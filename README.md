@@ -2,7 +2,7 @@
 
 A comprehensive Enterprise Resource Planning system designed specifically for interior design businesses, featuring role-based access control, process workflow management, and real-time collaboration.
 
-## 🏗️ Architecture Overview
+## 🏗️ Architecture Overview hi
 
 ### System Components
 
