@@ -196,6 +196,7 @@ export interface PurchaseRequestCreate {
 export interface LoginRequest {
   email: string;
   password: string;
+  role?: string; // Optional for development role testing
 }
 
 export interface LoginResponse {

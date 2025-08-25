@@ -1,12 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Briefcase, HardHat, Wrench, ShoppingCart, UserCheck, Building, DollarSign, 
-  CheckCircle, Clock, Calculator, FileText, AlertCircle, BarChart3, Settings, Target,
-  Phone, Mail, Truck, Award, Calendar, MapPin, Star, Shield, Package, ArrowDown, ArrowRight
+  CheckCircle, Calculator, FileText, AlertCircle, BarChart3, Settings, Target,
+  Truck, Award, Calendar, Package
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { apiWrapper, API_ENDPOINTS } from '@/api/config';
 import { Role, Process, ProcessConnection } from '@/types';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+
+// API Response types
+interface HierarchyData {
+  hierarchy: {
+    [tier: string]: Array<{
+      role: Role;
+      processes: Process[];
+    }>;
+  };
+  workflow_connections: ProcessConnection[];
+}
 
 // Your original component data structure (converted to use API data)
 const ProcessFlowPage: React.FC = () => {
@@ -15,21 +27,23 @@ const ProcessFlowPage: React.FC = () => {
   const [connections, setConnections] = useState<ProcessConnection[]>([]);
   const [activeRole, setActiveRole] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadProcessFlowData = async () => {
       try {
         setIsLoading(true);
+        setError(null);
         
         // Fetch organizational hierarchy
-        const hierarchyData = await apiWrapper.get(API_ENDPOINTS.PROCESSES.HIERARCHY);
+        const hierarchyData: HierarchyData = await apiWrapper.get(API_ENDPOINTS.PROCESSES.HIERARCHY);
         
         // Extract roles and processes
         const allRoles: Role[] = [];
         const allProcesses: Process[] = [];
         
-        Object.entries(hierarchyData.hierarchy).forEach(([tier, tierRoles]: [string, any[]]) => {
-          tierRoles.forEach((roleData: any) => {
+        Object.entries(hierarchyData.hierarchy).forEach(([, tierRoles]) => {
+          tierRoles.forEach((roleData) => {
             allRoles.push(roleData.role);
             allProcesses.push(...roleData.processes);
           });
@@ -40,6 +54,9 @@ const ProcessFlowPage: React.FC = () => {
         setConnections(hierarchyData.workflow_connections);
       } catch (error) {
         console.error('Failed to load process flow data:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load process flow data';
+        setError(errorMessage);
+        toast.error('Failed to load process flow data. Please try again.');
       } finally {
         setIsLoading(false);
       }
@@ -79,6 +96,23 @@ const ProcessFlowPage: React.FC = () => {
     };
     
     return iconMap[iconName] || Settings;
+  };
+
+  const getColorClass = (color: string): string => {
+    const colorMap: { [key: string]: string } = {
+      '#3b82f6': 'role-color-blue',
+      '#10b981': 'role-color-green',
+      '#8b5cf6': 'role-color-purple',
+      '#ef4444': 'role-color-red',
+      '#f59e0b': 'role-color-yellow',
+      '#6366f1': 'role-color-indigo',
+      '#ec4899': 'role-color-pink',
+      '#f97316': 'role-color-orange',
+      '#14b8a6': 'role-color-teal',
+      '#06b6d4': 'role-color-cyan',
+    };
+    
+    return colorMap[color] || 'role-color-blue';
   };
 
   const ProcessChild: React.FC<{ 
@@ -139,12 +173,12 @@ const ProcessFlowPage: React.FC = () => {
       <div className="role-tree" onClick={() => onClick(role.id)}>
         <div 
           id={`role-${role.id}`}
-          className="role-node cursor-pointer"
-          style={{ borderColor: role.color }}
+          className={`role-node cursor-pointer ${getColorClass(role.color)}`}
+          data-role-color
         >
           <div className="flex items-center mb-3">
-            <div className="rounded-full p-3 mr-3 shadow-lg" 
-                 style={{ background: `linear-gradient(135deg, ${role.color}20 0%, ${role.color}40 100%)` }}>
+            <div className="rounded-full p-3 mr-3 shadow-lg icon-container" 
+                 data-role-color>
               <IconComponent size={24} color={role.color} />
             </div>
             <div>
@@ -152,15 +186,15 @@ const ProcessFlowPage: React.FC = () => {
               <p className="text-sm text-gray-500">{role.tier}</p>
             </div>
           </div>
-          <div className="tree-connector vertical-line" style={{ background: role.color }}></div>
+          <div className="tree-connector vertical-line" data-role-color></div>
         </div>
 
         <div className="process-children">
           {roleProcesses.map((process, index) => (
             <div key={index} className="relative">
               {index === 1 && (
-                <div className="tree-connector vertical-line" 
-                     style={{ background: role.color, top: '-30px', height: '30px' }}></div>
+                <div className="tree-connector vertical-line absolute -top-8 h-8" 
+                     data-role-color></div>
               )}
               <ProcessChild 
                 process={process} 
@@ -179,6 +213,22 @@ const ProcessFlowPage: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <AlertCircle className="w-12 h-12 text-red-500" />
+        <h3 className="text-lg font-semibold text-gray-800">Failed to Load Process Flow</h3>
+        <p className="text-gray-600 text-center max-w-md">{error}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -268,6 +318,35 @@ const ProcessFlowPage: React.FC = () => {
           border-radius: 8px;
           font-weight: bold;
         }
+        
+        /* Dynamic color classes using CSS custom properties */
+        .role-node[data-role-color] {
+          border-color: var(--role-color);
+        }
+        
+        .icon-container[data-role-color] {
+          background: linear-gradient(135deg, var(--role-color-20) 0%, var(--role-color-40) 100%);
+        }
+        
+        .tree-connector[data-role-color] {
+          background: var(--role-color);
+        }
+        
+        .connection-border[data-role-color] {
+          border-color: var(--role-color);
+        }
+        
+        /* Predefined color classes to avoid inline styles */
+        .role-color-blue { --role-color: #3b82f6; --role-color-20: #3b82f620; --role-color-40: #3b82f640; }
+        .role-color-green { --role-color: #10b981; --role-color-20: #10b98120; --role-color-40: #10b98140; }
+        .role-color-purple { --role-color: #8b5cf6; --role-color-20: #8b5cf620; --role-color-40: #8b5cf640; }
+        .role-color-red { --role-color: #ef4444; --role-color-20: #ef444420; --role-color-40: #ef444440; }
+        .role-color-yellow { --role-color: #f59e0b; --role-color-20: #f59e0b20; --role-color-40: #f59e0b40; }
+        .role-color-indigo { --role-color: #6366f1; --role-color-20: #6366f120; --role-color-40: #6366f140; }
+        .role-color-pink { --role-color: #ec4899; --role-color-20: #ec489920; --role-color-40: #ec489940; }
+        .role-color-orange { --role-color: #f97316; --role-color-20: #f9731620; --role-color-40: #f9731640; }
+        .role-color-teal { --role-color: #14b8a6; --role-color-20: #14b8a620; --role-color-40: #14b8a640; }
+        .role-color-cyan { --role-color: #06b6d4; --role-color-20: #06b6d420; --role-color-40: #06b6d440; }
       `}</style>
       
       <div className="text-center mb-12">
@@ -346,15 +425,13 @@ const ProcessFlowPage: React.FC = () => {
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <h4 className="font-semibold text-gray-700 mb-3">Connected Processes:</h4>
-              {activeConnections.map((conn, index) => {
-                const isOutgoing = conn.from_role === activeRole;
-                const connectedRole = isOutgoing ? conn.to_role : conn.from_role;
-                const connectedProcess = isOutgoing ? conn.to_process : conn.from_process;
-                const currentProcess = isOutgoing ? conn.from_process : conn.to_process;
+                             {activeConnections.map((conn, index) => {
+                 const isOutgoing = conn.from_role === activeRole;
+                 const connectedRole = isOutgoing ? conn.to_role : conn.from_role;
                 
                 return (
-                  <div key={index} className="border-l-4 pl-4 mb-4 bg-gray-50 p-3 rounded" 
-                       style={{ borderColor: roles.find(r => r.id === connectedRole)?.color }}>
+                  <div key={index} className={`border-l-4 pl-4 mb-4 bg-gray-50 p-3 rounded connection-border ${getColorClass(roles.find(r => r.id === connectedRole)?.color || '#3b82f6')}`} 
+                       data-role-color>
                     <div className="font-semibold text-gray-800 text-sm">
                       {isOutgoing ? '→' : '←'} {roles.find(r => r.id === connectedRole)?.title}
                     </div>

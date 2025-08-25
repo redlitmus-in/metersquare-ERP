@@ -9,6 +9,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  developmentRole?: string; // For development testing
   
   // Actions
   login: (credentials: LoginRequest) => Promise<void>;
@@ -17,6 +18,7 @@ interface AuthState {
   getCurrentUser: () => Promise<void>;
   updateProfile: (userData: any) => Promise<void>;
   clearError: () => void;
+  setDevelopmentRole: (role: string) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -30,6 +32,37 @@ export const useAuthStore = create<AuthState>()(
       login: async (credentials: LoginRequest) => {
         try {
           set({ isLoading: true, error: null });
+          
+          // Check if this is a development role login
+          const devRole = localStorage.getItem('dev_role');
+          if (devRole && credentials.role) {
+            // For development, we'll simulate a successful login with the selected role
+            const mockUser: User = {
+              id: 'dev-user-id',
+              email: credentials.email,
+              full_name: `Dev User (${credentials.role})`,
+              role_id: credentials.role as any,
+              department: 'Development',
+              is_active: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            
+            // Store development token
+            localStorage.setItem('access_token', 'dev-token');
+            localStorage.setItem('dev_role', credentials.role);
+            
+            set({
+              user: mockUser,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null,
+              developmentRole: credentials.role,
+            });
+            
+            toast.success(`Development login successful as ${credentials.role}!`);
+            return;
+          }
           
           const response = await apiWrapper.post<LoginResponse>(
             API_ENDPOINTS.AUTH.LOGIN,
@@ -88,10 +121,12 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         localStorage.removeItem('access_token');
+        localStorage.removeItem('dev_role');
         set({
           user: null,
           isAuthenticated: false,
           error: null,
+          developmentRole: undefined,
         });
         toast.success('Logged out successfully');
       },
@@ -153,6 +188,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       clearError: () => set({ error: null }),
+      setDevelopmentRole: (role: string) => set({ developmentRole: role }),
     }),
     {
       name: 'auth-storage',
