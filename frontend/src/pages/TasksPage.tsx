@@ -1,290 +1,389 @@
-import React, { useEffect, useState } from 'react';
-import { PlusIcon, CheckCircleIcon, ClockIcon } from '@heroicons/react/24/outline';
-import { useTaskStore } from '@/store/taskStore';
-import { useAuthStore } from '@/store/authStore';
-import { Task, TaskStatus, Priority, UserRole } from '@/types';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { 
+  CheckCircleIcon, 
+  ClockIcon, 
+  PlusIcon,
+  UserIcon,
+  CalendarIcon,
+  FlagIcon,
+  EyeIcon,
+  PlayCircleIcon,
+  CheckIcon,
+  AlertCircleIcon
+} from 'lucide-react';
+
+interface Task {
+  id: string;
+  title: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'overdue';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  assignedTo: string;
+  dueDate: string;
+  estimatedHours: number;
+  actualHours?: number;
+  project: string;
+  tags: string[];
+}
 
 const TasksPage: React.FC = () => {
-  const { user } = useAuthStore();
-  const { myTasks, fetchMyTasks, isLoading, markTaskComplete } = useTaskStore();
-  const [filter, setFilter] = useState<TaskStatus | 'all'>('all');
-
+  const [activeFilter, setActiveFilter] = useState<string>('all');
+  
+  // Set page title
   useEffect(() => {
-    fetchMyTasks();
-  }, [fetchMyTasks]);
-
-  const handleTaskComplete = async (taskId: string) => {
-    try {
-      await markTaskComplete(taskId);
-    } catch (error) {
-      console.error('Failed to mark task as complete:', error);
+    document.title = 'Pending Actions - MeterSquare ERP';
+  }, []);
+  
+  // Workflow-based pending actions aligned with PDF requirements
+  const tasks: Task[] = [
+    {
+      id: '1',
+      title: 'Approve Purchase Requisition PR-2024-001',
+      description: 'QTY/SPEC FLAG approval required for construction materials - Marina Bay project',
+      status: 'pending',
+      priority: 'high',
+      assignedTo: 'Technical Director',
+      dueDate: '2024-08-27',
+      estimatedHours: 2,
+      project: 'Marina Bay Residential',
+      tags: ['Purchase Requisition', 'QTY/SPEC FLAG']
+    },
+    {
+      id: '2', 
+      title: 'Review Vendor Quotation VQ-2024-045',
+      description: 'QTY/SCOPE FLAG approval needed for electrical subcontractor quotation',
+      status: 'in_progress',
+      priority: 'medium',
+      assignedTo: 'Project Manager',
+      dueDate: '2024-08-30',
+      estimatedHours: 3,
+      actualHours: 1,
+      project: 'Orchard Office Tower',
+      tags: ['Vendor Quotation', 'QTY/SCOPE FLAG']
+    },
+    {
+      id: '3',
+      title: 'Acknowledge Payment Transaction',
+      description: 'Payment acknowledgment required for approved vendor invoice #INV-2024-089',
+      status: 'pending',
+      priority: 'urgent',
+      assignedTo: 'Accounts',
+      dueDate: '2024-08-26',
+      estimatedHours: 1,
+      project: 'Sentosa Resort Renovation',
+      tags: ['Payment', 'Acknowledgment']
+    },
+    {
+      id: '4',
+      title: 'Material Requisition MR-2024-112 Revision',
+      description: 'Qty & Spec revision required - rejected by Project Manager',
+      status: 'overdue',
+      priority: 'urgent',
+      assignedTo: 'Factory Supervisor',
+      dueDate: '2024-08-24',
+      estimatedHours: 2,
+      project: 'Downtown Complex',
+      tags: ['Material Requisition', 'Revision Required']
+    },
+    {
+      id: '5',
+      title: 'Approve Material Delivery Note MDN-2024-067',
+      description: 'QTY/SPEC/REQ FLAG approval for site delivery',
+      status: 'pending',
+      priority: 'high',
+      assignedTo: 'Technical Director',
+      dueDate: '2024-08-27',
+      estimatedHours: 1,
+      project: 'Palm Jumeirah Villa',
+      tags: ['Material Delivery', 'QTY/SPEC/REQ FLAG']
+    },
+    {
+      id: '6',
+      title: 'Design Reference Input Required',
+      description: 'Provide design reference for approved Purchase Requisition PR-2024-003',
+      status: 'completed',
+      priority: 'medium',
+      assignedTo: 'Design',
+      dueDate: '2024-08-25',
+      estimatedHours: 2,
+      actualHours: 2,
+      project: 'Business Bay Tower',
+      tags: ['Design Input', 'Reference']
     }
+  ];
+
+  const getStatusConfig = (status: Task['status']) => {
+    const configs = {
+      pending: { color: 'bg-yellow-100 text-yellow-700 border-yellow-300', icon: ClockIcon, label: 'Pending' },
+      in_progress: { color: 'bg-blue-100 text-blue-700 border-blue-300', icon: PlayCircleIcon, label: 'In Progress' },
+      completed: { color: 'bg-green-100 text-green-700 border-green-300', icon: CheckIcon, label: 'Completed' },
+      overdue: { color: 'bg-red-100 text-red-700 border-red-300', icon: AlertCircleIcon, label: 'Overdue' }
+    };
+    return configs[status];
   };
 
-  const filteredTasks = filter === 'all' 
-    ? myTasks 
-    : myTasks.filter(task => task.status === filter);
-
-  const getStatusBadgeClass = (status: TaskStatus) => {
-    switch (status) {
-      case TaskStatus.COMPLETED:
-        return 'badge-success';
-      case TaskStatus.IN_PROGRESS:
-        return 'badge-info';
-      case TaskStatus.PENDING:
-        return 'badge-warning';
-      case TaskStatus.REJECTED:
-        return 'badge-danger';
-      default:
-        return 'badge-secondary';
-    }
+  const getPriorityConfig = (priority: Task['priority']) => {
+    const configs = {
+      low: { color: 'bg-gray-100 text-gray-700 border-gray-300', label: 'Low' },
+      medium: { color: 'bg-blue-100 text-blue-700 border-blue-300', label: 'Medium' },
+      high: { color: 'bg-orange-100 text-orange-700 border-orange-300', label: 'High' },
+      urgent: { color: 'bg-red-100 text-red-700 border-red-300', label: 'Urgent' }
+    };
+    return configs[priority];
   };
 
-  const getPriorityBadgeClass = (priority: Priority) => {
-    switch (priority) {
-      case Priority.URGENT:
-        return 'priority-urgent';
-      case Priority.HIGH:
-        return 'priority-high';
-      case Priority.MEDIUM:
-        return 'priority-medium';
-      case Priority.LOW:
-        return 'priority-low';
-      default:
-        return 'priority-medium';
-    }
+  const getTasksByFilter = (filter: string) => {
+    if (filter === 'all') return tasks;
+    return tasks.filter(task => task.status === filter);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
-  };
+  const filteredTasks = getTasksByFilter(activeFilter);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
+  const taskStats = {
+    total: tasks.length,
+    pending: tasks.filter(t => t.status === 'pending').length,
+    in_progress: tasks.filter(t => t.status === 'in_progress').length,
+    completed: tasks.filter(t => t.status === 'completed').length,
+    overdue: tasks.filter(t => t.status === 'overdue').length,
+    approvals: tasks.filter(t => t.tags.some(tag => tag.includes('FLAG'))).length,
+    revisions: tasks.filter(t => t.tags.some(tag => tag.includes('Revision'))).length
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="p-4 space-y-4">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Tasks</h1>
-          <p className="text-gray-600">
-            Manage your assigned tasks and track progress
-          </p>
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gradient-to-r from-green-50 to-green-100 rounded-lg shadow-md p-4 text-gray-800 border border-green-200"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/60 rounded-md">
+              <CheckCircleIcon className="w-6 h-6 text-green-600" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold">Pending Actions</h1>
+              <p className="text-sm text-gray-600 mt-0.5">Review documents requiring your approval or action</p>
+            </div>
+          </div>
         </div>
-        
-        {(user?.role_id === UserRole.BUSINESS_OWNER || 
-          user?.role_id === UserRole.PROJECT_MANAGER) && (
-          <button className="btn-primary flex items-center">
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Create Task
-          </button>
-        )}
-      </div>
+      </motion.div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="card">
-          <div className="card-body">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="bg-blue-100 p-3 rounded-lg">
-                  <CheckCircleIcon className="h-6 w-6 text-blue-600" />
-                </div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 bg-gray-100 rounded-md">
+                <CheckCircleIcon className="w-4 h-4 text-gray-600" />
               </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">Total Tasks</h3>
-                <p className="text-2xl font-bold text-gray-900">{myTasks.length}</p>
+              <div>
+                <p className="text-xs text-gray-600">Total</p>
+                <p className="text-lg font-bold text-gray-900">{taskStats.total}</p>
               </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="card">
-          <div className="card-body">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="bg-yellow-100 p-3 rounded-lg">
-                  <ClockIcon className="h-6 w-6 text-yellow-600" />
-                </div>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 bg-yellow-100 rounded-md">
+                <ClockIcon className="w-4 h-4 text-yellow-600" />
               </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">Pending</h3>
-                <p className="text-2xl font-bold text-gray-900">
-                  {myTasks.filter(t => t.status === TaskStatus.PENDING).length}
-                </p>
+              <div>
+                <p className="text-xs text-gray-600">Pending</p>
+                <p className="text-lg font-bold text-gray-900">{taskStats.pending}</p>
               </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="card">
-          <div className="card-body">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="bg-green-100 p-3 rounded-lg">
-                  <CheckCircleIcon className="h-6 w-6 text-green-600" />
-                </div>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 bg-blue-100 rounded-md">
+                <PlayCircleIcon className="w-4 h-4 text-blue-600" />
               </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">Completed</h3>
-                <p className="text-2xl font-bold text-gray-900">
-                  {myTasks.filter(t => t.status === TaskStatus.COMPLETED).length}
-                </p>
+              <div>
+                <p className="text-xs text-gray-600">In Progress</p>
+                <p className="text-lg font-bold text-gray-900">{taskStats.in_progress}</p>
               </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="card">
-          <div className="card-body">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="bg-purple-100 p-3 rounded-lg">
-                  <ClockIcon className="h-6 w-6 text-purple-600" />
-                </div>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 bg-green-100 rounded-md">
+                <CheckIcon className="w-4 h-4 text-green-600" />
               </div>
-              <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500">In Progress</h3>
-                <p className="text-2xl font-bold text-gray-900">
-                  {myTasks.filter(t => t.status === TaskStatus.IN_PROGRESS).length}
-                </p>
+              <div>
+                <p className="text-xs text-gray-600">Completed</p>
+                <p className="text-lg font-bold text-gray-900">{taskStats.completed}</p>
               </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 bg-red-100 rounded-md">
+                <AlertCircleIcon className="w-4 h-4 text-red-600" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-600">Overdue</p>
+                <p className="text-lg font-bold text-gray-900">{taskStats.overdue}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
-      <div className="card">
-        <div className="card-body">
+      <Card className="border-0 shadow-md">
+        <CardContent className="p-4">
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filter === 'all'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              All Tasks ({myTasks.length})
-            </button>
-            <button
-              onClick={() => setFilter(TaskStatus.PENDING)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filter === TaskStatus.PENDING
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Pending ({myTasks.filter(t => t.status === TaskStatus.PENDING).length})
-            </button>
-            <button
-              onClick={() => setFilter(TaskStatus.IN_PROGRESS)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filter === TaskStatus.IN_PROGRESS
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              In Progress ({myTasks.filter(t => t.status === TaskStatus.IN_PROGRESS).length})
-            </button>
-            <button
-              onClick={() => setFilter(TaskStatus.COMPLETED)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filter === TaskStatus.COMPLETED
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Completed ({myTasks.filter(t => t.status === TaskStatus.COMPLETED).length})
-            </button>
+            {[
+              { key: 'all', label: `All (${taskStats.total})`, color: 'bg-gray-100 text-gray-700' },
+              { key: 'pending', label: `Pending (${taskStats.pending})`, color: 'bg-yellow-100 text-yellow-700' },
+              { key: 'in_progress', label: `In Progress (${taskStats.in_progress})`, color: 'bg-blue-100 text-blue-700' },
+              { key: 'completed', label: `Completed (${taskStats.completed})`, color: 'bg-green-100 text-green-700' },
+              { key: 'overdue', label: `Overdue (${taskStats.overdue})`, color: 'bg-red-100 text-red-700' }
+            ].map((filter) => (
+              <Button
+                key={filter.key}
+                variant={activeFilter === filter.key ? "default" : "outline"}
+                size="sm"
+                onClick={() => setActiveFilter(filter.key)}
+                className={activeFilter === filter.key ? "bg-green-600 hover:bg-green-700" : ""}
+              >
+                {filter.label}
+              </Button>
+            ))}
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Tasks List */}
-      <div className="card">
-        <div className="card-header">
-          <h2 className="text-lg font-medium text-gray-900">
-            {filter === 'all' ? 'All Tasks' : `${filter.replace('_', ' ')} Tasks`}
-          </h2>
-        </div>
-        <div className="card-body p-0">
+      <Card className="border-0 shadow-md">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CheckCircleIcon className="w-5 h-5 text-green-600" />
+            {activeFilter === 'all' ? 'All Tasks' : `${activeFilter.replace('_', ' ').toUpperCase()} Tasks`}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
           {filteredTasks.length > 0 ? (
             <div className="space-y-0">
-              {filteredTasks.map((task, index) => (
-                <div
-                  key={task.id}
-                  className={`p-6 ${index !== filteredTasks.length - 1 ? 'border-b border-gray-200' : ''}`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3">
-                        <h3 className="text-lg font-medium text-gray-900">
-                          {task.title}
-                        </h3>
-                        <span className={`badge ${getStatusBadgeClass(task.status)}`}>
-                          {task.status.replace('_', ' ')}
-                        </span>
-                        <span className={`badge ${getPriorityBadgeClass(task.priority)}`}>
-                          {task.priority}
-                        </span>
+              {filteredTasks.map((task, index) => {
+                const statusConfig = getStatusConfig(task.status);
+                const priorityConfig = getPriorityConfig(task.priority);
+                const StatusIcon = statusConfig.icon;
+
+                return (
+                  <motion.div
+                    key={task.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className={`p-6 hover:bg-gray-50 transition-colors ${
+                      index !== filteredTasks.length - 1 ? 'border-b border-gray-200' : ''
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-start gap-3 mb-3">
+                          <div className="mt-1">
+                            <StatusIcon className="w-5 h-5 text-gray-400" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                              {task.title}
+                            </h3>
+                            <p className="text-gray-600 mb-3">{task.description}</p>
+                            
+                            <div className="flex items-center gap-3 mb-3">
+                              <Badge className={`${statusConfig.color} border flex items-center gap-1`}>
+                                <StatusIcon className="w-3 h-3" />
+                                {statusConfig.label}
+                              </Badge>
+                              <Badge className={`${priorityConfig.color} border flex items-center gap-1`}>
+                                <FlagIcon className="w-3 h-3" />
+                                {priorityConfig.label}
+                              </Badge>
+                            </div>
+
+                            <div className="flex items-center gap-6 text-sm text-gray-500">
+                              <div className="flex items-center gap-1">
+                                <UserIcon className="w-4 h-4" />
+                                {task.assignedTo}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <CalendarIcon className="w-4 h-4" />
+                                Due: {task.dueDate}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <ClockIcon className="w-4 h-4" />
+                                {task.estimatedHours}h estimated
+                              </div>
+                              {task.actualHours && (
+                                <div className="text-green-600">
+                                  {task.actualHours}h completed
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge variant="outline" className="text-xs">
+                                {task.project}
+                              </Badge>
+                              {task.tags.map((tag) => (
+                                <Badge key={tag} variant="secondary" className="text-xs">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                       
-                      {task.description && (
-                        <p className="text-gray-600 mt-2">{task.description}</p>
-                      )}
-                      
-                      <div className="flex items-center space-x-4 mt-4 text-sm text-gray-500">
-                        {task.due_date && (
-                          <span>Due: {formatDate(task.due_date)}</span>
-                        )}
-                        {task.estimated_hours && (
-                          <span>Estimated: {task.estimated_hours}h</span>
-                        )}
-                        {task.actual_hours && (
-                          <span>Actual: {task.actual_hours}h</span>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" className="text-gray-600 hover:text-gray-900">
+                          <EyeIcon className="w-4 h-4" />
+                        </Button>
+                        {task.status !== 'completed' && (
+                          <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                            <CheckIcon className="w-4 h-4 mr-1" />
+                            Complete
+                          </Button>
                         )}
                       </div>
                     </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      {task.status !== TaskStatus.COMPLETED && (
-                        <button
-                          onClick={() => handleTaskComplete(task.id)}
-                          className="btn-success text-sm"
-                        >
-                          Mark Complete
-                        </button>
-                      )}
-                      <button className="btn-outline text-sm">
-                        View Details
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-12">
-              <CheckCircleIcon className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No tasks found</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                {filter === 'all' 
+              <CheckCircleIcon className="mx-auto w-12 h-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No tasks found</h3>
+              <p className="text-gray-500">
+                {activeFilter === 'all' 
                   ? "You don't have any tasks assigned yet." 
-                  : `No ${filter.replace('_', ' ')} tasks found.`}
+                  : `No ${activeFilter.replace('_', ' ')} tasks found.`}
               </p>
             </div>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

@@ -6,13 +6,19 @@ import { validateSupabaseConnection } from '@/utils/environment';
 
 // Pages
 import LoginPage from '@/pages/LoginPage';
-import DashboardPage from '@/pages/DashboardPage';
-import ProjectsPage from '@/pages/ProjectsPage';
+import ModernDashboard from '@/pages/ModernDashboard';
 import TasksPage from '@/pages/TasksPage';
-import ProcessFlowPage from '@/pages/ProcessFlowPage';
+// ProcessFlowPage removed - replaced with WorkflowStatusPage
 import ProfilePage from '@/pages/ProfilePage';
-import UsersPage from '@/pages/UsersPage';
 import AnalyticsPage from '@/pages/AnalyticsPage';
+import ProcurementDashboard from '@/pages/ProcurementDashboard';
+import WorkflowStatusPage from '@/pages/WorkflowStatusPage';
+
+// Procurement sub-pages
+import PurchaseRequestsPage from '@/pages/procurement/PurchaseRequestsPage';
+import VendorQuotationsPage from '@/pages/procurement/VendorQuotationsPage';
+import ApprovalsPage from '@/pages/procurement/ApprovalsPage';
+import DeliveriesPage from '@/pages/procurement/DeliveriesPage';
 
 // Layout
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -21,8 +27,13 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuthStore();
+  const token = localStorage.getItem('access_token');
+  const demoUser = localStorage.getItem('demo_user');
+  
+  // Allow demo users even if auth state isn't fully loaded
+  const isDemoUser = token === 'demo-token' && demoUser;
 
-  if (isLoading) {
+  if (isLoading && !isDemoUser) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" />
@@ -30,7 +41,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !isDemoUser) {
     return <Navigate to="/login" replace />;
   }
 
@@ -40,8 +51,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // Public Route Component (redirects if authenticated)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuthStore();
+  const token = localStorage.getItem('access_token');
+  const demoUser = localStorage.getItem('demo_user');
+  
+  // Check for demo user
+  const isDemoUser = token === 'demo-token' && demoUser;
 
-  if (isLoading) {
+  if (isLoading && !isDemoUser) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" />
@@ -49,7 +65,7 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     );
   }
 
-  if (isAuthenticated) {
+  if (isAuthenticated || isDemoUser) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -61,6 +77,19 @@ function App() {
   const [isEnvironmentValid, setIsEnvironmentValid] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // Check if this is a demo user first
+    const token = localStorage.getItem('access_token');
+    const demoUser = localStorage.getItem('demo_user');
+    
+    if (token === 'demo-token' && demoUser) {
+      // For demo users, skip environment validation
+      setIsEnvironmentValid(true);
+      if (!isAuthenticated) {
+        getCurrentUser();
+      }
+      return;
+    }
+    
     // Validate environment configuration on app startup
     const validateEnvironment = async () => {
       try {
@@ -69,7 +98,6 @@ function App() {
         
         if (success) {
           // Check for existing session on app load
-          const token = localStorage.getItem('access_token');
           if (token && !isAuthenticated) {
             getCurrentUser();
           }
@@ -149,11 +177,14 @@ function App() {
           }
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="projects" element={<ProjectsPage />} />
+          <Route path="dashboard" element={<ModernDashboard />} />
+          <Route path="procurement" element={<ProcurementDashboard />} />
+          <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
+          <Route path="procurement/quotations" element={<VendorQuotationsPage />} />
+          <Route path="procurement/approvals" element={<ApprovalsPage />} />
+          <Route path="procurement/deliveries" element={<DeliveriesPage />} />
           <Route path="tasks" element={<TasksPage />} />
-          <Route path="process-flow" element={<ProcessFlowPage />} />
-          <Route path="users" element={<UsersPage />} />
+          <Route path="workflow-status" element={<WorkflowStatusPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>

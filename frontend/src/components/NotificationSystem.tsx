@@ -1,0 +1,548 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Bell,
+  Check,
+  X,
+  AlertCircle,
+  Info,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Users,
+  Banknote,
+  FileText,
+  TrendingUp,
+  AlertTriangle,
+  Calendar,
+  Settings,
+  Trash2,
+  ChevronRight
+} from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+export interface Notification {
+  id: string;
+  type: 'approval' | 'alert' | 'info' | 'success' | 'error' | 'update' | 'reminder';
+  title: string;
+  message: string;
+  timestamp: Date;
+  read: boolean;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  category: 'procurement' | 'approval' | 'vendor' | 'system' | 'project';
+  actionRequired?: boolean;
+  actionUrl?: string;
+  actionLabel?: string;
+  metadata?: {
+    documentId?: string;
+    documentType?: string;
+    amount?: number;
+    sender?: string;
+    project?: string;
+  };
+}
+
+interface NotificationSystemProps {
+  position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
+  maxNotifications?: number;
+}
+
+const NotificationSystem: React.FC<NotificationSystemProps> = ({
+  position = 'top-right',
+  maxNotifications = 5
+}) => {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showPanel, setShowPanel] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'unread' | 'urgent'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [toastNotifications, setToastNotifications] = useState<Notification[]>([]);
+  
+  // Refs for click outside detection
+  const panelRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Handle click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showPanel &&
+          panelRef.current && 
+          buttonRef.current &&
+          !panelRef.current.contains(event.target as Node) &&
+          !buttonRef.current.contains(event.target as Node)) {
+        setShowPanel(false);
+      }
+    };
+
+    if (showPanel) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showPanel]);
+
+  // Mock notifications data
+  useEffect(() => {
+    const mockNotifications: Notification[] = [
+      {
+        id: '1',
+        type: 'approval',
+        title: 'Purchase Requisition Approval',
+        message: 'PR-2024-001 requires your approval for Marina Bay project',
+        timestamp: new Date(Date.now() - 5 * 60000),
+        read: false,
+        priority: 'urgent',
+        category: 'approval',
+        actionRequired: true,
+        actionUrl: '/approval/PR-2024-001',
+        actionLabel: 'Review Now',
+        metadata: {
+          documentId: 'PR-2024-001',
+          documentType: 'purchase_requisition',
+          amount: 45000,
+          sender: 'John Tan',
+          project: 'Marina Bay Residences'
+        }
+      },
+      {
+        id: '2',
+        type: 'alert',
+        title: 'Cost Overrun Alert',
+        message: 'Project budget exceeded by 15% for Orchard Office',
+        timestamp: new Date(Date.now() - 30 * 60000),
+        read: false,
+        priority: 'high',
+        category: 'project',
+        metadata: {
+          project: 'Orchard Office Fit-out',
+          amount: 125000
+        }
+      },
+      {
+        id: '3',
+        type: 'success',
+        title: 'Vendor Quotation Approved',
+        message: 'VQ-2024-002 has been approved by all stakeholders',
+        timestamp: new Date(Date.now() - 2 * 3600000),
+        read: true,
+        priority: 'medium',
+        category: 'vendor',
+        metadata: {
+          documentId: 'VQ-2024-002',
+          documentType: 'vendor_quotation',
+          amount: 98000
+        }
+      },
+      {
+        id: '4',
+        type: 'reminder',
+        title: 'Payment Due Reminder',
+        message: 'Invoice payment due in 3 days for ABC Contractors',
+        timestamp: new Date(Date.now() - 4 * 3600000),
+        read: false,
+        priority: 'high',
+        category: 'procurement',
+        actionRequired: true,
+        actionLabel: 'Process Payment',
+        metadata: {
+          amount: 75000,
+          sender: 'ABC Contractors Pte Ltd'
+        }
+      },
+      {
+        id: '5',
+        type: 'update',
+        title: 'Delivery Status Update',
+        message: 'Materials for PR-2024-003 delivered to site',
+        timestamp: new Date(Date.now() - 24 * 3600000),
+        read: true,
+        priority: 'low',
+        category: 'procurement',
+        metadata: {
+          documentId: 'PR-2024-003',
+          project: 'Sentosa Resort'
+        }
+      }
+    ];
+
+    setNotifications(mockNotifications);
+  }, []);
+
+  const getNotificationIcon = (type: Notification['type']) => {
+    switch (type) {
+      case 'approval':
+        return <Clock className="w-5 h-5" />;
+      case 'alert':
+        return <AlertTriangle className="w-5 h-5" />;
+      case 'success':
+        return <CheckCircle className="w-5 h-5" />;
+      case 'error':
+        return <XCircle className="w-5 h-5" />;
+      case 'info':
+        return <Info className="w-5 h-5" />;
+      case 'update':
+        return <TrendingUp className="w-5 h-5" />;
+      case 'reminder':
+        return <Calendar className="w-5 h-5" />;
+      default:
+        return <Bell className="w-5 h-5" />;
+    }
+  };
+
+  const getNotificationColor = (type: Notification['type']) => {
+    switch (type) {
+      case 'approval':
+        return 'text-blue-600 bg-blue-100';
+      case 'alert':
+        return 'text-amber-600 bg-amber-100';
+      case 'success':
+        return 'text-green-600 bg-green-100';
+      case 'error':
+        return 'text-red-600 bg-red-100';
+      case 'info':
+        return 'text-gray-600 bg-gray-100';
+      case 'update':
+        return 'text-purple-600 bg-purple-100';
+      case 'reminder':
+        return 'text-indigo-600 bg-indigo-100';
+      default:
+        return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getPriorityColor = (priority: Notification['priority']) => {
+    switch (priority) {
+      case 'urgent':
+        return 'bg-red-100 text-red-700 border-red-300';
+      case 'high':
+        return 'bg-orange-100 text-orange-700 border-orange-300';
+      case 'medium':
+        return 'bg-blue-100 text-blue-700 border-blue-300';
+      case 'low':
+        return 'bg-gray-100 text-gray-600 border-gray-300';
+      default:
+        return 'bg-gray-100 text-gray-600 border-gray-300';
+    }
+  };
+
+  const markAsRead = (id: string) => {
+    setNotifications(notifications.map(n => 
+      n.id === id ? { ...n, read: true } : n
+    ));
+  };
+
+  const markAllAsRead = () => {
+    setNotifications(notifications.map(n => ({ ...n, read: true })));
+  };
+
+  const deleteNotification = (id: string) => {
+    setNotifications(notifications.filter(n => n.id !== id));
+  };
+
+  const clearAll = () => {
+    setNotifications([]);
+  };
+
+  const filteredNotifications = notifications.filter(n => {
+    if (filter === 'unread' && n.read) return false;
+    if (filter === 'urgent' && n.priority !== 'urgent') return false;
+    if (categoryFilter !== 'all' && n.category !== categoryFilter) return false;
+    return true;
+  });
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+  const urgentCount = notifications.filter(n => n.priority === 'urgent' && !n.read).length;
+
+  const formatTimestamp = (date: Date) => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 60) return `${minutes} min ago`;
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  };
+
+  // Add notification to toast
+  const showToast = (notification: Notification) => {
+    setToastNotifications(prev => [...prev.slice(-maxNotifications + 1), notification]);
+    setTimeout(() => {
+      setToastNotifications(prev => prev.filter(n => n.id !== notification.id));
+    }, 5000);
+  };
+
+  // Position classes for toast notifications
+  const positionClasses = {
+    'top-right': 'top-4 right-4',
+    'top-left': 'top-4 left-4',
+    'bottom-right': 'bottom-4 right-4',
+    'bottom-left': 'bottom-4 left-4'
+  };
+
+  return (
+    <>
+      {/* Notification Bell Icon */}
+      <div className="relative">
+        <Button
+          ref={buttonRef}
+          variant="outline"
+          size="icon"
+          onClick={() => setShowPanel(!showPanel)}
+          className="relative"
+        >
+          <Bell className="w-4 h-4" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+              {unreadCount}
+            </span>
+          )}
+          {urgentCount > 0 && (
+            <span className="absolute -top-1 -left-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+          )}
+        </Button>
+      </div>
+
+      {/* Notification Panel */}
+      <AnimatePresence>
+        {showPanel && (
+          <motion.div
+            ref={panelRef}
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            className="absolute right-0 mt-2 w-[360px] max-h-[500px] bg-white rounded-lg shadow-xl border z-50 overflow-hidden"
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold text-base flex items-center gap-2">
+                  <Bell className="w-4 h-4" />
+                  Notifications
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowPanel(false)}
+                  className="text-white hover:bg-white/20"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-white/20 text-white border-white/30">
+                  {unreadCount} unread
+                </Badge>
+                {urgentCount > 0 && (
+                  <Badge className="bg-red-500/20 text-white border-red-400/30">
+                    {urgentCount} urgent
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="p-3 border-b bg-gray-50">
+              <div className="flex items-center gap-2">
+                <Select value={filter} onValueChange={(value: any) => setFilter(value)}>
+                  <SelectTrigger className="h-8 text-xs flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="unread">Unread</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="h-8 text-xs flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="procurement">Procurement</SelectItem>
+                    <SelectItem value="approval">Approvals</SelectItem>
+                    <SelectItem value="vendor">Vendors</SelectItem>
+                    <SelectItem value="project">Projects</SelectItem>
+                    <SelectItem value="system">System</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={markAllAsRead}
+                  className="text-xs px-2 flex-shrink-0"
+                >
+                  Mark all read
+                </Button>
+              </div>
+            </div>
+
+            {/* Notifications List */}
+            <div className="max-h-[320px] overflow-y-auto">
+              {filteredNotifications.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">No notifications</p>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {filteredNotifications.map((notification) => (
+                    <motion.div
+                      key={notification.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className={`p-3 hover:bg-gray-50 transition-colors ${
+                        !notification.read ? 'bg-blue-50/30' : ''
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`p-1.5 rounded-md ${getNotificationColor(notification.type)}`}>
+                          {getNotificationIcon(notification.type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm text-gray-900 mb-1 line-clamp-1">
+                            {notification.title}
+                          </h4>
+                          <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                            {notification.message}
+                          </p>
+                          
+                          {/* Metadata */}
+                          {notification.metadata && (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              {notification.metadata.project && (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
+                                  <FileText className="w-3 h-3 mr-1" />
+                                  <span className="truncate max-w-[100px]">{notification.metadata.project}</span>
+                                </Badge>
+                              )}
+                              {notification.metadata.amount && (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
+                                  <Banknote className="w-3 h-3 mr-1" />
+                                  AED {notification.metadata.amount.toLocaleString()}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2 mt-2">
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="text-xs text-gray-400">
+                                {formatTimestamp(notification.timestamp)}
+                              </span>
+                              {notification.metadata?.sender && (
+                                <span className="text-xs text-gray-500 truncate max-w-[80px]">
+                                  <Users className="w-3 h-3 inline mr-1" />
+                                  {notification.metadata.sender}
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Actions */}
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <Badge className={`text-[10px] px-1.5 py-0.5 ${getPriorityColor(notification.priority)} border`}>
+                                {notification.priority}
+                              </Badge>
+                              {notification.actionRequired && (
+                                <Button size="sm" className="h-6 px-2 text-[11px]">
+                                  {notification.actionLabel || 'Action'}
+                                  <ChevronRight className="w-3 h-3 ml-0.5" />
+                                </Button>
+                              )}
+                              {!notification.read && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => markAsRead(notification.id)}
+                                  className="h-6 w-6 p-0"
+                                  title="Mark as read"
+                                >
+                                  <Check className="w-3 h-3" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteNotification(notification.id)}
+                                className="h-6 w-6 p-0 text-gray-400 hover:text-red-600"
+                                title="Delete"
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 border-t bg-gray-50">
+              <div className="flex items-center justify-between gap-2">
+                <Button variant="ghost" size="sm" className="text-xs px-2 py-1">
+                  <Settings className="w-3 h-3 mr-1" />
+                  Settings
+                </Button>
+                <Button variant="ghost" size="sm" onClick={clearAll} className="text-xs text-red-600 hover:text-red-700 px-2 py-1">
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  Clear All
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast Notifications */}
+      <div className={`fixed ${positionClasses[position]} z-50 space-y-2`}>
+        <AnimatePresence>
+          {toastNotifications.map((notification) => (
+            <motion.div
+              key={notification.id}
+              initial={{ opacity: 0, x: position.includes('right') ? 100 : -100 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: position.includes('right') ? 100 : -100 }}
+              className="bg-white rounded-lg shadow-lg border p-4 w-80"
+            >
+              <div className="flex items-start gap-3">
+                <div className={`p-2 rounded-lg ${getNotificationColor(notification.type)}`}>
+                  {getNotificationIcon(notification.type)}
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium text-sm text-gray-900">
+                    {notification.title}
+                  </h4>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {notification.message}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setToastNotifications(prev => 
+                    prev.filter(n => n.id !== notification.id)
+                  )}
+                  className="h-6 w-6 p-0"
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </>
+  );
+};
+
+export default NotificationSystem;

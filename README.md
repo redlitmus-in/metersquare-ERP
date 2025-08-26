@@ -295,3 +295,140 @@ For technical support or questions:
 ---
 
 **Built with ❤️ for efficient interior design project management**
+You are designing and implementing a corporate, modern, and mobile-responsive ERP web application for Phase-1: Costing, Estimation & Procurement.
+
+The design must:
+
+Follow theme colors and style inspired by metersquare.com
+Use the provided logo (logo.png) in headers and login.
+
+Be user-friendly, clean, and professional (corporate ERP look).
+
+Support mobile responsiveness and dashboard-style layouts.
+
+Include modern UI elements: collapsible side menus, approval workflows, notifications, and real-time tracking panels.
+
+📌 Modules & Exact Flows
+1. Material Purchases Flow
+
+Purchase Requisition Form (initiated by Site/MEP Supervisor or Procurement).
+
+Purchase Requisition Approvals (Estimation + Project Manager).
+
+Flags: Qty/Spec Approval, Cost Approval.
+
+Rejections: Qty & Spec rejection, Cost rejection.
+
+Revisions: Qty/Spec revisions, Cost revisions.
+
+Payment Transaction (Accounts).
+
+Acknowledgement of Payment.
+
+Design Reference Inputs.
+
+Task Completion.
+
+2. Subcontractor / Vendor Flow
+
+Vendor Scope of Work Form (BOQ reference).
+
+Sub-Contractor Quotation submission.
+
+Quotation Approvals (Estimation + Technical Director + Project Manager).
+
+Flags: Qty/Scope & Cost approvals.
+
+Rejections: Qty & Scope rejection.
+
+Revisions: Qty/Scope revisions.
+
+Payment Transaction (Accounts).
+
+Acknowledgement of Payment.
+
+Design Reference Inputs.
+
+Task Completion.
+
+3. Material Dispatch – Production Flow
+
+Material Requisition Form (Factory Supervisor).
+
+Material Requisition Approvals (Procurement + Project Manager).
+
+Flags: Qty/Spec Approvals.
+
+Rejections: Qty & Spec rejection.
+
+Bulk Quantity Request.
+
+Bulk Quantity Approvals (Technical Director/Accounts).
+
+Material Dispatch for Production.
+
+Joinery & Furniture Production (workflow step).
+
+Acknowledgement of Dispatch.
+
+Design Reference Inputs.
+
+Task Completion.
+
+4. Material Dispatch – Site Works Flow
+
+Material Request (Site/MEP Supervisor).
+
+Material Delivery Note issued.
+
+Material Delivery Note Approvals (Project Manager/Procurement).
+
+Rejections: Qty & Spec rejection.
+
+Revisions: Qty & Spec revisions.
+
+Bulk Quantity Dispatch Request (if required).
+
+Bulk Quantity Dispatch Approvals (Technical Director).
+
+Site Delivery as per Approved Delivery Note.
+
+Acknowledgement of Delivery.
+
+Design Reference Inputs.
+
+Task Completion.
+
+🎨 Design Guidelines
+
+Dashboard:
+
+Quick stats (Pending Approvals, Payments, Revisions, Completed Tasks).
+
+Timeline of requisitions/dispatches.
+
+Navigation: Left side vertical menu with icons (Material, Vendor, Dispatch, Accounts, Reports).
+
+Approvals: Workflow-style UI (cards → pending approvals → approve/reject with notes).
+
+Forms: Clean corporate ERP form styles with tabs (Details, Documents, Notes).
+
+Tables/Grids: Modern data tables with filters, search, and export (Excel/PDF).
+
+Mobile: Responsive cards replacing tables; collapsible menus.
+
+Colors: Use metersquare.com brand palette (dark blue, teal, white, gray).
+
+Typography: Clean sans-serif font (similar to metersquare.com).
+
+Notifications: Bell icon for alerts (approvals pending, payment done, rejection flagged).
+
+🚀 Deliverables
+
+A modern ERP-style UI that exactly follows the above flows.
+
+Corporate and attractive UX.
+
+Mobile responsive (Bootstrap/Tailwind/Material style).
+
+Include all approval/rejection/revision/acknowledgement states as per PDF.

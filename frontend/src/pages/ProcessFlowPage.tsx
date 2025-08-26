@@ -1,508 +1,622 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { 
-  Users, Briefcase, HardHat, Wrench, ShoppingCart, UserCheck, Building, DollarSign, 
-  CheckCircle, Calculator, FileText, AlertCircle, BarChart3, Settings, Target,
-  Truck, Award, Calendar, Package
+  Package, 
+  Users, 
+  Factory, 
+  Truck,
+  FileText,
+  CheckCircle,
+  XCircle,
+  Clock,
+  AlertCircle,
+  ArrowRight,
+  ArrowDown,
+  Building2,
+  ClipboardCheck,
+  Banknote,
+  UserCheck,
+  Settings,
+  BarChart3,
+  Workflow,
+  ChevronRight,
+  Filter,
+  HardHat,
+  Wrench,
+  Database,
+  GitBranch,
+  Activity
 } from 'lucide-react';
-import { toast } from 'sonner';
-import { apiWrapper, API_ENDPOINTS } from '@/api/config';
-import { Role, Process, ProcessConnection } from '@/types';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// API Response types
-interface HierarchyData {
-  hierarchy: {
-    [tier: string]: Array<{
-      role: Role;
-      processes: Process[];
-    }>;
-  };
-  workflow_connections: ProcessConnection[];
+interface WorkflowNode {
+  id: string;
+  title: string;
+  role: string;
+  type: 'start' | 'process' | 'decision' | 'end' | 'flag';
+  status?: 'pending' | 'in-progress' | 'approved' | 'rejected' | 'completed';
+  color: string;
+  icon: React.ElementType;
+  x: number;
+  y: number;
 }
 
-// Your original component data structure (converted to use API data)
+interface WorkflowConnection {
+  from: string;
+  to: string;
+  label?: string;
+  type: 'normal' | 'approval' | 'rejection' | 'revision' | 'reference';
+}
+
 const ProcessFlowPage: React.FC = () => {
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [processes, setProcesses] = useState<Process[]>([]);
-  const [connections, setConnections] = useState<ProcessConnection[]>([]);
-  const [activeRole, setActiveRole] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [selectedWorkflow, setSelectedWorkflow] = useState('material-purchase');
+  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [filterRole, setFilterRole] = useState<string>('all');
 
-  useEffect(() => {
-    const loadProcessFlowData = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        // Fetch organizational hierarchy
-        const hierarchyData: HierarchyData = await apiWrapper.get(API_ENDPOINTS.PROCESSES.HIERARCHY);
-        
-        // Extract roles and processes
-        const allRoles: Role[] = [];
-        const allProcesses: Process[] = [];
-        
-        Object.entries(hierarchyData.hierarchy).forEach(([, tierRoles]) => {
-          tierRoles.forEach((roleData) => {
-            allRoles.push(roleData.role);
-            allProcesses.push(...roleData.processes);
-          });
-        });
-        
-        setRoles(allRoles);
-        setProcesses(allProcesses);
-        setConnections(hierarchyData.workflow_connections);
-      } catch (error) {
-        console.error('Failed to load process flow data:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load process flow data';
-        setError(errorMessage);
-        toast.error('Failed to load process flow data. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Material Purchase Workflow based on PDF
+  const materialPurchaseNodes: WorkflowNode[] = [
+    { id: 'site-supervisor', title: 'Site/MEP Supervisor', role: 'SITE_SUPERVISOR', type: 'start', color: 'bg-gray-500', icon: HardHat, x: 100, y: 200 },
+    { id: 'design', title: 'Design', role: 'DESIGN', type: 'process', color: 'bg-rose-500', icon: Settings, x: 100, y: 350 },
+    { id: 'procurement', title: 'Procurement', role: 'PROCUREMENT', type: 'process', color: 'bg-emerald-500', icon: Package, x: 350, y: 200 },
+    { id: 'qty-spec-flag', title: 'QTY/SPEC Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 500, y: 100 },
+    { id: 'project-manager', title: 'Project Manager', role: 'PROJECT_MANAGER', type: 'process', color: 'bg-purple-500', icon: Users, x: 650, y: 200 },
+    { id: 'pm-flag', title: 'PM Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 800, y: 250 },
+    { id: 'cost-flag', title: 'Cost Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: Banknote, x: 500, y: 350 },
+    { id: 'estimation', title: 'Estimation', role: 'ESTIMATION', type: 'process', color: 'bg-amber-500', icon: BarChart3, x: 800, y: 350 },
+    { id: 'flag', title: 'Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 800, y: 450 },
+    { id: 'accounts', title: 'Accounts', role: 'ACCOUNTS', type: 'process', color: 'bg-cyan-500', icon: Banknote, x: 350, y: 500 },
+    { id: 'technical-director', title: 'Technical Director', role: 'TECHNICAL_DIRECTOR', type: 'process', color: 'bg-teal-500', icon: Building2, x: 650, y: 500 },
+    { id: 'task-completion', title: 'Task Completion', role: 'COMPLETION', type: 'end', color: 'bg-indigo-500', icon: CheckCircle, x: 100, y: 500 }
+  ];
 
-    loadProcessFlowData();
-  }, []);
+  const materialPurchaseConnections: WorkflowConnection[] = [
+    { from: 'site-supervisor', to: 'procurement', label: 'Purchase requisition form', type: 'normal' },
+    { from: 'site-supervisor', to: 'design', label: 'reference inputs', type: 'reference' },
+    { from: 'design', to: 'procurement', label: 'reference inputs', type: 'reference' },
+    { from: 'procurement', to: 'qty-spec-flag', type: 'normal' },
+    { from: 'qty-spec-flag', to: 'procurement', label: 'Qty & spec revisions', type: 'revision' },
+    { from: 'qty-spec-flag', to: 'project-manager', label: 'Qty & spec approvals', type: 'approval' },
+    { from: 'procurement', to: 'project-manager', label: 'Purchase requisition form', type: 'normal' },
+    { from: 'project-manager', to: 'pm-flag', type: 'normal' },
+    { from: 'project-manager', to: 'estimation', label: 'Qty & spec approvals', type: 'approval' },
+    { from: 'procurement', to: 'cost-flag', label: 'Cost revision', type: 'normal' },
+    { from: 'cost-flag', to: 'procurement', label: 'Cost revision', type: 'revision' },
+    { from: 'estimation', to: 'flag', label: 'Qty, spec & cost approvals', type: 'approval' },
+    { from: 'flag', to: 'technical-director', label: 'Purchase requisition approvals', type: 'approval' },
+    { from: 'accounts', to: 'task-completion', label: 'Payment transaction', type: 'normal' },
+    { from: 'technical-director', to: 'accounts', label: 'Acknowledgement of payments', type: 'normal' },
+    { from: 'accounts', to: 'procurement', label: 'Acknowledgement of payments', type: 'normal' }
+  ];
 
-  const handleRoleClick = (roleId: string) => {
-    setActiveRole(prev => prev === roleId ? null : roleId);
+  // Subcontractor/Vendor Workflow based on PDF
+  const subcontractorNodes: WorkflowNode[] = [
+    { id: 'pm-vendor', title: 'Project Manager', role: 'PROJECT_MANAGER', type: 'start', color: 'bg-purple-500', icon: Users, x: 100, y: 200 },
+    { id: 'design-vendor', title: 'Design', role: 'DESIGN', type: 'process', color: 'bg-rose-500', icon: Settings, x: 100, y: 350 },
+    { id: 'procurement-vendor', title: 'Procurement', role: 'PROCUREMENT', type: 'process', color: 'bg-emerald-500', icon: Package, x: 350, y: 200 },
+    { id: 'qty-scope-flag', title: 'QTY/SCOPE Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 500, y: 100 },
+    { id: 'pm-approval', title: 'Project Manager', role: 'PROJECT_MANAGER', type: 'process', color: 'bg-purple-500', icon: Users, x: 650, y: 200 },
+    { id: 'pm-flag-vendor', title: 'PM Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 800, y: 250 },
+    { id: 'vendor-check', title: 'Estimation-Vendor Check', role: 'ESTIMATION', type: 'process', color: 'bg-amber-500', icon: ClipboardCheck, x: 500, y: 350 },
+    { id: 'estimation-vendor', title: 'Estimation', role: 'ESTIMATION', type: 'process', color: 'bg-amber-500', icon: BarChart3, x: 800, y: 350 },
+    { id: 'flag-vendor', title: 'Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 800, y: 450 },
+    { id: 'accounts-vendor', title: 'Accounts', role: 'ACCOUNTS', type: 'process', color: 'bg-cyan-500', icon: Banknote, x: 350, y: 500 },
+    { id: 'tech-director-vendor', title: 'Technical Director', role: 'TECHNICAL_DIRECTOR', type: 'process', color: 'bg-teal-500', icon: Building2, x: 650, y: 500 },
+    { id: 'completion-vendor', title: 'Task Completion', role: 'COMPLETION', type: 'end', color: 'bg-indigo-500', icon: CheckCircle, x: 100, y: 500 }
+  ];
+
+  const subcontractorConnections: WorkflowConnection[] = [
+    { from: 'pm-vendor', to: 'procurement-vendor', label: 'Vendor scope of work - BOQ ref', type: 'normal' },
+    { from: 'pm-vendor', to: 'design-vendor', label: 'reference inputs', type: 'reference' },
+    { from: 'design-vendor', to: 'procurement-vendor', label: 'reference inputs', type: 'reference' },
+    { from: 'procurement-vendor', to: 'qty-scope-flag', type: 'normal' },
+    { from: 'qty-scope-flag', to: 'procurement-vendor', label: 'Qty & scope revisions', type: 'revision' },
+    { from: 'qty-scope-flag', to: 'pm-approval', label: 'Qty & scope approvals', type: 'approval' },
+    { from: 'procurement-vendor', to: 'pm-approval', label: 'Sub-contractor quotation', type: 'normal' },
+    { from: 'procurement-vendor', to: 'vendor-check', label: 'reference inputs', type: 'reference' },
+    { from: 'vendor-check', to: 'procurement-vendor', label: 'reference inputs', type: 'reference' },
+    { from: 'pm-approval', to: 'pm-flag-vendor', type: 'normal' },
+    { from: 'pm-approval', to: 'estimation-vendor', label: 'Qty & scope approvals', type: 'approval' },
+    { from: 'estimation-vendor', to: 'flag-vendor', label: 'Qty, scope & cost approvals', type: 'approval' },
+    { from: 'flag-vendor', to: 'tech-director-vendor', label: 'Quotation approvals', type: 'approval' },
+    { from: 'accounts-vendor', to: 'completion-vendor', label: 'Payment transaction', type: 'normal' },
+    { from: 'tech-director-vendor', to: 'accounts-vendor', label: 'Acknowledgement of payments', type: 'normal' }
+  ];
+
+  // Material Dispatch Production Workflow
+  const productionNodes: WorkflowNode[] = [
+    { id: 'design-prod', title: 'Design', role: 'DESIGN', type: 'start', color: 'bg-rose-500', icon: Settings, x: 100, y: 100 },
+    { id: 'factory-supervisor', title: 'Factory Supervisor', role: 'FACTORY_SUPERVISOR', type: 'process', color: 'bg-gray-500', icon: Factory, x: 100, y: 250 },
+    { id: 'procurement-prod', title: 'Procurement', role: 'PROCUREMENT', type: 'process', color: 'bg-emerald-500', icon: Package, x: 350, y: 250 },
+    { id: 'qty-spec-flag-prod', title: 'QTY/SPEC Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 500, y: 150 },
+    { id: 'pm-prod', title: 'Project Manager', role: 'PROJECT_MANAGER', type: 'process', color: 'bg-purple-500', icon: Users, x: 650, y: 250 },
+    { id: 'pm-flag-prod', title: 'PM Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 800, y: 300 },
+    { id: 'store-in-charge', title: 'Procurement/Store In Charge', role: 'STORE', type: 'process', color: 'bg-cyan-500', icon: Database, x: 350, y: 400 },
+    { id: 'estimation-prod', title: 'Estimation', role: 'ESTIMATION', type: 'process', color: 'bg-amber-500', icon: BarChart3, x: 800, y: 400 },
+    { id: 'flag-prod', title: 'Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 800, y: 500 },
+    { id: 'tech-dir-prod', title: 'Technical Director', role: 'TECHNICAL_DIRECTOR', type: 'process', color: 'bg-teal-500', icon: Building2, x: 650, y: 550 },
+    { id: 'completion-prod', title: 'Task Completion', role: 'COMPLETION', type: 'end', color: 'bg-indigo-500', icon: CheckCircle, x: 100, y: 550 }
+  ];
+
+  const productionConnections: WorkflowConnection[] = [
+    { from: 'design-prod', to: 'factory-supervisor', label: 'reference inputs', type: 'reference' },
+    { from: 'factory-supervisor', to: 'procurement-prod', label: 'Material requisition form', type: 'normal' },
+    { from: 'procurement-prod', to: 'qty-spec-flag-prod', type: 'normal' },
+    { from: 'qty-spec-flag-prod', to: 'procurement-prod', label: 'Qty & spec revisions', type: 'revision' },
+    { from: 'qty-spec-flag-prod', to: 'pm-prod', label: 'Qty & spec approvals', type: 'approval' },
+    { from: 'procurement-prod', to: 'pm-prod', label: 'Material requisition form', type: 'normal' },
+    { from: 'pm-prod', to: 'pm-flag-prod', type: 'normal' },
+    { from: 'pm-prod', to: 'estimation-prod', label: 'Qty & spec approvals', type: 'approval' },
+    { from: 'procurement-prod', to: 'store-in-charge', label: 'Material dispatch for production', type: 'normal' },
+    { from: 'store-in-charge', to: 'factory-supervisor', label: 'Joinery & furniture production', type: 'normal' },
+    { from: 'store-in-charge', to: 'estimation-prod', label: 'Material requisition approvals', type: 'approval' },
+    { from: 'estimation-prod', to: 'flag-prod', label: 'Bulk qty approvals', type: 'approval' },
+    { from: 'flag-prod', to: 'tech-dir-prod', label: 'Bulk qty request', type: 'approval' },
+    { from: 'factory-supervisor', to: 'completion-prod', label: 'Acknowledgement of dispatch', type: 'normal' },
+    { from: 'store-in-charge', to: 'completion-prod', label: 'Acknowledgement of dispatch', type: 'normal' },
+    { from: 'tech-dir-prod', to: 'store-in-charge', label: 'Acknowledgement of dispatch', type: 'normal' }
+  ];
+
+  // Material Dispatch Site Works Workflow
+  const siteWorksNodes: WorkflowNode[] = [
+    { id: 'site-factory', title: 'Site/MEP/Factory Supervisor', role: 'SITE_SUPERVISOR', type: 'start', color: 'bg-gray-500', icon: HardHat, x: 100, y: 250 },
+    { id: 'design-site', title: 'Design', role: 'DESIGN', type: 'process', color: 'bg-rose-500', icon: Settings, x: 100, y: 400 },
+    { id: 'procurement-site', title: 'Procurement', role: 'PROCUREMENT', type: 'process', color: 'bg-emerald-500', icon: Package, x: 350, y: 250 },
+    { id: 'qty-spec-req-flag', title: 'QTY/SPEC/REQ Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 500, y: 150 },
+    { id: 'pm-site', title: 'Project Manager', role: 'PROJECT_MANAGER', type: 'process', color: 'bg-purple-500', icon: Users, x: 650, y: 250 },
+    { id: 'flag-site', title: 'Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 800, y: 350 },
+    { id: 'site-supervisor-delivery', title: 'Site Supervisor/MEP', role: 'SITE_SUPERVISOR', type: 'process', color: 'bg-gray-500', icon: Truck, x: 350, y: 450 },
+    { id: 'tech-dir-site', title: 'Technical Director', role: 'TECHNICAL_DIRECTOR', type: 'process', color: 'bg-teal-500', icon: Building2, x: 650, y: 500 },
+    { id: 'completion-site', title: 'Task Completion', role: 'COMPLETION', type: 'end', color: 'bg-indigo-500', icon: CheckCircle, x: 350, y: 600 }
+  ];
+
+  const siteWorksConnections: WorkflowConnection[] = [
+    { from: 'site-factory', to: 'procurement-site', label: 'Material request', type: 'normal' },
+    { from: 'site-factory', to: 'design-site', label: 'reference inputs', type: 'reference' },
+    { from: 'design-site', to: 'site-factory', label: 'reference inputs', type: 'reference' },
+    { from: 'procurement-site', to: 'qty-spec-req-flag', type: 'normal' },
+    { from: 'qty-spec-req-flag', to: 'procurement-site', label: 'Qty & spec revisions', type: 'revision' },
+    { from: 'qty-spec-req-flag', to: 'pm-site', label: 'Qty & spec approvals', type: 'approval' },
+    { from: 'procurement-site', to: 'pm-site', label: 'Material delivery note', type: 'normal' },
+    { from: 'pm-site', to: 'flag-site', label: 'Bulk qty dispatch approvals', type: 'approval' },
+    { from: 'pm-site', to: 'site-supervisor-delivery', label: 'Material delivery note approvals', type: 'approval' },
+    { from: 'procurement-site', to: 'site-supervisor-delivery', label: 'Site delivery as per approved delivery note', type: 'normal' },
+    { from: 'site-supervisor-delivery', to: 'procurement-site', label: 'Acknowledgement of delivery', type: 'normal' },
+    { from: 'site-supervisor-delivery', to: 'completion-site', label: 'Site delivery', type: 'normal' },
+    { from: 'flag-site', to: 'tech-dir-site', label: 'Bulk qty dispatch request', type: 'approval' },
+    { from: 'tech-dir-site', to: 'pm-site', label: 'Bulk qty dispatch approvals', type: 'approval' },
+    { from: 'tech-dir-site', to: 'completion-site', label: 'Acknowledgement of delivery', type: 'normal' }
+  ];
+
+  const workflows = {
+    'material-purchase': {
+      title: 'Material Purchase - Project Bound',
+      nodes: materialPurchaseNodes,
+      connections: materialPurchaseConnections
+    },
+    'subcontractor': {
+      title: 'Subcontractor/Vendor - Project Bound',
+      nodes: subcontractorNodes,
+      connections: subcontractorConnections
+    },
+    'production': {
+      title: 'Material Dispatch - Production - Project Bound',
+      nodes: productionNodes,
+      connections: productionConnections
+    },
+    'site-works': {
+      title: 'Material Dispatch - Site Works - Project Bound',
+      nodes: siteWorksNodes,
+      connections: siteWorksConnections
+    }
   };
 
-  const activeConnections = activeRole ? connections.filter(c => 
-    c.from_role === activeRole || c.to_role === activeRole
-  ) : [];
+  const currentWorkflow = workflows[selectedWorkflow as keyof typeof workflows];
 
-  const getIconComponent = (iconName: string) => {
-    const iconMap: { [key: string]: any } = {
-      'Briefcase': Briefcase,
-      'UserCheck': UserCheck,
-      'HardHat': HardHat,
-      'Wrench': Wrench,
-      'ShoppingCart': ShoppingCart,
-      'DollarSign': DollarSign,
-      'Building': Building,
-      'Truck': Truck,
-      'BarChart3': BarChart3,
-      'Target': Target,
-      'Calendar': Calendar,
-      'Users': Users,
-      'Settings': Settings,
-      'CheckCircle': CheckCircle,
-      'Package': Package,
-      'FileText': FileText,
-      'Calculator': Calculator,
-      'Award': Award,
-    };
-    
-    return iconMap[iconName] || Settings;
-  };
+  const roles = [
+    { value: 'all', label: 'All Roles' },
+    { value: 'TECHNICAL_DIRECTOR', label: 'Technical Director' },
+    { value: 'PROJECT_MANAGER', label: 'Project Manager' },
+    { value: 'PROCUREMENT', label: 'Procurement' },
+    { value: 'ESTIMATION', label: 'Estimation' },
+    { value: 'SITE_SUPERVISOR', label: 'Site Supervisor' },
+    { value: 'FACTORY_SUPERVISOR', label: 'Factory Supervisor' },
+    { value: 'DESIGN', label: 'Design' },
+    { value: 'ACCOUNTS', label: 'Accounts' },
+    { value: 'STORE', label: 'Store In Charge' }
+  ];
 
-  const getColorClass = (color: string): string => {
-    const colorMap: { [key: string]: string } = {
-      '#3b82f6': 'role-color-blue',
-      '#10b981': 'role-color-green',
-      '#8b5cf6': 'role-color-purple',
-      '#ef4444': 'role-color-red',
-      '#f59e0b': 'role-color-yellow',
-      '#6366f1': 'role-color-indigo',
-      '#ec4899': 'role-color-pink',
-      '#f97316': 'role-color-orange',
-      '#14b8a6': 'role-color-teal',
-      '#06b6d4': 'role-color-cyan',
-    };
-    
-    return colorMap[color] || 'role-color-blue';
-  };
+  const renderWorkflowNode = (node: WorkflowNode) => {
+    const Icon = node.icon;
+    const isFiltered = filterRole !== 'all' && node.role !== filterRole && node.role !== 'FLAG' && node.role !== 'COMPLETION';
+    const isSelected = selectedNode === node.id;
 
-  const ProcessChild: React.FC<{ 
-    process: Process; 
-    isActive: boolean; 
-    roleColor: string; 
-    showSteps?: boolean;
-  }> = ({ process, isActive, roleColor, showSteps = false }) => {
-    const IconComponent = getIconComponent(process.icon || 'Settings');
-    
     return (
-      <div className={`process-child ${isActive ? 'active' : ''}`}>
-        <div className="flex items-center mb-2">
-          <IconComponent size={14} className="mr-2" color={roleColor} />
-          <span className="font-bold text-xs">{process.name}</span>
-        </div>
-        <div className="text-xs text-gray-600 mb-2">{process.description}</div>
-        {process.approval_limit && (
-          <div className="approval-badge mb-2">
-            {process.approval_limit}
-          </div>
-        )}
-        <div className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded inline-block">
-          {process.frequency}
-        </div>
-        {process.steps && showSteps && (
-          <div className="mt-2 text-xs text-gray-500">
-            <div className="font-semibold mb-1 text-blue-700">Key Steps:</div>
-            <div className="bg-blue-50 p-2 rounded border">
-              <ol className="list-decimal list-inside space-y-1">
-                {process.steps.map((step, index) => (
-                  <li key={index} className="text-gray-700">{step}</li>
-                ))}
-              </ol>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const RoleTree: React.FC<{ 
-    role: Role; 
-    roleProcesses: Process[];
-    activeConnections: ProcessConnection[];
-    onClick: (roleId: string) => void;
-    isActive: boolean;
-  }> = ({ role, roleProcesses, activeConnections, onClick, isActive }) => {
-    const IconComponent = getIconComponent(role.icon);
-    
-    const isProcessActive = (processId: string) => {
-      return activeConnections.some(c => 
-        c.from_process === processId || c.to_process === processId
-      );
-    };
-
-    return (
-      <div className="role-tree" onClick={() => onClick(role.id)}>
-        <div 
-          id={`role-${role.id}`}
-          className={`role-node cursor-pointer ${getColorClass(role.color)}`}
-          data-role-color
-        >
-          <div className="flex items-center mb-3">
-            <div className="rounded-full p-3 mr-3 shadow-lg icon-container" 
-                 data-role-color>
-              <IconComponent size={24} color={role.color} />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-800">{role.title}</h3>
-              <p className="text-sm text-gray-500">{role.tier}</p>
-            </div>
-          </div>
-          <div className="tree-connector vertical-line" data-role-color></div>
-        </div>
-
-        <div className="process-children">
-          {roleProcesses.map((process, index) => (
-            <div key={index} className="relative">
-              {index === 1 && (
-                <div className="tree-connector vertical-line absolute -top-8 h-8" 
-                     data-role-color></div>
-              )}
-              <ProcessChild 
-                process={process} 
-                isActive={isProcessActive(process.id)}
-                roleColor={role.color}
-                showSteps={isActive}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <AlertCircle className="w-12 h-12 text-red-500" />
-        <h3 className="text-lg font-semibold text-gray-800">Failed to Load Process Flow</h3>
-        <p className="text-gray-600 text-center max-w-md">{error}</p>
-        <button 
-          onClick={() => window.location.reload()} 
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  const groupRolesByTier = () => {
-    const tiers = {
-      'Management Tier': roles.filter(r => r.tier === 'Management Tier'),
-      'Operations Tier': roles.filter(r => r.tier === 'Operations Tier'),
-      'Support Tier': roles.filter(r => r.tier === 'Support Tier'),
-    };
-    return tiers;
-  };
-
-  const tierGroups = groupRolesByTier();
-
-  return (
-    <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 min-h-screen font-sans p-6">
-      <style>{`
-        .role-node {
-          background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-          border: 3px solid;
-          border-radius: 16px;
-          padding: 16px;
-          margin: 8px;
-          min-width: 220px;
-          box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-          transition: all 0.3s ease;
-          position: relative;
-        }
-        .role-node:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 12px 35px rgba(0,0,0,0.15);
-        }
-        .process-child {
-          background: white;
-          border: 2px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 12px;
-          margin: 8px 0;
-          font-size: 11px;
-          transition: all 0.3s ease;
-          position: relative;
-        }
-        .process-child.active {
-          background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-          border-color: #3b82f6;
-          transform: scale(1.02);
-        }
-        .tree-connector {
-          position: absolute;
-          background: #64748b;
-          z-index: 1;
-          border-radius: 2px;
-        }
-        .vertical-line {
-          width: 3px;
-          height: 40px;
-          left: 50%;
-          transform: translateX(-50%);
-          top: 100%;
-        }
-        .tree-level {
-          display: flex;
-          justify-content: center;
-          align-items: flex-start;
-          margin: 40px 0;
-          position: relative;
-        }
-        .role-tree {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          margin: 0 20px;
-          position: relative;
-        }
-        .process-children {
-          display: flex;
-          gap: 16px;
-          margin-top: 30px;
-          position: relative;
-        }
-        .approval-badge {
-          background: linear-gradient(135deg, #fbbf24, #f59e0b);
-          color: white;
-          font-size: 9px;
-          padding: 2px 6px;
-          border-radius: 8px;
-          font-weight: bold;
-        }
-        
-        /* Dynamic color classes using CSS custom properties */
-        .role-node[data-role-color] {
-          border-color: var(--role-color);
-        }
-        
-        .icon-container[data-role-color] {
-          background: linear-gradient(135deg, var(--role-color-20) 0%, var(--role-color-40) 100%);
-        }
-        
-        .tree-connector[data-role-color] {
-          background: var(--role-color);
-        }
-        
-        .connection-border[data-role-color] {
-          border-color: var(--role-color);
-        }
-        
-        /* Predefined color classes to avoid inline styles */
-        .role-color-blue { --role-color: #3b82f6; --role-color-20: #3b82f620; --role-color-40: #3b82f640; }
-        .role-color-green { --role-color: #10b981; --role-color-20: #10b98120; --role-color-40: #10b98140; }
-        .role-color-purple { --role-color: #8b5cf6; --role-color-20: #8b5cf620; --role-color-40: #8b5cf640; }
-        .role-color-red { --role-color: #ef4444; --role-color-20: #ef444420; --role-color-40: #ef444440; }
-        .role-color-yellow { --role-color: #f59e0b; --role-color-20: #f59e0b20; --role-color-40: #f59e0b40; }
-        .role-color-indigo { --role-color: #6366f1; --role-color-20: #6366f120; --role-color-40: #6366f140; }
-        .role-color-pink { --role-color: #ec4899; --role-color-20: #ec489920; --role-color-40: #ec489940; }
-        .role-color-orange { --role-color: #f97316; --role-color-20: #f9731620; --role-color-40: #f9731640; }
-        .role-color-teal { --role-color: #14b8a6; --role-color-20: #14b8a620; --role-color-40: #14b8a640; }
-        .role-color-cyan { --role-color: #06b6d4; --role-color-20: #06b6d420; --role-color-40: #06b6d440; }
-      `}</style>
-      
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-black mb-4 bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-          Corporate Interiors ERP System
-        </h1>
-        <p className="text-lg text-gray-700 mb-2">Official Process Flow Documentation</p>
-        <p className="text-sm text-gray-600">
-          {activeRole ? `Showing processes for: ${roles.find(r => r.id === activeRole)?.title}` : 'Click any role to see official process connections'}
-        </p>
-      </div>
-
-      {/* Management Tier */}
-      {tierGroups['Management Tier'].length > 0 && (
-        <div className="tree-level">
-          <h2 className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-blue-800 text-white px-6 py-2 rounded-full text-sm font-bold">
-            🏛️ MANAGEMENT TIER
-          </h2>
-          {tierGroups['Management Tier'].map(role => (
-            <RoleTree 
-              key={role.id}
-              role={role}
-              roleProcesses={processes.filter(p => p.role_id === role.id)}
-              activeConnections={activeConnections}
-              onClick={handleRoleClick}
-              isActive={activeRole === role.id}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Operations Tier */}
-      {tierGroups['Operations Tier'].length > 0 && (
-        <div className="tree-level">
-          <h2 className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-purple-800 text-white px-6 py-2 rounded-full text-sm font-bold">
-            ⚙️ OPERATIONS TIER
-          </h2>
-          {tierGroups['Operations Tier'].map(role => (
-            <RoleTree 
-              key={role.id}
-              role={role}
-              roleProcesses={processes.filter(p => p.role_id === role.id)}
-              activeConnections={activeConnections}
-              onClick={handleRoleClick}
-              isActive={activeRole === role.id}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Support Tier */}
-      {tierGroups['Support Tier'].length > 0 && (
-        <div className="tree-level">
-          <h2 className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-green-800 text-white px-6 py-2 rounded-full text-sm font-bold">
-            🛠️ SUPPORT TIER
-          </h2>
-          {tierGroups['Support Tier'].map(role => (
-            <RoleTree 
-              key={role.id}
-              role={role}
-              roleProcesses={processes.filter(p => p.role_id === role.id)}
-              activeConnections={activeConnections}
-              onClick={handleRoleClick}
-              isActive={activeRole === role.id}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Active Role Details */}
-      {activeRole && (
-        <div className="mt-12 bg-white rounded-lg shadow-lg p-6 max-w-6xl mx-auto">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">
-            {roles.find(r => r.id === activeRole)?.title} - Official Process Documentation
-          </h3>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-semibold text-gray-700 mb-3">Connected Processes:</h4>
-                             {activeConnections.map((conn, index) => {
-                 const isOutgoing = conn.from_role === activeRole;
-                 const connectedRole = isOutgoing ? conn.to_role : conn.from_role;
-                
-                return (
-                  <div key={index} className={`border-l-4 pl-4 mb-4 bg-gray-50 p-3 rounded connection-border ${getColorClass(roles.find(r => r.id === connectedRole)?.color || '#3b82f6')}`} 
-                       data-role-color>
-                    <div className="font-semibold text-gray-800 text-sm">
-                      {isOutgoing ? '→' : '←'} {roles.find(r => r.id === connectedRole)?.title}
-                    </div>
-                    <div className="text-xs text-green-600 bg-green-50 p-2 rounded mt-2">
-                      <div className="font-medium">{processes.find(p => p.id === conn.from_process)?.name}</div>
-                      <div className="text-center text-gray-400 my-1">↓</div>
-                      <div className="font-medium">{processes.find(p => p.id === conn.to_process)?.name}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-700 mb-3">
-                All Processes ({processes.filter(p => p.role_id === activeRole).length}):
-              </h4>
-              <div className="space-y-4">
-                {processes.filter(p => p.role_id === activeRole).map((process, index) => {
-                  const hasConnections = activeConnections.some(conn => 
-                    conn.from_process === process.id || conn.to_process === process.id
-                  );
-                  
-                  return (
-                    <div key={index} className={`p-4 rounded-lg border-2 ${
-                      hasConnections ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
-                    }`}>
-                      <div className="font-medium text-gray-800 flex items-center mb-2">
-                        <span className="text-base">{process.name}</span>
-                        {hasConnections && (
-                          <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-1 rounded-full">
-                            Connected
-                          </span>
-                        )}
-                        {process.approval_limit && (
-                          <span className="ml-2 approval-badge">
-                            {process.approval_limit}
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="text-sm text-gray-600 mb-3">{process.description}</div>
-                      
-                      <div className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full inline-block mb-3">
-                        Frequency: {process.frequency}
-                      </div>
-                      
-                      {process.steps && process.steps.length > 0 && (
-                        <div className="mt-3">
-                          <div className="font-semibold mb-2 text-purple-700 text-sm flex items-center">
-                            <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
-                            Key Process Steps:
-                          </div>
-                          <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
-                            <ol className="list-decimal list-inside space-y-2 text-sm text-purple-900">
-                              {process.steps.map((step, idx) => (
-                                <li key={idx} className="leading-relaxed">
-                                  <span className="ml-1">{step}</span>
-                                </li>
-                              ))}
-                            </ol>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+      <motion.div
+        key={node.id}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ 
+          opacity: isFiltered ? 0.3 : 1, 
+          scale: 1,
+          filter: isFiltered ? 'grayscale(1)' : 'grayscale(0)'
+        }}
+        whileHover={{ scale: 1.05 }}
+        className={`absolute cursor-pointer transition-all duration-200 ${isSelected ? 'z-20' : 'z-10'}`}
+        style={{ left: `${node.x}px`, top: `${node.y}px` }}
+        onClick={() => setSelectedNode(node.id)}
+      >
+        <div className={`relative ${isSelected ? 'ring-4 ring-blue-400 ring-offset-2' : ''} rounded-lg`}>
+          <div className={`${node.color} p-3 rounded-lg shadow-lg border-2 border-white min-w-[140px]`}>
+            <div className="flex flex-col items-center space-y-1">
+              <Icon className="w-5 h-5 text-white" />
+              <div className="text-center">
+                <p className="text-white font-semibold text-xs leading-tight">{node.title}</p>
+                {node.type === 'flag' && (
+                  <Badge className="mt-1 bg-white/20 text-white text-[10px] px-1 py-0">
+                    Decision
+                  </Badge>
+                )}
               </div>
             </div>
           </div>
+          {node.status && (
+            <div className="absolute -top-2 -right-2">
+              {node.status === 'completed' && <CheckCircle className="w-5 h-5 text-green-500 bg-white rounded-full" />}
+              {node.status === 'in-progress' && <Clock className="w-5 h-5 text-blue-500 bg-white rounded-full" />}
+              {node.status === 'pending' && <AlertCircle className="w-5 h-5 text-yellow-500 bg-white rounded-full" />}
+              {node.status === 'rejected' && <XCircle className="w-5 h-5 text-red-500 bg-white rounded-full" />}
+            </div>
+          )}
         </div>
-      )}
+      </motion.div>
+    );
+  };
+
+  const renderConnection = (connection: WorkflowConnection, nodes: WorkflowNode[]) => {
+    const fromNode = nodes.find(n => n.id === connection.from);
+    const toNode = nodes.find(n => n.id === connection.to);
+    
+    if (!fromNode || !toNode) return null;
+
+    const x1 = fromNode.x + 70;
+    const y1 = fromNode.y + 30;
+    const x2 = toNode.x + 70;
+    const y2 = toNode.y + 30;
+
+    const strokeColor = connection.type === 'approval' ? '#10b981' : 
+                       connection.type === 'rejection' ? '#ef4444' :
+                       connection.type === 'revision' ? '#f59e0b' : 
+                       connection.type === 'reference' ? '#8b5cf6' : '#6b7280';
+
+    const strokeDasharray = connection.type === 'revision' ? '5,5' : 
+                           connection.type === 'reference' ? '3,3' : '0';
+
+    return (
+      <svg
+        key={`${connection.from}-${connection.to}`}
+        className="absolute inset-0 pointer-events-none z-0"
+        style={{ width: '100%', height: '100%' }}
+      >
+        <defs>
+          <marker
+            id={`arrowhead-${connection.from}-${connection.to}`}
+            markerWidth="10"
+            markerHeight="10"
+            refX="9"
+            refY="3"
+            orient="auto"
+          >
+            <polygon
+              points="0 0, 10 3, 0 6"
+              fill={strokeColor}
+            />
+          </marker>
+        </defs>
+        <line
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          stroke={strokeColor}
+          strokeWidth="2"
+          strokeDasharray={strokeDasharray}
+          markerEnd={`url(#arrowhead-${connection.from}-${connection.to})`}
+        />
+        {connection.label && (
+          <text
+            x={(x1 + x2) / 2}
+            y={(y1 + y2) / 2 - 5}
+            fill="#4b5563"
+            fontSize="9"
+            textAnchor="middle"
+            className="font-medium bg-white"
+            style={{ 
+              paintOrder: 'stroke', 
+              stroke: 'white', 
+              strokeWidth: '3px',
+              strokeLinejoin: 'round'
+            }}
+          >
+            {connection.label}
+          </text>
+        )}
+      </svg>
+    );
+  };
+
+  return (
+    <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Workflow className="w-7 h-7 text-blue-600" />
+            ERP Process Workflows
+          </h1>
+          <p className="text-sm text-gray-600 mt-1">
+            Costing, Estimation & Procurement Management System
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <Select value={filterRole} onValueChange={setFilterRole}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filter by role" />
+            </SelectTrigger>
+            <SelectContent>
+              {roles.map(role => (
+                <SelectItem key={role.value} value={role.value}>
+                  {role.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button 
+            variant="outline" 
+            className="flex items-center gap-2"
+            onClick={() => window.open('/procurement', '_blank')}
+          >
+            <Package className="w-4 h-4" />
+            Procurement Hub
+          </Button>
+          <Button variant="outline" className="flex items-center gap-2">
+            <Activity className="w-4 h-4" />
+            Live Status
+          </Button>
+        </div>
+      </div>
+
+      {/* Workflow Tabs */}
+      <Tabs value={selectedWorkflow} onValueChange={setSelectedWorkflow} className="space-y-6">
+        <TabsList className="grid grid-cols-4 w-full max-w-4xl bg-white shadow-sm">
+          <TabsTrigger value="material-purchase" className="text-xs data-[state=active]:bg-blue-50">
+            <Package className="w-4 h-4 mr-1" />
+            Material Purchase
+          </TabsTrigger>
+          <TabsTrigger value="subcontractor" className="text-xs data-[state=active]:bg-purple-50">
+            <Users className="w-4 h-4 mr-1" />
+            Subcontractor/Vendor
+          </TabsTrigger>
+          <TabsTrigger value="production" className="text-xs data-[state=active]:bg-emerald-50">
+            <Factory className="w-4 h-4 mr-1" />
+            Production
+          </TabsTrigger>
+          <TabsTrigger value="site-works" className="text-xs data-[state=active]:bg-amber-50">
+            <Truck className="w-4 h-4 mr-1" />
+            Site Works
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Workflow Canvas */}
+        <Card className="overflow-hidden shadow-lg">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <GitBranch className="w-5 h-5 text-blue-600" />
+                {currentWorkflow.title}
+              </CardTitle>
+              <div className="flex gap-2">
+                <Badge variant="outline" className="bg-white">
+                  {currentWorkflow.nodes.length} Steps
+                </Badge>
+                <Badge variant="outline" className="bg-white">
+                  {currentWorkflow.connections.length} Connections
+                </Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="relative bg-gradient-to-br from-gray-50 to-white h-[700px] overflow-auto">
+              <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+              <div className="relative w-[1000px] h-[650px]">
+                {/* Render Connections */}
+                {currentWorkflow.connections.map(connection => 
+                  renderConnection(connection, currentWorkflow.nodes)
+                )}
+                {/* Render Nodes */}
+                {currentWorkflow.nodes.map(renderWorkflowNode)}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Node Details Panel */}
+        {selectedNode && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="grid grid-cols-1 md:grid-cols-3 gap-6"
+          >
+            {/* Selected Node Details */}
+            <Card className="shadow-md">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <ClipboardCheck className="w-4 h-4 text-blue-600" />
+                  Node Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-4">
+                {(() => {
+                  const node = currentWorkflow.nodes.find(n => n.id === selectedNode);
+                  if (!node) return null;
+                  const Icon = node.icon;
+                  return (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <div className={`${node.color} p-2 rounded-lg`}>
+                          <Icon className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{node.title}</p>
+                          <p className="text-xs text-gray-500 capitalize">{node.type}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2 pt-2 border-t">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500">Department:</span>
+                          <span className="font-medium">{node.role.replace(/_/g, ' ')}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500">Type:</span>
+                          <Badge variant="outline" className="text-xs capitalize">
+                            {node.type}
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500">Status:</span>
+                          <Badge className="text-xs bg-green-100 text-green-700">
+                            Active
+                          </Badge>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+
+            {/* Connections */}
+            <Card className="shadow-md">
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <GitBranch className="w-4 h-4 text-purple-600" />
+                  Connections
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 pt-4">
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-gray-700">Incoming:</p>
+                  {currentWorkflow.connections
+                    .filter(c => c.to === selectedNode)
+                    .map((conn, idx) => (
+                      <div key={idx} className="text-xs bg-blue-50 p-2 rounded">
+                        <span className="font-medium">
+                          {currentWorkflow.nodes.find(n => n.id === conn.from)?.title}
+                        </span>
+                        {conn.label && (
+                          <span className="text-gray-500 block mt-1 text-[10px]">
+                            → {conn.label}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                </div>
+                <div className="space-y-2 pt-2">
+                  <p className="text-xs font-medium text-gray-700">Outgoing:</p>
+                  {currentWorkflow.connections
+                    .filter(c => c.from === selectedNode)
+                    .map((conn, idx) => (
+                      <div key={idx} className="text-xs bg-green-50 p-2 rounded">
+                        <span className="font-medium">
+                          {currentWorkflow.nodes.find(n => n.id === conn.to)?.title}
+                        </span>
+                        {conn.label && (
+                          <span className="text-gray-500 block mt-1 text-[10px]">
+                            → {conn.label}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Actions */}
+            <Card className="shadow-md">
+              <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-emerald-600" />
+                  Quick Actions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 pt-4">
+                <Button className="w-full justify-start text-xs" variant="outline" size="sm">
+                  <FileText className="w-4 h-4 mr-2" />
+                  View Documents
+                </Button>
+                <Button className="w-full justify-start text-xs" variant="outline" size="sm">
+                  <Users className="w-4 h-4 mr-2" />
+                  Assign User
+                </Button>
+                <Button className="w-full justify-start text-xs" variant="outline" size="sm">
+                  <Clock className="w-4 h-4 mr-2" />
+                  View History
+                </Button>
+                <Button className="w-full justify-start text-xs" variant="outline" size="sm">
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  View Analytics
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </Tabs>
+
+      {/* Legend */}
+      <Card className="shadow-md">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-gray-600" />
+            Workflow Legend
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-0.5 bg-gray-500"></div>
+              <span className="text-xs text-gray-600">Normal Flow</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-0.5 bg-green-500"></div>
+              <span className="text-xs text-gray-600">Approval</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-0.5 bg-red-500"></div>
+              <span className="text-xs text-gray-600">Rejection</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-0.5 border-t-2 border-dashed border-yellow-500"></div>
+              <span className="text-xs text-gray-600">Revision</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-0.5 border-t-2 border-dashed border-purple-500"></div>
+              <span className="text-xs text-gray-600">Reference</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Add CSS for grid pattern */}
+      <style>{`
+        .bg-grid-pattern {
+          background-image: 
+            linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+          background-size: 20px 20px;
+        }
+      `}</style>
     </div>
   );
 };

@@ -1,3 +1,6 @@
+/* Import Corporate Theme */
+@import './styles/corporate-theme.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

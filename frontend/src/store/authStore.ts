@@ -122,6 +122,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('dev_role');
+        localStorage.removeItem('demo_user');
         set({
           user: null,
           isAuthenticated: false,
@@ -136,6 +137,30 @@ export const useAuthStore = create<AuthState>()(
           const token = localStorage.getItem('access_token');
           if (!token) {
             set({ isAuthenticated: false, user: null });
+            return;
+          }
+
+          // Check if this is a demo user
+          const demoUserData = localStorage.getItem('demo_user');
+          if (token === 'demo-token' && demoUserData) {
+            const demoUser = JSON.parse(demoUserData);
+            const mockUser: User = {
+              id: 'demo-user-id',
+              email: demoUser.email,
+              full_name: demoUser.name,
+              role_id: demoUser.role as any,
+              department: 'Demo',
+              is_active: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            
+            set({
+              user: mockUser,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null,
+            });
             return;
           }
 
