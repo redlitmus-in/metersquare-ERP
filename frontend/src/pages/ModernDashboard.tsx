@@ -30,13 +30,42 @@ import {
   TrendingDown,
   Layers,
   Truck,
-  CreditCard
+  CreditCard,
+  MoreHorizontal,
+  Settings,
+  Download,
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/authStore';
+import { UserRole } from '@/types';
 import { Progress } from '@/components/ui/progress';
+import { 
+  LineChart as RechartsLineChart, 
+  Line, 
+  AreaChart, 
+  Area, 
+  BarChart as RechartsBarChart, 
+  Bar, 
+  PieChart as RechartsPieChart, 
+  Pie, 
+  Cell, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  ComposedChart,
+  RadialBarChart,
+  RadialBar,
+  ScatterChart,
+  Scatter,
+  ReferenceLine
+} from 'recharts';
 
 interface MetricData {
   title: string;
@@ -74,82 +103,85 @@ const ModernDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'year'>('month');
-  const [showAllProjects, setShowAllProjects] = useState(false);
 
-  // Main metrics based on user role
-  const getMetrics = (): MetricData[] => {
-    const baseMetrics: MetricData[] = [
-      {
-        title: 'Total Revenue',
-        value: 'AED 2,456,890',
-        change: 12.5,
-        trend: 'up',
-        icon: Banknote,
-        color: 'bg-green-500',
-        subtitle: 'This fiscal year'
-      },
-      {
-        title: 'Active Projects',
-        value: 24,
-        change: 8.3,
-        trend: 'up',
-        icon: Briefcase,
-        color: 'bg-blue-500',
-        subtitle: '6 new this month'
-      },
-      {
-        title: 'Pending Approvals',
-        value: 15,
-        change: -25.0,
-        trend: 'down',
-        icon: Clock,
-        color: 'bg-amber-500',
-        subtitle: 'Requires action'
-      },
-      {
-        title: 'Vendor Performance',
-        value: '94%',
-        change: 3.2,
-        trend: 'up',
-        icon: Award,
-        color: 'bg-red-500',
-        subtitle: 'Satisfaction rate'
-      }
-    ];
+  // Compact Chart data
+  const revenueData = [
+    { month: 'Jan', revenue: 2400, profit: 400, target: 2200 },
+    { month: 'Feb', revenue: 2600, profit: 500, target: 2400 },
+    { month: 'Mar', revenue: 2350, profit: 350, target: 2500 },
+    { month: 'Apr', revenue: 2800, profit: 600, target: 2600 },
+    { month: 'May', revenue: 3100, profit: 700, target: 2800 },
+    { month: 'Jun', revenue: 3300, profit: 800, target: 3000 },
+  ];
 
-    if (user?.role_id === 'TECHNICAL_DIRECTOR' || user?.role_id === 'BUSINESS_OWNER') {
-      return [
-        ...baseMetrics,
-        {
-          title: 'Cost Savings',
-          value: 'AED 145,230',
-          change: 18.7,
-          trend: 'up',
-          icon: TrendingDown,
-          color: 'bg-indigo-500',
-          subtitle: 'YTD optimization'
-        },
-        {
-          title: 'Process Efficiency',
-          value: '89%',
-          change: 5.4,
-          trend: 'up',
-          icon: Zap,
-          color: 'bg-pink-500',
-          subtitle: 'Automation rate'
-        }
-      ];
+  const projectStatusData = [
+    { name: 'Completed', value: 24, color: '#EF4444' },
+    { name: 'Active', value: 15, color: '#3B82F6' },
+    { name: 'On Hold', value: 3, color: '#F59E0B' },
+    { name: 'Planning', value: 5, color: '#DC2626' },
+  ];
+
+  const departmentData = [
+    { name: 'Eng', value: 45, target: 50 },
+    { name: 'Proc', value: 38, target: 40 },
+    { name: 'Quality', value: 42, target: 45 },
+    { name: 'Ops', value: 35, target: 40 },
+  ];
+
+  // Performance Data
+  const performanceData = [
+    { name: 'Quality', value: 94 },
+    { name: 'Timeline', value: 87 },
+    { name: 'Budget', value: 91 },
+    { name: 'Satisfaction', value: 96 },
+  ];
+
+  // Main metrics - more compact
+  const metrics: MetricData[] = [
+    {
+      title: 'Revenue',
+      value: 'AED 2.45M',
+      change: 12.5,
+      trend: 'up',
+      icon: Banknote,
+      color: 'text-green-600',
+      subtitle: 'This year'
+    },
+    {
+      title: 'Projects',
+      value: 24,
+      change: 8.3,
+      trend: 'up',
+      icon: Briefcase,
+      color: 'text-blue-600',
+      subtitle: '6 new'
+    },
+    {
+      title: 'Approvals',
+      value: 15,
+      change: -25.0,
+      trend: 'down',
+      icon: Clock,
+      color: 'text-amber-600',
+      subtitle: 'Pending'
+    },
+    {
+      title: 'Performance',
+      value: '94%',
+      change: 3.2,
+      trend: 'up',
+      icon: Award,
+      color: 'text-red-600',
+      subtitle: 'Overall'
     }
+  ];
 
-    return baseMetrics;
-  };
-
-  // Sample projects data
+  // Compact projects data
   const projects: ProjectData[] = [
     {
       id: '1',
-      name: 'Marina Bay Residences - Tower A',
-      client: 'Marina Development Ltd',
+      name: 'Marina Bay Tower A',
+      client: 'Marina Development',
       status: 'active',
       progress: 75,
       budget: 850000,
@@ -159,7 +191,7 @@ const ModernDashboard: React.FC = () => {
     },
     {
       id: '2',
-      name: 'Orchard Central Office Fit-out',
+      name: 'Orchard Office Fit-out',
       client: 'TechCorp Singapore',
       status: 'active',
       progress: 45,
@@ -167,495 +199,413 @@ const ModernDashboard: React.FC = () => {
       spent: 540000,
       deadline: '2024-04-30',
       manager: 'Michael Tan'
-    },
-    {
-      id: '3',
-      name: 'Sentosa Resort Renovation',
-      client: 'Hospitality Group Asia',
-      status: 'planning',
-      progress: 15,
-      budget: 2000000,
-      spent: 0,
-      deadline: '2024-06-01',
-      manager: 'Sarah Chen'
-    },
-    {
-      id: '4',
-      name: 'CBD Corporate Tower - Level 23',
-      client: 'Financial Services Inc',
-      status: 'on-hold',
-      progress: 30,
-      budget: 650000,
-      spent: 195000,
-      deadline: '2024-05-15',
-      manager: 'David Lim'
     }
   ];
 
-  // Recent activities
+  // Compact activities
   const recentActivities: RecentActivity[] = [
     {
       id: '1',
       type: 'approval',
-      title: 'Purchase Requisition Approved',
-      description: 'PR-2024-001 for Marina Bay project approved',
-      time: '5 minutes ago',
+      title: 'PR Approved',
+      description: 'PR-2024-001 approved',
+      time: '5m ago',
       urgent: false,
       user: 'John Tan'
     },
     {
       id: '2',
       type: 'vendor',
-      title: 'New Vendor Quotation',
-      description: 'ABC Contractors submitted quotation for Orchard project',
-      time: '1 hour ago',
+      title: 'New Quotation',
+      description: 'ABC Contractors quotation',
+      time: '1h ago',
       urgent: true
     },
     {
       id: '3',
       type: 'payment',
       title: 'Payment Processed',
-      description: 'Invoice #INV-2024-089 paid to XYZ Suppliers',
-      time: '3 hours ago',
-      user: 'Finance Team'
-    },
-    {
-      id: '4',
-      type: 'task',
-      title: 'Task Completed',
-      description: 'Site inspection completed for Sentosa Resort',
-      time: '5 hours ago',
-      user: 'Site Team'
+      description: 'INV-2024-089 paid',
+      time: '3h ago',
+      user: 'Finance'
     }
   ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
-        return 'bg-green-100 text-green-700 border-green-300';
+        return 'bg-green-100 text-green-800';
       case 'completed':
-        return 'bg-blue-100 text-blue-700 border-blue-300';
+        return 'bg-blue-100 text-blue-800';
       case 'on-hold':
-        return 'bg-amber-100 text-amber-700 border-amber-300';
+        return 'bg-yellow-100 text-yellow-800';
       case 'planning':
-        return 'bg-purple-100 text-purple-700 border-purple-300';
+        return 'bg-red-100 text-red-800';
       default:
-        return 'bg-gray-100 text-gray-600 border-gray-300';
+        return 'bg-gray-100 text-gray-600';
     }
   };
 
   const getActivityIcon = (type: string) => {
     switch (type) {
       case 'approval':
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
+        return <CheckCircle className="w-3 h-3 text-green-600" />;
       case 'purchase':
-        return <ShoppingCart className="w-4 h-4 text-blue-600" />;
+        return <ShoppingCart className="w-3 h-3 text-blue-600" />;
       case 'vendor':
-        return <Users className="w-4 h-4 text-red-600" />;
+        return <Users className="w-3 h-3 text-red-600" />;
       case 'payment':
-        return <CreditCard className="w-4 h-4 text-indigo-600" />;
+        return <CreditCard className="w-3 h-3 text-indigo-600" />;
       case 'task':
-        return <FileText className="w-4 h-4 text-gray-600" />;
+        return <FileText className="w-3 h-3 text-gray-600" />;
       default:
-        return <Activity className="w-4 h-4 text-gray-600" />;
+        return <Activity className="w-3 h-3 text-gray-600" />;
     }
   };
 
-  const metrics = getMetrics();
-  const displayedProjects = showAllProjects ? projects : projects.slice(0, 3);
-
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-xl shadow-sm p-6 border"
-      >
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Welcome back, {user?.full_name}!
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Here's what's happening with your projects today
-            </p>
-          </div>
-          <div className="flex items-center gap-3 mt-4 md:mt-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate('/procurement')}
-              className="flex items-center gap-2"
-            >
-              <ShoppingCart className="w-4 h-4" />
-              Procurement
-            </Button>
-            <Button
-              onClick={() => navigate('/procurement')}
-              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-200"
-            >
-              <Plus className="w-4 h-4" />
-              New Purchase Request
-            </Button>
-          </div>
+    <div className="p-4 space-y-4 bg-gray-50 min-h-screen">
+      {/* Compact Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">
+            Welcome back, {user?.full_name}!
+          </h1>
+          <p className="text-xs text-gray-600 mt-0.5">
+            Here's your projects overview
+          </p>
         </div>
-      </motion.div>
+        <div className="flex items-center gap-2 mt-3 md:mt-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/analytics')}
+            className="flex items-center gap-1 text-xs px-3 py-1"
+          >
+            <BarChart3 className="w-3 h-3" />
+            Analytics
+          </Button>
+          <Button
+            onClick={() => navigate('/procurement')}
+            className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1 text-xs px-3 py-1"
+          >
+            <Plus className="w-3 h-3" />
+            New Request
+          </Button>
+        </div>
+      </div>
 
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      {/* Compact Metrics Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {metrics.map((metric, index) => (
           <motion.div
             key={metric.title}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
-            className="xl:col-span-1 md:col-span-1"
           >
-            <Card className="border-0 shadow-md hover:shadow-lg transition-all cursor-pointer">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div className={`p-2 rounded-lg ${metric.color} bg-opacity-10`}>
-                    <metric.icon className={`w-5 h-5 ${metric.color.replace('bg-', 'text-')}`} />
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs font-medium text-gray-600">{metric.title}</p>
+                    <p className="text-lg font-bold text-gray-900 mt-1">{metric.value}</p>
+                    <div className="flex items-center mt-1">
+                      {metric.trend === 'up' ? (
+                        <TrendingUp className="w-3 h-3 text-green-500 mr-1" />
+                      ) : (
+                        <TrendingDown className="w-3 h-3 text-red-500 mr-1" />
+                      )}
+                      <span className={`text-xs font-medium ${
+                        metric.trend === 'up' ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {metric.change > 0 ? '+' : ''}{metric.change}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">{metric.subtitle}</p>
                   </div>
-                  <div className={`flex items-center gap-1 text-xs font-medium ${
-                    metric.trend === 'up' ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {metric.trend === 'up' ? (
-                      <ChevronUp className="w-3 h-3" />
-                    ) : (
-                      <ChevronDown className="w-3 h-3" />
-                    )}
-                    {Math.abs(metric.change)}%
+                  <div className={`p-2 rounded-lg bg-gray-100`}>
+                    <metric.icon className={`w-4 h-4 ${metric.color}`} />
                   </div>
                 </div>
-                <p className="text-2xl font-bold text-gray-900">{metric.value}</p>
-                <p className="text-xs text-gray-600 mt-1">{metric.title}</p>
-                {metric.subtitle && (
-                  <p className="text-xs text-gray-500 mt-1">{metric.subtitle}</p>
-                )}
               </CardContent>
             </Card>
           </motion.div>
         ))}
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Projects Section - 2 columns */}
-        <div className="lg:col-span-2">
-          <Card className="shadow-lg border-0">
-            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Briefcase className="w-5 h-5 text-blue-600" />
-                  Active Projects
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-blue-100 text-blue-700 border border-blue-300">
-                    {projects.filter(p => p.status === 'active').length} Active
-                  </Badge>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => navigate('/projects')}
+      {/* Compact Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        {/* Revenue Chart - Takes 3 columns */}
+        <Card className="lg:col-span-3">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <TrendingUp className="w-4 h-4 text-red-600" />
+              Revenue & Profit Analysis
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={revenueData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{ fontSize: 10 }}
+                    axisLine={{ stroke: '#e0e0e0' }}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 10 }}
+                    axisLine={{ stroke: '#e0e0e0' }}
+                  />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '6px',
+                      fontSize: '12px'
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    fill="url(#revenueGradient)"
+                    stroke="#EF4444"
+                    strokeWidth={2}
+                    name="Revenue"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="profit"
+                    stroke="#3B82F6"
+                    strokeWidth={2}
+                    dot={{ fill: '#3B82F6', strokeWidth: 1, r: 3 }}
+                    name="Profit"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="target"
+                    stroke="#DC2626"
+                    strokeWidth={1}
+                    strokeDasharray="3 3"
+                    dot={{ fill: '#DC2626', strokeWidth: 1, r: 2 }}
+                    name="Target"
+                  />
+                  <defs>
+                    <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#EF4444" stopOpacity={0.1}/>
+                    </linearGradient>
+                  </defs>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Project Status Pie Chart - Takes 2 columns */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Briefcase className="w-4 h-4 text-blue-600" />
+              Project Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsPieChart>
+                  <Pie
+                    data={projectStatusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={30}
+                    outerRadius={70}
+                    paddingAngle={2}
+                    dataKey="value"
                   >
-                    View All
-                    <ArrowRight className="w-4 h-4 ml-1" />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y">
-                {displayedProjects.map((project, index) => (
-                  <motion.div
-                    key={project.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="p-4 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h4 className="font-semibold text-gray-900">{project.name}</h4>
-                        <p className="text-sm text-gray-600">{project.client}</p>
-                      </div>
-                      <Badge className={`${getStatusColor(project.status)} border`}>
-                        {project.status}
-                      </Badge>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600">Progress</span>
-                        <span className="font-medium">{project.progress}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all ${
-                            project.progress >= 75 ? 'bg-green-500' :
-                            project.progress >= 50 ? 'bg-blue-500' :
-                            project.progress >= 25 ? 'bg-yellow-500' :
-                            'bg-red-500'
-                          }`}
-                          style={{ width: `${project.progress}%` }}
-                        />
-                      </div>
-                    </div>
+                    {projectStatusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ fontSize: '12px' }} />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
+                </RechartsPieChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-                    <div className="grid grid-cols-3 gap-4 mt-3 pt-3 border-t">
-                      <div>
-                        <p className="text-xs text-gray-500">Budget</p>
-                        <p className="text-sm font-semibold">AED {project.budget.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Spent</p>
-                        <p className="text-sm font-semibold text-blue-600">
-                          AED {project.spent.toLocaleString()}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Deadline</p>
-                        <p className="text-sm font-semibold">{project.deadline}</p>
-                      </div>
-                    </div>
+      {/* Second Row Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Department Performance Bar Chart */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <BarChart3 className="w-4 h-4 text-blue-600" />
+              Department Performance
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="h-40">
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsBarChart data={departmentData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fontSize: 10 }}
+                    axisLine={{ stroke: '#e0e0e0' }}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 10 }}
+                    axisLine={{ stroke: '#e0e0e0' }}
+                  />
+                  <Tooltip contentStyle={{ fontSize: '12px' }} />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  <Bar dataKey="target" fill="#e5e7eb" name="Target" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="value" fill="#3B82F6" name="Actual" radius={[2, 2, 0, 0]} />
+                </RechartsBarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
 
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center">
-                          <Users className="w-3 h-3 text-gray-600" />
-                        </div>
-                        <span className="text-sm text-gray-600">{project.manager}</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => navigate(`/projects/${project.id}`)}
-                        className="text-blue-600 hover:text-blue-700"
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        View Details
-                      </Button>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-              {!showAllProjects && projects.length > 3 && (
-                <div className="p-4 border-t">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setShowAllProjects(true)}
-                  >
-                    Show More Projects ({projects.length - 3} more)
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-            <Card className="shadow-md border-0">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Procurement This Month</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">AED 345,670</p>
-                    <p className="text-xs text-green-600 mt-1">+12% from last month</p>
-                  </div>
-                  <Package className="w-8 h-8 text-blue-500 opacity-20" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-md border-0">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Pending Deliveries</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">18</p>
-                    <p className="text-xs text-amber-600 mt-1">5 arriving today</p>
-                  </div>
-                  <Truck className="w-8 h-8 text-amber-500 opacity-20" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-md border-0">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Active Vendors</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">42</p>
-                    <p className="text-xs text-purple-600 mt-1">3 new this week</p>
-                  </div>
-                  <Building2 className="w-8 h-8 text-purple-500 opacity-20" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Right Column - Activities & Notifications */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Pending Approvals */}
-          <Card className="shadow-md border-0">
-            <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Clock className="w-4 h-4 text-amber-600" />
-                Pending Approvals
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              {[
-                { id: 'PR-2024-004', amount: 'AED 45,000', project: 'Marina Bay', urgent: true },
-                { id: 'VQ-2024-003', amount: 'AED 78,500', project: 'Orchard Office', urgent: false },
-                { id: 'PR-2024-005', amount: 'AED 23,400', project: 'Sentosa Resort', urgent: true }
-              ].map((item) => (
-                <div key={item.id} className="bg-amber-50 rounded-lg p-3 border border-amber-200">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm">{item.id}</span>
-                        {item.urgent && (
-                          <Badge className="bg-red-100 text-red-700 border border-red-300 text-xs">
-                            Urgent
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-600 mt-1">{item.project}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-sm">{item.amount}</p>
-                      <Button
-                        size="sm"
-                        className="mt-1 h-7 text-xs bg-amber-600 hover:bg-amber-700"
-                        onClick={() => navigate('/procurement')}
-                      >
-                        Review
-                      </Button>
-                    </div>
+        {/* Performance Overview */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Target className="w-4 h-4 text-red-600" />
+              Performance Overview
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 gap-2">
+              {performanceData.map((item, index) => (
+                <div key={item.name} className="text-center p-2 bg-gray-50 rounded-lg">
+                  <div className="text-xs text-gray-600">{item.name}</div>
+                  <div className="text-lg font-bold text-gray-900">{item.value}%</div>
+                  <div className="w-full bg-gray-200 rounded-full h-1 mt-1">
+                    <div
+                      className={`h-1 rounded-full ${index % 2 === 0 ? 'bg-red-500' : 'bg-blue-500'}`}
+                      style={{ width: `${item.value}%` }}
+                    />
                   </div>
                 </div>
               ))}
-              <Button
-                variant="outline"
-                className="w-full text-sm"
-                onClick={() => navigate('/procurement')}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Projects and Activities - Compact */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Active Projects - Compact */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Briefcase className="w-4 h-4 text-blue-600" />
+                Active Projects
+              </CardTitle>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => navigate('/projects')}
+                className="text-xs h-6 px-2"
               >
-                View All Approvals
+                View All
                 <ArrowRight className="w-3 h-3 ml-1" />
               </Button>
-            </CardContent>
-          </Card>
-
-          {/* Recent Activity */}
-          <Card className="shadow-md border-0">
-            <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 border-b">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Activity className="w-4 h-4 text-gray-600" />
-                Recent Activity
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              {recentActivities.map((activity) => (
-                <div key={activity.id} className="flex items-start gap-3">
-                  <div className="mt-1">{getActivityIcon(activity.type)}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{activity.title}</p>
-                    <p className="text-xs text-gray-600 mt-0.5">{activity.description}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-gray-400">{activity.time}</span>
-                      {activity.user && (
-                        <>
-                          <span className="text-xs text-gray-400">•</span>
-                          <span className="text-xs text-gray-500">{activity.user}</span>
-                        </>
-                      )}
-                    </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-2">
+            {projects.map((project) => (
+              <div key={project.id} className="p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1">
+                    <h4 className="text-sm font-semibold text-gray-900">{project.name}</h4>
+                    <p className="text-xs text-gray-600">{project.client}</p>
                   </div>
-                  {activity.urgent && (
-                    <AlertCircle className="w-4 h-4 text-red-500 animate-pulse" />
-                  )}
+                  <Badge className={`${getStatusColor(project.status)} text-xs`}>
+                    {project.status}
+                  </Badge>
                 </div>
-              ))}
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">Progress</span>
+                    <span className="font-medium">{project.progress}%</span>
+                  </div>
+                  <Progress value={project.progress} className="h-1" />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
+                  <div>
+                    <span className="text-gray-500">Budget</span>
+                    <p className="font-semibold">AED {(project.budget / 1000).toFixed(0)}K</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Spent</span>
+                    <p className="font-semibold text-blue-600">
+                      AED {(project.spent / 1000).toFixed(0)}K
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Manager</span>
+                    <p className="font-semibold">{project.manager}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Recent Activity - Compact */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Activity className="w-4 h-4 text-gray-600" />
+              Recent Activity
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-2">
+            {recentActivities.map((activity) => (
+              <div key={activity.id} className="flex items-start gap-2 p-2 hover:bg-gray-50 rounded transition-colors">
+                <div className="mt-0.5">{getActivityIcon(activity.type)}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-900">{activity.title}</p>
+                  <p className="text-xs text-gray-600">{activity.description}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-gray-400">{activity.time}</span>
+                    {activity.user && (
+                      <>
+                        <span className="text-xs text-gray-400">•</span>
+                        <span className="text-xs text-gray-500">{activity.user}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {activity.urgent && (
+                  <AlertCircle className="w-3 h-3 text-red-500 animate-pulse" />
+                )}
+              </div>
+            ))}
+            
+            <div className="pt-2 border-t">
               <Button
                 variant="outline"
-                className="w-full text-sm"
+                className="w-full text-xs h-7"
                 onClick={() => navigate('/notifications')}
               >
                 View All Activity
                 <Bell className="w-3 h-3 ml-1" />
               </Button>
-            </CardContent>
-          </Card>
-
-          {/* Performance Overview */}
-          <Card className="shadow-md border-0">
-            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Target className="w-4 h-4 text-green-600" />
-                Performance Overview
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              {[
-                { label: 'On-Time Delivery', value: 92, color: 'bg-green-500' },
-                { label: 'Budget Compliance', value: 87, color: 'bg-blue-500' },
-                { label: 'Quality Score', value: 95, color: 'bg-purple-500' },
-                { label: 'Client Satisfaction', value: 89, color: 'bg-indigo-500' }
-              ].map((metric) => (
-                <div key={metric.label}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-gray-600">{metric.label}</span>
-                    <span className="text-sm font-semibold">{metric.value}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full ${metric.color}`}
-                      style={{ width: `${metric.value}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-
-      {/* Bottom Quick Actions */}
-      <Card className="shadow-md border-0">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Zap className="w-4 h-4 text-blue-600" />
-            Quick Actions
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {[
-              { icon: Plus, label: 'New Project', color: 'text-blue-600', path: '/projects/new' },
-              { icon: ShoppingCart, label: 'Purchase Request', color: 'text-green-600', path: '/procurement' },
-              { icon: Users, label: 'Add Vendor', color: 'text-purple-600', path: '/vendors/new' },
-              { icon: FileText, label: 'Create Invoice', color: 'text-indigo-600', path: '/invoices/new' },
-              { icon: BarChart3, label: 'View Reports', color: 'text-orange-600', path: '/analytics' },
-              { icon: Shield, label: 'Process Flow', color: 'text-pink-600', path: '/process-flow' }
-            ].map((action) => (
-              <Button
-                key={action.label}
-                variant="outline"
-                className="flex flex-col items-center gap-2 h-20 hover:bg-gray-50"
-                onClick={() => navigate(action.path)}
-              >
-                <action.icon className={`w-5 h-5 ${action.color}`} />
-                <span className="text-xs text-center">{action.label}</span>
-              </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };

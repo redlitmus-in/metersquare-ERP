@@ -291,6 +291,7 @@ const VendorScopeOfWorkForm: React.FC = () => {
                     </Label>
                     <Input
                       type="date"
+                      placeholder="dd/mm/yyyy"
                       {...register('startDate', { required: 'Start date is required' })}
                       className="focus:border-red-500 focus:ring-red-500"
                     />
@@ -303,6 +304,7 @@ const VendorScopeOfWorkForm: React.FC = () => {
                     </Label>
                     <Input
                       type="date"
+                      placeholder="dd/mm/yyyy"
                       {...register('completionDate', { required: 'Completion date is required' })}
                       className="focus:border-red-500 focus:ring-red-500"
                     />

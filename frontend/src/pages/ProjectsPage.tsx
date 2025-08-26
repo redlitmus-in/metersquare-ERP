@@ -654,6 +654,7 @@ const ProjectsPage: React.FC = () => {
                 <Input
                   id="startDate"
                   type="date"
+                  placeholder="dd/mm/yyyy"
                   value={newProject.startDate}
                   onChange={(e) => setNewProject({...newProject, startDate: e.target.value})}
                 />
@@ -663,6 +664,7 @@ const ProjectsPage: React.FC = () => {
                 <Input
                   id="endDate"
                   type="date"
+                  placeholder="dd/mm/yyyy"
                   value={newProject.endDate}
                   onChange={(e) => setNewProject({...newProject, endDate: e.target.value})}
                 />

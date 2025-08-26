@@ -851,6 +851,7 @@ const VendorQuotationForm: React.FC = () => {
                       <Input 
                         type="date" 
                         className="border-gray-200"
+                        placeholder="dd/mm/yyyy"
                         {...register('validity.validFrom')}
                       />
                     </div>
@@ -859,6 +860,7 @@ const VendorQuotationForm: React.FC = () => {
                       <Input 
                         type="date" 
                         className="border-gray-200"
+                        placeholder="dd/mm/yyyy"
                         {...register('validity.validUntil')}
                       />
                     </div>

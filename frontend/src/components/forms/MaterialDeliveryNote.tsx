@@ -302,6 +302,7 @@ const MaterialDeliveryNote: React.FC = () => {
                     </Label>
                     <Input
                       type="date"
+                      placeholder="dd/mm/yyyy"
                       {...register('deliveryDate', { required: 'Delivery date is required' })}
                       className="focus:border-green-500 focus:ring-green-500"
                     />
@@ -326,6 +327,7 @@ const MaterialDeliveryNote: React.FC = () => {
                     </Label>
                     <Input
                       type="date"
+                      placeholder="dd/mm/yyyy"
                       {...register('expectedDeliveryDate')}
                       className="focus:border-green-500 focus:ring-green-500"
                     />

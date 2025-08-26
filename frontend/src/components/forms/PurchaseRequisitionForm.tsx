@@ -256,6 +256,7 @@ const PurchaseRequisitionForm: React.FC = () => {
                       type="date"
                       {...register('dateRequired', { required: true })}
                       className="h-11 border-gray-200 focus:border-red-500"
+                      placeholder="dd/mm/yyyy"
                     />
                   </div>
                 </div>

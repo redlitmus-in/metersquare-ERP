@@ -57,7 +57,7 @@ const CredentialCard: React.FC<{
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay }}
       onClick={onClick}
-      className="p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all cursor-pointer group"
+      className="p-2.5 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all cursor-pointer group"
     >
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">{role}</span>
@@ -438,8 +438,8 @@ const LoginPage: React.FC = () => {
         .workflow-node:nth-child(8) .popup-text { animation: showFloat8 6s infinite ease-in-out; }
       `}</style>
       <div className="min-h-screen flex">
-      {/* Left Panel - Modern Login Form */}
-      <div className="w-full lg:w-2/5 xl:w-5/12 bg-gradient-to-br from-white via-gray-50 to-white flex items-center justify-center p-8 relative overflow-hidden">
+      {/* Left Panel - Modern Login Form - Resized for laptop */}
+      <div className="w-full lg:w-2/5 xl:w-5/12 bg-gradient-to-br from-white via-gray-50 to-white flex items-center justify-center p-6 relative overflow-hidden">
         {/* Subtle Background Pattern */}
         <div className="absolute inset-0">
           <div className="absolute inset-0 opacity-[0.02]" style={{
@@ -453,23 +453,23 @@ const LoginPage: React.FC = () => {
           transition={{ duration: 0.6 }}
           className="w-full max-w-md relative z-10"
         >
-          {/* Logo Section - Resized */}
+          {/* Logo Section - Slightly smaller for laptop */}
           <motion.div 
-            className="text-center mb-8"
+            className="text-center mb-6"
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.5 }}
           >
-            <div className="flex justify-center mb-4">
+            <div className="flex justify-center mb-3">
               <div className="relative">
                 <img
                   src="/logo.png"
                   alt="MeterSquare Interiors LLC"
-                  className="h-12 w-auto object-contain"
+                  className="h-10 w-auto object-contain"
                 />
               </div>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-xl font-bold text-gray-900">
               Welcome to MeterSquare
             </h1>
             <p className="text-sm text-gray-500 mt-1">
@@ -477,14 +477,14 @@ const LoginPage: React.FC = () => {
             </p>
           </motion.div>
 
-          {/* Modern Login Form Card */}
+          {/* Modern Login Form Card - Compact padding */}
           <motion.div
-            className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-gray-100"
+            className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl p-6 border border-gray-100"
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.1 }}
           >
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               {/* Email Field */}
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
@@ -498,7 +498,7 @@ const LoginPage: React.FC = () => {
                   <input
                     {...register('email')}
                     type="email"
-                    className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 text-gray-700 placeholder-gray-400"
+                    className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 text-gray-700 placeholder-gray-400"
                     placeholder="user@metersquare.com"
                   />
                 </motion.div>
@@ -526,7 +526,7 @@ const LoginPage: React.FC = () => {
                   <input
                     {...register('password')}
                     type={showPassword ? 'text' : 'password'}
-                    className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 text-gray-700 placeholder-gray-400 pr-12"
+                    className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 text-gray-700 placeholder-gray-400 pr-12"
                     placeholder="••••••••"
                   />
                   <button
@@ -566,7 +566,7 @@ const LoginPage: React.FC = () => {
               <motion.button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
               >
@@ -582,7 +582,7 @@ const LoginPage: React.FC = () => {
             </form>
 
             {/* Divider */}
-            <div className="relative my-6">
+            <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200"></div>
               </div>
@@ -591,7 +591,7 @@ const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Demo Credentials */}
+            {/* Demo Credentials - Compact */}
             <div className="space-y-2">
               <p className="text-xs text-gray-500 mb-2">Click any card below to auto-fill and login:</p>
               {demoCredentials.map((cred, index) => (
@@ -609,7 +609,7 @@ const LoginPage: React.FC = () => {
 
           {/* Security Badges */}
           <motion.div
-            className="mt-6 flex items-center justify-center gap-4"
+            className="mt-4 flex items-center justify-center gap-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6 }}
@@ -626,13 +626,13 @@ const LoginPage: React.FC = () => {
         </motion.div>
       </div>
 
-      {/* Right Panel - Modern Workflow Visualization */}
+      {/* Right Panel - Modern Workflow Visualization - Slightly smaller for laptop */}
       <div className="hidden lg:flex lg:flex-1 bg-gradient-to-br from-red-50 via-rose-50 to-red-50 relative overflow-hidden items-center justify-center">
         
         {/* Floating Background Elements */}
         <div className="absolute inset-0">
           <motion.div
-            className="absolute top-20 left-20 w-72 h-72 bg-red-200/30 rounded-full blur-3xl"
+            className="absolute top-20 left-20 w-60 h-60 bg-red-200/30 rounded-full blur-3xl"
             animate={{ 
               x: [0, 30, 0],
               y: [0, -30, 0]
@@ -640,7 +640,7 @@ const LoginPage: React.FC = () => {
             transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
           />
           <motion.div
-            className="absolute bottom-20 right-20 w-96 h-96 bg-blue-200/30 rounded-full blur-3xl"
+            className="absolute bottom-20 right-20 w-80 h-80 bg-blue-200/30 rounded-full blur-3xl"
             animate={{ 
               x: [0, -30, 0],
               y: [0, 30, 0]
@@ -650,12 +650,12 @@ const LoginPage: React.FC = () => {
         </div>
 
         {/* Enhanced Analytics Icons with Glass Morphism */}
-        <div className="absolute top-8 left-8 right-8 flex justify-between">
+        <div className="absolute top-6 left-6 right-6 flex justify-between">
           <motion.div
             initial={{ opacity: 0, y: -30, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ delay: 0.3, duration: 0.6 }}
-            className="bg-gradient-to-br from-white/25 via-white/15 to-white/10 backdrop-blur-xl rounded-2xl p-4 shadow-2xl border border-white/30"
+            className="bg-gradient-to-br from-white/25 via-white/15 to-white/10 backdrop-blur-xl rounded-2xl p-3 shadow-2xl border border-white/30"
             style={{ transform: 'rotate(-5deg)' }}
           >
             <motion.div
@@ -666,7 +666,7 @@ const LoginPage: React.FC = () => {
               transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
               className="relative"
             >
-              <LineChart className="w-7 h-7 text-emerald-600 filter drop-shadow-sm" />
+              <LineChart className="w-6 h-6 text-emerald-600 filter drop-shadow-sm" />
               <div className="absolute inset-0 bg-emerald-400/20 blur-xl rounded-full scale-150 animate-pulse"></div>
             </motion.div>
           </motion.div>
@@ -675,7 +675,7 @@ const LoginPage: React.FC = () => {
             initial={{ opacity: 0, y: -30, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ delay: 0.5, duration: 0.6 }}
-            className="bg-gradient-to-br from-white/25 via-white/15 to-white/10 backdrop-blur-xl rounded-2xl p-4 shadow-2xl border border-white/30"
+            className="bg-gradient-to-br from-white/25 via-white/15 to-white/10 backdrop-blur-xl rounded-2xl p-3 shadow-2xl border border-white/30"
             style={{ transform: 'rotate(3deg)' }}
           >
             <motion.div
@@ -689,7 +689,7 @@ const LoginPage: React.FC = () => {
               }}
               className="relative"
             >
-              <PieChart className="w-7 h-7 text-purple-600 filter drop-shadow-sm" />
+              <PieChart className="w-6 h-6 text-purple-600 filter drop-shadow-sm" />
               <div className="absolute inset-0 bg-purple-400/20 blur-xl rounded-full scale-150 animate-pulse" style={{ animationDelay: '1s' }}></div>
             </motion.div>
           </motion.div>
@@ -698,7 +698,7 @@ const LoginPage: React.FC = () => {
             initial={{ opacity: 0, y: -30, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ delay: 0.7, duration: 0.6 }}
-            className="bg-gradient-to-br from-white/25 via-white/15 to-white/10 backdrop-blur-xl rounded-2xl p-4 shadow-2xl border border-white/30"
+            className="bg-gradient-to-br from-white/25 via-white/15 to-white/10 backdrop-blur-xl rounded-2xl p-3 shadow-2xl border border-white/30"
             style={{ transform: 'rotate(-2deg)' }}
           >
             <motion.div
@@ -709,17 +709,17 @@ const LoginPage: React.FC = () => {
               transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
               className="relative"
             >
-              <Target className="w-7 h-7 text-indigo-600 filter drop-shadow-sm" />
+              <Target className="w-6 h-6 text-indigo-600 filter drop-shadow-sm" />
               <div className="absolute inset-0 bg-indigo-400/20 blur-xl rounded-full scale-150 animate-pulse" style={{ animationDelay: '2s' }}></div>
             </motion.div>
           </motion.div>
         </div>
 
-        {/* Main Workflow Container */}
-        <div className="relative" style={{ width: '900px', height: '600px' }}>
+        {/* Main Workflow Container - Scaled for laptop */}
+        <div className="relative" style={{ width: '750px', height: '500px' }}>
           
           {/* SVG Connections */}
-          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 900 600">
+          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 750 500">
             <defs>
               <linearGradient id="redGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="#3b82f6" stopOpacity="0" />
@@ -754,9 +754,9 @@ const LoginPage: React.FC = () => {
               </filter>
             </defs>
             
-            {/* Static Dotted Connection Lines */}
+            {/* Static Dotted Connection Lines - Scaled */}
             <path
-              d="M 150 150 Q 280 150 420 150 T 650 150"
+              d="M 120 120 Q 230 120 350 120 T 540 120"
               stroke="#ef4444"
               strokeWidth="2"
               fill="none"
@@ -764,7 +764,7 @@ const LoginPage: React.FC = () => {
               opacity="0.6"
             />
             <path
-              d="M 650 150 Q 720 220 650 290"
+              d="M 540 120 Q 600 180 540 240"
               stroke="#ef4444"
               strokeWidth="2"
               fill="none"
@@ -772,7 +772,7 @@ const LoginPage: React.FC = () => {
               opacity="0.6"
             />
             <path
-              d="M 650 290 Q 520 290 420 290 T 150 290"
+              d="M 540 240 Q 430 240 350 240 T 120 240"
               stroke="#ef4444"
               strokeWidth="2"
               fill="none"
@@ -780,7 +780,7 @@ const LoginPage: React.FC = () => {
               opacity="0.6"
             />
             <path
-              d="M 150 290 Q 80 360 150 430"
+              d="M 120 240 Q 60 300 120 360"
               stroke="#ef4444"
               strokeWidth="2"
               fill="none"
@@ -788,7 +788,7 @@ const LoginPage: React.FC = () => {
               opacity="0.6"
             />
             <path
-              d="M 150 430 Q 280 430 420 430 T 650 430"
+              d="M 120 360 Q 230 360 350 360 T 540 360"
               stroke="#ef4444"
               strokeWidth="2"
               fill="none"
@@ -807,7 +807,7 @@ const LoginPage: React.FC = () => {
               <animateMotion
                 dur="15s"
                 repeatCount="indefinite"
-                path="M 150 150 Q 280 150 420 150 T 650 150 Q 720 220 650 290 Q 520 290 420 290 T 150 290 Q 80 360 150 430 Q 280 430 420 430 T 700 430 Q 650 430 420 430 Q 370 420 420 400"
+                path="M 120 120 Q 230 120 350 120 T 540 120 Q 600 180 540 240 Q 430 240 350 240 T 120 240 Q 60 300 120 360 Q 230 360 350 360 T 580 360 Q 540 360 350 360 Q 310 350 350 330"
               />
             </circle>
             
@@ -822,162 +822,162 @@ const LoginPage: React.FC = () => {
                 dur="15s"
                 repeatCount="indefinite"
                 begin="2s"
-                path="M 150 150 Q 280 150 420 150 T 650 150 Q 720 220 650 290 Q 520 290 420 290 T 150 290 Q 80 360 150 430 Q 280 430 420 430 T 700 430 Q 650 430 420 430 Q 370 420 420 400"
+                path="M 120 120 Q 230 120 350 120 T 540 120 Q 600 180 540 240 Q 430 240 350 240 T 120 240 Q 60 300 120 360 Q 230 360 350 360 T 580 360 Q 540 360 350 360 Q 310 350 350 330"
               />
             </circle>
           </svg>
 
-          {/* Refined Workflow Nodes */}
+          {/* Refined Workflow Nodes - Scaled down */}
           <motion.div
             className="absolute workflow-node"
-            style={{ left: '100px', top: '100px', transform: 'rotate(-3deg)' }}
+            style={{ left: '80px', top: '80px', transform: 'rotate(-3deg)' }}
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: "spring" }}
           >
             <motion.div 
-              className="bg-white backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
+              className="bg-white backdrop-blur-sm rounded-xl p-3 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
               id="node-request"
             >
-              <FileText className="w-8 h-8 text-red-500" />
+              <FileText className="w-6 h-6 text-red-500" />
             </motion.div>
             <span className="popup-text">Processing</span>
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Request</span>
+            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Request</span>
           </motion.div>
 
           <motion.div
             className="absolute workflow-node"
-            style={{ left: '370px', top: '100px', transform: 'rotate(2deg)' }}
+            style={{ left: '310px', top: '80px', transform: 'rotate(2deg)' }}
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.4, type: "spring" }}
           >
             <motion.div 
-              className="bg-white backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
+              className="bg-white backdrop-blur-sm rounded-xl p-3 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
               id="node-review"
             >
-              <ClipboardList className="w-8 h-8 text-red-500" />
+              <ClipboardList className="w-6 h-6 text-red-500" />
             </motion.div>
             <span className="popup-text">Reviewing</span>
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Review</span>
+            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Review</span>
           </motion.div>
 
           <motion.div
             className="absolute workflow-node"
-            style={{ left: '600px', top: '100px', transform: 'rotate(-1deg)' }}
+            style={{ left: '500px', top: '80px', transform: 'rotate(-1deg)' }}
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.6, type: "spring" }}
           >
             <motion.div 
-              className="bg-white backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
+              className="bg-white backdrop-blur-sm rounded-xl p-3 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
               id="node-approval"
             >
-              <CheckSquare className="w-8 h-8 text-blue-500" />
+              <CheckSquare className="w-6 h-6 text-blue-500" />
             </motion.div>
             <span className="popup-text">Approving</span>
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Approval</span>
+            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Approval</span>
           </motion.div>
 
           <motion.div
             className="absolute workflow-node"
-            style={{ left: '600px', top: '240px', transform: 'rotate(3deg)' }}
+            style={{ left: '500px', top: '200px', transform: 'rotate(3deg)' }}
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.8, type: "spring" }}
           >
             <motion.div 
-              className="bg-white backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
+              className="bg-white backdrop-blur-sm rounded-xl p-3 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
               id="node-process"
             >
-              <Settings className="w-8 h-8 text-blue-500" />
+              <Settings className="w-6 h-6 text-blue-500" />
             </motion.div>
             <span className="popup-text">Executing</span>
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Process</span>
+            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Process</span>
           </motion.div>
 
           <motion.div
             className="absolute workflow-node"
-            style={{ left: '370px', top: '240px', transform: 'rotate(-2deg)' }}
+            style={{ left: '310px', top: '200px', transform: 'rotate(-2deg)' }}
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 1, type: "spring" }}
           >
             <motion.div 
-              className="bg-white backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
+              className="bg-white backdrop-blur-sm rounded-xl p-3 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
               id="node-production"
             >
-              <Package className="w-8 h-8 text-red-500" />
+              <Package className="w-6 h-6 text-red-500" />
             </motion.div>
             <span className="popup-text">Building</span>
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Production</span>
+            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Production</span>
           </motion.div>
 
           <motion.div
             className="absolute workflow-node"
-            style={{ left: '100px', top: '240px', transform: 'rotate(4deg)' }}
+            style={{ left: '80px', top: '200px', transform: 'rotate(4deg)' }}
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 1.2, type: "spring" }}
           >
             <motion.div 
-              className="bg-white backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
+              className="bg-white backdrop-blur-sm rounded-xl p-3 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
               id="node-dispatch"
             >
-              <Truck className="w-8 h-8 text-blue-500" />
+              <Truck className="w-6 h-6 text-blue-500" />
             </motion.div>
             <span className="popup-text">Shipping</span>
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Dispatch</span>
+            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Dispatch</span>
           </motion.div>
 
           <motion.div
             className="absolute workflow-node"
-            style={{ left: '100px', top: '380px', transform: 'rotate(-2deg)' }}
+            style={{ left: '80px', top: '320px', transform: 'rotate(-2deg)' }}
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 1.4, type: "spring" }}
           >
             <motion.div 
-              className="bg-white backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
+              className="bg-white backdrop-blur-sm rounded-xl p-3 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
               id="node-complete"
             >
-              <CheckCircle className="w-8 h-8 text-green-500" />
+              <CheckCircle className="w-6 h-6 text-green-500" />
             </motion.div>
             <span className="popup-text">Done!</span>
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Complete</span>
+            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Complete</span>
           </motion.div>
 
           {/* ERP Hub - Center Final Position */}
           <motion.div
             className="absolute workflow-node"
-            style={{ left: '370px', top: '380px' }}
+            style={{ left: '310px', top: '320px' }}
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 1.8, type: "spring" }}
           >
             <div
-              className="bg-gradient-to-br from-red-500 to-rose-500 rounded-xl p-4 shadow-lg"
+              className="bg-gradient-to-br from-red-500 to-rose-500 rounded-xl p-3 shadow-lg"
               id="node-hub"
             >
-              <Layers className="w-8 h-8 text-white" />
+              <Layers className="w-6 h-6 text-white" />
             </div>
             <span className="popup-text">Syncing</span>
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs font-semibold text-gray-700">ERP Hub</span>
+            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-semibold text-gray-700">ERP Hub</span>
           </motion.div>
         </div>
 
-        {/* Bottom Info */}
+        {/* Bottom Info - Compact */}
         <motion.div
-          className="absolute bottom-10 left-0 right-0 text-center"
+          className="absolute bottom-8 left-0 right-0 text-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 2 }}
         >
-          <h3 className="text-3xl font-bold bg-gradient-to-r from-red-500 to-rose-600 bg-clip-text text-transparent">
+          <h3 className="text-2xl font-bold bg-gradient-to-r from-red-500 to-rose-600 bg-clip-text text-transparent">
             Intelligent Workflow Automation
           </h3>
-          <p className="text-gray-600 mt-2">Streamline your interior project management</p>
-          <div className="flex justify-center gap-8 mt-4">
+          <p className="text-gray-600 mt-2 text-sm">Streamline your interior project management</p>
+          <div className="flex justify-center gap-6 mt-3">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-red-500" />
               <span className="text-xs text-gray-500">5min Setup</span>

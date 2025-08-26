@@ -318,6 +318,7 @@ const MaterialRequisitionForm: React.FC = () => {
                     </Label>
                     <Input
                       type="date"
+                      placeholder="dd/mm/yyyy"
                       {...register('requestDate', { required: 'Request date is required' })}
                       className="focus:border-blue-500 focus:ring-blue-500"
                     />
@@ -330,6 +331,7 @@ const MaterialRequisitionForm: React.FC = () => {
                     </Label>
                     <Input
                       type="date"
+                      placeholder="dd/mm/yyyy"
                       {...register('requiredDate', { required: 'Required date is required' })}
                       className="focus:border-blue-500 focus:ring-blue-500"
                     />

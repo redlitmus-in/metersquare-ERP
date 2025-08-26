@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,21 @@ import {
   CartesianGrid, 
   Tooltip, 
   Legend, 
-  ResponsiveContainer 
+  ResponsiveContainer,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  Treemap,
+  ScatterChart,
+  Scatter,
+  ComposedChart,
+  FunnelChart,
+  Funnel,
+  LabelList,
+  RadialBarChart,
+  RadialBar
 } from 'recharts';
 import { 
   BarChart3,
@@ -43,7 +57,19 @@ import {
   PieChart,
   BarChart,
   TrendingUp as LineChart,
-  Activity
+  Activity,
+  Layers,
+  Zap,
+  Globe,
+  Award,
+  Sparkles,
+  Settings,
+  RefreshCw,
+  Maximize2,
+  Minimize2,
+  MoreHorizontal,
+  Star,
+  Gauge
 } from 'lucide-react';
 
 interface ChartData {
@@ -66,29 +92,99 @@ interface ReportData {
 const AnalyticsPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState('30d');
   const [activeTab, setActiveTab] = useState('overview');
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [expandedChart, setExpandedChart] = useState<string | null>(null);
 
-  // Sample chart data
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    setRefreshing(false);
+  };
+
+  // Enhanced chart data with more advanced datasets
   const procurementData: ChartData[] = [
     { name: 'Jan', value: 125000, change: 12, color: '#ef4444' },
     { name: 'Feb', value: 145000, change: 16, color: '#ef4444' },
     { name: 'Mar', value: 132000, change: -9, color: '#ef4444' },
     { name: 'Apr', value: 168000, change: 27, color: '#ef4444' },
     { name: 'May', value: 189000, change: 13, color: '#ef4444' },
-    { name: 'Jun', value: 205000, change: 8, color: '#ef4444' }
+    { name: 'Jun', value: 205000, change: 8, color: '#ef4444' },
+    { name: 'Jul', value: 225000, change: 10, color: '#ef4444' },
+    { name: 'Aug', value: 245000, change: 9, color: '#ef4444' }
   ];
 
   const projectData: ChartData[] = [
-    { name: 'Completed', value: 24, change: 20, color: '#22c55e' },
-    { name: 'In Progress', value: 15, change: 7, color: '#3b82f6' },
-    { name: 'On Hold', value: 3, change: -2, color: '#f59e0b' },
-    { name: 'Cancelled', value: 2, change: -1, color: '#ef4444' }
+    { name: 'Completed', value: 24, change: 20, color: '#10B981' },
+    { name: 'In Progress', value: 15, change: 7, color: '#3B82F6' },
+    { name: 'On Hold', value: 3, change: -2, color: '#F59E0B' },
+    { name: 'Cancelled', value: 2, change: -1, color: '#EF4444' }
   ];
 
   const vendorPerformance: ChartData[] = [
-    { name: 'Excellent', value: 12, change: 3, color: '#22c55e' },
-    { name: 'Good', value: 18, change: 2, color: '#3b82f6' },
-    { name: 'Average', value: 8, change: -1, color: '#f59e0b' },
-    { name: 'Poor', value: 2, change: -1, color: '#ef4444' }
+    { name: 'Excellent', value: 12, change: 3, color: '#10B981' },
+    { name: 'Good', value: 18, change: 2, color: '#3B82F6' },
+    { name: 'Average', value: 8, change: -1, color: '#F59E0B' },
+    { name: 'Poor', value: 2, change: -1, color: '#EF4444' }
+  ];
+
+  // Advanced analytics datasets
+  const performanceRadarData = [
+    { subject: 'Quality', A: 120, B: 110, fullMark: 150 },
+    { subject: 'Cost', A: 98, B: 130, fullMark: 150 },
+    { subject: 'Time', A: 86, B: 130, fullMark: 150 },
+    { subject: 'Innovation', A: 99, B: 100, fullMark: 150 },
+    { subject: 'Safety', A: 85, B: 90, fullMark: 150 },
+    { subject: 'Sustainability', A: 65, B: 85, fullMark: 150 }
+  ];
+
+  const heatmapData = [
+    { name: 'Engineering', Q1: 45, Q2: 52, Q3: 48, Q4: 61, efficiency: 92 },
+    { name: 'Procurement', Q1: 38, Q2: 41, Q3: 45, Q4: 48, efficiency: 88 },
+    { name: 'Quality', Q1: 42, Q2: 38, Q3: 41, Q4: 44, efficiency: 85 },
+    { name: 'Operations', Q1: 35, Q2: 42, Q3: 38, Q4: 41, efficiency: 78 },
+    { name: 'Finance', Q1: 28, Q2: 32, Q3: 35, Q4: 38, efficiency: 82 }
+  ];
+
+  const scatterData = [
+    { x: 85, y: 92, z: 45, name: 'Project Alpha' },
+    { x: 78, y: 88, z: 38, name: 'Project Beta' },
+    { x: 92, y: 95, z: 52, name: 'Project Gamma' },
+    { x: 88, y: 87, z: 41, name: 'Project Delta' },
+    { x: 91, y: 93, z: 48, name: 'Project Epsilon' },
+    { x: 76, y: 82, z: 35, name: 'Project Zeta' }
+  ];
+
+  const funnelData = [
+    { name: 'Leads', value: 1000, fill: '#8884d8' },
+    { name: 'Qualified', value: 750, fill: '#83a6ed' },
+    { name: 'Proposals', value: 500, fill: '#8dd1e1' },
+    { name: 'Contracts', value: 300, fill: '#82ca9d' },
+    { name: 'Completed', value: 180, fill: '#ffc658' }
+  ];
+
+  const treemapData = [
+    { name: 'Engineering', size: 3500, children: [
+      { name: 'Structural', size: 1200 },
+      { name: 'Electrical', size: 1100 },
+      { name: 'Mechanical', size: 800 },
+      { name: 'Civil', size: 400 }
+    ]},
+    { name: 'Operations', size: 2800, children: [
+      { name: 'Site Management', size: 1200 },
+      { name: 'Quality Control', size: 900 },
+      { name: 'Safety', size: 700 }
+    ]},
+    { name: 'Procurement', size: 2200, children: [
+      { name: 'Materials', size: 1000 },
+      { name: 'Equipment', size: 700 },
+      { name: 'Services', size: 500 }
+    ]}
   ];
 
   // Sample reports data
@@ -172,81 +268,184 @@ const AnalyticsPage: React.FC = () => {
     );
   };
 
-  return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl shadow-xl p-6 text-gray-800 border border-orange-200"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-white/60 rounded-lg">
-              <BarChart3 className="w-8 h-8 text-orange-600" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Analytics & Reports</h1>
-              <p className="text-gray-600 mt-1">Business insights and performance metrics</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="3m">Last 3 months</SelectItem>
-                <SelectItem value="6m">Last 6 months</SelectItem>
-                <SelectItem value="1y">Last year</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button className="bg-orange-600 hover:bg-orange-700 text-white flex items-center gap-2">
-              <Download className="w-4 h-4" />
-              Export
-            </Button>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Key Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { title: 'Total Procurement', value: 'AED 1.2M', change: '+12%', icon: ShoppingCart, color: 'text-red-600', bgColor: 'bg-red-50' },
-          { title: 'Active Projects', value: '44', change: '+8%', icon: Package, color: 'text-blue-600', bgColor: 'bg-blue-50' },
-          { title: 'Vendor Partners', value: '127', change: '+15%', icon: Users, color: 'text-green-600', bgColor: 'bg-green-50' },
-          { title: 'Cost Savings', value: 'AED 185K', change: '+23%', icon: Target, color: 'text-purple-600', bgColor: 'bg-purple-50' }
-        ].map((metric, index) => (
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50 to-amber-50 flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
           <motion.div
-            key={index}
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            className="w-20 h-20 border-4 border-orange-200 border-t-orange-600 rounded-full mx-auto mb-6"
+          />
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
+            transition={{ delay: 0.3 }}
           >
-            <Card className="border-0 shadow-md hover:shadow-lg transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">{metric.title}</p>
-                    <p className="text-2xl font-bold text-gray-900">{metric.value}</p>
-                    <div className="flex items-center mt-2">
-                      <ArrowUp className="w-4 h-4 text-green-500 mr-1" />
-                      <span className="text-sm text-green-600 font-medium">{metric.change}</span>
-                      <span className="text-sm text-gray-500 ml-2">vs last month</span>
-                    </div>
-                  </div>
-                  <div className={`p-3 rounded-lg ${metric.bgColor}`}>
-                    <metric.icon className={`w-6 h-6 ${metric.color}`} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Loading Advanced Analytics</h2>
+            <p className="text-gray-600">Preparing premium charts and insights...</p>
           </motion.div>
-        ))}
+        </motion.div>
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50 to-amber-50 relative overflow-hidden">
+      {/* Premium background effects */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-orange-400/10 to-red-400/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-tr from-amber-400/10 to-orange-400/10 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-r from-yellow-400/5 to-orange-400/5 rounded-full blur-3xl animate-pulse delay-500" />
+      </div>
+      
+      <div className="relative z-10 p-6 space-y-6">
+        {/* Premium Header */}
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative backdrop-blur-xl bg-white/80 border border-white/20 rounded-2xl shadow-2xl p-8 overflow-hidden"
+        >
+          {/* Glassmorphism overlay */}
+          <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 via-amber-500/5 to-yellow-500/5" />
+          
+          <div className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <motion.div
+                whileHover={{ scale: 1.1, rotate: 360 }}
+                transition={{ duration: 0.5 }}
+                className="p-4 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl shadow-lg"
+              >
+                <Sparkles className="w-8 h-8 text-white" />
+              </motion.div>
+              <div>
+                <motion.h1 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-orange-900 to-amber-900 bg-clip-text text-transparent"
+                >
+                  Advanced Analytics
+                </motion.h1>
+                <motion.p 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="text-gray-600 mt-2 flex items-center gap-2"
+                >
+                  <Globe className="w-4 h-4" />
+                  Premium business insights and performance metrics
+                </motion.p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className="backdrop-blur-sm bg-white/50 border-white/30 hover:bg-white/70 flex items-center gap-2 shadow-lg"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </motion.div>
+              
+              <Select value={timeRange} onValueChange={setTimeRange}>
+                <SelectTrigger className="w-40 backdrop-blur-sm bg-white/50 border-white/30">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="backdrop-blur-xl bg-white/90">
+                  <SelectItem value="7d">Last 7 days</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                  <SelectItem value="3m">Last 3 months</SelectItem>
+                  <SelectItem value="6m">Last 6 months</SelectItem>
+                  <SelectItem value="1y">Last year</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 hover:from-orange-700 hover:via-amber-700 hover:to-orange-800 text-white flex items-center gap-2 shadow-xl">
+                  <Download className="w-4 h-4" />
+                  Export Premium Report
+                </Button>
+              </motion.div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Premium Key Metrics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { title: 'Total Procurement', value: 'AED 1.2M', change: '+12%', icon: ShoppingCart, gradient: 'from-red-500 to-pink-500', bgGradient: 'from-red-50 to-pink-50' },
+            { title: 'Active Projects', value: '44', change: '+8%', icon: Package, gradient: 'from-blue-500 to-cyan-500', bgGradient: 'from-blue-50 to-cyan-50' },
+            { title: 'Vendor Partners', value: '127', change: '+15%', icon: Users, gradient: 'from-green-500 to-emerald-500', bgGradient: 'from-green-50 to-emerald-50' },
+            { title: 'Cost Savings', value: 'AED 185K', change: '+23%', icon: Target, gradient: 'from-purple-500 to-violet-500', bgGradient: 'from-purple-50 to-violet-50' },
+            { title: 'Efficiency Score', value: '94.2%', change: '+5%', icon: Zap, gradient: 'from-orange-500 to-amber-500', bgGradient: 'from-orange-50 to-amber-50' },
+            { title: 'Quality Rating', value: '4.8/5', change: '+2%', icon: Star, gradient: 'from-indigo-500 to-purple-500', bgGradient: 'from-indigo-50 to-purple-50' }
+          ].map((metric, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ delay: index * 0.1 }}
+              whileHover={{ scale: 1.05, y: -5 }}
+              className="group"
+            >
+              <Card className={`relative border-0 backdrop-blur-xl bg-gradient-to-br ${metric.bgGradient} shadow-xl hover:shadow-2xl transition-all duration-500 overflow-hidden cursor-pointer`}>
+                {/* Animated shimmer effect */}
+                <div className="absolute inset-0 -skew-x-12 bg-gradient-to-r from-transparent via-white/30 to-transparent transform translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+                
+                <CardContent className="p-6 relative z-10">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-2 font-medium">{metric.title}</p>
+                      <motion.p 
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: index * 0.1 + 0.3 }}
+                        className="text-3xl font-bold text-gray-900 mb-3 group-hover:text-gray-800 transition-colors"
+                      >
+                        {metric.value}
+                      </motion.p>
+                      <motion.div 
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 + 0.4 }}
+                        className="flex items-center"
+                      >
+                        <div className="flex items-center px-2 py-1 rounded-full bg-green-100 text-green-700">
+                          <TrendingUp className="w-3 h-3 mr-1" />
+                          <span className="text-xs font-semibold">{metric.change}</span>
+                        </div>
+                        <span className="text-xs text-gray-500 ml-2">vs last month</span>
+                      </motion.div>
+                    </div>
+                    <motion.div 
+                      whileHover={{ scale: 1.2, rotate: 5 }}
+                      className={`p-4 rounded-xl bg-gradient-to-br ${metric.gradient} shadow-lg group-hover:shadow-xl transition-shadow duration-300`}
+                    >
+                      <metric.icon className="w-7 h-7 text-white" />
+                    </motion.div>
+                  </div>
+                  
+                  {/* Progress indicator */}
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: '100%' }}
+                    transition={{ delay: index * 0.1 + 0.6, duration: 0.8 }}
+                    className={`absolute bottom-0 left-0 h-1 bg-gradient-to-r ${metric.gradient} opacity-70 group-hover:opacity-100 transition-opacity duration-300`}
+                  />
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -489,7 +688,6 @@ const AnalyticsPage: React.FC = () => {
                       />
                       <Bar 
                         dataKey="value" 
-                        fill={(entry: any, index: number) => vendorPerformance[index % vendorPerformance.length].color}
                         radius={[4, 4, 0, 0]}
                       >
                         {vendorPerformance.map((entry, index) => (
@@ -765,6 +963,7 @@ const AnalyticsPage: React.FC = () => {
           </Card>
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 };
