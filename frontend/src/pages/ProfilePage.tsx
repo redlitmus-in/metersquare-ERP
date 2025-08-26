@@ -82,7 +82,7 @@ const ProfilePage: React.FC = () => {
                   alt={user.full_name}
                 />
               ) : (
-                <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center border-4 border-white shadow-lg">
+                <div className="h-16 w-16 rounded-full bg-gradient-to-br from-[#243d8a] via-purple-500 to-pink-500 flex items-center justify-center border-4 border-white shadow-lg">
                   <span className="text-xl font-bold text-white">
                     {user?.full_name.charAt(0).toUpperCase()}
                   </span>
@@ -96,7 +96,7 @@ const ProfilePage: React.FC = () => {
             <div>
               <h1 className="text-2xl font-bold">{user?.full_name}</h1>
               <p className="text-gray-600">{user?.email}</p>
-              <Badge className="mt-1 bg-blue-100 text-blue-700 border-blue-300">
+              <Badge className="mt-1 bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30">
                 <BriefcaseIcon className="w-3 h-3 mr-1" />
                 {getRoleDisplayName(user?.role_id || '')}
               </Badge>
@@ -107,7 +107,7 @@ const ProfilePage: React.FC = () => {
             {!isEditing ? (
               <Button 
                 onClick={() => setIsEditing(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+                className="bg-[#243d8a] hover:bg-[#243d8a]/90 text-white flex items-center gap-2"
               >
                 <EditIcon className="w-4 h-4" />
                 Edit Profile
@@ -365,7 +365,7 @@ const ProfilePage: React.FC = () => {
                       <input
                         type="checkbox"
                         defaultChecked={pref.enabled}
-                        className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        className="h-4 w-4 text-[#243d8a] border-gray-300 rounded focus:ring-[#243d8a]"
                       />
                     </div>
                   </div>
@@ -394,8 +394,8 @@ const ProfilePage: React.FC = () => {
                   { action: 'Signed in from new device', time: '1 week ago', type: 'security' }
                 ].map((activity, index) => (
                   <div key={index} className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <CheckIcon className="w-4 h-4 text-blue-600" />
+                    <div className="p-2 bg-[#243d8a]/10 rounded-lg">
+                      <CheckIcon className="w-4 h-4 text-[#243d8a]" />
                     </div>
                     <div className="flex-1">
                       <p className="text-gray-900 font-medium">{activity.action}</p>

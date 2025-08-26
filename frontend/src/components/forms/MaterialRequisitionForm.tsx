@@ -153,7 +153,7 @@ const MaterialRequisitionForm: React.FC = () => {
     switch (priority) {
       case 'urgent': return 'bg-red-100 text-red-700 border-red-300';
       case 'high': return 'bg-orange-100 text-orange-700 border-orange-300';
-      case 'medium': return 'bg-blue-100 text-blue-700 border-blue-300';
+      case 'medium': return 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30';
       default: return 'bg-gray-100 text-gray-700 border-gray-300';
     }
   };
@@ -175,12 +175,12 @@ const MaterialRequisitionForm: React.FC = () => {
       className="max-w-6xl mx-auto p-6 space-y-6"
     >
       {/* Header */}
-      <Card className="shadow-lg border-0 bg-gradient-to-r from-blue-50 to-blue-100">
+      <Card className="shadow-lg border-0 bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-white/60 rounded-lg">
-                <Factory className="w-8 h-8 text-blue-600" />
+                <Factory className="w-8 h-8 text-[#243d8a]" />
               </div>
               <div>
                 <CardTitle className="text-2xl font-bold text-gray-800">
@@ -190,7 +190,7 @@ const MaterialRequisitionForm: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Badge className="bg-blue-100 text-blue-700 border border-blue-300">
+              <Badge className="bg-[#243d8a]/10 text-[#243d8a]/90 border border-[#243d8a]/30">
                 <Package className="w-3 h-3 mr-1" />
                 {totalItems} Items
               </Badge>
@@ -210,28 +210,28 @@ const MaterialRequisitionForm: React.FC = () => {
           <TabsList className="grid grid-cols-4 w-full max-w-2xl bg-white shadow-sm border">
             <TabsTrigger 
               value="basic" 
-              className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700"
+              className="data-[state=active]:bg-[#243d8a]/5 data-[state=active]:text-[#243d8a]/90"
             >
               <FileText className="w-4 h-4 mr-2" />
               Basic Info
             </TabsTrigger>
             <TabsTrigger 
               value="project" 
-              className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700"
+              className="data-[state=active]:bg-[#243d8a]/5 data-[state=active]:text-[#243d8a]/90"
             >
               <Building className="w-4 h-4 mr-2" />
               Project Details
             </TabsTrigger>
             <TabsTrigger 
               value="materials" 
-              className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700"
+              className="data-[state=active]:bg-[#243d8a]/5 data-[state=active]:text-[#243d8a]/90"
             >
               <Package className="w-4 h-4 mr-2" />
               Materials
             </TabsTrigger>
             <TabsTrigger 
               value="delivery" 
-              className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700"
+              className="data-[state=active]:bg-[#243d8a]/5 data-[state=active]:text-[#243d8a]/90"
             >
               <Truck className="w-4 h-4 mr-2" />
               Delivery
@@ -241,9 +241,9 @@ const MaterialRequisitionForm: React.FC = () => {
           {/* Basic Information Tab */}
           <TabsContent value="basic">
             <Card className="shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b">
+              <CardHeader className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 border-b">
                 <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600" />
+                  <FileText className="w-5 h-5 text-[#243d8a]" />
                   Requisition Information
                 </CardTitle>
               </CardHeader>
@@ -251,13 +251,13 @@ const MaterialRequisitionForm: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <Hash className="w-4 h-4 text-blue-500" />
+                      <Hash className="w-4 h-4 text-[#243d8a]" />
                       Requisition Number
                     </Label>
                     <Input
                       {...register('requisitionNumber', { required: 'Requisition number is required' })}
                       placeholder="MRF-2024-001"
-                      className="focus:border-blue-500 focus:ring-blue-500"
+                      className="focus:border-[#243d8a] focus:ring-[#243d8a]"
                     />
                     {errors.requisitionNumber && (
                       <p className="text-red-500 text-sm flex items-center gap-1">
@@ -269,23 +269,23 @@ const MaterialRequisitionForm: React.FC = () => {
 
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <User className="w-4 h-4 text-blue-500" />
+                      <User className="w-4 h-4 text-[#243d8a]" />
                       Requested By
                     </Label>
                     <Input
                       {...register('requestedBy', { required: 'Requester name is required' })}
                       placeholder="John Tan - Factory Supervisor"
-                      className="focus:border-blue-500 focus:ring-blue-500"
+                      className="focus:border-[#243d8a] focus:ring-[#243d8a]"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <Building className="w-4 h-4 text-blue-500" />
+                      <Building className="w-4 h-4 text-[#243d8a]" />
                       Department
                     </Label>
                     <Select onValueChange={(value) => setValue('department', value)}>
-                      <SelectTrigger className="focus:border-blue-500 focus:ring-blue-500">
+                      <SelectTrigger className="focus:border-[#243d8a] focus:ring-[#243d8a]">
                         <SelectValue placeholder="Select department" />
                       </SelectTrigger>
                       <SelectContent>
@@ -301,49 +301,49 @@ const MaterialRequisitionForm: React.FC = () => {
 
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <User className="w-4 h-4 text-blue-500" />
+                      <User className="w-4 h-4 text-[#243d8a]" />
                       Supervisor Name
                     </Label>
                     <Input
                       {...register('supervisorName', { required: 'Supervisor name is required' })}
                       placeholder="Michael Lim"
-                      className="focus:border-blue-500 focus:ring-blue-500"
+                      className="focus:border-[#243d8a] focus:ring-[#243d8a]"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <Calendar className="w-4 h-4 text-blue-500" />
+                      <Calendar className="w-4 h-4 text-[#243d8a]" />
                       Request Date
                     </Label>
                     <Input
                       type="date"
                       placeholder="dd/mm/yyyy"
                       {...register('requestDate', { required: 'Request date is required' })}
-                      className="focus:border-blue-500 focus:ring-blue-500"
+                      className="focus:border-[#243d8a] focus:ring-[#243d8a]"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <Calendar className="w-4 h-4 text-blue-500" />
+                      <Calendar className="w-4 h-4 text-[#243d8a]" />
                       Required Date
                     </Label>
                     <Input
                       type="date"
                       placeholder="dd/mm/yyyy"
                       {...register('requiredDate', { required: 'Required date is required' })}
-                      className="focus:border-blue-500 focus:ring-blue-500"
+                      className="focus:border-[#243d8a] focus:ring-[#243d8a]"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <Settings className="w-4 h-4 text-blue-500" />
+                      <Settings className="w-4 h-4 text-[#243d8a]" />
                       Factory Section
                     </Label>
                     <Select onValueChange={(value) => setValue('factorySection', value)}>
-                      <SelectTrigger className="focus:border-blue-500 focus:ring-blue-500">
+                      <SelectTrigger className="focus:border-[#243d8a] focus:ring-[#243d8a]">
                         <SelectValue placeholder="Select section" />
                       </SelectTrigger>
                       <SelectContent>
@@ -359,11 +359,11 @@ const MaterialRequisitionForm: React.FC = () => {
 
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <Clock className="w-4 h-4 text-blue-500" />
+                      <Clock className="w-4 h-4 text-[#243d8a]" />
                       Urgency Level
                     </Label>
                     <Select onValueChange={(value) => setValue('urgencyLevel', value as any)}>
-                      <SelectTrigger className="focus:border-blue-500 focus:ring-blue-500">
+                      <SelectTrigger className="focus:border-[#243d8a] focus:ring-[#243d8a]">
                         <SelectValue placeholder="Select urgency" />
                       </SelectTrigger>
                       <SelectContent>
@@ -378,27 +378,27 @@ const MaterialRequisitionForm: React.FC = () => {
 
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-1">
-                    <FileText className="w-4 h-4 text-blue-500" />
+                    <FileText className="w-4 h-4 text-[#243d8a]" />
                     Purpose of Requisition
                   </Label>
                   <textarea
                     {...register('purpose', { required: 'Purpose is required' })}
                     rows={3}
                     placeholder="Describe the purpose and intended use of materials..."
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:border-[#243d8a] focus:ring-1 focus:ring-[#243d8a]"
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4 text-blue-500" />
+                    <AlertCircle className="w-4 h-4 text-[#243d8a]" />
                     Justification
                   </Label>
                   <textarea
                     {...register('justification')}
                     rows={3}
                     placeholder="Business justification for urgent or high-value requisitions..."
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:border-[#243d8a] focus:ring-1 focus:ring-[#243d8a]"
                   />
                 </div>
               </CardContent>
@@ -408,9 +408,9 @@ const MaterialRequisitionForm: React.FC = () => {
           {/* Project Details Tab */}
           <TabsContent value="project">
             <Card className="shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b">
+              <CardHeader className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 border-b">
                 <CardTitle className="flex items-center gap-2">
-                  <Building className="w-5 h-5 text-blue-600" />
+                  <Building className="w-5 h-5 text-[#243d8a]" />
                   Project Information
                 </CardTitle>
               </CardHeader>
@@ -418,59 +418,59 @@ const MaterialRequisitionForm: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <Building className="w-4 h-4 text-blue-500" />
+                      <Building className="w-4 h-4 text-[#243d8a]" />
                       Project Name
                     </Label>
                     <Input
                       {...register('projectName', { required: 'Project name is required' })}
                       placeholder="Marina Bay Residential Project"
-                      className="focus:border-blue-500 focus:ring-blue-500"
+                      className="focus:border-[#243d8a] focus:ring-[#243d8a]"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <Hash className="w-4 h-4 text-blue-500" />
+                      <Hash className="w-4 h-4 text-[#243d8a]" />
                       Project ID
                     </Label>
                     <Input
                       {...register('projectId', { required: 'Project ID is required' })}
                       placeholder="PRJ-2024-001"
-                      className="focus:border-blue-500 focus:ring-blue-500"
+                      className="focus:border-[#243d8a] focus:ring-[#243d8a]"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <MapPin className="w-4 h-4 text-blue-500" />
+                      <MapPin className="w-4 h-4 text-[#243d8a]" />
                       Work Location
                     </Label>
                     <Input
                       {...register('workLocation', { required: 'Work location is required' })}
                       placeholder="Factory Floor A / Site Location"
-                      className="focus:border-blue-500 focus:ring-blue-500"
+                      className="focus:border-[#243d8a] focus:ring-[#243d8a]"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <Hash className="w-4 h-4 text-blue-500" />
+                      <Hash className="w-4 h-4 text-[#243d8a]" />
                       Work Order Number
                     </Label>
                     <Input
                       {...register('workOrderNumber')}
                       placeholder="WO-2024-001"
-                      className="focus:border-blue-500 focus:ring-blue-500"
+                      className="focus:border-[#243d8a] focus:ring-[#243d8a]"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
-                      <Layers className="w-4 h-4 text-blue-500" />
+                      <Layers className="w-4 h-4 text-[#243d8a]" />
                       Production Line
                     </Label>
                     <Select onValueChange={(value) => setValue('productionLine', value)}>
-                      <SelectTrigger className="focus:border-blue-500 focus:ring-blue-500">
+                      <SelectTrigger className="focus:border-[#243d8a] focus:ring-[#243d8a]">
                         <SelectValue placeholder="Select production line" />
                       </SelectTrigger>
                       <SelectContent>
@@ -491,14 +491,14 @@ const MaterialRequisitionForm: React.FC = () => {
           {/* Materials Tab */}
           <TabsContent value="materials">
             <Card className="shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b">
+              <CardHeader className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 border-b">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <Package className="w-5 h-5 text-blue-600" />
+                    <Package className="w-5 h-5 text-[#243d8a]" />
                     Material Items
                   </CardTitle>
                   <div className="flex items-center gap-3">
-                    <Badge className="bg-blue-100 text-blue-700 border border-blue-300">
+                    <Badge className="bg-[#243d8a]/10 text-[#243d8a]/90 border border-[#243d8a]/30">
                       <Calculator className="w-3 h-3 mr-1" />
                       Total: AED {totalRequisitionValue.toLocaleString()}
                     </Badge>
@@ -506,7 +506,7 @@ const MaterialRequisitionForm: React.FC = () => {
                       type="button"
                       size="sm"
                       onClick={addMaterialItem}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      className="bg-[#243d8a] hover:bg-[#243d8a]/90 text-white"
                     >
                       <Plus className="w-4 h-4 mr-1" />
                       Add Material
@@ -664,46 +664,46 @@ const MaterialRequisitionForm: React.FC = () => {
           {/* Delivery Tab */}
           <TabsContent value="delivery">
             <Card className="shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b">
+              <CardHeader className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 border-b">
                 <CardTitle className="flex items-center gap-2">
-                  <Truck className="w-5 h-5 text-blue-600" />
+                  <Truck className="w-5 h-5 text-[#243d8a]" />
                   Delivery Instructions
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-1">
-                    <Truck className="w-4 h-4 text-blue-500" />
+                    <Truck className="w-4 h-4 text-[#243d8a]" />
                     Delivery Instructions
                   </Label>
                   <textarea
                     {...register('deliveryInstructions')}
                     rows={4}
                     placeholder="Specific delivery instructions, location details, contact person, timing requirements..."
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:border-[#243d8a] focus:ring-1 focus:ring-[#243d8a]"
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4 text-blue-500" />
+                    <AlertCircle className="w-4 h-4 text-[#243d8a]" />
                     Special Handling Requirements
                   </Label>
                   <textarea
                     {...register('specialHandling')}
                     rows={4}
                     placeholder="Special handling, storage requirements, safety precautions, temperature controls..."
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:border-[#243d8a] focus:ring-1 focus:ring-[#243d8a]"
                   />
                 </div>
 
                 {/* Document Upload */}
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-1">
-                    <Upload className="w-4 h-4 text-blue-500" />
+                    <Upload className="w-4 h-4 text-[#243d8a]" />
                     Supporting Documents
                   </Label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-300 transition-colors">
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#243d8a]/30 transition-colors">
                     <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-600 mb-2">
                       Upload drawings, specifications, work orders
@@ -715,21 +715,21 @@ const MaterialRequisitionForm: React.FC = () => {
                 </div>
 
                 {/* Summary Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-blue-50 rounded-lg">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-[#243d8a]/5 rounded-lg">
                   <div className="text-center">
-                    <div className="font-bold text-lg text-blue-600">{totalItems}</div>
+                    <div className="font-bold text-lg text-[#243d8a]">{totalItems}</div>
                     <div className="text-sm text-gray-600">Total Items</div>
                   </div>
                   <div className="text-center">
-                    <div className="font-bold text-lg text-blue-600">{criticalItems}</div>
+                    <div className="font-bold text-lg text-[#243d8a]">{criticalItems}</div>
                     <div className="text-sm text-gray-600">Critical Items</div>
                   </div>
                   <div className="text-center">
-                    <div className="font-bold text-lg text-blue-600">AED {totalRequisitionValue.toLocaleString()}</div>
+                    <div className="font-bold text-lg text-[#243d8a]">AED {totalRequisitionValue.toLocaleString()}</div>
                     <div className="text-sm text-gray-600">Total Value</div>
                   </div>
                   <div className="text-center">
-                    <div className="font-bold text-lg text-blue-600">
+                    <div className="font-bold text-lg text-[#243d8a]">
                       {Math.max(...materialItems.map(item => item.leadTime))}
                     </div>
                     <div className="text-sm text-gray-600">Max Lead Time (days)</div>
@@ -741,11 +741,11 @@ const MaterialRequisitionForm: React.FC = () => {
         </Tabs>
 
         {/* Submit Actions */}
-        <Card className="shadow-lg border-2 border-blue-200">
+        <Card className="shadow-lg border-2 border-[#243d8a]/20">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600">
-                <p className="font-semibold">Total Requisition Value: <span className="text-blue-600">AED {totalRequisitionValue.toLocaleString()}</span></p>
+                <p className="font-semibold">Total Requisition Value: <span className="text-[#243d8a]">AED {totalRequisitionValue.toLocaleString()}</span></p>
                 <p className="text-xs mt-1">This requisition will be submitted for quantity & specification approval</p>
               </div>
               <div className="flex gap-3">
@@ -753,7 +753,7 @@ const MaterialRequisitionForm: React.FC = () => {
                   <Save className="w-4 h-4 mr-1" />
                   Save Draft
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Button type="submit" className="bg-[#243d8a] hover:bg-[#243d8a]/90 text-white">
                   <Send className="w-4 h-4 mr-1" />
                   Submit for Approval
                 </Button>

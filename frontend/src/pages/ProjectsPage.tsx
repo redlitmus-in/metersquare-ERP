@@ -170,7 +170,7 @@ const ProjectsPage: React.FC = () => {
   const getStatusColor = (status: Project['status']) => {
     switch (status) {
       case 'planning': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
-      case 'in_progress': return 'bg-blue-100 text-blue-700 border-blue-300';
+      case 'in_progress': return 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30';
       case 'on_hold': return 'bg-orange-100 text-orange-700 border-orange-300';
       case 'completed': return 'bg-green-100 text-green-700 border-green-300';
       case 'cancelled': return 'bg-red-100 text-red-700 border-red-300';
@@ -245,14 +245,14 @@ const ProjectsPage: React.FC = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-        <Card className="border-l-4 border-l-blue-500">
+        <Card className="border-l-4 border-l-[#243d8a]">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-500">Total Projects</p>
                 <p className="text-2xl font-bold">{stats.total}</p>
               </div>
-              <FolderOpen className="w-8 h-8 text-blue-500 opacity-20" />
+              <FolderOpen className="w-8 h-8 text-[#243d8a] opacity-20" />
             </div>
           </CardContent>
         </Card>
@@ -464,6 +464,7 @@ const ProjectsPage: React.FC = () => {
                       variant="outline" 
                       size="sm" 
                       className="flex-1"
+                      onClick={() => navigate(`/projects/${project.id}/edit`)}
                     >
                       <Edit className="w-4 h-4 mr-1" />
                       Edit
@@ -541,7 +542,12 @@ const ProjectsPage: React.FC = () => {
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={() => navigate(`/projects/${project.id}/edit`)}
+                          >
                             <Edit className="w-4 h-4" />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8">

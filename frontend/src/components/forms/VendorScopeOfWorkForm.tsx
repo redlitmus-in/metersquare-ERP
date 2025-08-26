@@ -138,7 +138,7 @@ const VendorScopeOfWorkForm: React.FC = () => {
     switch (priority) {
       case 'urgent': return 'bg-red-100 text-red-700 border-red-300';
       case 'high': return 'bg-orange-100 text-orange-700 border-orange-300';
-      case 'medium': return 'bg-blue-100 text-blue-700 border-blue-300';
+      case 'medium': return 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30';
       default: return 'bg-gray-100 text-gray-700 border-gray-300';
     }
   };

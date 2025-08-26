@@ -111,7 +111,7 @@ const WorkflowStatusPage: React.FC = () => {
     switch (status) {
       case 'approved': return 'bg-green-100 text-green-700';
       case 'pending': return 'bg-yellow-100 text-yellow-700';
-      case 'in_review': return 'bg-blue-100 text-blue-700';
+      case 'in_review': return 'bg-[#243d8a]/10 text-[#243d8a]/90';
       case 'rejected': return 'bg-red-100 text-red-700';
       case 'revision_required': return 'bg-orange-100 text-orange-700';
       default: return 'bg-gray-100 text-gray-700';
@@ -182,11 +182,11 @@ const WorkflowStatusPage: React.FC = () => {
                   </div>
 
                   {/* Current Step */}
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4 className="font-semibold text-blue-900 mb-2">Current Step</h4>
+                  <div className="bg-[#243d8a]/5 p-4 rounded-lg">
+                    <h4 className="font-semibold text-[#243d8a] mb-2">Current Step</h4>
                     <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-blue-600" />
-                      <span className="text-blue-800">{workflow.currentStep.replace(/_/g, ' ')}</span>
+                      <User className="w-4 h-4 text-[#243d8a]" />
+                      <span className="text-[#243d8a]/80">{workflow.currentStep.replace(/_/g, ' ')}</span>
                     </div>
                   </div>
 
@@ -224,7 +224,7 @@ const WorkflowStatusPage: React.FC = () => {
                           <React.Fragment key={step}>
                             <div className={`px-3 py-1 rounded text-xs font-medium ${
                               isCompleted ? 'bg-green-100 text-green-700' :
-                              isCurrent ? 'bg-blue-100 text-blue-700' :
+                              isCurrent ? 'bg-[#243d8a]/10 text-[#243d8a]/90' :
                               isRejected ? 'bg-red-100 text-red-700' :
                               'bg-gray-100 text-gray-500'
                             }`}>
@@ -283,13 +283,13 @@ const WorkflowStatusPage: React.FC = () => {
       </div>
 
       {/* Integration Notice */}
-      <Card className="bg-blue-50 border-blue-200">
+      <Card className="bg-[#243d8a]/5 border-[#243d8a]/20">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-[#243d8a] mt-0.5" />
             <div>
-              <h4 className="font-semibold text-blue-900">Backend Integration Required</h4>
-              <p className="text-sm text-blue-800 mt-1">
+              <h4 className="font-semibold text-[#243d8a]">Backend Integration Required</h4>
+              <p className="text-sm text-[#243d8a]/80 mt-1">
                 This page shows the designed workflow structure. Full functionality requires backend API integration 
                 for real-time workflow state management, approvals, and flag tracking.
               </p>

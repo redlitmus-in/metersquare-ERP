@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,8 @@ import {
   EditIcon,
   PackageIcon
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import DocumentViewModal from '@/components/DocumentViewModal';
 
 interface Delivery {
   id: string;
@@ -24,6 +26,9 @@ interface Delivery {
 }
 
 const DeliveriesPage: React.FC = () => {
+  const navigate = useNavigate();
+  const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
+  const [showViewModal, setShowViewModal] = useState(false);
   const deliveries: Delivery[] = [
     {
       id: 'DEL-001',
@@ -57,7 +62,7 @@ const DeliveriesPage: React.FC = () => {
   const getStatusBadge = (status: Delivery['status']) => {
     const statusConfig = {
       pending: { color: 'bg-yellow-100 text-yellow-700 border-yellow-300', icon: ClockIcon },
-      in_transit: { color: 'bg-blue-100 text-blue-700 border-blue-300', icon: TruckIcon },
+      in_transit: { color: 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30', icon: TruckIcon },
       delivered: { color: 'bg-green-100 text-green-700 border-green-300', icon: CheckCircleIcon },
       delayed: { color: 'bg-red-100 text-red-700 border-red-300', icon: AlertCircleIcon }
     };
@@ -165,10 +170,25 @@ const DeliveriesPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <Button size="sm" variant="outline" className="text-gray-600 hover:text-gray-900">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="text-gray-600 hover:text-gray-900"
+                          onClick={() => {
+                            setSelectedDelivery(delivery);
+                            setShowViewModal(true);
+                          }}
+                          title="View Delivery Details"
+                        >
                           <EyeIcon className="w-4 h-4" />
                         </Button>
-                        <Button size="sm" variant="outline" className="text-gray-600 hover:text-gray-900">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="text-gray-600 hover:text-gray-900"
+                          onClick={() => navigate(`/procurement/deliveries/edit/${delivery.id}`)}
+                          title="Edit Delivery"
+                        >
                           <EditIcon className="w-4 h-4" />
                         </Button>
                       </div>
@@ -180,6 +200,23 @@ const DeliveriesPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delivery View Modal */}
+      <DocumentViewModal
+        isOpen={showViewModal}
+        onClose={() => {
+          setShowViewModal(false);
+          setSelectedDelivery(null);
+        }}
+        documentType="Delivery Note"
+        documentData={selectedDelivery}
+        onEdit={() => {
+          setShowViewModal(false);
+          if (selectedDelivery) {
+            navigate(`/procurement/deliveries/edit/${selectedDelivery.id}`);
+          }
+        }}
+      />
     </div>
   );
 };

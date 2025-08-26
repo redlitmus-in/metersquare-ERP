@@ -80,7 +80,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
         href: '/dashboard', 
         icon: HomeIcon, 
         iconSolid: HomeSolid,
-        color: 'text-blue-600'
+        color: 'text-[#243d8a]'
       },
       { 
         name: 'Procurement', 
@@ -229,46 +229,54 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                 {/* Main Navigation Item */}
                 <div className="relative">
                   {hasChildren ? (
-                    <button
-                      onClick={() => !isCollapsed && toggleSection(item.name.toLowerCase())}
-                      title={isCollapsed ? item.name : ''}
-                      className={clsx(
-                        'w-full group flex items-center transition-all duration-200 text-xs font-medium rounded-lg',
-                        isCollapsed ? 'px-2 py-2 justify-center' : 'px-2.5 py-2 justify-between',
-                        isActive 
-                          ? item.name === 'Procurement' 
-                            ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-900 shadow-md border border-red-200'
-                            : 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-900 shadow-md border border-blue-200'
-                          : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                      )}
-                    >
-                      <div className="flex items-center">
-                        <div className={clsx(
-                          'rounded-md transition-colors duration-200',
-                          isCollapsed ? 'p-1.5' : 'p-1.5 mr-2',
+                    <div className="flex items-center">
+                      <Link
+                        to={item.href}
+                        onClick={() => setSidebarOpen(false)}
+                        title={isCollapsed ? item.name : ''}
+                        className={clsx(
+                          'flex-1 group flex items-center transition-all duration-200 text-xs font-medium rounded-lg',
+                          isCollapsed ? 'px-2 py-2 justify-center' : 'px-2.5 py-2',
                           isActive 
-                            ? item.name === 'Procurement'
-                              ? 'bg-red-500 shadow-lg' 
-                              : 'bg-blue-500 shadow-lg'
-                            : 'bg-gray-100 group-hover:bg-gray-200'
-                        )}>
-                          <IconComponent className={clsx(
-                            'w-4 h-4 transition-colors duration-200',
-                            isActive ? 'text-white' : item.color || 'text-gray-500'
-                          )} />
+                            ? item.name === 'Procurement' 
+                              ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-900 shadow-md border border-red-200'
+                              : 'bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 text-[#243d8a] shadow-md border border-[#243d8a]/20'
+                            : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                        )}
+                      >
+                        <div className="flex items-center">
+                          <div className={clsx(
+                            'rounded-md transition-colors duration-200',
+                            isCollapsed ? 'p-1.5' : 'p-1.5 mr-2',
+                            isActive 
+                              ? item.name === 'Procurement'
+                                ? 'bg-red-500 shadow-lg' 
+                                : 'bg-[#243d8a] shadow-lg'
+                              : 'bg-gray-100 group-hover:bg-gray-200'
+                          )}>
+                            <IconComponent className={clsx(
+                              'w-4 h-4 transition-colors duration-200',
+                              isActive ? 'text-white' : item.color || 'text-gray-500'
+                            )} />
+                          </div>
+                          {!isCollapsed && <span className="font-semibold">{item.name}</span>}
                         </div>
-                        {!isCollapsed && <span className="font-semibold">{item.name}</span>}
-                      </div>
+                      </Link>
                       {!isCollapsed && (
-                        <ChevronRightIcon 
-                          className={clsx(
-                            'w-4 h-4 transition-transform duration-200',
-                            isExpanded ? 'transform rotate-90' : '',
-                            isActive ? 'text-gray-700' : 'text-gray-400'
-                          )} 
-                        />
+                        <button
+                          onClick={() => toggleSection(item.name.toLowerCase())}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                          <ChevronRightIcon 
+                            className={clsx(
+                              'w-4 h-4 transition-transform duration-200',
+                              isExpanded ? 'transform rotate-90' : '',
+                              isActive ? 'text-gray-700' : 'text-gray-400'
+                            )} 
+                          />
+                        </button>
                       )}
-                    </button>
+                    </div>
                   ) : (
                     <Link
                       to={item.href}
@@ -280,7 +288,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                         isActive 
                           ? item.name === 'Procurement' 
                             ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-900 shadow-md border border-red-200'
-                            : 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-900 shadow-md border border-blue-200'
+                            : 'bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 text-[#243d8a] shadow-md border border-[#243d8a]/20'
                           : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                       )}
                     >
@@ -288,7 +296,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                       {isActive && (
                         <div className={clsx(
                           "absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 rounded-r-full",
-                          item.name === 'Procurement' ? 'bg-red-500' : 'bg-blue-500'
+                          item.name === 'Procurement' ? 'bg-red-500' : 'bg-[#243d8a]'
                         )}></div>
                       )}
                       
@@ -298,7 +306,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                         isActive 
                           ? item.name === 'Procurement'
                             ? 'bg-red-500 shadow-lg' 
-                            : 'bg-blue-500 shadow-lg'
+                            : 'bg-[#243d8a] shadow-lg'
                           : 'bg-gray-100 group-hover:bg-gray-200'
                       )}>
                         <IconComponent className={clsx(
@@ -313,7 +321,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                         "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl",
                         item.name === 'Procurement' 
                           ? 'bg-gradient-to-r from-red-500/5 to-red-500/10' 
-                          : 'bg-gradient-to-r from-blue-500/5 to-blue-500/10'
+                          : 'bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10'
                       )}></div>
                     </Link>
                   )}
@@ -364,10 +372,10 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
         {/* User Info Section */}
         {user && (
           <div className="mt-4 pt-3 border-t border-gray-100">
-            <div className="bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg p-3 border border-gray-200">
+            <div className="bg-gradient-to-r from-gray-50 to-[#243d8a]/5 rounded-lg p-3 border border-gray-200">
               <div className="flex items-center space-x-3">
                 <div className="relative">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#243d8a] to-[#243d8a] flex items-center justify-center shadow-md">
                     <span className="text-white font-bold text-xs">
                       {user.full_name.charAt(0).toUpperCase()}
                     </span>
@@ -390,7 +398,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
         {/* Version Info */}
         <div className="mt-4 px-4 text-center">
           <p className="text-xs text-gray-400">Version 1.0.0</p>
-          <div className="mt-2 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-300 to-transparent"></div>
+          <div className="mt-2 w-full h-0.5 bg-gradient-to-r from-transparent via-[#243d8a]/30 to-transparent"></div>
         </div>
       </div>
     </div>

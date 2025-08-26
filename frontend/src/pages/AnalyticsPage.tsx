@@ -255,7 +255,7 @@ const AnalyticsPage: React.FC = () => {
 
   const getFrequencyBadge = (frequency: ReportData['frequency']) => {
     const colors = {
-      daily: 'bg-blue-100 text-blue-700 border-blue-300',
+      daily: 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30',
       weekly: 'bg-purple-100 text-purple-700 border-purple-300',
       monthly: 'bg-orange-100 text-orange-700 border-orange-300'
     };
@@ -370,7 +370,35 @@ const AnalyticsPage: React.FC = () => {
               </Select>
               
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 hover:from-orange-700 hover:via-amber-700 hover:to-orange-800 text-white flex items-center gap-2 shadow-xl">
+                <Button 
+                  className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 hover:from-orange-700 hover:via-amber-700 hover:to-orange-800 text-white flex items-center gap-2 shadow-xl"
+                  onClick={() => {
+                    // Generate sample analytics report data
+                    const reportData = {
+                      generated: new Date().toISOString(),
+                      timeRange: timeRange,
+                      metrics: {
+                        totalProcurement: 'AED 1.2M',
+                        activeProjects: 44,
+                        vendorPartners: 127,
+                        costSavings: 'AED 185K',
+                        efficiencyScore: '94.2%',
+                        qualityRating: '4.8/5'
+                      },
+                      summary: 'Premium Analytics Report generated from MeterSquare ERP'
+                    };
+                    
+                    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `analytics_report_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  }}
+                >
                   <Download className="w-4 h-4" />
                   Export Premium Report
                 </Button>
@@ -383,7 +411,7 @@ const AnalyticsPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
             { title: 'Total Procurement', value: 'AED 1.2M', change: '+12%', icon: ShoppingCart, gradient: 'from-red-500 to-pink-500', bgGradient: 'from-red-50 to-pink-50' },
-            { title: 'Active Projects', value: '44', change: '+8%', icon: Package, gradient: 'from-blue-500 to-cyan-500', bgGradient: 'from-blue-50 to-cyan-50' },
+            { title: 'Active Projects', value: '44', change: '+8%', icon: Package, gradient: 'from-[#243d8a] to-cyan-500', bgGradient: 'from-[#243d8a]/5 to-cyan-50' },
             { title: 'Vendor Partners', value: '127', change: '+15%', icon: Users, gradient: 'from-green-500 to-emerald-500', bgGradient: 'from-green-50 to-emerald-50' },
             { title: 'Cost Savings', value: 'AED 185K', change: '+23%', icon: Target, gradient: 'from-purple-500 to-violet-500', bgGradient: 'from-purple-50 to-violet-50' },
             { title: 'Efficiency Score', value: '94.2%', change: '+5%', icon: Zap, gradient: 'from-orange-500 to-amber-500', bgGradient: 'from-orange-50 to-amber-50' },
@@ -707,9 +735,9 @@ const AnalyticsPage: React.FC = () => {
           <div className="space-y-6">
             {/* Budget Overview Chart */}
             <Card className="shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b">
+              <CardHeader className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 border-b">
                 <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-blue-600" />
+                  <BarChart3 className="w-5 h-5 text-[#243d8a]" />
                   Monthly Budget vs Actual Spending
                 </CardTitle>
               </CardHeader>
@@ -775,9 +803,9 @@ const AnalyticsPage: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Project Timeline */}
             <Card className="shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b">
+              <CardHeader className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 border-b">
                 <CardTitle className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-blue-600" />
+                  <Activity className="w-5 h-5 text-[#243d8a]" />
                   Project Timeline & Milestones
                 </CardTitle>
               </CardHeader>
@@ -794,7 +822,7 @@ const AnalyticsPage: React.FC = () => {
                         <h4 className="font-medium text-gray-900">{project.project}</h4>
                         <Badge className={
                           project.status === 'On Track' ? 'bg-green-100 text-green-700 border-green-300' :
-                          project.status === 'Ahead' ? 'bg-blue-100 text-blue-700 border-blue-300' :
+                          project.status === 'Ahead' ? 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30' :
                           project.status === 'Delayed' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' :
                           'bg-red-100 text-red-700 border-red-300'
                         }>
@@ -822,9 +850,9 @@ const AnalyticsPage: React.FC = () => {
 
             {/* Budget Analysis */}
             <Card className="shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b">
+              <CardHeader className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 border-b">
                 <CardTitle className="flex items-center gap-2">
-                  <Banknote className="w-5 h-5 text-blue-600" />
+                  <Banknote className="w-5 h-5 text-[#243d8a]" />
                   Budget vs Actual Analysis
                 </CardTitle>
               </CardHeader>
@@ -883,7 +911,31 @@ const AnalyticsPage: React.FC = () => {
                     <Filter className="w-4 h-4 mr-2" />
                     Filter
                   </Button>
-                  <Button className="bg-orange-600 hover:bg-orange-700 text-white" size="sm">
+                  <Button 
+                    className="bg-orange-600 hover:bg-orange-700 text-white" 
+                    size="sm"
+                    onClick={() => {
+                      const allReports = {
+                        generated: new Date().toISOString(),
+                        reports: [
+                          { name: 'Monthly Procurement Report', generated: '2024-01-01', status: 'ready' },
+                          { name: 'Vendor Performance Report', generated: '2024-01-15', status: 'ready' },
+                          { name: 'Cost Analysis Report', generated: '2024-02-01', status: 'ready' },
+                          { name: 'Project Status Report', generated: '2024-02-15', status: 'ready' }
+                        ]
+                      };
+                      
+                      const blob = new Blob([JSON.stringify(allReports, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `all_reports_${new Date().toISOString().split('T')[0]}.json`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
                     <Download className="w-4 h-4 mr-2" />
                     Download All
                   </Button>
@@ -946,10 +998,44 @@ const AnalyticsPage: React.FC = () => {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
-                            <Button size="sm" variant="outline" className="text-gray-600 hover:text-gray-900">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="text-gray-600 hover:text-gray-900"
+                              onClick={() => {
+                                alert(`Viewing report: ${report.title}\n\nThis would open a detailed view of the report.`);
+                              }}
+                              title="View Report"
+                            >
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button size="sm" variant="outline" className="text-gray-600 hover:text-gray-900">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="text-gray-600 hover:text-gray-900"
+                              onClick={() => {
+                                const reportData = {
+                                  title: report.title,
+                                  description: report.description,
+                                  category: report.category,
+                                  frequency: report.frequency,
+                                  lastGenerated: report.lastGenerated,
+                                  status: report.status,
+                                  data: 'Report content would be here...'
+                                };
+                                
+                                const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `${report.title.replace(/\s+/g, '_').toLowerCase()}.json`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                              }}
+                              title="Download Report"
+                            >
                               <Download className="w-4 h-4" />
                             </Button>
                           </div>

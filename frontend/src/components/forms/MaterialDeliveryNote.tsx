@@ -179,7 +179,7 @@ const MaterialDeliveryNote: React.FC = () => {
       case 'full': return 'bg-green-100 text-green-700 border-green-300';
       case 'partial': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
       case 'emergency': return 'bg-red-100 text-red-700 border-red-300';
-      case 'back_order': return 'bg-blue-100 text-blue-700 border-blue-300';
+      case 'back_order': return 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30';
       default: return 'bg-gray-100 text-gray-700 border-gray-300';
     }
   };
@@ -520,7 +520,7 @@ const MaterialDeliveryNote: React.FC = () => {
                   </CardTitle>
                   <div className="flex items-center gap-3">
                     <div className="flex gap-2 text-xs">
-                      <Badge className="bg-blue-100 text-blue-700 border border-blue-300">
+                      <Badge className="bg-[#243d8a]/10 text-[#243d8a]/90 border border-[#243d8a]/30">
                         Delivered: {totalItemsDelivered}
                       </Badge>
                       <Badge className="bg-green-100 text-green-700 border border-green-300">
@@ -820,7 +820,7 @@ const MaterialDeliveryNote: React.FC = () => {
                     <div className="text-sm text-gray-600">Items Rejected</div>
                   </div>
                   <div className="text-center">
-                    <div className="font-bold text-lg text-blue-600">
+                    <div className="font-bold text-lg text-[#243d8a]">
                       {totalItemsRejected === 0 ? '100%' : `${Math.round((totalItemsAccepted / totalItemsDelivered) * 100)}%`}
                     </div>
                     <div className="text-sm text-gray-600">Acceptance Rate</div>

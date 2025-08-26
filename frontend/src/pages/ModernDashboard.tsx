@@ -153,7 +153,7 @@ const ModernDashboard: React.FC = () => {
       change: 8.3,
       trend: 'up',
       icon: Briefcase,
-      color: 'text-blue-600',
+      color: 'text-[#243d8a]',
       subtitle: '6 new'
     },
     {
@@ -236,7 +236,7 @@ const ModernDashboard: React.FC = () => {
       case 'active':
         return 'bg-green-100 text-green-800';
       case 'completed':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-[#243d8a]/10 text-[#243d8a]/80';
       case 'on-hold':
         return 'bg-yellow-100 text-yellow-800';
       case 'planning':
@@ -251,7 +251,7 @@ const ModernDashboard: React.FC = () => {
       case 'approval':
         return <CheckCircle className="w-3 h-3 text-green-600" />;
       case 'purchase':
-        return <ShoppingCart className="w-3 h-3 text-blue-600" />;
+        return <ShoppingCart className="w-3 h-3 text-[#243d8a]" />;
       case 'vendor':
         return <Users className="w-3 h-3 text-red-600" />;
       case 'payment':
@@ -408,7 +408,7 @@ const ModernDashboard: React.FC = () => {
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <Briefcase className="w-4 h-4 text-blue-600" />
+              <Briefcase className="w-4 h-4 text-[#243d8a]" />
               Project Status
             </CardTitle>
           </CardHeader>
@@ -444,7 +444,7 @@ const ModernDashboard: React.FC = () => {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <BarChart3 className="w-4 h-4 text-blue-600" />
+              <BarChart3 className="w-4 h-4 text-[#243d8a]" />
               Department Performance
             </CardTitle>
           </CardHeader>
@@ -488,7 +488,7 @@ const ModernDashboard: React.FC = () => {
                   <div className="text-lg font-bold text-gray-900">{item.value}%</div>
                   <div className="w-full bg-gray-200 rounded-full h-1 mt-1">
                     <div
-                      className={`h-1 rounded-full ${index % 2 === 0 ? 'bg-red-500' : 'bg-blue-500'}`}
+                      className={`h-1 rounded-full ${index % 2 === 0 ? 'bg-red-500' : 'bg-[#243d8a]'}`}
                       style={{ width: `${item.value}%` }}
                     />
                   </div>
@@ -506,7 +506,7 @@ const ModernDashboard: React.FC = () => {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-sm">
-                <Briefcase className="w-4 h-4 text-blue-600" />
+                <Briefcase className="w-4 h-4 text-[#243d8a]" />
                 Active Projects
               </CardTitle>
               <Button 
@@ -548,7 +548,7 @@ const ModernDashboard: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-gray-500">Spent</span>
-                    <p className="font-semibold text-blue-600">
+                    <p className="font-semibold text-[#243d8a]">
                       AED {(project.spent / 1000).toFixed(0)}K
                     </p>
                   </div>

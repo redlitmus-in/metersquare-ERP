@@ -248,7 +248,7 @@ const ProcessFlowPage: React.FC = () => {
         style={{ left: `${node.x}px`, top: `${node.y}px` }}
         onClick={() => setSelectedNode(node.id)}
       >
-        <div className={`relative ${isSelected ? 'ring-4 ring-blue-400 ring-offset-2' : ''} rounded-lg`}>
+        <div className={`relative ${isSelected ? 'ring-4 ring-[#243d8a]/40 ring-offset-2' : ''} rounded-lg`}>
           <div className={`${node.color} p-3 rounded-lg shadow-lg border-2 border-white min-w-[140px]`}>
             <div className="flex flex-col items-center space-y-1">
               <Icon className="w-5 h-5 text-white" />
@@ -265,7 +265,7 @@ const ProcessFlowPage: React.FC = () => {
           {node.status && (
             <div className="absolute -top-2 -right-2">
               {node.status === 'completed' && <CheckCircle className="w-5 h-5 text-green-500 bg-white rounded-full" />}
-              {node.status === 'in-progress' && <Clock className="w-5 h-5 text-blue-500 bg-white rounded-full" />}
+              {node.status === 'in-progress' && <Clock className="w-5 h-5 text-[#243d8a] bg-white rounded-full" />}
               {node.status === 'pending' && <AlertCircle className="w-5 h-5 text-yellow-500 bg-white rounded-full" />}
               {node.status === 'rejected' && <XCircle className="w-5 h-5 text-red-500 bg-white rounded-full" />}
             </div>
@@ -353,7 +353,7 @@ const ProcessFlowPage: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Workflow className="w-7 h-7 text-blue-600" />
+            <Workflow className="w-7 h-7 text-[#243d8a]" />
             ERP Process Workflows
           </h1>
           <p className="text-sm text-gray-600 mt-1">
@@ -391,7 +391,7 @@ const ProcessFlowPage: React.FC = () => {
       {/* Workflow Tabs */}
       <Tabs value={selectedWorkflow} onValueChange={setSelectedWorkflow} className="space-y-6">
         <TabsList className="grid grid-cols-4 w-full max-w-4xl bg-white shadow-sm">
-          <TabsTrigger value="material-purchase" className="text-xs data-[state=active]:bg-blue-50">
+          <TabsTrigger value="material-purchase" className="text-xs data-[state=active]:bg-[#243d8a]/5">
             <Package className="w-4 h-4 mr-1" />
             Material Purchase
           </TabsTrigger>
@@ -411,10 +411,10 @@ const ProcessFlowPage: React.FC = () => {
 
         {/* Workflow Canvas */}
         <Card className="overflow-hidden shadow-lg">
-          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+          <CardHeader className="bg-gradient-to-r from-[#243d8a]/5 to-indigo-50 border-b">
             <div className="flex justify-between items-center">
               <CardTitle className="text-lg flex items-center gap-2">
-                <GitBranch className="w-5 h-5 text-blue-600" />
+                <GitBranch className="w-5 h-5 text-[#243d8a]" />
                 {currentWorkflow.title}
               </CardTitle>
               <div className="flex gap-2">
@@ -451,9 +451,9 @@ const ProcessFlowPage: React.FC = () => {
           >
             {/* Selected Node Details */}
             <Card className="shadow-md">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+              <CardHeader className="bg-gradient-to-r from-[#243d8a]/5 to-indigo-50">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <ClipboardCheck className="w-4 h-4 text-blue-600" />
+                  <ClipboardCheck className="w-4 h-4 text-[#243d8a]" />
                   Node Details
                 </CardTitle>
               </CardHeader>
@@ -511,7 +511,7 @@ const ProcessFlowPage: React.FC = () => {
                   {currentWorkflow.connections
                     .filter(c => c.to === selectedNode)
                     .map((conn, idx) => (
-                      <div key={idx} className="text-xs bg-blue-50 p-2 rounded">
+                      <div key={idx} className="text-xs bg-[#243d8a]/5 p-2 rounded">
                         <span className="font-medium">
                           {currentWorkflow.nodes.find(n => n.id === conn.from)?.title}
                         </span>
@@ -552,19 +552,51 @@ const ProcessFlowPage: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 pt-4">
-                <Button className="w-full justify-start text-xs" variant="outline" size="sm">
+                <Button 
+                  className="w-full justify-start text-xs" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    const nodeData = workflowNodes.find(n => n.id === selectedNode);
+                    alert(`Viewing documents for: ${nodeData?.label}\n\nThis would show all related documents for this workflow step.`);
+                  }}
+                >
                   <FileText className="w-4 h-4 mr-2" />
                   View Documents
                 </Button>
-                <Button className="w-full justify-start text-xs" variant="outline" size="sm">
+                <Button 
+                  className="w-full justify-start text-xs" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    const nodeData = workflowNodes.find(n => n.id === selectedNode);
+                    alert(`Assigning user to: ${nodeData?.label}\n\nThis would open a user assignment dialog.`);
+                  }}
+                >
                   <Users className="w-4 h-4 mr-2" />
                   Assign User
                 </Button>
-                <Button className="w-full justify-start text-xs" variant="outline" size="sm">
+                <Button 
+                  className="w-full justify-start text-xs" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    const nodeData = workflowNodes.find(n => n.id === selectedNode);
+                    alert(`History for: ${nodeData?.label}\n\nTimeline:\n- Created: 2 days ago\n- Approved: 1 day ago\n- Current status: ${nodeData?.status || 'Active'}`);
+                  }}
+                >
                   <Clock className="w-4 h-4 mr-2" />
                   View History
                 </Button>
-                <Button className="w-full justify-start text-xs" variant="outline" size="sm">
+                <Button 
+                  className="w-full justify-start text-xs" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    const nodeData = workflowNodes.find(n => n.id === selectedNode);
+                    alert(`Analytics for: ${nodeData?.label}\n\n- Average processing time: 2.3 days\n- Success rate: 95%\n- Bottleneck score: Low`);
+                  }}
+                >
                   <BarChart3 className="w-4 h-4 mr-2" />
                   View Analytics
                 </Button>

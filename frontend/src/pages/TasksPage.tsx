@@ -119,7 +119,7 @@ const TasksPage: React.FC = () => {
   const getStatusConfig = (status: Task['status']) => {
     const configs = {
       pending: { color: 'bg-yellow-100 text-yellow-700 border-yellow-300', icon: ClockIcon, label: 'Pending' },
-      in_progress: { color: 'bg-blue-100 text-blue-700 border-blue-300', icon: PlayCircleIcon, label: 'In Progress' },
+      in_progress: { color: 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30', icon: PlayCircleIcon, label: 'In Progress' },
       completed: { color: 'bg-green-100 text-green-700 border-green-300', icon: CheckIcon, label: 'Completed' },
       overdue: { color: 'bg-red-100 text-red-700 border-red-300', icon: AlertCircleIcon, label: 'Overdue' }
     };
@@ -129,7 +129,7 @@ const TasksPage: React.FC = () => {
   const getPriorityConfig = (priority: Task['priority']) => {
     const configs = {
       low: { color: 'bg-gray-100 text-gray-700 border-gray-300', label: 'Low' },
-      medium: { color: 'bg-blue-100 text-blue-700 border-blue-300', label: 'Medium' },
+      medium: { color: 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30', label: 'Medium' },
       high: { color: 'bg-orange-100 text-orange-700 border-orange-300', label: 'High' },
       urgent: { color: 'bg-red-100 text-red-700 border-red-300', label: 'Urgent' }
     };
@@ -207,8 +207,8 @@ const TasksPage: React.FC = () => {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-3">
             <div className="flex items-center gap-3">
-              <div className="p-1.5 bg-blue-100 rounded-md">
-                <PlayCircleIcon className="w-4 h-4 text-blue-600" />
+              <div className="p-1.5 bg-[#243d8a]/10 rounded-md">
+                <PlayCircleIcon className="w-4 h-4 text-[#243d8a]" />
               </div>
               <div>
                 <p className="text-xs text-gray-600">In Progress</p>
@@ -254,7 +254,7 @@ const TasksPage: React.FC = () => {
             {[
               { key: 'all', label: `All (${taskStats.total})`, color: 'bg-gray-100 text-gray-700' },
               { key: 'pending', label: `Pending (${taskStats.pending})`, color: 'bg-yellow-100 text-yellow-700' },
-              { key: 'in_progress', label: `In Progress (${taskStats.in_progress})`, color: 'bg-blue-100 text-blue-700' },
+              { key: 'in_progress', label: `In Progress (${taskStats.in_progress})`, color: 'bg-[#243d8a]/10 text-[#243d8a]/90' },
               { key: 'completed', label: `Completed (${taskStats.completed})`, color: 'bg-green-100 text-green-700' },
               { key: 'overdue', label: `Overdue (${taskStats.overdue})`, color: 'bg-red-100 text-red-700' }
             ].map((filter) => (

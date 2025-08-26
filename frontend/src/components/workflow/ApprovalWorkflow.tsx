@@ -161,7 +161,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({
       case 'rejected':
         return 'bg-red-100 text-red-700 border-red-300';
       case 'in-review':
-        return 'bg-blue-100 text-blue-700 border-blue-300';
+        return 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30';
       case 'revision-requested':
         return 'bg-amber-100 text-amber-700 border-amber-300';
       default:
@@ -176,7 +176,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({
       case 'rejected':
         return <XCircle className="w-5 h-5 text-red-600" />;
       case 'in-review':
-        return <Clock className="w-5 h-5 text-blue-600 animate-pulse" />;
+        return <Clock className="w-5 h-5 text-[#243d8a] animate-pulse" />;
       case 'revision-requested':
         return <AlertTriangle className="w-5 h-5 text-amber-600" />;
       default:
@@ -198,14 +198,14 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({
     <div className="space-y-6">
       {/* Status Overview */}
       <Card className="shadow-lg border-0">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+        <CardHeader className="bg-gradient-to-r from-[#243d8a]/5 to-indigo-50 border-b">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-blue-600" />
+              <Shield className="w-5 h-5 text-[#243d8a]" />
               Approval Workflow Status
             </CardTitle>
             <div className="flex items-center gap-3">
-              <Badge className="bg-blue-100 text-blue-700 border border-blue-300">
+              <Badge className="bg-[#243d8a]/10 text-[#243d8a]/90 border border-[#243d8a]/30">
                 <Activity className="w-3 h-3 mr-1" />
                 In Progress
               </Badge>
@@ -227,7 +227,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({
                 initial={{ width: 0 }}
                 animate={{ width: '40%' }}
                 transition={{ duration: 1, ease: 'easeOut' }}
-                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"
+                className="h-full bg-gradient-to-r from-[#243d8a] to-indigo-500 rounded-full"
               />
             </div>
           </div>
@@ -256,7 +256,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({
                   {/* Step Content */}
                   <div className="flex-1">
                     <div className={`bg-white rounded-lg border-2 p-4 ${
-                      step.status === 'in-review' ? 'border-blue-300 shadow-md' : 'border-gray-200'
+                      step.status === 'in-review' ? 'border-[#243d8a]/30 shadow-md' : 'border-gray-200'
                     }`}>
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -398,7 +398,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
           >
-            <Card className="shadow-lg border-2 border-blue-200">
+            <Card className="shadow-lg border-2 border-[#243d8a]/20">
               <CardHeader className={`${
                 selectedAction === 'approve' ? 'bg-green-50' :
                 selectedAction === 'reject' ? 'bg-red-50' :
@@ -484,7 +484,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({
                   <textarea
                     value={comments}
                     onChange={(e) => setComments(e.target.value)}
-                    className="w-full min-h-[100px] p-3 border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full min-h-[100px] p-3 border border-gray-200 rounded-lg focus:border-[#243d8a] focus:ring-1 focus:ring-[#243d8a]"
                     placeholder={
                       selectedAction === 'approve' ? 'Add approval comments (optional)...' :
                       selectedAction === 'reject' ? 'Provide reason for rejection (required)...' :
@@ -629,7 +629,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                         event.type === 'approve' ? 'bg-green-100 text-green-600' :
                         event.type === 'reject' ? 'bg-red-100 text-red-600' :
-                        event.type === 'review' ? 'bg-blue-100 text-blue-600' :
+                        event.type === 'review' ? 'bg-[#243d8a]/10 text-[#243d8a]' :
                         'bg-gray-100 text-gray-600'
                       }`}>
                         {event.type === 'approve' && <Check className="w-4 h-4" />}

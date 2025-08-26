@@ -639,7 +639,7 @@ const PurchaseRequisitionForm: React.FC = () => {
                   )}
 
                   {/* Design References */}
-                  <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                  <div className="bg-[#243d8a]/5 rounded-xl p-4 border border-[#243d8a]/20">
                     <div className="flex items-center gap-2 mb-3">
                       <Layers className="w-5 h-5 text-red-600" />
                       <span className="font-semibold text-gray-800">Design References</span>

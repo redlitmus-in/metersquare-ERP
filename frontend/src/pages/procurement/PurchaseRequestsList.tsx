@@ -26,7 +26,8 @@ import {
   SortAsc,
   SortDesc
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import DocumentViewModal from '@/components/DocumentViewModal';
 
 interface PurchaseRequest {
   id: string;
@@ -52,6 +53,7 @@ interface PurchaseRequest {
 }
 
 const PurchaseRequestsList: React.FC = () => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
@@ -60,6 +62,8 @@ const PurchaseRequestsList: React.FC = () => {
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'priority'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<PurchaseRequest | null>(null);
+  const [showViewModal, setShowViewModal] = useState(false);
 
   // Mock data - would come from backend
   const purchaseRequests: PurchaseRequest[] = [
@@ -224,7 +228,7 @@ const PurchaseRequestsList: React.FC = () => {
       pending: { color: 'bg-yellow-100 text-yellow-700', icon: Clock },
       approved: { color: 'bg-green-100 text-green-700', icon: CheckCircle },
       rejected: { color: 'bg-red-100 text-red-700', icon: XCircle },
-      in_progress: { color: 'bg-blue-100 text-blue-700', icon: AlertCircle },
+      in_progress: { color: 'bg-[#243d8a]/10 text-[#243d8a]/90', icon: AlertCircle },
       completed: { color: 'bg-purple-100 text-purple-700', icon: CheckCircle }
     };
     return configs[status];
@@ -233,7 +237,7 @@ const PurchaseRequestsList: React.FC = () => {
   const getPriorityConfig = (priority: PurchaseRequest['priority']) => {
     const configs = {
       low: { color: 'bg-gray-100 text-gray-600' },
-      medium: { color: 'bg-blue-100 text-blue-700' },
+      medium: { color: 'bg-[#243d8a]/10 text-[#243d8a]/90' },
       high: { color: 'bg-orange-100 text-orange-700' },
       urgent: { color: 'bg-red-100 text-red-700' }
     };
@@ -264,9 +268,9 @@ const PurchaseRequestsList: React.FC = () => {
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <FileText className="w-5 h-5 text-blue-600" />
+                <FileText className="w-5 h-5 text-[#243d8a]" />
                 <h2 className="text-lg font-semibold">Purchase Requests</h2>
-                <Badge className="bg-blue-100 text-blue-700">
+                <Badge className="bg-[#243d8a]/10 text-[#243d8a]/90">
                   {filteredRequests.length} Records
                 </Badge>
               </div>
@@ -280,14 +284,14 @@ const PurchaseRequestsList: React.FC = () => {
                   <Filter className="w-3 h-3" />
                   Filters
                   {activeFiltersCount > 0 && (
-                    <Badge className="ml-1 bg-blue-600 text-white">
+                    <Badge className="ml-1 bg-[#243d8a] text-white">
                       {activeFiltersCount}
                     </Badge>
                   )}
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1"
+                  className="bg-[#243d8a] hover:bg-[#243d8a]/90 text-white flex items-center gap-1"
                   onClick={() => {/* Navigate to create form */}}
                 >
                   <Plus className="w-3 h-3" />
@@ -490,7 +494,7 @@ const PurchaseRequestsList: React.FC = () => {
                             {/* Approval Flags */}
                             <div className="flex items-center gap-2 mt-2">
                               {pr.flags.qtySpec && (
-                                <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-700">
+                                <Badge variant="outline" className="text-[10px] border-[#243d8a]/30 text-[#243d8a]/90">
                                   QTY/SPEC FLAG
                                 </Badge>
                               )}
@@ -514,13 +518,45 @@ const PurchaseRequestsList: React.FC = () => {
 
                       {/* Actions */}
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0"
+                          onClick={() => {
+                            setSelectedDocument(pr);
+                            setShowViewModal(true);
+                          }}
+                          title="View Details"
+                        >
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0"
+                          onClick={() => navigate(`/procurement/purchase-requests/edit/${pr.id}`)}
+                          title="Edit"
+                        >
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0"
+                          onClick={() => {
+                            const data = JSON.stringify(pr, null, 2);
+                            const blob = new Blob([data], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `PR_${pr.prNumber}.json`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                          }}
+                          title="Download"
+                        >
                           <Download className="w-4 h-4" />
                         </Button>
                       </div>
@@ -532,6 +568,23 @@ const PurchaseRequestsList: React.FC = () => {
           })
         )}
       </div>
+
+      {/* Document View Modal */}
+      <DocumentViewModal
+        isOpen={showViewModal}
+        onClose={() => {
+          setShowViewModal(false);
+          setSelectedDocument(null);
+        }}
+        documentType="Purchase Request"
+        documentData={selectedDocument}
+        onEdit={() => {
+          setShowViewModal(false);
+          if (selectedDocument) {
+            navigate(`/procurement/purchase-requests/edit/${selectedDocument.id}`);
+          }
+        }}
+      />
     </div>
   );
 };

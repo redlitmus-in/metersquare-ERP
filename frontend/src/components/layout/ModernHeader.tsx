@@ -103,7 +103,7 @@ const ModernHeader: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
                   target.nextElementSibling?.classList.remove('hidden');
                 }}
               />
-              <div className="hidden w-7 h-7 bg-blue-600 rounded-lg shadow-lg flex items-center justify-center">
+              <div className="hidden w-7 h-7 bg-[#243d8a] rounded-lg shadow-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">M</span>
               </div>
               <span className="text-lg font-bold text-gray-900">MeterSquare</span>
@@ -116,7 +116,7 @@ const ModernHeader: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
                   "text-2xl font-bold",
                   location.pathname.startsWith('/procurement') 
                     ? 'text-red-700' 
-                    : 'text-blue-700'
+                    : 'text-[#243d8a]/90'
                 )}>
                   {getPageTitle()}
                 </h1>
@@ -188,7 +188,7 @@ const ModernHeader: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
               <Popover.Button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500">
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <div className="w-2 h-2 bg-[#243d8a] rounded-full"></div>
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 </div>
               </Popover.Button>
@@ -239,7 +239,7 @@ const ModernHeader: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
                       alt={user.full_name}
                     />
                   ) : (
-                    <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 via-red-500 to-purple-600 flex items-center justify-center shadow-lg border-2 border-white">
+                    <div className="h-9 w-9 rounded-full bg-gradient-to-br from-[#243d8a] via-red-500 to-purple-600 flex items-center justify-center shadow-lg border-2 border-white">
                       <span className="text-sm font-bold text-white">
                         {user?.full_name.charAt(0).toUpperCase()}
                       </span>
@@ -259,9 +259,9 @@ const ModernHeader: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
               >
                 <Menu.Items className="origin-top-right absolute right-0 mt-2 w-64 rounded-xl shadow-xl bg-white ring-1 ring-black ring-opacity-5 focus:outline-none border border-gray-200 overflow-hidden">
                   {/* User Info Header */}
-                  <div className="px-4 py-4 bg-gradient-to-r from-blue-50 via-red-50 to-purple-50 border-b border-gray-200">
+                  <div className="px-4 py-4 bg-gradient-to-r from-[#243d8a]/5 via-red-50 to-purple-50 border-b border-gray-200">
                     <div className="flex items-center space-x-3">
-                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 via-red-500 to-purple-600 flex items-center justify-center shadow-lg">
+                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#243d8a] via-red-500 to-purple-600 flex items-center justify-center shadow-lg">
                         <span className="text-lg font-bold text-white">
                           {user?.full_name.charAt(0).toUpperCase()}
                         </span>
@@ -349,7 +349,7 @@ const ModernHeader: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
         "h-1",
         location.pathname.startsWith('/procurement') 
           ? 'bg-red-500' 
-          : 'bg-blue-500'
+          : 'bg-[#243d8a]'
       )}></div>
     </div>
   );

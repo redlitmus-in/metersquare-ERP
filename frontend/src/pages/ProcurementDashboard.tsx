@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import DocumentViewModal from '@/components/DocumentViewModal';
 import { motion } from 'framer-motion';
 import {
   Package,
@@ -70,11 +72,14 @@ interface VendorQuotation {
 }
 
 const ProcurementDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [activeView, setActiveView] = useState<'dashboard' | 'purchase' | 'vendor' | 'approval'>('dashboard');
   const [selectedPR, setSelectedPR] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedVendorQuote, setSelectedVendorQuote] = useState<VendorQuotation | null>(null);
+  const [showVendorModal, setShowVendorModal] = useState(false);
 
   // Metrics data
   const metrics: MetricCard[] = [
@@ -91,7 +96,7 @@ const ProcurementDashboard: React.FC = () => {
       value: 28,
       change: -5.2,
       icon: FileText,
-      color: 'bg-blue-500',
+      color: 'bg-[#243d8a]',
       trend: 'down'
     },
     {
@@ -204,7 +209,7 @@ const ProcurementDashboard: React.FC = () => {
         return 'bg-green-100 text-green-700 border-green-300';
       case 'pending':
       case 'under_review':
-        return 'bg-blue-100 text-blue-700 border-blue-300';
+        return 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30';
       case 'rejected':
         return 'bg-red-100 text-red-700 border-red-300';
       case 'in_progress':
@@ -223,7 +228,7 @@ const ProcurementDashboard: React.FC = () => {
       case 'high':
         return 'bg-orange-100 text-orange-700 border-orange-300';
       case 'medium':
-        return 'bg-blue-100 text-blue-700 border-blue-300';
+        return 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30';
       case 'low':
         return 'bg-gray-100 text-gray-600 border-gray-300';
       default:
@@ -297,7 +302,7 @@ const ProcurementDashboard: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Package className="w-7 h-7 text-blue-600" />
+              <Package className="w-7 h-7 text-[#243d8a]" />
               Procurement & Costing Hub
             </h1>
             <p className="text-sm text-gray-600 mt-1">
@@ -357,7 +362,7 @@ const ProcurementDashboard: React.FC = () => {
             {/* Quick Actions */}
             <Button
               onClick={() => setActiveView('purchase')}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-[#243d8a] hover:bg-[#243d8a]/90 text-white"
             >
               <Plus className="w-4 h-4 mr-2" />
               New PR
@@ -408,7 +413,7 @@ const ProcurementDashboard: React.FC = () => {
       {/* Main Content Tabs */}
       <Tabs defaultValue="requisitions" className="space-y-6">
         <TabsList className="grid grid-cols-4 w-full max-w-2xl bg-white shadow-sm">
-          <TabsTrigger value="requisitions" className="data-[state=active]:bg-blue-50">
+          <TabsTrigger value="requisitions" className="data-[state=active]:bg-[#243d8a]/5">
             <FileText className="w-4 h-4 mr-2" />
             Requisitions
           </TabsTrigger>
@@ -497,7 +502,7 @@ const ProcurementDashboard: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <FileText className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm font-medium text-blue-600 hover:text-blue-800 cursor-pointer">
+                            <span className="text-sm font-medium text-[#243d8a] hover:text-[#243d8a]/80 cursor-pointer">
                               {pr.prNumber}
                             </span>
                           </div>
@@ -651,13 +656,42 @@ const ProcurementDashboard: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="sm">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => {
+                                setSelectedVendorQuote(vq);
+                                setShowVendorModal(true);
+                              }}
+                              title="View Vendor Quotation"
+                            >
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => navigate(`/procurement/vendor-quotations/edit/${vq.id}`)}
+                              title="Edit Vendor Quotation"
+                            >
                               <Edit className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => {
+                                const data = JSON.stringify(vq, null, 2);
+                                const blob = new Blob([data], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `VQ_${vq.vqNumber}.json`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                              }}
+                              title="Download"
+                            >
                               <MoreVertical className="w-4 h-4" />
                             </Button>
                           </div>
@@ -796,9 +830,9 @@ const ProcurementDashboard: React.FC = () => {
 
             {/* Category Breakdown */}
             <Card className="shadow-md">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b">
+              <CardHeader className="bg-gradient-to-r from-[#243d8a]/5 to-cyan-50 border-b">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <BarChart3 className="w-5 h-5 text-blue-600" />
+                  <BarChart3 className="w-5 h-5 text-[#243d8a]" />
                   Spending by Category
                 </CardTitle>
               </CardHeader>
@@ -817,7 +851,7 @@ const ProcurementDashboard: React.FC = () => {
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
-                          className="bg-blue-500 h-2 rounded-full"
+                          className="bg-[#243d8a] h-2 rounded-full"
                           style={{ width: `${item.percentage}%` }}
                         />
                       </div>
@@ -839,7 +873,7 @@ const ProcurementDashboard: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   {[
                     { label: 'Cost Savings', value: '12%', icon: TrendingDown, color: 'text-green-600' },
-                    { label: 'Process Efficiency', value: '89%', icon: Zap, color: 'text-blue-600' },
+                    { label: 'Process Efficiency', value: '89%', icon: Zap, color: 'text-[#243d8a]' },
                     { label: 'Vendor Satisfaction', value: '4.5/5', icon: Award, color: 'text-purple-600' },
                     { label: 'Compliance Rate', value: '98%', icon: Shield, color: 'text-indigo-600' }
                   ].map((kpi) => (
@@ -857,6 +891,23 @@ const ProcurementDashboard: React.FC = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Vendor Quotation View Modal */}
+      <DocumentViewModal
+        isOpen={showVendorModal}
+        onClose={() => {
+          setShowVendorModal(false);
+          setSelectedVendorQuote(null);
+        }}
+        documentType="Vendor Quotation"
+        documentData={selectedVendorQuote}
+        onEdit={() => {
+          setShowVendorModal(false);
+          if (selectedVendorQuote) {
+            navigate(`/procurement/vendor-quotations/edit/${selectedVendorQuote.id}`);
+          }
+        }}
+      />
     </div>
   );
 };

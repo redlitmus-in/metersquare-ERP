@@ -197,7 +197,7 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
   const getNotificationColor = (type: Notification['type']) => {
     switch (type) {
       case 'approval':
-        return 'text-blue-600 bg-blue-100';
+        return 'text-[#243d8a] bg-[#243d8a]/10';
       case 'alert':
         return 'text-amber-600 bg-amber-100';
       case 'success':
@@ -222,7 +222,7 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
       case 'high':
         return 'bg-orange-100 text-orange-700 border-orange-300';
       case 'medium':
-        return 'bg-blue-100 text-blue-700 border-blue-300';
+        return 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30';
       case 'low':
         return 'bg-gray-100 text-gray-600 border-gray-300';
       default:
@@ -317,67 +317,40 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="absolute right-0 mt-2 w-[360px] max-h-[500px] bg-white rounded-lg shadow-xl border z-50 overflow-hidden"
+            className="absolute right-0 top-full mt-2 w-[420px] max-h-[600px] bg-white rounded-lg shadow-xl border z-50 overflow-hidden"
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3">
+            <div className="bg-gradient-to-r from-red-50 to-red-100 border-b border-red-200 p-3">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-base flex items-center gap-2">
-                  <Bell className="w-4 h-4" />
+                <h3 className="font-semibold text-base flex items-center gap-2 text-gray-800">
+                  <Bell className="w-4 h-4 text-red-600" />
                   Notifications
                 </h3>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowPanel(false)}
-                  className="text-white hover:bg-white/20"
+                  className="text-gray-600 hover:bg-red-100"
                 >
                   <X className="w-4 h-4" />
                 </Button>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge className="bg-white/20 text-white border-white/30">
-                  {unreadCount} unread
-                </Badge>
-                {urgentCount > 0 && (
-                  <Badge className="bg-red-500/20 text-white border-red-400/30">
-                    {urgentCount} urgent
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-red-100 text-red-700 border-red-300">
+                    {unreadCount} unread
                   </Badge>
-                )}
-              </div>
-            </div>
-
-            {/* Filters */}
-            <div className="p-3 border-b bg-gray-50">
-              <div className="flex items-center gap-2">
-                <Select value={filter} onValueChange={(value: any) => setFilter(value)}>
-                  <SelectTrigger className="h-8 text-xs flex-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="unread">Unread</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="h-8 text-xs flex-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    <SelectItem value="procurement">Procurement</SelectItem>
-                    <SelectItem value="approval">Approvals</SelectItem>
-                    <SelectItem value="vendor">Vendors</SelectItem>
-                    <SelectItem value="project">Projects</SelectItem>
-                    <SelectItem value="system">System</SelectItem>
-                  </SelectContent>
-                </Select>
+                  {urgentCount > 0 && (
+                    <Badge className="bg-orange-100 text-orange-700 border-orange-300">
+                      {urgentCount} urgent
+                    </Badge>
+                  )}
+                </div>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={markAllAsRead}
-                  className="text-xs px-2 flex-shrink-0"
+                  className="text-xs px-2 text-red-600 hover:bg-red-100"
                 >
                   Mark all read
                 </Button>
@@ -385,7 +358,7 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
             </div>
 
             {/* Notifications List */}
-            <div className="max-h-[320px] overflow-y-auto">
+            <div className="max-h-[400px] overflow-y-auto">
               {filteredNotifications.length === 0 ? (
                 <div className="p-8 text-center">
                   <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -399,7 +372,7 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       className={`p-3 hover:bg-gray-50 transition-colors ${
-                        !notification.read ? 'bg-blue-50/30' : ''
+                        !notification.read ? 'bg-[#243d8a]/5/30' : ''
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -407,10 +380,10 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
                           {getNotificationIcon(notification.type)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-medium text-sm text-gray-900 mb-1 line-clamp-1">
+                          <h4 className="font-medium text-sm text-gray-900 mb-1">
                             {notification.title}
                           </h4>
-                          <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                          <p className="text-xs text-gray-600 mb-2">
                             {notification.message}
                           </p>
                           
@@ -420,7 +393,7 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
                               {notification.metadata.project && (
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
                                   <FileText className="w-3 h-3 mr-1" />
-                                  <span className="truncate max-w-[100px]">{notification.metadata.project}</span>
+                                  {notification.metadata.project}
                                 </Badge>
                               )}
                               {notification.metadata.amount && (
@@ -438,7 +411,7 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
                                 {formatTimestamp(notification.timestamp)}
                               </span>
                               {notification.metadata?.sender && (
-                                <span className="text-xs text-gray-500 truncate max-w-[80px]">
+                                <span className="text-xs text-gray-500">
                                   <Users className="w-3 h-3 inline mr-1" />
                                   {notification.metadata.sender}
                                 </span>

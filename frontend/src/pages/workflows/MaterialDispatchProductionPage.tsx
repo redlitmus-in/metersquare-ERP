@@ -101,7 +101,7 @@ const MaterialDispatchProductionPage: React.FC = () => {
     const configs = {
       draft: { color: 'bg-gray-100 text-gray-700 border-gray-300', label: 'Draft' },
       pending_approval: { color: 'bg-yellow-100 text-yellow-700 border-yellow-300', label: 'Pending Approval' },
-      approved: { color: 'bg-blue-100 text-blue-700 border-blue-300', label: 'Approved' },
+      approved: { color: 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30', label: 'Approved' },
       dispatched: { color: 'bg-purple-100 text-purple-700 border-purple-300', label: 'Dispatched' },
       in_production: { color: 'bg-orange-100 text-orange-700 border-orange-300', label: 'In Production' },
       completed: { color: 'bg-green-100 text-green-700 border-green-300', label: 'Completed' }
@@ -112,7 +112,7 @@ const MaterialDispatchProductionPage: React.FC = () => {
   const getProductionStageConfig = (stage: MaterialDispatch['productionStage']) => {
     const configs = {
       requested: { icon: FileText, color: 'text-gray-600', bgColor: 'bg-gray-100' },
-      bulk_approved: { icon: CheckCircle, color: 'text-blue-600', bgColor: 'bg-blue-100' },
+      bulk_approved: { icon: CheckCircle, color: 'text-[#243d8a]', bgColor: 'bg-[#243d8a]/10' },
       dispatched: { icon: Package, color: 'text-purple-600', bgColor: 'bg-purple-100' },
       in_production: { icon: Settings, color: 'text-orange-600', bgColor: 'bg-orange-100' },
       completed: { icon: CheckCircle, color: 'text-green-600', bgColor: 'bg-green-100' }
@@ -394,7 +394,7 @@ const MaterialDispatchProductionPage: React.FC = () => {
                             )}
                             {step.stage === 'bulk_qty_approval' && (
                               <div className="mt-2">
-                                <Badge className="bg-blue-100 text-blue-700 border border-blue-300 text-xs">
+                                <Badge className="bg-[#243d8a]/10 text-[#243d8a]/90 border border-[#243d8a]/30 text-xs">
                                   Bulk Qty Dispatch Gating
                                 </Badge>
                               </div>
@@ -452,7 +452,7 @@ const MaterialDispatchProductionPage: React.FC = () => {
                               {getStatusConfig(dispatch.status).label}
                             </Badge>
                             {dispatch.bulkQtyApproved && (
-                              <Badge className="bg-blue-100 text-blue-700 border border-blue-300 text-xs">
+                              <Badge className="bg-[#243d8a]/10 text-[#243d8a]/90 border border-[#243d8a]/30 text-xs">
                                 Bulk Qty ✓
                               </Badge>
                             )}
@@ -478,7 +478,7 @@ const MaterialDispatchProductionPage: React.FC = () => {
               </CardHeader>
               <CardContent className="p-6 space-y-4">
                 {[
-                  { section: 'Joinery Workshop', active: 2, completed: 5, color: 'bg-blue-100 text-blue-700' },
+                  { section: 'Joinery Workshop', active: 2, completed: 5, color: 'bg-[#243d8a]/10 text-[#243d8a]/90' },
                   { section: 'Furniture Production', active: 1, completed: 3, color: 'bg-green-100 text-green-700' },
                   { section: 'Custom Workshop', active: 1, completed: 2, color: 'bg-purple-100 text-purple-700' },
                   { section: 'Assembly Line', active: 0, completed: 4, color: 'bg-orange-100 text-orange-700' },

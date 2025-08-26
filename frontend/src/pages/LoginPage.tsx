@@ -57,12 +57,12 @@ const CredentialCard: React.FC<{
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay }}
       onClick={onClick}
-      className="p-2.5 bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all cursor-pointer group"
+      className="p-2.5 bg-white rounded-lg border border-gray-200 hover:border-[#243d8a] hover:bg-[#243d8a]/5 transition-all cursor-pointer group"
     >
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">{role}</span>
+        <span className="text-sm font-medium text-gray-700 group-hover:text-[#243d8a]/90">{role}</span>
         <div className="flex flex-col items-end gap-1">
-          <code className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-mono group-hover:bg-blue-100">
+          <code className="text-xs bg-[#243d8a]/5 text-[#243d8a] px-2 py-1 rounded font-mono group-hover:bg-[#243d8a]/10">
             {email}
           </code>
           <code className="text-xs text-gray-500">Pass: {password}</code>
@@ -498,7 +498,7 @@ const LoginPage: React.FC = () => {
                   <input
                     {...register('email')}
                     type="email"
-                    className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 text-gray-700 placeholder-gray-400"
+                    className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:border-transparent focus:ring-2 focus:ring-[#243d8a] focus:ring-offset-2 transition-all duration-200 text-gray-700 placeholder-gray-400"
                     placeholder="user@metersquare.com"
                   />
                 </motion.div>
@@ -526,7 +526,7 @@ const LoginPage: React.FC = () => {
                   <input
                     {...register('password')}
                     type={showPassword ? 'text' : 'password'}
-                    className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 text-gray-700 placeholder-gray-400 pr-12"
+                    className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:border-transparent focus:ring-2 focus:ring-[#243d8a] focus:ring-offset-2 transition-all duration-200 text-gray-700 placeholder-gray-400 pr-12"
                     placeholder="••••••••"
                   />
                   <button
@@ -553,11 +553,11 @@ const LoginPage: React.FC = () => {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500/20"
+                    className="w-4 h-4 rounded border-gray-300 text-[#243d8a] focus:ring-2 focus:ring-[#243d8a]/20"
                   />
                   <span className="text-sm text-gray-600">Keep me signed in</span>
                 </label>
-                <a href="#" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                <a href="#" className="text-sm font-medium text-[#243d8a] hover:text-[#243d8a]/90">
                   Forgot password?
                 </a>
               </div>
@@ -566,7 +566,7 @@ const LoginPage: React.FC = () => {
               <motion.button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="w-full bg-[#243d8a] hover:bg-[#243d8a]/90 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
               >
@@ -619,7 +619,7 @@ const LoginPage: React.FC = () => {
               <span className="text-xs">SSL Secured</span>
             </div>
             <div className="flex items-center gap-1.5 text-gray-500">
-              <Activity className="w-4 h-4 text-blue-500" />
+              <Activity className="w-4 h-4 text-[#243d8a]" />
               <span className="text-xs">99.9% Uptime</span>
             </div>
           </motion.div>
@@ -640,7 +640,7 @@ const LoginPage: React.FC = () => {
             transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
           />
           <motion.div
-            className="absolute bottom-20 right-20 w-80 h-80 bg-blue-200/30 rounded-full blur-3xl"
+            className="absolute bottom-20 right-20 w-80 h-80 bg-[#243d8a]/20/30 rounded-full blur-3xl"
             animate={{ 
               x: [0, -30, 0],
               y: [0, 30, 0]
@@ -797,10 +797,9 @@ const LoginPage: React.FC = () => {
             />
             
             
-            {/* Red Dot - Moving First */}
+            {/* Red Dot - Changes to green when at hub position (310, 320) */}
             <circle
               r="4"
-              fill="#ef4444"
               filter="url(#iconGlow)"
               opacity="0.8"
             >
@@ -809,12 +808,19 @@ const LoginPage: React.FC = () => {
                 repeatCount="indefinite"
                 path="M 120 120 Q 230 120 350 120 T 540 120 Q 600 180 540 240 Q 430 240 350 240 T 120 240 Q 60 300 120 360 Q 230 360 350 360 T 580 360 Q 540 360 350 360 Q 310 350 350 330"
               />
+              {/* Changes to green only when at hub (around 66.7% of journey) */}
+              <animate
+                attributeName="fill"
+                values="#ef4444;#ef4444;#ef4444;#ef4444;#ef4444;#ef4444;#ef4444;#ef4444;#ef4444;#ef4444;#10b981;#10b981;#10b981;#10b981;#10b981"
+                dur="15s"
+                repeatCount="indefinite"
+                keyTimes="0;0.1;0.2;0.3;0.4;0.5;0.6;0.65;0.66;0.67;0.68;0.7;0.8;0.9;1"
+              />
             </circle>
             
-            {/* Blue Dot - Following Red Dot - Triggers Icon Shine Effect */}
+            {/* Blue Dot - Changes to green when at hub position */}
             <circle
               r="4"
-              fill="#3b82f6"
               filter="url(#iconGlow)"
               opacity="0.8"
             >
@@ -823,6 +829,15 @@ const LoginPage: React.FC = () => {
                 repeatCount="indefinite"
                 begin="2s"
                 path="M 120 120 Q 230 120 350 120 T 540 120 Q 600 180 540 240 Q 430 240 350 240 T 120 240 Q 60 300 120 360 Q 230 360 350 360 T 580 360 Q 540 360 350 360 Q 310 350 350 330"
+              />
+              {/* Changes to green only when at hub */}
+              <animate
+                attributeName="fill"
+                values="#3b82f6;#3b82f6;#3b82f6;#3b82f6;#3b82f6;#3b82f6;#3b82f6;#3b82f6;#3b82f6;#3b82f6;#10b981;#10b981;#10b981;#10b981;#10b981"
+                dur="15s"
+                begin="2s"
+                repeatCount="indefinite"
+                keyTimes="0;0.1;0.2;0.3;0.4;0.5;0.6;0.65;0.66;0.67;0.68;0.7;0.8;0.9;1"
               />
             </circle>
           </svg>
@@ -873,7 +888,7 @@ const LoginPage: React.FC = () => {
               className="bg-white backdrop-blur-sm rounded-xl p-3 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
               id="node-approval"
             >
-              <CheckSquare className="w-6 h-6 text-blue-500" />
+              <CheckSquare className="w-6 h-6 text-[#243d8a]" />
             </motion.div>
             <span className="popup-text">Approving</span>
             <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Approval</span>
@@ -890,7 +905,7 @@ const LoginPage: React.FC = () => {
               className="bg-white backdrop-blur-sm rounded-xl p-3 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
               id="node-process"
             >
-              <Settings className="w-6 h-6 text-blue-500" />
+              <Settings className="w-6 h-6 text-[#243d8a]" />
             </motion.div>
             <span className="popup-text">Executing</span>
             <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Process</span>
@@ -924,7 +939,7 @@ const LoginPage: React.FC = () => {
               className="bg-white backdrop-blur-sm rounded-xl p-3 shadow-lg border border-gray-200 transition-all duration-300 shine-effect"
               id="node-dispatch"
             >
-              <Truck className="w-6 h-6 text-blue-500" />
+              <Truck className="w-6 h-6 text-[#243d8a]" />
             </motion.div>
             <span className="popup-text">Shipping</span>
             <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-gray-600">Dispatch</span>
@@ -983,7 +998,7 @@ const LoginPage: React.FC = () => {
               <span className="text-xs text-gray-500">5min Setup</span>
             </div>
             <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-blue-500" />
+              <Shield className="w-4 h-4 text-[#243d8a]" />
               <span className="text-xs text-gray-500">Secure & Reliable</span>
             </div>
             <div className="flex items-center gap-2">

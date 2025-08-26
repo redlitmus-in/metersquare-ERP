@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
+import DocumentViewModal from '@/components/DocumentViewModal';
 import {
   Users,
   Building2,
@@ -108,6 +109,7 @@ const VendorQuotationForm: React.FC = () => {
   const [quotationItems, setQuotationItems] = useState<QuotationItem[]>([]);
   const [activeTab, setActiveTab] = useState('vendor');
   const [showComparison, setShowComparison] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const { register, handleSubmit, watch, formState: { errors }, setValue } = useForm<VendorQuotationFormData>();
 
@@ -168,6 +170,10 @@ const VendorQuotationForm: React.FC = () => {
 
   const calculateGrandTotal = () => {
     return quotationItems.reduce((sum, item) => sum + item.totalAmount, 0);
+  };
+
+  const calculateTotal = () => {
+    return calculateGrandTotal();
   };
 
   const onSubmit = (data: VendorQuotationFormData) => {
@@ -895,13 +901,13 @@ const VendorQuotationForm: React.FC = () => {
                 <div className="space-y-6">
                   {/* Approval Flags */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                    <div className="bg-[#243d8a]/5 rounded-xl p-4 border border-[#243d8a]/20">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <Briefcase className="w-5 h-5 text-blue-600" />
+                          <Briefcase className="w-5 h-5 text-[#243d8a]" />
                           <span className="font-semibold">Technical Review</span>
                         </div>
-                        <Badge className="bg-blue-100 text-blue-700 border border-blue-300">
+                        <Badge className="bg-[#243d8a]/10 text-[#243d8a]/90 border border-[#243d8a]/30">
                           Pending
                         </Badge>
                       </div>
@@ -955,7 +961,7 @@ const VendorQuotationForm: React.FC = () => {
                         <div key={index} className="flex items-center gap-4">
                           <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
                             approver.status === 'completed' ? 'bg-green-100 text-green-600' :
-                            approver.status === 'in-progress' ? 'bg-blue-100 text-blue-600' :
+                            approver.status === 'in-progress' ? 'bg-[#243d8a]/10 text-[#243d8a]' :
                             'bg-gray-100 text-gray-400'
                           }`}>
                             <approver.icon className="w-6 h-6" />
@@ -971,7 +977,7 @@ const VendorQuotationForm: React.FC = () => {
                                   <CheckCircle2 className="w-5 h-5 text-green-600 mb-1" />
                                 )}
                                 {approver.status === 'in-progress' && (
-                                  <Clock className="w-5 h-5 text-blue-600 mb-1 animate-pulse" />
+                                  <Clock className="w-5 h-5 text-[#243d8a] mb-1 animate-pulse" />
                                 )}
                                 <p className="text-xs text-gray-500">{approver.date}</p>
                               </div>
@@ -1041,6 +1047,7 @@ const VendorQuotationForm: React.FC = () => {
               type="button"
               variant="outline"
               className="flex items-center gap-2"
+              onClick={() => setShowPreview(true)}
             >
               <Eye className="w-4 h-4" />
               Preview
@@ -1049,6 +1056,25 @@ const VendorQuotationForm: React.FC = () => {
               type="button"
               variant="outline"
               className="flex items-center gap-2"
+              onClick={() => {
+                const formData = watch();
+                const data = {
+                  ...formData,
+                  items: quotationItems,
+                  total: calculateTotal()
+                };
+                // For now, export as JSON. PDF export would require a library like jsPDF
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `VendorQuotation_${Date.now()}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                alert('Exported as JSON. PDF export requires additional setup.');
+              }}
             >
               <Download className="w-4 h-4" />
               Export PDF
@@ -1081,6 +1107,40 @@ const VendorQuotationForm: React.FC = () => {
           </div>
         </motion.div>
       </form>
+
+      {/* Preview Modal */}
+      <DocumentViewModal
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        documentType="Vendor Quotation"
+        documentData={{
+          id: 'VQ-' + Date.now(),
+          vendor: watch('vendor.name') || 'Vendor Name',
+          project: watch('project.projectName') || 'Project Name',
+          totalAmount: calculateTotal(),
+          items: quotationItems,
+          status: 'draft',
+          createdDate: new Date().toLocaleDateString(),
+          priority: 'medium'
+        }}
+        onDownload={() => {
+          const formData = watch();
+          const data = {
+            ...formData,
+            items: quotationItems,
+            total: calculateTotal()
+          };
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `VQ_${Date.now()}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }}
+      />
     </div>
   );
 };

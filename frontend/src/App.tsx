@@ -8,6 +8,8 @@ import { validateSupabaseConnection } from '@/utils/environment';
 import LoginPage from '@/pages/LoginPage';
 import ModernDashboard from '@/pages/ModernDashboard';
 import TasksPage from '@/pages/TasksPage';
+import ProjectsPage from '@/pages/ProjectsPage';
+import ProcessFlowPage from '@/pages/ProcessFlowPage';
 // ProcessFlowPage removed - replaced with WorkflowStatusPage
 import ProfilePage from '@/pages/ProfilePage';
 import AnalyticsPage from '@/pages/AnalyticsPage';
@@ -143,7 +145,7 @@ function App() {
           </div>
           <button 
             onClick={() => window.location.reload()} 
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="mt-4 px-4 py-2 bg-[#243d8a] text-white rounded hover:bg-[#243d8a]"
           >
             Retry
           </button>
@@ -180,10 +182,17 @@ function App() {
           <Route path="dashboard" element={<ModernDashboard />} />
           <Route path="procurement" element={<ProcurementDashboard />} />
           <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
+          <Route path="procurement/purchase-requests/edit/:id" element={<PurchaseRequestsPage />} />
           <Route path="procurement/quotations" element={<VendorQuotationsPage />} />
+          <Route path="procurement/vendor-quotations/edit/:id" element={<VendorQuotationsPage />} />
           <Route path="procurement/approvals" element={<ApprovalsPage />} />
           <Route path="procurement/deliveries" element={<DeliveriesPage />} />
+          <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
           <Route path="tasks" element={<TasksPage />} />
+          <Route path="projects" element={<ProjectsPage />} />
+          <Route path="projects/:id" element={<ProjectsPage />} />
+          <Route path="projects/:id/edit" element={<ProjectsPage />} />
+          <Route path="process-flow" element={<ProcessFlowPage />} />
           <Route path="workflow-status" element={<WorkflowStatusPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="profile" element={<ProfilePage />} />

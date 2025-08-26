@@ -111,7 +111,7 @@ const MaterialDispatchSitePage: React.FC = () => {
     const configs = {
       draft: { color: 'bg-gray-100 text-gray-700 border-gray-300', label: 'Draft' },
       pending_approval: { color: 'bg-yellow-100 text-yellow-700 border-yellow-300', label: 'Pending Approval' },
-      bulk_approved: { color: 'bg-blue-100 text-blue-700 border-blue-300', label: 'Bulk Approved' },
+      bulk_approved: { color: 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30', label: 'Bulk Approved' },
       dispatched: { color: 'bg-purple-100 text-purple-700 border-purple-300', label: 'Dispatched' },
       delivered: { color: 'bg-green-100 text-green-700 border-green-300', label: 'Delivered' },
       acknowledged: { color: 'bg-green-100 text-green-700 border-green-300', label: 'Acknowledged' }
@@ -122,7 +122,7 @@ const MaterialDispatchSitePage: React.FC = () => {
   const getSupervisorIcon = (type: SiteDispatch['supervisorType']) => {
     const configs = {
       site: { icon: Construction, color: 'text-orange-600', bgColor: 'bg-orange-100' },
-      mep: { icon: Zap, color: 'text-blue-600', bgColor: 'bg-blue-100' },
+      mep: { icon: Zap, color: 'text-[#243d8a]', bgColor: 'bg-[#243d8a]/10' },
       factory: { icon: Building, color: 'text-purple-600', bgColor: 'bg-purple-100' }
     };
     return configs[type];
@@ -422,7 +422,7 @@ const MaterialDispatchSitePage: React.FC = () => {
                             )}
                             {step.stage === 'bulk_qty_approval' && (
                               <div className="mt-2">
-                                <Badge className="bg-blue-100 text-blue-700 border border-blue-300 text-xs">
+                                <Badge className="bg-[#243d8a]/10 text-[#243d8a]/90 border border-[#243d8a]/30 text-xs">
                                   Technical Director FLAG
                                 </Badge>
                               </div>
@@ -442,8 +442,8 @@ const MaterialDispatchSitePage: React.FC = () => {
                         )}
 
                         {step.stage === 'bulk_qty_request' && (
-                          <div className="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
-                            <p className="text-xs text-blue-700">
+                          <div className="mt-3 p-3 bg-[#243d8a]/5 rounded border border-[#243d8a]/20">
+                            <p className="text-xs text-[#243d8a]/90">
                               <strong>Conditional:</strong> Only triggered when bulk quantity dispatch is needed
                             </p>
                           </div>
@@ -476,7 +476,7 @@ const MaterialDispatchSitePage: React.FC = () => {
                     active: 3, 
                     delivered: 8, 
                     supervisor: 'Site Supervisor',
-                    color: 'bg-blue-100 text-blue-700',
+                    color: 'bg-[#243d8a]/10 text-[#243d8a]/90',
                     icon: Construction
                   },
                   { 
@@ -552,7 +552,7 @@ const MaterialDispatchSitePage: React.FC = () => {
                     type: 'MEP Supervisor',
                     count: siteDispatches.filter(d => d.supervisorType === 'mep').length,
                     pending: siteDispatches.filter(d => d.supervisorType === 'mep' && d.status === 'pending_approval').length,
-                    color: 'bg-blue-100 text-blue-700',
+                    color: 'bg-[#243d8a]/10 text-[#243d8a]/90',
                     icon: Zap
                   },
                   { 
