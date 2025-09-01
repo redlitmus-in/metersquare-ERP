@@ -6,6 +6,7 @@ import { validateSupabaseConnection } from '@/utils/environment';
 
 // Pages
 import LoginPage from '@/pages/LoginPage';
+import LoginPageOTP from '@/pages/LoginPageOTP';
 import ModernDashboard from '@/pages/ModernDashboard';
 import TasksPage from '@/pages/TasksPage';
 import ProjectsPage from '@/pages/ProjectsPage';
@@ -36,8 +37,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const token = localStorage.getItem('access_token');
   const demoUser = localStorage.getItem('demo_user');
   
-  // Allow demo users even if auth state isn't fully loaded
-  const isDemoUser = token === 'demo-token' && demoUser;
+  // Allow demo users and OTP users even if auth state isn't fully loaded
+  const isDemoUser = (token === 'demo-token' || token === 'otp-demo-token') && demoUser;
 
   if (isLoading && !isDemoUser) {
     return (
@@ -87,7 +88,7 @@ function App() {
     const token = localStorage.getItem('access_token');
     const demoUser = localStorage.getItem('demo_user');
     
-    if (token === 'demo-token' && demoUser) {
+    if ((token === 'demo-token' || token === 'otp-demo-token') && demoUser) {
       // For demo users, skip environment validation
       setIsEnvironmentValid(true);
       if (!isAuthenticated) {
@@ -165,6 +166,14 @@ function App() {
         {/* Public Routes */}
         <Route
           path="/login"
+          element={
+            <PublicRoute>
+              <LoginPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/login-old"
           element={
             <PublicRoute>
               <LoginPage />

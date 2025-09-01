@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
+import { formatDate, formatDateForInput, getTodayFormatted } from '@/utils/dateFormatter';
 import {
   Truck,
   Package,
@@ -31,6 +32,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -300,8 +302,7 @@ const MaterialDeliveryNote: React.FC = () => {
                       <Calendar className="w-4 h-4 text-green-500" />
                       Delivery Date
                     </Label>
-                    <Input
-                      type="date"
+                    <DateInput
                       placeholder="dd/mm/yyyy"
                       {...register('deliveryDate', { required: 'Delivery date is required' })}
                       className="focus:border-green-500 focus:ring-green-500"
@@ -325,8 +326,7 @@ const MaterialDeliveryNote: React.FC = () => {
                       <Calendar className="w-4 h-4 text-green-500" />
                       Expected Delivery Date
                     </Label>
-                    <Input
-                      type="date"
+                    <DateInput
                       placeholder="dd/mm/yyyy"
                       {...register('expectedDeliveryDate')}
                       className="focus:border-green-500 focus:ring-green-500"

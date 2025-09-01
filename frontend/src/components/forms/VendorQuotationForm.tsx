@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
+import { formatDate, formatDateForInput, getTodayFormatted } from '@/utils/dateFormatter';
 import DocumentViewModal from '@/components/DocumentViewModal';
 import {
   Users,
@@ -39,6 +40,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -854,8 +856,7 @@ const VendorQuotationForm: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-sm font-semibold">Valid From</Label>
-                      <Input 
-                        type="date" 
+                      <DateInput 
                         className="border-gray-200"
                         placeholder="dd/mm/yyyy"
                         {...register('validity.validFrom')}
@@ -863,8 +864,7 @@ const VendorQuotationForm: React.FC = () => {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-sm font-semibold">Valid Until</Label>
-                      <Input 
-                        type="date" 
+                      <DateInput 
                         className="border-gray-200"
                         placeholder="dd/mm/yyyy"
                         {...register('validity.validUntil')}
@@ -1120,7 +1120,7 @@ const VendorQuotationForm: React.FC = () => {
           totalAmount: calculateTotal(),
           items: quotationItems,
           status: 'draft',
-          createdDate: new Date().toLocaleDateString(),
+          createdDate: getTodayFormatted(),
           priority: 'medium'
         }}
         onDownload={() => {

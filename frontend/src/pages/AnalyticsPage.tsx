@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { formatDate } from '@/utils/dateFormatter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -392,7 +393,7 @@ const AnalyticsPage: React.FC = () => {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `analytics_report_${new Date().toISOString().split('T')[0]}.json`;
+                    a.download = `analytics_report_${formatDate(new Date()).replace(/\//g, '-')}.json`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
@@ -929,7 +930,7 @@ const AnalyticsPage: React.FC = () => {
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
-                      a.download = `all_reports_${new Date().toISOString().split('T')[0]}.json`;
+                      a.download = `all_reports_${formatDate(new Date()).replace(/\//g, '-')}.json`;
                       document.body.appendChild(a);
                       a.click();
                       document.body.removeChild(a);

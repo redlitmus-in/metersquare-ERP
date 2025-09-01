@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,61 +28,62 @@ import {
   Shield,
   TrendingUp as LineChart,
   PieChart,
-  Target
+  Target,
+  User,
+  ChevronDown,
+  CheckCircle2,
+  KeyRound,
+  RefreshCw,
+  HardHat,
+  Briefcase
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useAuthStore } from '@/store/authStore';
 import { LoginRequest } from '@/types';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import OTPInput from '@/components/OTPInput';
+import { AnimatePresence } from 'framer-motion';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  role: z.string().min(1, 'Please select a role'),
 });
+
+// Available roles
+const availableRoles = [
+  { value: 'technical_director', label: 'Technical Director', icon: Briefcase },
+  { value: 'project_manager', label: 'Project Manager', icon: Users },
+  { value: 'procurement', label: 'Procurement', icon: Package },
+  { value: 'site_supervisor', label: 'Site Supervisor', icon: HardHat },
+  { value: 'mep_supervisor', label: 'MEP Supervisor', icon: Activity },
+  { value: 'estimation', label: 'Estimation', icon: BarChart3 },
+  { value: 'accounts', label: 'Accounts', icon: Building2 },
+  { value: 'design', label: 'Design', icon: Layers },
+];
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-// Credential Card Component
-const CredentialCard: React.FC<{
-  role: string;
-  email: string;
-  password: string;
-  delay: number;
-  onClick: () => void;
-}> = ({ role, email, password, delay, onClick }) => {
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay }}
-      onClick={onClick}
-      className="p-2.5 bg-white rounded-lg border border-gray-200 hover:border-[#243d8a] hover:bg-[#243d8a]/5 transition-all cursor-pointer group"
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-700 group-hover:text-[#243d8a]/90">{role}</span>
-        <div className="flex flex-col items-end gap-1">
-          <code className="text-xs bg-[#243d8a]/5 text-[#243d8a] px-2 py-1 rounded font-mono group-hover:bg-[#243d8a]/10">
-            {email}
-          </code>
-          <code className="text-xs text-gray-500">Pass: {password}</code>
-        </div>
-      </div>
-    </motion.div>
-  );
-};
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login, isLoading } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
+  const [step, setStep] = useState<'email' | 'otp'>('email');
+  const [otp, setOtp] = useState('');
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
+  const [userEmail, setUserEmail] = useState('');
+  const [userRole, setUserRole] = useState('');
   
-  // Demo credentials
-  const demoCredentials = [
-    { role: 'Technical Director', email: 'td@demo.com', password: 'demo123' },
-    { role: 'Project Manager', email: 'pm@demo.com', password: 'demo123' },
-    { role: 'Procurement Lead', email: 'proc@demo.com', password: 'demo123' }
-  ];
+  // Timer for resend OTP
+  useEffect(() => {
+    if (resendTimer > 0) {
+      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendTimer]);
+  
 
   const {
     register,
@@ -93,66 +94,80 @@ const LoginPage: React.FC = () => {
     resolver: zodResolver(loginSchema),
   });
   
-  // Handle demo credential click
-  const handleDemoClick = (email: string, password: string) => {
-    setValue('email', email);
-    setValue('password', password);
-    // Auto-submit the form
-    setTimeout(() => {
-      handleSubmit(onSubmit)();
-    }, 100);
-  };
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      // Check if this is a demo credential
-      const isDemoUser = demoCredentials.some(cred => cred.email === data.email);
-      
-      if (isDemoUser) {
-        // For demo users, create a mock successful login
-        const demoUser = demoCredentials.find(cred => cred.email === data.email);
-        if (demoUser && data.password === demoUser.password) {
-          // Simulate successful login
-          localStorage.setItem('access_token', 'demo-token');
-          localStorage.setItem('demo_user', JSON.stringify({
-            email: demoUser.email,
-            role: demoUser.role,
-            name: demoUser.role
-          }));
-          
-          // Update auth store to trigger re-render
-          await useAuthStore.getState().getCurrentUser();
-          
-          toast.success('Welcome to MeterSquare ERP', {
-            description: `Logged in as ${demoUser.role}`,
-            icon: <CheckCircle className="w-5 h-5 text-green-500" />
-          });
-          
-          // Navigate to dashboard
-          setTimeout(() => {
-            navigate('/dashboard');
-          }, 500);
-          return;
-        } else {
-          throw new Error('Invalid demo password');
-        }
+      if (!data.email || !data.role) {
+        toast.error('Please fill all fields', {
+          description: 'Email and role are required'
+        });
+        return;
       }
+
+      setUserEmail(data.email);
+      setUserRole(data.role);
       
-      // For non-demo users, use the regular login
-      const loginRequest: LoginRequest = {
-        email: data.email,
-        password: data.password,
-      };
+      // Simulate OTP sending
+      setStep('otp');
+      setResendTimer(30);
       
-      await login(loginRequest);
+      // For demo purposes, show the OTP
+      const demoOTP = '123456';
+      toast.success('OTP Sent Successfully!', {
+        description: `Demo OTP: ${demoOTP}`,
+        duration: 10000,
+        icon: <Mail className="w-5 h-5 text-green-500" />
+      });
+    } catch (error: any) {
+      toast.error('Failed to send OTP', {
+        description: error.message || 'Please try again.'
+      });
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (otp.length !== 6) {
+      toast.error('Invalid OTP', {
+        description: 'Please enter a 6-digit OTP'
+      });
+      return;
+    }
+
+    // For demo, accept 123456 as valid OTP
+    if (otp === '123456') {
+      const roleData = availableRoles.find(r => r.value === userRole);
+      localStorage.setItem('access_token', 'otp-demo-token');
+      localStorage.setItem('demo_user', JSON.stringify({
+        email: userEmail,
+        role: roleData?.label || userRole,
+        name: roleData?.label || 'User'
+      }));
+      
+      // Update auth store to trigger re-render
+      await useAuthStore.getState().getCurrentUser();
+      
       toast.success('Welcome to MeterSquare ERP', {
-        description: 'Login successful. Redirecting to dashboard...',
+        description: `Logged in as ${roleData?.label}`,
         icon: <CheckCircle className="w-5 h-5 text-green-500" />
       });
-      navigate('/dashboard');
-    } catch (error: any) {
-      toast.error('Login failed', {
-        description: error.message || 'Invalid credentials. Please try again.'
+      
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 500);
+    } else {
+      toast.error('Invalid OTP', {
+        description: 'Please enter the correct OTP'
+      });
+    }
+  };
+
+  const handleResendOTP = () => {
+    if (resendTimer === 0) {
+      setResendTimer(30);
+      toast.success('OTP Resent!', {
+        description: 'Demo OTP: 123456',
+        duration: 10000,
+        icon: <RefreshCw className="w-5 h-5 text-green-500" />
       });
     }
   };
@@ -484,127 +499,210 @@ const LoginPage: React.FC = () => {
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.1 }}
           >
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {/* Email Field */}
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-gray-400" />
-                  Email Address
-                </label>
-                <motion.div 
-                  className="relative"
-                  whileFocus={{ scale: 1.01 }}
+            <AnimatePresence mode="wait">
+              {step === 'email' ? (
+                <motion.form
+                  key="email-form"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  onSubmit={handleSubmit(onSubmit)}
+                  className="space-y-4"
                 >
-                  <input
-                    {...register('email')}
-                    type="email"
-                    className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:border-transparent focus:ring-2 focus:ring-[#243d8a] focus:ring-offset-2 transition-all duration-200 text-gray-700 placeholder-gray-400"
-                    placeholder="user@metersquare.com"
-                  />
-                </motion.div>
-                {errors.email && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-xs text-red-500 ml-1"
-                  >
-                    {errors.email.message}
-                  </motion.p>
-                )}
-              </div>
+                  {/* Email Field */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-gray-400" />
+                      Email Address
+                    </label>
+                    <motion.div 
+                      className="relative"
+                      whileFocus={{ scale: 1.01 }}
+                    >
+                      <input
+                        {...register('email')}
+                        type="email"
+                        className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:border-transparent focus:ring-2 focus:ring-[#243d8a] focus:ring-offset-2 transition-all duration-200 text-gray-700 placeholder-gray-400"
+                        placeholder="user@metersquare.com"
+                      />
+                    </motion.div>
+                    {errors.email && (
+                      <motion.p
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-xs text-red-500 ml-1"
+                      >
+                        {errors.email.message}
+                      </motion.p>
+                    )}
+                  </div>
 
-              {/* Password Field */}
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-gray-400" />
-                  Password
-                </label>
-                <motion.div 
-                  className="relative"
-                  whileFocus={{ scale: 1.01 }}
+                  {/* Role Selection Dropdown */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      <User className="w-4 h-4 text-gray-400" />
+                      Select Your Role
+                    </label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowRoleDropdown(!showRoleDropdown)}
+                        className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#243d8a] focus:ring-2 focus:ring-[#243d8a]/20 transition-all duration-200 text-gray-700 text-left flex items-center justify-between"
+                      >
+                        {userRole ? (
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const role = availableRoles.find(r => r.value === userRole);
+                              const Icon = role?.icon || User;
+                              return (
+                                <>
+                                  <Icon className="w-4 h-4 text-[#243d8a]" />
+                                  <span>{role?.label}</span>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">Choose your role...</span>
+                        )}
+                        <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${showRoleDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      <AnimatePresence>
+                        {showRoleDropdown && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden"
+                          >
+                            <div className="max-h-64 overflow-y-auto">
+                              {availableRoles.map((role) => {
+                                const Icon = role.icon;
+                                return (
+                                  <button
+                                    key={role.value}
+                                    type="button"
+                                    {...register('role')}
+                                    onClick={() => {
+                                      setValue('role', role.value);
+                                      setUserRole(role.value);
+                                      setShowRoleDropdown(false);
+                                    }}
+                                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors"
+                                  >
+                                    <Icon className="w-4 h-4 text-[#243d8a]" />
+                                    <span className="text-gray-700">{role.label}</span>
+                                    {userRole === role.value && (
+                                      <CheckCircle2 className="w-4 h-4 text-green-500 ml-auto" />
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                    {errors.role && (
+                      <motion.p
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-xs text-red-500 ml-1"
+                      >
+                        {errors.role.message}
+                      </motion.p>
+                    )}
+                  </div>
+
+                  {/* Submit Button */}
+                  <motion.button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full bg-[#243d8a] hover:bg-[#243d8a]/90 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                  >
+                    {isLoading ? (
+                      <LoadingSpinner size="sm" color="white" />
+                    ) : (
+                      <>
+                        <span>Send OTP</span>
+                        <ArrowRight className="w-5 h-5" />
+                      </>
+                    )}
+                  </motion.button>
+                </motion.form>
+              ) : (
+                <motion.div
+                  key="otp-form"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  className="space-y-4"
                 >
-                  <input
-                    {...register('password')}
-                    type={showPassword ? 'text' : 'password'}
-                    className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:border-transparent focus:ring-2 focus:ring-[#243d8a] focus:ring-offset-2 transition-all duration-200 text-gray-700 placeholder-gray-400 pr-12"
-                    placeholder="••••••••"
+                  <div className="text-center mb-4">
+                    <div className="w-12 h-12 bg-[#243d8a]/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <KeyRound className="w-6 h-6 text-[#243d8a]" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900">Enter OTP</h3>
+                    <p className="text-sm text-gray-500 mt-1">We've sent a code to {userEmail}</p>
+                  </div>
+
+                  <OTPInput
+                    value={otp}
+                    onChange={setOtp}
+                    onComplete={handleVerifyOTP}
+                    disabled={isLoading}
                   />
+
+                  <div className="text-center">
+                    {resendTimer > 0 ? (
+                      <p className="text-sm text-gray-500">
+                        Resend OTP in <span className="font-semibold text-[#243d8a]">{resendTimer}s</span>
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleResendOTP}
+                        className="text-sm font-medium text-[#243d8a] hover:text-[#243d8a]/80"
+                      >
+                        Resend OTP
+                      </button>
+                    )}
+                  </div>
+
+                  <motion.button
+                    onClick={handleVerifyOTP}
+                    disabled={isLoading || otp.length !== 6}
+                    className="w-full bg-[#243d8a] hover:bg-[#243d8a]/90 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                  >
+                    {isLoading ? (
+                      <LoadingSpinner size="sm" color="white" />
+                    ) : (
+                      <>
+                        <span>Verify & Login</span>
+                        <Lock className="w-5 h-5" />
+                      </>
+                    )}
+                  </motion.button>
+
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+                    onClick={() => {
+                      setStep('email');
+                      setOtp('');
+                    }}
+                    className="w-full text-sm text-gray-500 hover:text-gray-700"
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    ← Back to email
                   </button>
                 </motion.div>
-                {errors.password && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-xs text-red-500 ml-1"
-                  >
-                    {errors.password.message}
-                  </motion.p>
-                )}
-              </div>
+              )}
+            </AnimatePresence>
 
-              {/* Remember & Forgot */}
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 rounded border-gray-300 text-[#243d8a] focus:ring-2 focus:ring-[#243d8a]/20"
-                  />
-                  <span className="text-sm text-gray-600">Keep me signed in</span>
-                </label>
-                <a href="#" className="text-sm font-medium text-[#243d8a] hover:text-[#243d8a]/90">
-                  Forgot password?
-                </a>
-              </div>
-
-              {/* Submit Button */}
-              <motion.button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-[#243d8a] hover:bg-[#243d8a]/90 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-              >
-                {isLoading ? (
-                  <LoadingSpinner size="sm" color="white" />
-                ) : (
-                  <>
-                    <span>Sign In</span>
-                    <ArrowRight className="w-5 h-5" />
-                  </>
-                )}
-              </motion.button>
-            </form>
-
-            {/* Divider */}
-            <div className="relative my-4">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-3 bg-white text-gray-400 uppercase tracking-wider">Demo Access</span>
-              </div>
-            </div>
-
-            {/* Demo Credentials - Compact */}
-            <div className="space-y-2">
-              <p className="text-xs text-gray-500 mb-2">Click any card below to auto-fill and login:</p>
-              {demoCredentials.map((cred, index) => (
-                <CredentialCard
-                  key={cred.email}
-                  role={cred.role}
-                  email={cred.email}
-                  password={cred.password}
-                  delay={0.3 + index * 0.1}
-                  onClick={() => handleDemoClick(cred.email, cred.password)}
-                />
-              ))}
-            </div>
           </motion.div>
 
           {/* Security Badges */}

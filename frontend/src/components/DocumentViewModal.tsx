@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { formatDate, getTodayFormatted } from '@/utils/dateFormatter';
 import {
   X,
   FileText,
@@ -291,7 +292,7 @@ const DocumentViewModal: React.FC<DocumentViewModalProps> = ({
                           <div className="flex-1">
                             <p className="font-medium">Document Approved</p>
                             <p className="text-sm text-gray-500">
-                              By Manager on {new Date().toLocaleDateString()}
+                              By Manager on {getTodayFormatted()}
                             </p>
                           </div>
                         </div>

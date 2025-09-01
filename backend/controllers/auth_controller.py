@@ -314,17 +314,21 @@ def send_email():
         data = request.get_json(silent=True)
         if not data:
             data = request.form.to_dict()
-
+ 
         email = data.get("email")
-        if not email:
+        role = data.get("role")
+        if not email or not role:
             return jsonify({"error": "Email is required"}), 400
-
-        user = User.query.filter_by(email=email, is_deleted=False).first()
+        role = Role.query.filter_by(role=role, is_deleted=False).first()
+        if not role:
+            return jsonify({"error": "Role not found"}), 404
+ 
+        user = User.query.filter_by(email=email, is_deleted=False,role_id = role.role_id).first()
         if not user:
             return jsonify({"error": "User not found"}), 404
-
+ 
         otp = send_otp(email)
-
+ 
         if otp:
             response_data = {
                 "message": "OTP sent successfully"
@@ -332,11 +336,11 @@ def send_email():
             # Only include OTP in non-production environments (for testing/debugging)
             if ENVIRONMENT != 'prod':
                 response_data["otp"] = otp
-
+ 
             return jsonify(response_data), 200
         else:
             return jsonify({"error": "Failed to send OTP"}), 500
-
+ 
     except Exception as e:
         log.error(f"Error in send_email: {e}")
         return jsonify({"error": "An unexpected error occurred. Please try again later."}), 500
