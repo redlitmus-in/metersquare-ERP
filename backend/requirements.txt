@@ -5,7 +5,7 @@ Flask-SQLAlchemy==3.0.5
 
 # Database
 supabase==2.0.2
-psycopg2-binary==2.9.7
+psycopg2-binary==2.9.9
 SQLAlchemy==2.0.23
 alembic==1.13.0
 
@@ -23,7 +23,7 @@ email-validator==2.0.0
 
 # HTTP and API
 requests==2.31.0
-httpx==0.25.2
+httpx==0.24.1
 
 # WebSockets and Real-time
 websockets==12.0

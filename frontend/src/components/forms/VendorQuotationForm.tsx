@@ -1115,8 +1115,8 @@ const VendorQuotationForm: React.FC = () => {
         documentType="Vendor Quotation"
         documentData={{
           id: 'VQ-' + Date.now(),
-          vendor: watch('vendor.name') || 'Vendor Name',
-          project: watch('project.projectName') || 'Project Name',
+          vendor: watch('vendor')?.companyName || 'Vendor Name',
+          project: watch('projectName') || 'Project Name',
           totalAmount: calculateTotal(),
           items: quotationItems,
           status: 'draft',

@@ -22,6 +22,10 @@ import VendorQuotationsPage from '@/pages/procurement/VendorQuotationsPage';
 import ApprovalsPage from '@/pages/procurement/ApprovalsPage';
 import DeliveriesPage from '@/pages/procurement/DeliveriesPage';
 
+// Workflow pages
+import MaterialDispatchProductionPage from '@/pages/workflows/MaterialDispatchProductionPage';
+import MaterialDispatchSitePage from '@/pages/workflows/MaterialDispatchSitePage';
+
 // Layout
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -194,6 +198,8 @@ function App() {
           <Route path="projects/:id/edit" element={<ProjectsPage />} />
           <Route path="process-flow" element={<ProcessFlowPage />} />
           <Route path="workflow-status" element={<WorkflowStatusPage />} />
+          <Route path="workflows/material-dispatch-production" element={<MaterialDispatchProductionPage />} />
+          <Route path="workflows/material-dispatch-site" element={<MaterialDispatchSitePage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>

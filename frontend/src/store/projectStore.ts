@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Project, ProjectCreate, ProjectUpdate, ProjectStatus, ProjectProgress } from '@/types';
 import { apiWrapper, API_ENDPOINTS } from '@/api/config';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface ProjectState {
   projects: Project[];
