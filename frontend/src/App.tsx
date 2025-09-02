@@ -14,11 +14,10 @@ import ProcessFlowPage from '@/pages/ProcessFlowPage';
 // ProcessFlowPage removed - replaced with WorkflowStatusPage
 import ProfilePage from '@/pages/ProfilePage';
 import AnalyticsPage from '@/pages/AnalyticsPage';
-import ProcurementDashboard from '@/pages/ProcurementDashboard';
 import WorkflowStatusPage from '@/pages/WorkflowStatusPage';
+import ProcurementDashboard from '@/pages/ProcurementDashboard';
 
 // Procurement sub-pages
-import PurchaseRequestsPage from '@/pages/procurement/PurchaseRequestsPage';
 import VendorQuotationsPage from '@/pages/procurement/VendorQuotationsPage';
 import ApprovalsPage from '@/pages/procurement/ApprovalsPage';
 import DeliveriesPage from '@/pages/procurement/DeliveriesPage';
@@ -33,6 +32,13 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // DEVELOPMENT MODE: Skip authentication
+  const DEV_MODE_SKIP_AUTH = true;
+  
+  if (DEV_MODE_SKIP_AUTH) {
+    return <>{children}</>;
+  }
+  
   const { isAuthenticated, isLoading } = useAuthStore();
   const token = localStorage.getItem('access_token');
   const demoUser = localStorage.getItem('demo_user');
@@ -57,6 +63,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Public Route Component (redirects if authenticated)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // DEVELOPMENT MODE: Skip authentication - auto redirect to dashboard
+  const DEV_MODE_SKIP_AUTH = true;
+  
+  if (DEV_MODE_SKIP_AUTH) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
   const { isAuthenticated, isLoading } = useAuthStore();
   const token = localStorage.getItem('access_token');
   const demoUser = localStorage.getItem('demo_user');
@@ -82,8 +95,17 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 function App() {
   const { getCurrentUser, isAuthenticated } = useAuthStore();
   const [isEnvironmentValid, setIsEnvironmentValid] = useState<boolean | null>(null);
+  
+  // DEVELOPMENT MODE: Skip authentication
+  const DEV_MODE_SKIP_AUTH = true;
 
   useEffect(() => {
+    // In dev mode, skip all validation
+    if (DEV_MODE_SKIP_AUTH) {
+      setIsEnvironmentValid(true);
+      return;
+    }
+    
     // Check if this is a demo user first
     const token = localStorage.getItem('access_token');
     const demoUser = localStorage.getItem('demo_user');
@@ -193,9 +215,8 @@ function App() {
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<ModernDashboard />} />
-          <Route path="procurement" element={<ProcurementDashboard />} />
-          <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
-          <Route path="procurement/purchase-requests/edit/:id" element={<PurchaseRequestsPage />} />
+          <Route path="procurement/requests" element={<ProcurementDashboard />} />
+          <Route path="procurement/purchase-requests/edit/:id" element={<ProcurementDashboard />} />
           <Route path="procurement/quotations" element={<VendorQuotationsPage />} />
           <Route path="procurement/vendor-quotations/edit/:id" element={<VendorQuotationsPage />} />
           <Route path="procurement/approvals" element={<ApprovalsPage />} />

@@ -1,6 +1,7 @@
 import React, { Fragment, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Link, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   XMarkIcon,
@@ -50,11 +51,23 @@ interface SidebarProps {
 const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
   const location = useLocation();
   const { user } = useAuthStore();
-  const [expandedSections, setExpandedSections] = useState<string[]>(['procurement']);
+  const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
     return saved === 'true';
   });
+
+  // Auto-expand procurement if any of its children are active
+  useEffect(() => {
+    if (location.pathname.startsWith('/procurement/')) {
+      setExpandedSections(prev => {
+        if (!prev.includes('procurement')) {
+          return [...prev, 'procurement'];
+        }
+        return prev;
+      });
+    }
+  }, [location.pathname]);
 
   const toggleSection = (sectionName: string) => {
     setExpandedSections(prev => 
@@ -84,7 +97,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
       },
       { 
         name: 'Procurement', 
-        href: '/procurement', 
+        href: '#', // Non-clickable, only expandable
         icon: ShoppingCartIcon, 
         iconSolid: ShoppingSolid,
         color: 'text-red-600',
@@ -219,8 +232,11 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
       )}>
         <nav className="flex-1 space-y-1">
           {navigation.map((item, index) => {
-            const isActive = isPathActive(item.href);
             const hasChildren = item.children && item.children.length > 0;
+            // Check if any child is active for parent items with children
+            const isActive = hasChildren 
+              ? item.children?.some(child => isPathActive(child.href)) || false
+              : isPathActive(item.href);
             const isExpanded = expandedSections.includes(item.name.toLowerCase());
             const IconComponent = isActive ? item.iconSolid : item.icon;
 
@@ -230,9 +246,12 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                 <div className="relative">
                   {hasChildren ? (
                     <div className="flex items-center">
-                      <Link
-                        to={item.href}
-                        onClick={() => setSidebarOpen(false)}
+                      <button
+                        onClick={() => {
+                          if (!isCollapsed) {
+                            toggleSection(item.name.toLowerCase());
+                          }
+                        }}
                         title={isCollapsed ? item.name : ''}
                         className={clsx(
                           'flex-1 group flex items-center transition-all duration-200 text-xs font-medium rounded-lg',
@@ -244,7 +263,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                             : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                         )}
                       >
-                        <div className="flex items-center">
+                        <div className="flex items-center w-full">
                           <div className={clsx(
                             'rounded-md transition-colors duration-200',
                             isCollapsed ? 'p-1.5' : 'p-1.5 mr-2',
@@ -259,23 +278,20 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                               isActive ? 'text-white' : item.color || 'text-gray-500'
                             )} />
                           </div>
-                          {!isCollapsed && <span className="font-semibold">{item.name}</span>}
+                          {!isCollapsed && (
+                            <>
+                              <span className="font-semibold flex-1 text-left">{item.name}</span>
+                              <ChevronRightIcon 
+                                className={clsx(
+                                  'w-4 h-4 transition-transform duration-200',
+                                  isExpanded ? 'transform rotate-90' : '',
+                                  isActive ? 'text-gray-700' : 'text-gray-400'
+                                )} 
+                              />
+                            </>
+                          )}
                         </div>
-                      </Link>
-                      {!isCollapsed && (
-                        <button
-                          onClick={() => toggleSection(item.name.toLowerCase())}
-                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                        >
-                          <ChevronRightIcon 
-                            className={clsx(
-                              'w-4 h-4 transition-transform duration-200',
-                              isExpanded ? 'transform rotate-90' : '',
-                              isActive ? 'text-gray-700' : 'text-gray-400'
-                            )} 
-                          />
-                        </button>
-                      )}
+                      </button>
                     </div>
                   ) : (
                     <Link

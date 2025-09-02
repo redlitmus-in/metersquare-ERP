@@ -285,13 +285,6 @@ const ModernDashboard: React.FC = () => {
             <BarChart3 className="w-3 h-3" />
             Analytics
           </Button>
-          <Button
-            onClick={() => navigate('/procurement')}
-            className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1 text-xs px-3 py-1"
-          >
-            <Plus className="w-3 h-3" />
-            New Request
-          </Button>
         </div>
       </div>
 

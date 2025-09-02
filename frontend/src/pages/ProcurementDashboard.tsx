@@ -237,57 +237,20 @@ const ProcurementDashboard: React.FC = () => {
   };
 
   if (activeView === 'purchase') {
-    return (
-      <div>
-        <Button
-          onClick={() => setActiveView('dashboard')}
-          className="mb-4 flex items-center gap-2"
-          variant="outline"
-        >
-          <ArrowRight className="w-4 h-4 rotate-180" />
-          Back to Dashboard
-        </Button>
-        <PurchaseRequisitionForm />
-      </div>
-    );
+    return <PurchaseRequisitionForm />;
   }
 
   if (activeView === 'vendor') {
-    return (
-      <div>
-        <Button
-          onClick={() => setActiveView('dashboard')}
-          className="mb-4 flex items-center gap-2"
-          variant="outline"
-        >
-          <ArrowRight className="w-4 h-4 rotate-180" />
-          Back to Dashboard
-        </Button>
-        <VendorQuotationForm />
-      </div>
-    );
+    return <VendorQuotationForm />;
   }
 
   if (activeView === 'approval' && selectedPR) {
     return (
-      <div>
-        <Button
-          onClick={() => {
-            setActiveView('dashboard');
-            setSelectedPR(null);
-          }}
-          className="mb-4 flex items-center gap-2"
-          variant="outline"
-        >
-          <ArrowRight className="w-4 h-4 rotate-180" />
-          Back to Dashboard
-        </Button>
-        <ApprovalWorkflow 
-          documentType="purchase_requisition"
-          documentId={selectedPR}
-          currentUserRole="Estimation"
-        />
-      </div>
+      <ApprovalWorkflow 
+        documentType="purchase_requisition"
+        documentId={selectedPR}
+        currentUserRole="Estimation"
+      />
     );
   }
 
