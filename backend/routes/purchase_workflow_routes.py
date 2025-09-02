@@ -19,11 +19,6 @@ def get_all_purchase_route():
 def view_purchase_route(purchase_id):
     return get_purchase_request_by_id(purchase_id)
 
-@purchase_workflow_routes.route('/<int:purchase_id>/workflow', methods=['GET'])
-@jwt_required
-def get_purchase_with_workflow_route(purchase_id):
-    return get_purchase_with_workflow_status(purchase_id)
-
 @purchase_workflow_routes.route('/upload_file/<int:purchase_id>', methods=['POST'])
 @jwt_required
 def file_upload_route(purchase_id):

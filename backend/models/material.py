@@ -42,4 +42,5 @@ class Material(db.Model):
             'created_by': self.created_by,
             "last_modified_at": self.last_modified_at.isoformat() if self.last_modified_at else None,
             'last_modified_by': self.last_modified_by
+            
         }

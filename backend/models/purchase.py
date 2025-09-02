@@ -2,6 +2,7 @@ from datetime import datetime
 from config.db import db
 from sqlalchemy.dialects.postgresql import ARRAY
 
+
 class Purchase(db.Model):
     __tablename__ = 'purchase'
     __table_args__ = {'schema': 'public'}  # Explicitly set schema

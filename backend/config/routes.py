@@ -6,3 +6,4 @@ from routes.purchase_workflow_routes import purchase_workflow_routes
 def initialize_routes(app):
     app.register_blueprint(auth_routes)
     app.register_blueprint(purchase_workflow_routes)
+    

@@ -5,7 +5,6 @@ from config.routes import initialize_routes
 from config.db import initialize_db as initialize_sqlalchemy, db
 from config.logging import get_logger
 import os
-
 # Load environment variables from .env file
 load_dotenv()
 

@@ -182,7 +182,6 @@ def get_purchase_request_by_id(purchase_id):
                     'created_at': mat.created_at,
                     'created_by': mat.created_by
                 })
-
         # Serialize purchase
         purchase_data = {
             'purchase_id': purchase.purchase_id,
