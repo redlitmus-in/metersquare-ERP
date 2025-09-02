@@ -45,16 +45,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import OTPInput from '@/components/OTPInput';
 import { AnimatePresence } from 'framer-motion';
 import { authApi } from '@/api/auth';
-<<<<<<< Updated upstream:frontend/src/pages/auth/LoginPage.tsx
-<<<<<<< Updated upstream:frontend/src/pages/auth/LoginPage.tsx
-<<<<<<< Updated upstream:frontend/src/pages/auth/LoginPage.tsx
 import { getRoleDashboardPath } from '@/utils/roleRouting';
-=======
->>>>>>> Stashed changes:frontend/src/pages/LoginPage.tsx
-=======
->>>>>>> Stashed changes:frontend/src/pages/LoginPage.tsx
-=======
->>>>>>> Stashed changes:frontend/src/pages/LoginPage.tsx
 import './LoginPage.css';
 
 const loginSchema = z.object({
@@ -63,10 +54,15 @@ const loginSchema = z.object({
 });
 
 // Available roles - matching database exactly (camelCase)
+// Available roles - matching database exactly (camelCase)
 const availableRoles = [
   { value: 'technicalDirector', label: 'Technical Director', icon: Briefcase },
   { value: 'projectManager', label: 'Project Manager', icon: Users },
+  { value: 'technicalDirector', label: 'Technical Director', icon: Briefcase },
+  { value: 'projectManager', label: 'Project Manager', icon: Users },
   { value: 'procurement', label: 'Procurement', icon: Package },
+  { value: 'siteSupervisor', label: 'Site Supervisor', icon: HardHat },
+  { value: 'mepSupervisor', label: 'MEP Supervisor', icon: Activity },
   { value: 'siteSupervisor', label: 'Site Supervisor', icon: HardHat },
   { value: 'mepSupervisor', label: 'MEP Supervisor', icon: Activity },
   { value: 'estimation', label: 'Estimation', icon: BarChart3 },
@@ -165,18 +161,9 @@ const LoginPage: React.FC = () => {
       // Update auth store with the user data
       await useAuthStore.getState().getCurrentUser();
       
-<<<<<<< Updated upstream:frontend/src/pages/auth/LoginPage.tsx
-<<<<<<< Updated upstream:frontend/src/pages/auth/LoginPage.tsx
-<<<<<<< Updated upstream:frontend/src/pages/auth/LoginPage.tsx
       // Navigate to role-specific dashboard
       const dashboardPath = getRoleDashboardPath(response.user.role || userRole);
       
-=======
->>>>>>> Stashed changes:frontend/src/pages/LoginPage.tsx
-=======
->>>>>>> Stashed changes:frontend/src/pages/LoginPage.tsx
-=======
->>>>>>> Stashed changes:frontend/src/pages/LoginPage.tsx
       setTimeout(() => {
         navigate(dashboardPath);
       }, 500);
@@ -497,6 +484,7 @@ const LoginPage: React.FC = () => {
       <div className="w-full lg:w-2/5 xl:w-5/12 bg-gradient-to-br from-white via-gray-50 to-white flex items-center justify-center p-6 relative overflow-hidden">
         {/* Subtle Background Pattern */}
         <div className="absolute inset-0">
+          <div className="absolute inset-0 opacity-[0.02] background-pattern" />
           <div className="absolute inset-0 opacity-[0.02] background-pattern" />
         </div>
 
@@ -1138,4 +1126,5 @@ const LoginPage: React.FC = () => {
   );
 };
 
+export { LoginPage };
 export default LoginPage;

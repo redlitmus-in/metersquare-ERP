@@ -5,17 +5,13 @@ from routes import initialize_routes
 from config.db import initialize_db as initialize_sqlalchemy, db
 from config.logging import get_logger
 import os
+
 # Load environment variables from .env file
 load_dotenv()
 
 def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", "default-secret-key")
-<<<<<<< Updated upstream
-    
-    CORS(app)  # Enable CORS
-=======
-    # db.create_all()
 
     # Configure CORS for development - more permissive settings
     CORS(app, 
@@ -37,13 +33,6 @@ def create_app():
         response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         return response
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
     logger = get_logger()  # Setup logging (make sure this returns something usable)
 
