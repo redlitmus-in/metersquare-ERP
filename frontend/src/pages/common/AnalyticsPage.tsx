@@ -513,7 +513,7 @@ const AnalyticsPage: React.FC = () => {
                   {procurementData.map((item, index) => (
                     <div key={index} className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
+                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
                         <span className="font-medium text-gray-900">{item.name}</span>
                       </div>
                       <div className="flex items-center gap-3">
@@ -583,7 +583,11 @@ const AnalyticsPage: React.FC = () => {
                   {projectData.map((item, index) => (
                     <div key={index} className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
+                        <div className={`w-3 h-3 rounded-full ${
+                          item.name === 'Completed' ? 'bg-green-500' :
+                          item.name === 'In Progress' ? 'bg-blue-500' :
+                          item.name === 'On Hold' ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}></div>
                         <span className="font-medium text-gray-900">{item.name}</span>
                       </div>
                       <div className="flex items-center gap-3">
@@ -630,7 +634,7 @@ const AnalyticsPage: React.FC = () => {
                       <Legend 
                         verticalAlign="bottom" 
                         height={36}
-                        formatter={(value) => <span style={{ color: '#374151', fontSize: '12px' }}>{value}</span>}
+                        formatter={(value) => <span className="text-gray-700 text-xs">{value}</span>}
                       />
                     </RechartsPieChart>
                   </ResponsiveContainer>
@@ -681,8 +685,16 @@ const AnalyticsPage: React.FC = () => {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   {vendorPerformance.map((item, index) => (
                     <div key={index} className="text-center">
-                      <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: `${item.color}20` }}>
-                        <span className="font-bold text-lg" style={{ color: item.color }}>{item.value}</span>
+                      <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-2 ${
+                        item.name === 'Excellent' ? 'bg-green-100' :
+                        item.name === 'Good' ? 'bg-blue-100' :
+                        item.name === 'Average' ? 'bg-yellow-100' : 'bg-red-100'
+                      }`}>
+                        <span className={`font-bold text-lg ${
+                          item.name === 'Excellent' ? 'text-green-600' :
+                          item.name === 'Good' ? 'text-blue-600' :
+                          item.name === 'Average' ? 'text-yellow-600' : 'text-red-600'
+                        }`}>{item.value}</span>
                       </div>
                       <p className="text-sm font-medium text-gray-900">{item.name}</p>
                       <p className={`text-xs ${item.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>

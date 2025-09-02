@@ -132,12 +132,14 @@ const OTPInput: React.FC<OTPInputProps> = ({
             inputMode="numeric"
             autoComplete="one-time-code"
             pattern="\d{1}"
-            maxLength={length}
+            maxLength={1}
             value={digit}
             onChange={(e) => handleChange(index, e)}
             onKeyDown={(e) => handleKeyDown(index, e)}
             onFocus={handleFocus}
             disabled={disabled}
+            aria-label={`OTP digit ${index + 1} of ${length}`}
+            title={`Enter digit ${index + 1} of ${length}`}
             className={cn(
               "w-12 h-14 text-center text-xl font-semibold",
               "border-2 rounded-xl transition-all duration-200",

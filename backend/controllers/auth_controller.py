@@ -7,7 +7,7 @@ from flask import g, request, jsonify, current_app, make_response
 from functools import wraps
 from datetime import datetime, timedelta
 import jwt
-from werkzeug.security import generate_password_hash, check_password_hash
+# Password hashing removed - using OTP-only authentication
 
 from config.db import db
 from models.user import User
@@ -52,8 +52,7 @@ def jwt_required(func):
                 "full_name": user.full_name,
                 "phone": user.phone,
                 "role_id": user.role_id,
-                "avatar_url": user.avatar_url,
-                "org_uuid": user.org_uuid,
+                "department": user.department,
                 "is_active": user.is_active
             }
             g.user_id = user.user_id
@@ -71,17 +70,20 @@ def jwt_required(func):
     return wrapper
 
 def user_register():
+    """
+    Register a new user (OTP-based, no password needed)
+    """
     try:
         data = request.get_json()
 
         email = data.get("email")
-        password = data.get("password")
         full_name = data.get("full_name")
         phone = data.get("phone")
         role_name = data.get("role", "user").lower()
+        department = data.get("department")
 
-        if not email or not password:
-            return jsonify({"error": "Email and password are required"}), 400
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
 
         # Check if user exists
         if User.query.filter_by(email=email, is_deleted=False).first():
@@ -90,26 +92,20 @@ def user_register():
         # Get or create role
         role = Role.query.filter(db.func.lower(Role.role) == role_name, Role.is_deleted == False).first()
         if not role:
-            role = Role(
-                role=role_name,
-                description=f"{role_name} role",
-                is_active=True,
-                is_deleted=False,
-                created_at=datetime.utcnow()
-            )
-            db.session.add(role)
-            db.session.commit()  # Commit to get role_id
+            return jsonify({"error": f"Role '{role_name}' not found. Please contact admin."}), 404
 
-        # Hash password
-        hashed_password = generate_password_hash(password)
+        # Get department from role if not provided
+        if not department:
+            from config.roles_config import get_role_department
+            department = get_role_department(role_name)
 
-        # Create user
+        # Create user (no password needed)
         user = User(
             email=email,
-            password=hashed_password,
             full_name=full_name,
             phone=phone,
             role_id=role.role_id,
+            department=department,
             is_active=True,
             is_deleted=False,
             created_at=datetime.utcnow()
@@ -117,89 +113,82 @@ def user_register():
         db.session.add(user)
         db.session.commit()
 
-        return jsonify({
-            "message": "User registered successfully",
-            "user_id": user.user_id
-        }), 201
+        # Send welcome OTP for first login
+        otp = send_otp(email)
+        
+        response_data = {
+            "message": "User registered successfully. OTP sent to email for first login.",
+            "user_id": user.user_id,
+            "email": email
+        }
+
+        return jsonify(response_data), 201
 
     except Exception as e:
+        db.session.rollback()
         log.error(f"Registration error: {str(e)}")
         return jsonify({"error": f"Registration failed: {str(e)}"}), 500
 
 def user_login():
+    """
+    OTP-based login - Step 1: Send OTP to user's email
+    Optional role parameter for role-based validation
+    """
     try:
         data = request.get_json()
-        username = data.get("username") or data.get("email")
-        password = data.get("password")
-        role_name = data.get("role")
+        email = data.get("email") 
+        role_name = data.get("role")  # Optional role parameter
         
-        if not username or not password:
-            return jsonify({"error": "Username and password are required"}), 400
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
 
-        # query = User.query.join(Role).filter(
-        #     User.email == username,
-        #     User.is_deleted == False,
-        #     User.is_active == True
-        # )
-        query = db.session.query(User).join(Role, User.role_id == Role.role_id).filter(
-            User.full_name == username,
+        # Build query to check user exists
+        query = db.session.query(User).join(
+            Role, User.role_id == Role.role_id
+        ).filter(
+            User.email == email,
             User.is_deleted == False,
             User.is_active == True
         )
-
+        
+        # If role specified, validate user has that role
         if role_name:
-            query = query.filter(db.func.lower(Role.role) == role_name.lower())
-
+            query = query.filter(
+                db.func.lower(Role.role) == role_name.lower()
+            )
+            
         user = query.first()
 
-        if not user or not check_password_hash(user.password, password):
-            return jsonify({"error": "Invalid username, password, or role"}), 401
-
-        # Update last login
-        user.last_login = datetime.utcnow()
-        db.session.commit()
-
-        secret_key = current_app.config.get('SECRET_KEY', 'your-secret-key')
-        payload = {
-            'user_id': user.user_id,
-            'email': user.email,
-            'role': user.role.role if user.role else "user",
-            'creation_time': datetime.utcnow().isoformat(),
-            'exp': datetime.utcnow() + timedelta(hours=24)
-        }
-        token = jwt.encode(payload, secret_key, algorithm="HS256")
-
-        response_data = {
-            "message": "Login successful",
-            "token": token,
-            "user": {
-                "user_id": user.user_id,
-                "email": user.email,
-                "full_name": user.full_name,
-                "phone": user.phone,
-                "role": user.role.role if user.role else "user",
-                "department": getattr(user, "department", None),
-                "avatar_url": getattr(user, "avatar_url", None)
+        if not user:
+            if role_name:
+                return jsonify({"error": f"User not found with role '{role_name}' or account inactive"}), 404
+            else:
+                return jsonify({"error": "User not found or inactive"}), 404
+        
+        # Send OTP to user's email
+        otp = send_otp(email)
+        
+        if otp:
+            # Store user_id and role for verification step
+            from utils.authentication import otp_storage
+            if email in otp_storage:
+                otp_storage[email]['user_id'] = user.user_id
+                if role_name:
+                    otp_storage[email]['role'] = role_name
+            
+            response_data = {
+                "message": "OTP sent successfully to your email",
+                "email": email,
+                "otp_expiry": "5 minutes"
             }
-        }
-
-        response = make_response(jsonify(response_data), 200)
-        response.set_cookie(
-            'access_token',
-            token,
-            httponly=True,
-            secure=True,  # Set False if testing locally
-            samesite='Lax',
-            # expires=datetime.utcnow() + timedelta(hours=24)
-           expires= datetime.utcnow() + timedelta(days=1)
-        )
-
-        return response
+            
+            return jsonify(response_data), 200
+        else:
+            return jsonify({"error": "Failed to send OTP. Please try again."}), 500
 
     except Exception as e:
         log.error(f"Login error: {str(e)}")
-        return jsonify({
-            "error": f"Login failed: {str(e)}"}), 500
+        return jsonify({"error": f"Login failed: {str(e)}"}), 500
 
 def handle_get_logged_in_user():
     try:
@@ -220,8 +209,7 @@ def handle_get_logged_in_user():
                 "full_name": current_user.get("full_name"),
                 "phone": current_user.get("phone"),
                 "role": role_name,
-                "avatar_url": current_user.get("avatar_url"),
-                "org_uuid": current_user.get("org_uuid"),
+                "department": current_user.get("department"),
                 "is_active": current_user.get("is_active")
             },
             "api_info": {
@@ -246,7 +234,7 @@ def update_user_profile():
             return jsonify({"error": "Not logged in"}), 401
 
         data = request.get_json()
-        allowed_fields = ["full_name", "phone", "avatar_url"]
+        allowed_fields = ["full_name", "phone", "department"]
         update_data = {field: data[field] for field in allowed_fields if field in data}
 
         if not update_data:
@@ -273,40 +261,7 @@ def update_user_profile():
         log.error(f"Profile update error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-def change_password():
-    try:
-        current_user = g.get("user")
-        if not current_user:
-            return jsonify({
-                "error": "Not logged in"}), 401
-
-        data = request.get_json()
-        old_password = data.get("old_password")
-        new_password = data.get("new_password")
-
-        if not old_password or not new_password:
-            return jsonify({
-                "error": "Old and new passwords are required",
-                "required_fields": {"old_password": "string", "new_password": "string"}
-            }), 400
-
-        # Fetch user from DB
-        user = User.query.filter_by(user_id=current_user["user_id"], is_deleted=False).first()
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-
-        if not check_password_hash(user.password, old_password):
-            return jsonify({"error": "Invalid old password"}), 401
-
-        user.password = generate_password_hash(new_password)
-        db.session.commit()
-
-        return jsonify({
-            "message": "Password changed successfully"}), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+# Password change removed - using OTP-based authentication only
 
 def send_email():
     try:
@@ -316,16 +271,13 @@ def send_email():
             data = request.form.to_dict()
  
         email = data.get("email")
-        role = data.get("role")
-        if not email or not role:
+        if not email:
             return jsonify({"error": "Email is required"}), 400
-        role = Role.query.filter_by(role=role, is_deleted=False).first()
-        if not role:
-            return jsonify({"error": "Role not found"}), 404
  
-        user = User.query.filter_by(email=email, is_deleted=False,role_id = role.role_id).first()
+        # Find user by email only
+        user = User.query.filter_by(email=email, is_deleted=False, is_active=True).first()
         if not user:
-            return jsonify({"error": "User not found"}), 404
+            return jsonify({"error": "User not found or inactive"}), 404
  
         otp = send_otp(email)
  
@@ -333,9 +285,6 @@ def send_email():
             response_data = {
                 "message": "OTP sent successfully"
             }
-            # Only include OTP in non-production environments (for testing/debugging)
-            if ENVIRONMENT != 'prod':
-                response_data["otp"] = otp
  
             return jsonify(response_data), 200
         else:
@@ -345,31 +294,8 @@ def send_email():
         log.error(f"Error in send_email: {e}")
         return jsonify({"error": "An unexpected error occurred. Please try again later."}), 500
 
-def reset_password():
-    try:
-        data = request.get_json()
-        email = data.get("email")
-        otp = data.get("otp")  # Optional: verify OTP properly
-        new_password = data.get("new_password")
-
-        if not email or not otp or not new_password:
-            return jsonify({"error": "Email, OTP, and new password are required"}), 400
-
-        # TODO: Add OTP verification logic here
-
-        user = User.query.filter_by(email=email, is_deleted=False).first()
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-
-        user.password = generate_password_hash(new_password)
-        db.session.commit()
-
-        return jsonify({
-            "message": "Password reset successfully"}), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+# Password reset removed - using OTP-based authentication only
+# Users can login with OTP sent to their email
 
 def logout():
     response_data = {"message": "Successfully logged out"}

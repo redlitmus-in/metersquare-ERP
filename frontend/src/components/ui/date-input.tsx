@@ -105,6 +105,8 @@ const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
             type="button"
             onClick={handleIconClick}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            aria-label="Open date picker"
+            title="Open date picker"
           >
             <Calendar className="w-4 h-4" />
           </button>
@@ -118,6 +120,8 @@ const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
           onChange={handleDatePickerChange}
           className="absolute opacity-0 pointer-events-none"
           tabIndex={-1}
+          aria-label="Date picker"
+          title="Date picker"
         />
       </div>
     );

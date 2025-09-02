@@ -19,41 +19,15 @@ export interface EnvironmentConfig {
  * Throws descriptive errors for missing required variables
  */
 export const getEnvironmentConfig = (): EnvironmentConfig => {
-  const missingVars: string[] = [];
+  // Supabase is optional - we're using Flask backend
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
   
-  // Required Supabase variables
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  // API URL is required
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
   
-  if (!supabaseUrl) missingVars.push('VITE_SUPABASE_URL');
-  if (!supabaseAnonKey) missingVars.push('VITE_SUPABASE_ANON_KEY');
-  
-  if (missingVars.length > 0) {
-    const errorMessage = `
-🚨 Missing Required Environment Variables: ${missingVars.join(', ')}
-
-To fix this error:
-
-1. Create a .env file in the frontend directory
-2. Add the following variables:
-
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
-VITE_API_BASE_URL=http://localhost:8000
-
-3. Get your Supabase credentials from:
-   - Go to https://supabase.com/dashboard
-   - Select your project
-   - Go to Settings > API
-   - Copy the Project URL and anon/public key
-
-4. Restart your development server
-
-For production deployment, set these as environment variables in your hosting platform.
-    `;
-    
-    console.error(errorMessage);
-    throw new Error(`Missing environment variables: ${missingVars.join(', ')}`);
+  if (!apiBaseUrl) {
+    console.warn('VITE_API_BASE_URL not set, using default: http://localhost:5000');
   }
   
   return {
@@ -62,7 +36,7 @@ For production deployment, set these as environment variables in your hosting pl
       anonKey: supabaseAnonKey,
     },
     api: {
-      baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+      baseUrl: apiBaseUrl,
     },
     environment: (import.meta.env.NODE_ENV || 'development') as EnvironmentConfig['environment'],
   };

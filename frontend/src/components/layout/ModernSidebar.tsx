@@ -1,7 +1,6 @@
 import React, { Fragment, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Link, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   XMarkIcon,
@@ -32,6 +31,7 @@ import {
 } from '@heroicons/react/24/solid';
 import { useAuthStore } from '@/store/authStore';
 import { UserRole } from '@/types';
+import { getRoleDisplayName, getRoleThemeColor } from '@/utils/roleRouting';
 import { clsx } from 'clsx';
 
 interface NavigationItem {
@@ -50,24 +50,31 @@ interface SidebarProps {
 
 const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
   const location = useLocation();
-  const { user } = useAuthStore();
-  const [expandedSections, setExpandedSections] = useState<string[]>([]);
+  const { user, getRoleDashboard } = useAuthStore();
+  const roleName = getRoleDisplayName(user?.role_id || '');
+  const roleColor = getRoleThemeColor(user?.role_id || '');
+  const dashboardPath = getRoleDashboard();
+  const [expandedSections, setExpandedSections] = useState<string[]>(['procurement']);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
     return saved === 'true';
   });
 
-  // Auto-expand procurement if any of its children are active
-  useEffect(() => {
-    if (location.pathname.startsWith('/procurement/')) {
-      setExpandedSections(prev => {
-        if (!prev.includes('procurement')) {
-          return [...prev, 'procurement'];
-        }
-        return prev;
-      });
-    }
-  }, [location.pathname]);
+  // Listen for storage changes to sync collapsed state across components
+  React.useEffect(() => {
+    const handleStorageChange = () => {
+      const saved = localStorage.getItem('sidebarCollapsed');
+      setIsCollapsed(saved === 'true');
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('sidebarToggle', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('sidebarToggle', handleStorageChange);
+    };
+  }, []);
 
   const toggleSection = (sectionName: string) => {
     setExpandedSections(prev => 
@@ -89,15 +96,15 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
   const getNavigationItems = (): NavigationItem[] => {
     const baseItems: NavigationItem[] = [
       { 
-        name: 'Dashboard', 
-        href: '/dashboard', 
+        name: `Dashboard`, 
+        href: dashboardPath, 
         icon: HomeIcon, 
         iconSolid: HomeSolid,
         color: 'text-[#243d8a]'
       },
       { 
         name: 'Procurement', 
-        href: '#', // Non-clickable, only expandable
+        href: '/procurement', 
         icon: ShoppingCartIcon, 
         iconSolid: ShoppingSolid,
         color: 'text-red-600',
@@ -148,7 +155,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
 
     let navigation = [...baseItems];
 
-    if (user?.role_id === UserRole.BUSINESS_OWNER) {
+    if (user?.role_id === UserRole.TECHNICAL_DIRECTOR) {
       navigation.splice(-1, 0, ...managerItems, ...executiveItems);
     } else if (user?.role_id === UserRole.PROJECT_MANAGER) {
       navigation.splice(-1, 0, ...managerItems);
@@ -210,6 +217,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
             onClick={toggleSidebar}
             className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors duration-200"
             title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {isCollapsed ? (
               <ChevronRightIcon className="w-4 h-4 text-gray-600" />
@@ -232,11 +240,8 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
       )}>
         <nav className="flex-1 space-y-1">
           {navigation.map((item, index) => {
+            const isActive = isPathActive(item.href);
             const hasChildren = item.children && item.children.length > 0;
-            // Check if any child is active for parent items with children
-            const isActive = hasChildren 
-              ? item.children?.some(child => isPathActive(child.href)) || false
-              : isPathActive(item.href);
             const isExpanded = expandedSections.includes(item.name.toLowerCase());
             const IconComponent = isActive ? item.iconSolid : item.icon;
 
@@ -246,12 +251,9 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                 <div className="relative">
                   {hasChildren ? (
                     <div className="flex items-center">
-                      <button
-                        onClick={() => {
-                          if (!isCollapsed) {
-                            toggleSection(item.name.toLowerCase());
-                          }
-                        }}
+                      <Link
+                        to={item.href}
+                        onClick={() => setSidebarOpen(false)}
                         title={isCollapsed ? item.name : ''}
                         className={clsx(
                           'flex-1 group flex items-center transition-all duration-200 text-xs font-medium rounded-lg',
@@ -263,7 +265,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                             : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                         )}
                       >
-                        <div className="flex items-center w-full">
+                        <div className="flex items-center">
                           <div className={clsx(
                             'rounded-md transition-colors duration-200',
                             isCollapsed ? 'p-1.5' : 'p-1.5 mr-2',
@@ -278,20 +280,25 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                               isActive ? 'text-white' : item.color || 'text-gray-500'
                             )} />
                           </div>
-                          {!isCollapsed && (
-                            <>
-                              <span className="font-semibold flex-1 text-left">{item.name}</span>
-                              <ChevronRightIcon 
-                                className={clsx(
-                                  'w-4 h-4 transition-transform duration-200',
-                                  isExpanded ? 'transform rotate-90' : '',
-                                  isActive ? 'text-gray-700' : 'text-gray-400'
-                                )} 
-                              />
-                            </>
-                          )}
+                          {!isCollapsed && <span className="font-semibold">{item.name}</span>}
                         </div>
-                      </button>
+                      </Link>
+                      {!isCollapsed && (
+                        <button
+                          onClick={() => toggleSection(item.name.toLowerCase())}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                          title={`Toggle ${item.name} section`}
+                          aria-label={`Toggle ${item.name} section`}
+                        >
+                          <ChevronRightIcon 
+                            className={clsx(
+                              'w-4 h-4 transition-transform duration-200',
+                              isExpanded ? 'transform rotate-90' : '',
+                              isActive ? 'text-gray-700' : 'text-gray-400'
+                            )} 
+                          />
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <Link
@@ -403,7 +410,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                     {user.full_name}
                   </p>
                   <p className="text-[10px] text-gray-600 truncate">
-                    {user.role_id.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                    {roleName}
                   </p>
                 </div>
               </div>

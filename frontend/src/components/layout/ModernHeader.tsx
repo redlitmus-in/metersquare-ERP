@@ -1,4 +1,4 @@
-import React, { Fragment, useState } from 'react';
+import React, { Fragment, useState, useEffect } from 'react';
 import { Menu, Transition, Popover } from '@headlessui/react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -17,15 +17,44 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import NotificationSystem from '@/components/NotificationSystem';
 import { clsx } from 'clsx';
+import { getRoleDisplayName } from '@/utils/roleRouting';
 
 interface HeaderProps {
   setSidebarOpen: (open: boolean) => void;
+  sidebarCollapsed?: boolean;
 }
 
-const ModernHeader: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
+const ModernHeader: React.FC<HeaderProps> = ({ setSidebarOpen, sidebarCollapsed: propsSidebarCollapsed }) => {
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return propsSidebarCollapsed !== undefined ? propsSidebarCollapsed : saved === 'true';
+  });
+
+  // Listen for sidebar state changes
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const saved = localStorage.getItem('sidebarCollapsed');
+      setSidebarCollapsed(saved === 'true');
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('sidebarToggle', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('sidebarToggle', handleStorageChange);
+    };
+  }, []);
+
+  // Update local state when props change
+  useEffect(() => {
+    if (propsSidebarCollapsed !== undefined) {
+      setSidebarCollapsed(propsSidebarCollapsed);
+    }
+  }, [propsSidebarCollapsed]);
 
   const handleLogout = () => {
     logout();
@@ -76,7 +105,10 @@ const ModernHeader: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
   return (
     <div className="sticky top-0 z-30 flex-shrink-0">
       {/* Main Header */}
-      <div className="flex h-16 bg-white shadow-lg border-b border-gray-200">
+      <div className={clsx(
+        "flex h-16 bg-white shadow-lg border-b border-gray-200 transition-all duration-300",
+        sidebarCollapsed ? "md:max-w-[calc(100vw-4rem)]" : "md:max-w-[calc(100vw-14rem)]"
+      )}>
         {/* Mobile menu button */}
         <button
           type="button"
@@ -271,7 +303,7 @@ const ModernHeader: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
                           {user?.full_name}
                         </p>
                         <p className="text-xs text-gray-600">
-                          {user?.role_id.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                          {user?.role_id ? getRoleDisplayName(String(user.role_id)) : 'User'}
                         </p>
                         <p className="text-xs text-gray-500">
                           {user?.email}

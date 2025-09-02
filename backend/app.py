@@ -1,7 +1,7 @@
-from flask import Flask
+from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-from config.routes import initialize_routes
+from routes import initialize_routes
 from config.db import initialize_db as initialize_sqlalchemy, db
 from config.logging import get_logger
 import os

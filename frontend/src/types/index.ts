@@ -5,17 +5,16 @@ export interface BaseEntity {
   updated_at: string;
 }
 
-// User Types
+// User Types - matching database exactly (camelCase)
 export enum UserRole {
-  BUSINESS_OWNER = 'businessOwner',
+  TECHNICAL_DIRECTOR = 'technicalDirector',
   PROJECT_MANAGER = 'projectManager',
-  FACTORY_SUPERVISOR = 'factorySupervisor',
-  SITE_ENGINEER = 'siteEngineer',
-  TECHNICIANS = 'technicians',
-  PURCHASE_TEAM = 'purchaseTeam',
+  PROCUREMENT = 'procurement',
+  SITE_SUPERVISOR = 'siteSupervisor',
+  MEP_SUPERVISOR = 'mepSupervisor',
+  ESTIMATION = 'estimation',
   ACCOUNTS = 'accounts',
-  SUB_CONTRACTORS = 'subContractors',
-  VENDOR_MANAGEMENT = 'vendorManagement',
+  DESIGN = 'design',
 }
 
 export interface User extends BaseEntity {

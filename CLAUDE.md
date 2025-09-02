@@ -391,5 +391,15 @@ npm run preview         # Preview production build
 - ✅ Updated project structure to reflect current implementation
 
 *This documentation serves as the comprehensive guide for MeterSquare ERP Phase 1 implementation. For technical support or feature requests, please refer to the project repository issues section.*
-- always user /docs folder for reference documents
-- all database details are in /database folder
+
+## 🔒 Development Rules & Standards
+
+### API Configuration
+- **NEVER hardcode API URLs** in frontend code (no localhost, IP addresses, or direct URLs)
+- **ALWAYS use `VITE_API_BASE_URL`** environment variable for API endpoints
+- All API calls must go through `apiClient` from `src/api/config.ts`
+- Environment configuration is managed in `src/utils/environment.ts`
+
+### Documentation & Database
+- Always use `/docs` folder for reference documents  
+- All database details are in `/database` folder

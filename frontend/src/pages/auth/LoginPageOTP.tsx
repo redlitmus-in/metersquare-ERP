@@ -24,34 +24,62 @@ import {
   Lock,
   CheckCircle2,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Wrench,
+  Calculator,
+  DollarSign
 } from 'lucide-react';
 import { toast } from 'sonner';
 import OTPInput from '@/components/OTPInput';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import authApi from '@/api/auth';
+import { fetchRoles, Role } from '@/api/roles';
 
-// Available roles based on the workflow
-const availableRoles = [
-  { value: 'technical_director', label: 'Technical Director', icon: Briefcase, color: 'from-purple-500 to-indigo-600' },
-  { value: 'project_manager', label: 'Project Manager', icon: Users, color: 'from-blue-500 to-cyan-600' },
-  { value: 'procurement', label: 'Procurement', icon: Package, color: 'from-green-500 to-emerald-600' },
-  { value: 'estimation', label: 'Estimation', icon: BarChart3, color: 'from-orange-500 to-red-600' },
-  { value: 'accounts', label: 'Accounts', icon: Building2, color: 'from-pink-500 to-rose-600' },
-  { value: 'design', label: 'Design', icon: Layers, color: 'from-indigo-500 to-purple-600' },
-  { value: 'site_supervisor', label: 'Site Supervisor', icon: HardHat, color: 'from-amber-500 to-yellow-600' },
-  { value: 'mep_supervisor', label: 'MEP Supervisor', icon: Activity, color: 'from-teal-500 to-green-600' },
-  { value: 'factory_supervisor', label: 'Factory Supervisor', icon: Building2, color: 'from-red-500 to-orange-600' },
-];
+// Icon mapping for roles
+const roleIcons: Record<string, any> = {
+  'siteSupervisor': HardHat,
+  'mepSupervisor': Activity,
+  'procurement': Package,
+  'projectManager': Users,
+  'design': Layers,
+  'estimation': Calculator,
+  'accounts': DollarSign,
+  'technicalDirector': Briefcase
+};
+
+// Color mapping for roles
+const roleColors: Record<string, string> = {
+  'siteSupervisor': 'from-orange-500 to-red-600',
+  'mepSupervisor': 'from-cyan-500 to-blue-600',
+  'procurement': 'from-red-500 to-pink-600',
+  'projectManager': 'from-green-500 to-emerald-600',
+  'design': 'from-purple-500 to-indigo-600',
+  'estimation': 'from-amber-500 to-orange-600',
+  'accounts': 'from-green-600 to-teal-600',
+  'technicalDirector': 'from-blue-600 to-indigo-700'
+};
 
 const LoginPageOTP: React.FC = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState<'email' | 'otp' | 'success'>('email');
   const [email, setEmail] = useState('');
-  const [selectedRole, setSelectedRole] = useState('');
+  const [selectedRole, setSelectedRole] = useState<string>('');
+  const [roles, setRoles] = useState<Role[]>([]);
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+  const [userRole, setUserRole] = useState<string>('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+
+  // Load roles on component mount
+  useEffect(() => {
+    const loadRoles = async () => {
+      const availableRoles = await fetchRoles();
+      setRoles(availableRoles);
+    };
+    loadRoles();
+  }, []);
 
   // Timer for resend OTP
   useEffect(() => {
@@ -64,29 +92,38 @@ const LoginPageOTP: React.FC = () => {
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !selectedRole) {
-      toast.error('Please fill all fields', {
-        description: 'Email and role are required'
-      });
+    if (!email) {
+      toast.error('Please enter your email address');
+      return;
+    }
+
+    if (!selectedRole) {
+      toast.error('Please select your role');
       return;
     }
 
     setIsLoading(true);
+    console.log('Sending OTP to:', email, 'with role:', selectedRole);
     
-    // Simulate OTP sending
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const response = await authApi.sendOTP(email, selectedRole);
+      console.log('OTP sent successfully:', response);
+      
       setStep('otp');
       setResendTimer(30);
       
-      // For demo purposes, show the OTP
-      const demoOTP = '123456';
       toast.success('OTP Sent Successfully!', {
-        description: `Demo OTP: ${demoOTP}`,
-        duration: 10000,
+        description: response.message,
         icon: <Mail className="w-5 h-5 text-green-500" />
       });
-    }, 1500);
+    } catch (error: any) {
+      console.error('Failed to send OTP:', error);
+      toast.error('Failed to send OTP', {
+        description: error.message || 'Please check your connection and try again'
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleVerifyOTP = async () => {
@@ -99,51 +136,49 @@ const LoginPageOTP: React.FC = () => {
 
     setIsLoading(true);
     
-    // Simulate OTP verification
-    setTimeout(() => {
-      // For demo, accept 123456 as valid OTP
-      if (otp === '123456') {
-        setStep('success');
-        
-        // Store auth data
-        const roleData = availableRoles.find(r => r.value === selectedRole);
-        localStorage.setItem('access_token', 'otp-demo-token');
-        localStorage.setItem('demo_user', JSON.stringify({
-          email: email,
-          role: roleData?.label || selectedRole,
-          name: roleData?.label || 'User'
-        }));
-        
-        toast.success('Login Successful!', {
-          description: `Welcome ${roleData?.label}`,
-          icon: <CheckCircle className="w-5 h-5 text-green-500" />
-        });
-        
-        // Redirect after animation
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
-      } else {
-        setIsLoading(false);
-        toast.error('Invalid OTP', {
-          description: 'Please enter the correct OTP'
-        });
-      }
-    }, 1500);
-  };
-
-  const handleResendOTP = () => {
-    if (resendTimer === 0) {
-      setResendTimer(30);
-      toast.success('OTP Resent!', {
-        description: 'Demo OTP: 123456',
-        duration: 10000,
-        icon: <RefreshCw className="w-5 h-5 text-green-500" />
+    try {
+      const response = await authApi.verifyOTP(email, otp);
+      
+      setStep('success');
+      setUserRole(response.user.role);
+      
+      toast.success('Login Successful!', {
+        description: `Welcome ${response.user.full_name || response.user.role}`,
+        icon: <CheckCircle className="w-5 h-5 text-green-500" />
       });
+      
+      // Redirect after animation
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 2000);
+    } catch (error: any) {
+      toast.error('Invalid OTP', {
+        description: error.message
+      });
+      setIsLoading(false);
     }
   };
 
-  const selectedRoleData = availableRoles.find(r => r.value === selectedRole);
+  const handleResendOTP = async () => {
+    if (resendTimer === 0) {
+      setIsLoading(true);
+      try {
+        const response = await authApi.sendOTP(email, selectedRole);
+        setResendTimer(30);
+        
+        toast.success('OTP Resent!', {
+          description: response.message,
+          icon: <RefreshCw className="w-5 h-5 text-green-500" />
+        });
+      } catch (error: any) {
+        toast.error('Failed to resend OTP', {
+          description: error.message
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center p-6">
@@ -208,7 +243,7 @@ const LoginPageOTP: React.FC = () => {
                     <Mail className="w-8 h-8 text-red-500" />
                   </div>
                   <h2 className="text-xl font-semibold text-gray-900">Sign In</h2>
-                  <p className="text-sm text-gray-500 mt-1">Enter your email and select role</p>
+                  <p className="text-sm text-gray-500 mt-1">Enter your email to receive OTP</p>
                 </div>
 
                 {/* Email Input */}
@@ -230,60 +265,72 @@ const LoginPageOTP: React.FC = () => {
                 {/* Role Selection Dropdown */}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-400" />
-                    Select Your Role
+                    <Users className="w-4 h-4 text-gray-400" />
+                    Select Role
                   </label>
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#243d8a] focus:ring-2 focus:ring-[#243d8a]/20 transition-all duration-200 text-gray-700 text-left flex items-center justify-between"
+                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#243d8a] focus:ring-2 focus:ring-[#243d8a]/20 transition-all duration-200 text-gray-700 flex items-center justify-between"
                     >
-                      {selectedRoleData ? (
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${selectedRoleData.color} flex items-center justify-center`}>
-                            <selectedRoleData.icon className="w-4 h-4 text-white" />
-                          </div>
-                          <span>{selectedRoleData.label}</span>
+                      {selectedRole ? (
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const role = roles.find(r => r.id === selectedRole);
+                            const Icon = role ? roleIcons[role.id] : Users;
+                            return (
+                              <>
+                                <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${role ? roleColors[role.id] : 'from-gray-500 to-gray-600'} flex items-center justify-center`}>
+                                  {Icon && <Icon className="w-3 h-3 text-white" />}
+                                </div>
+                                <span>{role?.title || 'Select a role'}</span>
+                              </>
+                            );
+                          })()}
                         </div>
                       ) : (
-                        <span className="text-gray-400">Choose your role...</span>
+                        <span className="text-gray-400">Choose your role</span>
                       )}
-                      <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${showRoleDropdown ? 'rotate-180' : ''}`} />
+                      <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                     </button>
-
-                    <AnimatePresence>
-                      {showRoleDropdown && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden"
-                        >
-                          <div className="max-h-64 overflow-y-auto">
-                            {availableRoles.map((role) => (
+                    
+                    {/* Dropdown Menu */}
+                    {isDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden"
+                      >
+                        <div className="max-h-64 overflow-y-auto">
+                          {roles.map((role) => {
+                            const Icon = roleIcons[role.id] || Users;
+                            return (
                               <button
-                                key={role.value}
+                                key={role.id}
                                 type="button"
                                 onClick={() => {
-                                  setSelectedRole(role.value);
-                                  setShowRoleDropdown(false);
+                                  setSelectedRole(role.id);
+                                  setIsDropdownOpen(false);
                                 }}
-                                className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors"
+                                className={`w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${selectedRole === role.id ? 'bg-gray-50' : ''}`}
                               >
-                                <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${role.color} flex items-center justify-center`}>
-                                  <role.icon className="w-4 h-4 text-white" />
+                                <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${roleColors[role.id] || 'from-gray-500 to-gray-600'} flex items-center justify-center`}>
+                                  <Icon className="w-4 h-4 text-white" />
                                 </div>
-                                <span className="text-gray-700">{role.label}</span>
-                                {selectedRole === role.value && (
-                                  <CheckCircle2 className="w-4 h-4 text-green-500 ml-auto" />
+                                <div className="text-left flex-1">
+                                  <div className="font-medium text-gray-900">{role.title}</div>
+                                  <div className="text-xs text-gray-500">{role.tier}</div>
+                                </div>
+                                {selectedRole === role.id && (
+                                  <CheckCircle2 className="w-5 h-5 text-[#243d8a]" />
                                 )}
                               </button>
-                            ))}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
                   </div>
                 </div>
 
@@ -325,14 +372,6 @@ const LoginPageOTP: React.FC = () => {
                     We've sent a 6-digit code to
                   </p>
                   <p className="text-sm font-medium text-gray-700 mt-1">{email}</p>
-                  {selectedRoleData && (
-                    <div className="flex items-center justify-center gap-2 mt-2">
-                      <div className={`w-6 h-6 rounded bg-gradient-to-br ${selectedRoleData.color} flex items-center justify-center`}>
-                        <selectedRoleData.icon className="w-3 h-3 text-white" />
-                      </div>
-                      <span className="text-xs text-gray-600">{selectedRoleData.label}</span>
-                    </div>
-                  )}
                 </div>
 
                 {/* OTP Input */}
@@ -412,12 +451,14 @@ const LoginPageOTP: React.FC = () => {
                 </motion.div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome!</h2>
                 <p className="text-gray-600">Login successful. Redirecting...</p>
-                {selectedRoleData && (
+                {userRole && (
                   <div className="flex items-center justify-center gap-2 mt-4">
-                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${selectedRoleData.color} flex items-center justify-center`}>
-                      <selectedRoleData.icon className="w-4 h-4 text-white" />
+                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${roleColors[userRole] || 'from-gray-500 to-gray-600'} flex items-center justify-center`}>
+                      {roleIcons[userRole] ? React.createElement(roleIcons[userRole], { className: "w-4 h-4 text-white" }) : <Users className="w-4 h-4 text-white" />}
                     </div>
-                    <span className="text-sm font-medium text-gray-700">{selectedRoleData.label}</span>
+                    <span className="text-sm font-medium text-gray-700">
+                      {userRole.replace(/([A-Z])/g, ' $1').trim()}
+                    </span>
                   </div>
                 )}
                 <motion.div

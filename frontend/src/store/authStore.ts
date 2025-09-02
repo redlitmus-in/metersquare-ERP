@@ -3,13 +3,13 @@ import { persist } from 'zustand/middleware';
 import { User, LoginRequest, LoginResponse } from '@/types';
 import { apiWrapper, API_ENDPOINTS } from '@/api/config';
 import { toast } from 'sonner';
+import { getRoleDashboardPath } from '@/utils/roleRouting';
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  developmentRole?: string; // For development testing
   
   // Actions
   login: (credentials: LoginRequest) => Promise<void>;
@@ -18,7 +18,7 @@ interface AuthState {
   getCurrentUser: () => Promise<void>;
   updateProfile: (userData: any) => Promise<void>;
   clearError: () => void;
-  setDevelopmentRole: (role: string) => void;
+  getRoleDashboard: () => string;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -32,37 +32,6 @@ export const useAuthStore = create<AuthState>()(
       login: async (credentials: LoginRequest) => {
         try {
           set({ isLoading: true, error: null });
-          
-          // Check if this is a development role login
-          const devRole = localStorage.getItem('dev_role');
-          if (devRole && credentials.role) {
-            // For development, we'll simulate a successful login with the selected role
-            const mockUser: User = {
-              id: 'dev-user-id',
-              email: credentials.email,
-              full_name: `Dev User (${credentials.role})`,
-              role_id: credentials.role as any,
-              department: 'Development',
-              is_active: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            };
-            
-            // Store development token
-            localStorage.setItem('access_token', 'dev-token');
-            localStorage.setItem('dev_role', credentials.role);
-            
-            set({
-              user: mockUser,
-              isAuthenticated: true,
-              isLoading: false,
-              error: null,
-              developmentRole: credentials.role,
-            });
-            
-            toast.success(`Development login successful as ${credentials.role}!`);
-            return;
-          }
           
           const response = await apiWrapper.post<LoginResponse>(
             API_ENDPOINTS.AUTH.LOGIN,
@@ -121,13 +90,11 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         localStorage.removeItem('access_token');
-        localStorage.removeItem('dev_role');
-        localStorage.removeItem('demo_user');
+        localStorage.removeItem('user');
         set({
           user: null,
           isAuthenticated: false,
           error: null,
-          developmentRole: undefined,
         });
         toast.success('Logged out successfully');
       },
@@ -140,33 +107,29 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
-          // Check if this is a demo user
-          const demoUserData = localStorage.getItem('demo_user');
-          if (token === 'demo-token' && demoUserData) {
-            const demoUser = JSON.parse(demoUserData);
-            const mockUser: User = {
-              id: 'demo-user-id',
-              email: demoUser.email,
-              full_name: demoUser.name,
-              role_id: demoUser.role as any,
-              department: 'Demo',
-              is_active: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            };
-            
-            set({
-              user: mockUser,
-              isAuthenticated: true,
-              isLoading: false,
-              error: null,
-            });
-            return;
+          // Check if we have cached user data
+          const cachedUserData = localStorage.getItem('user');
+          if (cachedUserData) {
+            try {
+              const cachedUser = JSON.parse(cachedUserData);
+              set({
+                user: cachedUser,
+                isAuthenticated: true,
+                isLoading: false,
+                error: null,
+              });
+              return;
+            } catch (e) {
+              // If cached data is invalid, fetch from API
+            }
           }
 
           set({ isLoading: true });
           
           const user = await apiWrapper.get<User>(API_ENDPOINTS.AUTH.ME);
+          
+          // Cache user data
+          localStorage.setItem('user', JSON.stringify(user));
           
           set({
             user,
@@ -182,6 +145,7 @@ export const useAuthStore = create<AuthState>()(
             error: 'Failed to fetch user profile',
           });
           localStorage.removeItem('access_token');
+          localStorage.removeItem('user');
         }
       },
 
@@ -213,7 +177,14 @@ export const useAuthStore = create<AuthState>()(
       },
 
       clearError: () => set({ error: null }),
-      setDevelopmentRole: (role: string) => set({ developmentRole: role }),
+      
+      getRoleDashboard: () => {
+        const { user } = get();
+        if (!user || !user.role_id) {
+          return '/dashboard';
+        }
+        return getRoleDashboardPath(user.role_id);
+      },
     }),
     {
       name: 'auth-storage',

@@ -1,219 +1,426 @@
 import React, { useEffect, useState } from 'react';
+
 import { Routes, Route, Navigate } from 'react-router-dom';
+
 import { Toaster } from 'sonner';
+
 import { useAuthStore } from '@/store/authStore';
+
 import { validateSupabaseConnection } from '@/utils/environment';
- 
+
+
+
 // Pages
-import LoginPage from '@/pages/LoginPage';
-import LoginPageOTP from '@/pages/LoginPageOTP';
+
+import LoginPage from '@/pages/auth/LoginPage';
+
+import LoginPageOTP from '@/pages/auth/LoginPageOTP';
+
 import ModernDashboard from '@/pages/ModernDashboard';
-import TasksPage from '@/pages/TasksPage';
-import ProjectsPage from '@/pages/ProjectsPage';
-import ProcessFlowPage from '@/pages/ProcessFlowPage';
+
+import TasksPage from '@/pages/common/TasksPage';
+
+import ProjectsPage from '@/pages/common/ProjectsPage';
+
+import ProcessFlowPage from '@/pages/common/ProcessFlowPage';
+
 // ProcessFlowPage removed - replaced with WorkflowStatusPage
-import ProfilePage from '@/pages/ProfilePage';
-import AnalyticsPage from '@/pages/AnalyticsPage';
-import ProcurementDashboard from '@/pages/ProcurementDashboard';
-import WorkflowStatusPage from '@/pages/WorkflowStatusPage';
- 
+
+import ProfilePage from '@/pages/common/ProfilePage';
+
+import AnalyticsPage from '@/pages/common/AnalyticsPage';
+
+import ProcurementDashboard from '@/pages/dashboards/ProcurementDashboard';
+
+import WorkflowStatusPage from '@/pages/common/WorkflowStatusPage';
+
+
+
 // Role-specific dashboards
+
 import {
   TechnicalDirectorDashboard,
   ProjectManagerDashboard,
-  ProcurementOfficerDashboard,
+  ProcurementDashboard as ProcurementOfficerDashboard,
   SiteSupervisorDashboard,
   MEPSupervisorDashboard,
   EstimationDashboard,
   AccountsDashboard,
   DesignDashboard
 } from '@/pages/dashboards';
- 
+
+
+
 // Procurement sub-pages
-import PurchaseRequestsPage from '@/pages/procurement/PurchaseRequestsPage';
-import VendorQuotationsPage from '@/pages/procurement/VendorQuotationsPage';
+
 import ApprovalsPage from '@/pages/procurement/ApprovalsPage';
+
+import VendorQuotationsPage from '@/pages/procurement/VendorQuotationsPage';
+
 import DeliveriesPage from '@/pages/procurement/DeliveriesPage';
- 
+
+
+
 // Workflow pages
+
 import MaterialDispatchProductionPage from '@/pages/workflows/MaterialDispatchProductionPage';
+
 import MaterialDispatchSitePage from '@/pages/workflows/MaterialDispatchSitePage';
- 
+
+
+
 // Layout
+
 import DashboardLayout from '@/components/layout/DashboardLayout';
+
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+
 import RoleBasedRedirect from '@/components/routing/RoleBasedRedirect';
- 
+
+
+
 // Protected Route Component
+
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+
   const { isAuthenticated, isLoading } = useAuthStore();
+
   const token = localStorage.getItem('access_token');
- 
+
+
+
   if (isLoading && !token) {
+
     return (
+
       <div className="min-h-screen flex items-center justify-center">
+
         <LoadingSpinner size="lg" />
+
       </div>
+
     );
+
   }
- 
+
+
+
   if (!isAuthenticated && !token) {
+
     return <Navigate to="/login" replace />;
+
   }
- 
+
+
+
   return <>{children}</>;
+
 };
- 
+
+
+
 // Public Route Component (redirects if authenticated)
+
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+
   const { isAuthenticated, isLoading, user, getRoleDashboard } = useAuthStore();
+
   const token = localStorage.getItem('access_token');
- 
+
+
+
   if (isLoading && !token) {
+
     return (
+
       <div className="min-h-screen flex items-center justify-center">
+
         <LoadingSpinner size="lg" />
+
       </div>
+
     );
+
   }
- 
+
+
+
   if (isAuthenticated || token) {
+
     const dashboardPath = getRoleDashboard();
+
     return <Navigate to={dashboardPath} replace />;
+
   }
- 
+
+
+
   return <>{children}</>;
+
 };
- 
+
+
+
 function App() {
+
   const { getCurrentUser, isAuthenticated } = useAuthStore();
+
   const [isEnvironmentValid, setIsEnvironmentValid] = useState<boolean | null>(null);
- 
+
+
+
   useEffect(() => {
+
     // Validate environment configuration on app startup
+
     const validateEnvironment = async () => {
+
       try {
+
         const { success } = await validateSupabaseConnection();
+
         setIsEnvironmentValid(success);
+
        
+
         if (success) {
+
           // Check for existing session on app load
+
           const token = localStorage.getItem('access_token');
+
           if (token && !isAuthenticated) {
+
             getCurrentUser();
+
           }
+
         }
+
       } catch (error) {
+
         console.error('Environment validation failed:', error);
+
         setIsEnvironmentValid(false);
+
       }
+
     };
- 
+
+
+
     validateEnvironment();
+
   }, [getCurrentUser, isAuthenticated]);
- 
+
+
+
   // Show loading while validating environment
+
   if (isEnvironmentValid === null) {
+
     return (
+
       <div className="min-h-screen flex items-center justify-center">
+
         <div className="text-center">
+
           <LoadingSpinner size="lg" />
+
           <p className="mt-4 text-gray-600">Validating environment configuration...</p>
+
         </div>
+
       </div>
+
     );
+
   }
- 
+
+
+
   // Show error if environment is invalid
+
   if (isEnvironmentValid === false) {
+
     return (
+
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
+
         <div className="max-w-md mx-auto text-center p-6 bg-white rounded-lg shadow-lg">
+
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
+
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Configuration Error</h1>
+
           <p className="text-gray-600 mb-6">
+
             The application cannot start due to missing or invalid environment configuration.
+
           </p>
+
           <div className="text-left bg-gray-100 p-4 rounded text-sm">
+
             <p className="font-semibold mb-2">To fix this issue:</p>
+
             <ol className="list-decimal list-inside space-y-1">
+
               <li>Create a <code className="bg-gray-200 px-1 rounded">.env</code> file in the frontend directory</li>
+
               <li>Add your Supabase credentials (see <code className="bg-gray-200 px-1 rounded">env.example</code>)</li>
+
               <li>Restart the development server</li>
+
             </ol>
+
           </div>
+
           <button
+
             onClick={() => window.location.reload()}
+
             className="mt-4 px-4 py-2 bg-[#243d8a] text-white rounded hover:bg-[#243d8a]"
+
           >
+
             Retry
+
           </button>
+
         </div>
+
       </div>
+
     );
+
   }
- 
+
+
+
   return (
+
     <div className="App">
+
       <Toaster position="top-right" richColors />
+
       <Routes>
+
         {/* Public Routes */}
+
         <Route
+
           path="/login"
+
           element={
+
             <PublicRoute>
+
               <LoginPage />
+
             </PublicRoute>
+
           }
+
         />
- 
- 
+
+
+
+
+
         {/* Protected Routes */}
+
         <Route
+
           path="/"
+
           element={
+
             <ProtectedRoute>
+
               <DashboardLayout />
+
             </ProtectedRoute>
+
           }
+
         >
+
           <Route index element={<Navigate to="/dashboard" replace />} />
+
           <Route path="dashboard" element={<RoleBasedRedirect><ModernDashboard /></RoleBasedRedirect>} />
+
          
+
           {/* Role-specific dashboard routes */}
+
           <Route path="dashboard/technical-director" element={<TechnicalDirectorDashboard />} />
+
           <Route path="dashboard/project-manager" element={<ProjectManagerDashboard />} />
+
           <Route path="dashboard/procurement" element={<ProcurementOfficerDashboard />} />
+
           <Route path="dashboard/site-supervisor" element={<SiteSupervisorDashboard />} />
+
           <Route path="dashboard/mep-supervisor" element={<MEPSupervisorDashboard />} />
+
           <Route path="dashboard/estimation" element={<EstimationDashboard />} />
+
           <Route path="dashboard/accounts" element={<AccountsDashboard />} />
+
           <Route path="dashboard/design" element={<DesignDashboard />} />
+
           <Route path="procurement" element={<ProcurementDashboard />} />
-          <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
-          <Route path="procurement/purchase-requests/edit/:id" element={<PurchaseRequestsPage />} />
+
+          <Route path="procurement/requests" element={<ApprovalsPage />} />
+
+          <Route path="procurement/purchase-requests/edit/:id" element={<ApprovalsPage />} />
+
           <Route path="procurement/quotations" element={<VendorQuotationsPage />} />
+
           <Route path="procurement/vendor-quotations/edit/:id" element={<VendorQuotationsPage />} />
+
           <Route path="procurement/approvals" element={<ApprovalsPage />} />
+
           <Route path="procurement/deliveries" element={<DeliveriesPage />} />
+
           <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
+
           <Route path="tasks" element={<TasksPage />} />
+
           <Route path="projects" element={<ProjectsPage />} />
+
           <Route path="projects/:id" element={<ProjectsPage />} />
+
           <Route path="projects/:id/edit" element={<ProjectsPage />} />
+
           <Route path="process-flow" element={<ProcessFlowPage />} />
+
           <Route path="workflow-status" element={<WorkflowStatusPage />} />
+
           <Route path="workflows/material-dispatch-production" element={<MaterialDispatchProductionPage />} />
+
           <Route path="workflows/material-dispatch-site" element={<MaterialDispatchSitePage />} />
+
           <Route path="analytics" element={<AnalyticsPage />} />
+
           <Route path="profile" element={<ProfilePage />} />
+
         </Route>
- 
+
+
+
         {/* Catch all route */}
+
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
       </Routes>
+
     </div>
+
   );
+
 }
- 
+
+
+
 export default App;

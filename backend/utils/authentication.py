@@ -99,6 +99,12 @@ def send_otp(email_id):
         return None
 
 def verification_otp():
+    """
+    OTP-based login - Step 2: Verify OTP and complete login
+    Validates role if it was specified during OTP request
+    """
+    from models.role import Role
+    
     data = request.get_json()
     otp_input = data.get('otp')
     email_id = data.get('email') or data.get('email_id')  # support both keys
@@ -114,16 +120,37 @@ def verification_otp():
     except ValueError:
         return jsonify({"error": "OTP must be a number"}), 400
     
-    # Fetch user by email
-    user = User.query.filter_by(email=email_id, is_deleted=False).first()
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    
-    # Get OTP data from storage
+    # Get OTP data from storage first to check if role was specified
     otp_data = otp_storage.get(email_id)
     if not otp_data:
         return jsonify({"error": "OTP not found or expired"}), 400
     
+    # Check if a specific role was required during login
+    required_role = otp_data.get('role')
+    
+    # Fetch user by email with role information
+    from config.db import db
+    query = db.session.query(User).join(Role, User.role_id == Role.role_id).filter(
+        User.email == email_id,
+        User.is_deleted == False,
+        User.is_active == True
+    )
+    
+    # If role was specified during login, validate it
+    if required_role:
+        query = query.filter(
+            db.func.lower(Role.role) == required_role.lower()
+        )
+    
+    user = query.first()
+    
+    if not user:
+        if required_role:
+            return jsonify({"error": f"User not found with role '{required_role}' or account inactive"}), 404
+        else:
+            return jsonify({"error": "User not found or inactive"}), 404
+    
+    # OTP data already retrieved above
     stored_otp = otp_data.get("otp")
     expires_at = datetime.fromtimestamp(otp_data.get("expires_at"))
     
@@ -139,14 +166,27 @@ def verification_otp():
         del otp_storage[email_id]
         return jsonify({"error": "OTP expired"}), 400
     
+    # Update last login
+    user.last_login = current_time
+    db.session.commit()
+    
     # OTP verified, remove from storage
     del otp_storage[email_id]
     
-    # Create JWT token with 1-day expiry
+    # Get role permissions
+    role_permissions = []
+    if user.role and user.role.permissions:
+        role_permissions = user.role.permissions if isinstance(user.role.permissions, list) else []
+    
+    # Create JWT token with role information
     expiration_time = current_time + timedelta(days=1)
     payload = {
-        'user_id': user.user_id,  # ✅ required
-        'email': user.email,   # ✅ required
+        'user_id': user.user_id,
+        'email': user.email,
+        'role': user.role.role if user.role else "user",
+        'role_id': user.role_id,
+        'permissions': role_permissions,
+        'full_name': user.full_name,
         'creation_time': current_time.isoformat(),
         'exp': expiration_time
     }
@@ -156,12 +196,19 @@ def verification_otp():
         session_token = session_token.decode('utf-8')
     
     response_data = {
+        "message": "Login successful",
         "access_token": session_token,
         "expires_at": expiration_time.isoformat(),
-        "existing_user": True,
-        "onboarding_status": True,
-        "email_id": email_id,
-        "message": "OTP Verified Successfully!"
+        "user": {
+            "user_id": user.user_id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "phone": user.phone,
+            "role": user.role.role if user.role else "user",
+            "role_id": user.role_id,
+            "department": user.department,
+            "permissions": role_permissions
+        }
     }
     
     response = make_response(jsonify(response_data), 200)
@@ -171,7 +218,7 @@ def verification_otp():
         expires=expiration_time,
         httponly=True,
         secure=True,
-        samesite='Lax'  # or 'Strict' depending on your requirements
+        samesite='Lax'
     )
     return response
    
@@ -199,3 +246,58 @@ def verification_otp():
 #         return "Verification email sent!"
 #     except Exception as e:
 #         return f"Failed to send email: {str(e)}"
+
+
+# JWT Required Decorator
+from functools import wraps
+
+def jwt_required(f):
+    """Decorator to require valid JWT token for protected routes"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = None
+        
+        # Check for token in Authorization header
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            try:
+                token = auth_header.split(' ')[1]  # Bearer <token>
+            except IndexError:
+                return jsonify({'message': 'Invalid token format'}), 401
+        
+        # Check for token in cookies if not in header
+        if not token:
+            token = request.cookies.get('access_token')
+        
+        # Check for token in request args (for backward compatibility)
+        if not token:
+            token = request.args.get('token')
+        
+        if not token:
+            return jsonify({'message': 'Token is missing'}), 401
+        
+        try:
+            # Decode the token
+            data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            
+            # Get the user from the database
+            current_user = User.query.filter_by(user_id=data['user_id']).first()
+            
+            if not current_user:
+                return jsonify({'message': 'User not found'}), 401
+            
+            # Store user in g object for access in route
+            g.current_user = current_user
+            g.user_id = current_user.user_id
+            
+        except jwt.ExpiredSignatureError:
+            return jsonify({'message': 'Token has expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'message': 'Invalid token'}), 401
+        except Exception as e:
+            log.error(f"JWT verification error: {str(e)}")
+            return jsonify({'message': 'Token verification failed'}), 401
+        
+        return f(*args, **kwargs)
+    
+    return decorated_function

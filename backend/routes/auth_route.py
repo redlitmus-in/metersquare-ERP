@@ -27,11 +27,6 @@ def verification_otp_route():
     """Verify OTP"""
     return verification_otp()
 
-@auth_routes.route('/reset-password', methods=['POST'])
-def reset_password_route():
-    """Reset password with OTP"""
-    return reset_password()
-
 @auth_routes.route('/logout', methods=['POST'])
 def logout_route():
     """Logout user"""
@@ -50,8 +45,4 @@ def update_profile_route():
     """Update user profile"""
     return update_user_profile()
 
-@auth_routes.route('/change-password', methods=['POST'])
-@jwt_required
-def change_password_route():
-    """Change user password"""
-    return change_password()
+# Note: Password-related endpoints removed - using OTP-only authentication

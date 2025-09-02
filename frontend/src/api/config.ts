@@ -24,7 +24,7 @@ export const supabase = createClient(envConfig.supabase.url, envConfig.supabase.
 
 // Axios instance with enhanced error handling
 export const apiClient = axios.create({
-  baseURL: `${API_BASE_URL}/api/v1`,
+  baseURL: API_BASE_URL,
   timeout: 15000, // Increased timeout for production
   headers: {
     'Content-Type': 'application/json',
@@ -41,6 +41,15 @@ apiClient.interceptors.request.use(
     
     // Add request ID for tracing
     config.headers['X-Request-ID'] = crypto.randomUUID();
+    
+    // Debug logging
+    console.log('API Request:', {
+      method: config.method,
+      url: config.url,
+      baseURL: config.baseURL,
+      fullURL: `${config.baseURL}${config.url}`,
+      data: config.data
+    });
     
     return config;
   },

@@ -6,7 +6,6 @@ from models.purchase import Purchase
 from models.role import Role
 from config.db import db
 from datetime import datetime
-from controllers.workflow_controller import WorkflowController
 from config.logging import get_logger
 from werkzeug.utils import secure_filename
 from supabase import create_client, Client

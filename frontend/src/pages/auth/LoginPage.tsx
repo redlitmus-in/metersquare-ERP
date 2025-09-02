@@ -44,19 +44,22 @@ import { LoginRequest } from '@/types';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import OTPInput from '@/components/OTPInput';
 import { AnimatePresence } from 'framer-motion';
+import { authApi } from '@/api/auth';
+import { getRoleDashboardPath } from '@/utils/roleRouting';
+import './LoginPage.css';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   role: z.string().min(1, 'Please select a role'),
 });
 
-// Available roles
+// Available roles - matching database exactly (camelCase)
 const availableRoles = [
-  { value: 'technical_director', label: 'Technical Director', icon: Briefcase },
-  { value: 'project_manager', label: 'Project Manager', icon: Users },
+  { value: 'technicalDirector', label: 'Technical Director', icon: Briefcase },
+  { value: 'projectManager', label: 'Project Manager', icon: Users },
   { value: 'procurement', label: 'Procurement', icon: Package },
-  { value: 'site_supervisor', label: 'Site Supervisor', icon: HardHat },
-  { value: 'mep_supervisor', label: 'MEP Supervisor', icon: Activity },
+  { value: 'siteSupervisor', label: 'Site Supervisor', icon: HardHat },
+  { value: 'mepSupervisor', label: 'MEP Supervisor', icon: Activity },
   { value: 'estimation', label: 'Estimation', icon: BarChart3 },
   { value: 'accounts', label: 'Accounts', icon: Building2 },
   { value: 'design', label: 'Design', icon: Layers },
@@ -82,6 +85,7 @@ const LoginPage: React.FC = () => {
       const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [resendTimer]);
   
 
@@ -107,17 +111,22 @@ const LoginPage: React.FC = () => {
       setUserEmail(data.email);
       setUserRole(data.role);
       
-      // Simulate OTP sending
+      // Send OTP via backend API
+      const response = await authApi.sendOTP(data.email, data.role);
+      
       setStep('otp');
       setResendTimer(30);
       
-      // For demo purposes, show the OTP
-      const demoOTP = '123456';
       toast.success('OTP Sent Successfully!', {
-        description: `Demo OTP: ${demoOTP}`,
-        duration: 10000,
+        description: 'Please check your email for the OTP',
+        duration: 5000,
         icon: <Mail className="w-5 h-5 text-green-500" />
       });
+      
+      // Only show OTP in development mode
+      if (response.otp && process.env.NODE_ENV === 'development') {
+        console.log('Development OTP:', response.otp);
+      }
     } catch (error: any) {
       toast.error('Failed to send OTP', {
         description: error.message || 'Please try again.'
@@ -133,42 +142,55 @@ const LoginPage: React.FC = () => {
       return;
     }
 
-    // For demo, accept 123456 as valid OTP
-    if (otp === '123456') {
-      const roleData = availableRoles.find(r => r.value === userRole);
-      localStorage.setItem('access_token', 'otp-demo-token');
-      localStorage.setItem('demo_user', JSON.stringify({
-        email: userEmail,
-        role: roleData?.label || userRole,
-        name: roleData?.label || 'User'
-      }));
+    try {
+      // Verify OTP via backend API
+      const response = await authApi.verifyOTP(userEmail, otp);
       
-      // Update auth store to trigger re-render
-      await useAuthStore.getState().getCurrentUser();
+      const roleData = availableRoles.find(r => r.value === userRole);
       
       toast.success('Welcome to MeterSquare ERP', {
-        description: `Logged in as ${roleData?.label}`,
+        description: `Logged in as ${response.user.role}`,
         icon: <CheckCircle className="w-5 h-5 text-green-500" />
       });
       
+      // Update auth store with the user data
+      await useAuthStore.getState().getCurrentUser();
+      
+      // Navigate to role-specific dashboard
+      const dashboardPath = getRoleDashboardPath(response.user.role || userRole);
+      
       setTimeout(() => {
-        navigate('/dashboard');
+        navigate(dashboardPath);
       }, 500);
-    } else {
+    } catch (error: any) {
       toast.error('Invalid OTP', {
-        description: 'Please enter the correct OTP'
+        description: error.message || 'Please enter the correct OTP'
       });
     }
   };
 
-  const handleResendOTP = () => {
+  const handleResendOTP = async () => {
     if (resendTimer === 0) {
-      setResendTimer(30);
-      toast.success('OTP Resent!', {
-        description: 'Demo OTP: 123456',
-        duration: 10000,
-        icon: <RefreshCw className="w-5 h-5 text-green-500" />
-      });
+      try {
+        // Resend OTP via backend API
+        const response = await authApi.sendOTP(userEmail, userRole);
+        
+        setResendTimer(30);
+        toast.success('OTP Resent!', {
+          description: 'Please check your email for the new OTP',
+          duration: 5000,
+          icon: <RefreshCw className="w-5 h-5 text-green-500" />
+        });
+        
+        // Only show OTP in development mode
+        if (response.otp && process.env.NODE_ENV === 'development') {
+          console.log('Development OTP:', response.otp);
+        }
+      } catch (error: any) {
+        toast.error('Failed to resend OTP', {
+          description: error.message || 'Please try again.'
+        });
+      }
     }
   };
 
@@ -457,9 +479,7 @@ const LoginPage: React.FC = () => {
       <div className="w-full lg:w-2/5 xl:w-5/12 bg-gradient-to-br from-white via-gray-50 to-white flex items-center justify-center p-6 relative overflow-hidden">
         {/* Subtle Background Pattern */}
         <div className="absolute inset-0">
-          <div className="absolute inset-0 opacity-[0.02]" style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-          }} />
+          <div className="absolute inset-0 opacity-[0.02] background-pattern" />
         </div>
 
         <motion.div
@@ -753,8 +773,7 @@ const LoginPage: React.FC = () => {
             initial={{ opacity: 0, y: -30, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ delay: 0.3, duration: 0.6 }}
-            className="bg-gradient-to-br from-white/25 via-white/15 to-white/10 backdrop-blur-xl rounded-2xl p-3 shadow-2xl border border-white/30"
-            style={{ transform: 'rotate(-5deg)' }}
+            className="bg-gradient-to-br from-white/25 via-white/15 to-white/10 backdrop-blur-xl rounded-2xl p-3 shadow-2xl border border-white/30 -rotate-[5deg]"
           >
             <motion.div
               animate={{ 
@@ -773,8 +792,7 @@ const LoginPage: React.FC = () => {
             initial={{ opacity: 0, y: -30, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ delay: 0.5, duration: 0.6 }}
-            className="bg-gradient-to-br from-white/25 via-white/15 to-white/10 backdrop-blur-xl rounded-2xl p-3 shadow-2xl border border-white/30"
-            style={{ transform: 'rotate(3deg)' }}
+            className="bg-gradient-to-br from-white/25 via-white/15 to-white/10 backdrop-blur-xl rounded-2xl p-3 shadow-2xl border border-white/30 rotate-3"
           >
             <motion.div
               animate={{ 
@@ -788,7 +806,7 @@ const LoginPage: React.FC = () => {
               className="relative"
             >
               <PieChart className="w-6 h-6 text-purple-600 filter drop-shadow-sm" />
-              <div className="absolute inset-0 bg-purple-400/20 blur-xl rounded-full scale-150 animate-pulse" style={{ animationDelay: '1s' }}></div>
+              <div className="absolute inset-0 bg-purple-400/20 blur-xl rounded-full scale-150 animate-pulse [animation-delay:1s]"></div>
             </motion.div>
           </motion.div>
           
@@ -796,8 +814,7 @@ const LoginPage: React.FC = () => {
             initial={{ opacity: 0, y: -30, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ delay: 0.7, duration: 0.6 }}
-            className="bg-gradient-to-br from-white/25 via-white/15 to-white/10 backdrop-blur-xl rounded-2xl p-3 shadow-2xl border border-white/30"
-            style={{ transform: 'rotate(-2deg)' }}
+            className="bg-gradient-to-br from-white/25 via-white/15 to-white/10 backdrop-blur-xl rounded-2xl p-3 shadow-2xl border border-white/30 -rotate-2"
           >
             <motion.div
               animate={{ 
@@ -808,13 +825,13 @@ const LoginPage: React.FC = () => {
               className="relative"
             >
               <Target className="w-6 h-6 text-indigo-600 filter drop-shadow-sm" />
-              <div className="absolute inset-0 bg-indigo-400/20 blur-xl rounded-full scale-150 animate-pulse" style={{ animationDelay: '2s' }}></div>
+              <div className="absolute inset-0 bg-indigo-400/20 blur-xl rounded-full scale-150 animate-pulse [animation-delay:2s]"></div>
             </motion.div>
           </motion.div>
         </div>
 
         {/* Main Workflow Container - Scaled for laptop */}
-        <div className="relative" style={{ width: '750px', height: '500px' }}>
+        <div className="relative w-[750px] h-[500px]">
           
           {/* SVG Connections */}
           <svg className="absolute inset-0 w-full h-full" viewBox="0 0 750 500">
@@ -942,8 +959,7 @@ const LoginPage: React.FC = () => {
 
           {/* Refined Workflow Nodes - Scaled down */}
           <motion.div
-            className="absolute workflow-node"
-            style={{ left: '80px', top: '80px', transform: 'rotate(-3deg)' }}
+            className="absolute workflow-node left-[80px] top-[80px] -rotate-[3deg]"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: "spring" }}
@@ -959,8 +975,7 @@ const LoginPage: React.FC = () => {
           </motion.div>
 
           <motion.div
-            className="absolute workflow-node"
-            style={{ left: '310px', top: '80px', transform: 'rotate(2deg)' }}
+            className="absolute workflow-node left-[310px] top-[80px] rotate-[2deg]"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.4, type: "spring" }}
@@ -976,8 +991,7 @@ const LoginPage: React.FC = () => {
           </motion.div>
 
           <motion.div
-            className="absolute workflow-node"
-            style={{ left: '500px', top: '80px', transform: 'rotate(-1deg)' }}
+            className="absolute workflow-node left-[500px] top-[80px] -rotate-[1deg]"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.6, type: "spring" }}
@@ -993,8 +1007,7 @@ const LoginPage: React.FC = () => {
           </motion.div>
 
           <motion.div
-            className="absolute workflow-node"
-            style={{ left: '500px', top: '200px', transform: 'rotate(3deg)' }}
+            className="absolute workflow-node left-[500px] top-[200px] rotate-[3deg]"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.8, type: "spring" }}
@@ -1010,8 +1023,7 @@ const LoginPage: React.FC = () => {
           </motion.div>
 
           <motion.div
-            className="absolute workflow-node"
-            style={{ left: '310px', top: '200px', transform: 'rotate(-2deg)' }}
+            className="absolute workflow-node left-[310px] top-[200px] -rotate-[2deg]"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 1, type: "spring" }}
@@ -1027,8 +1039,7 @@ const LoginPage: React.FC = () => {
           </motion.div>
 
           <motion.div
-            className="absolute workflow-node"
-            style={{ left: '80px', top: '200px', transform: 'rotate(4deg)' }}
+            className="absolute workflow-node left-[80px] top-[200px] rotate-[4deg]"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 1.2, type: "spring" }}
@@ -1044,8 +1055,7 @@ const LoginPage: React.FC = () => {
           </motion.div>
 
           <motion.div
-            className="absolute workflow-node"
-            style={{ left: '80px', top: '320px', transform: 'rotate(-2deg)' }}
+            className="absolute workflow-node left-[80px] top-[320px] -rotate-[2deg]"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 1.4, type: "spring" }}
@@ -1062,8 +1072,7 @@ const LoginPage: React.FC = () => {
 
           {/* ERP Hub - Center Final Position */}
           <motion.div
-            className="absolute workflow-node"
-            style={{ left: '310px', top: '320px' }}
+            className="absolute workflow-node left-[310px] top-[320px]"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 1.8, type: "spring" }}

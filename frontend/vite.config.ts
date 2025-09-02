@@ -14,6 +14,7 @@ export default defineConfig({
       '@/types': resolve(__dirname, './src/types'),
       '@/utils': resolve(__dirname, './src/utils'),
       '@/api': resolve(__dirname, './src/api'),
+      '@/lib': resolve(__dirname, './src/lib'),
     },
   },
   server: {

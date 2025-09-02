@@ -37,7 +37,7 @@ const DashboardLayout: React.FC = () => {
         sidebarCollapsed ? 'md:pl-16' : 'md:pl-56'
       }`}>
         {/* Header */}
-        <ModernHeader setSidebarOpen={setSidebarOpen} />
+        <ModernHeader setSidebarOpen={setSidebarOpen} sidebarCollapsed={sidebarCollapsed} />
 
         {/* Page content */}
         <main className="flex-1 relative overflow-y-auto focus:outline-none bg-gradient-to-br from-gray-50/50 to-white">

@@ -88,7 +88,11 @@ const ProfilePage: React.FC = () => {
                   </span>
                 </div>
               )}
-              <button className="absolute -bottom-1 -right-1 p-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+              <button 
+                className="absolute -bottom-1 -right-1 p-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                aria-label="Change profile picture"
+                title="Change profile picture"
+              >
                 <CameraIcon className="w-3 h-3 text-gray-600" />
               </button>
             </div>
@@ -366,6 +370,8 @@ const ProfilePage: React.FC = () => {
                         type="checkbox"
                         defaultChecked={pref.enabled}
                         className="h-4 w-4 text-[#243d8a] border-gray-300 rounded focus:ring-[#243d8a]"
+                        aria-label={pref.label}
+                        title={pref.label}
                       />
                     </div>
                   </div>
