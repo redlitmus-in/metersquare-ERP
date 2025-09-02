@@ -18,7 +18,10 @@ interface AuthState {
   getCurrentUser: () => Promise<void>;
   updateProfile: (userData: any) => Promise<void>;
   clearError: () => void;
+<<<<<<< Updated upstream
   getRoleDashboard: () => string;
+=======
+>>>>>>> Stashed changes
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -177,6 +180,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       clearError: () => set({ error: null }),
+<<<<<<< Updated upstream
       
       getRoleDashboard: () => {
         const { user } = get();
@@ -185,6 +189,8 @@ export const useAuthStore = create<AuthState>()(
         }
         return getRoleDashboardPath(user.role_id);
       },
+=======
+>>>>>>> Stashed changes
     }),
     {
       name: 'auth-storage',

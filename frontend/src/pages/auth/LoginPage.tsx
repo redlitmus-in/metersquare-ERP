@@ -45,7 +45,10 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import OTPInput from '@/components/OTPInput';
 import { AnimatePresence } from 'framer-motion';
 import { authApi } from '@/api/auth';
+<<<<<<< Updated upstream:frontend/src/pages/auth/LoginPage.tsx
 import { getRoleDashboardPath } from '@/utils/roleRouting';
+=======
+>>>>>>> Stashed changes:frontend/src/pages/LoginPage.tsx
 import './LoginPage.css';
 
 const loginSchema = z.object({
@@ -156,9 +159,12 @@ const LoginPage: React.FC = () => {
       // Update auth store with the user data
       await useAuthStore.getState().getCurrentUser();
       
+<<<<<<< Updated upstream:frontend/src/pages/auth/LoginPage.tsx
       // Navigate to role-specific dashboard
       const dashboardPath = getRoleDashboardPath(response.user.role || userRole);
       
+=======
+>>>>>>> Stashed changes:frontend/src/pages/LoginPage.tsx
       setTimeout(() => {
         navigate(dashboardPath);
       }, 500);

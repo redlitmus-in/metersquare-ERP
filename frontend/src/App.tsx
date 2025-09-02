@@ -87,10 +87,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   const token = localStorage.getItem('access_token');
 
+<<<<<<< Updated upstream
 
 
   if (isLoading && !token) {
 
+=======
+  if (isLoading && !token) {
+>>>>>>> Stashed changes
     return (
 
       <div className="min-h-screen flex items-center justify-center">
@@ -103,10 +107,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   }
 
+<<<<<<< Updated upstream
 
 
   if (!isAuthenticated && !token) {
 
+=======
+  if (!isAuthenticated && !token) {
+>>>>>>> Stashed changes
     return <Navigate to="/login" replace />;
 
   }
@@ -127,10 +135,14 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const token = localStorage.getItem('access_token');
 
+<<<<<<< Updated upstream
 
 
   if (isLoading && !token) {
 
+=======
+  if (isLoading && !token) {
+>>>>>>> Stashed changes
     return (
 
       <div className="min-h-screen flex items-center justify-center">
@@ -143,6 +155,7 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   }
 
+<<<<<<< Updated upstream
 
 
   if (isAuthenticated || token) {
@@ -151,6 +164,10 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     return <Navigate to={dashboardPath} replace />;
 
+=======
+  if (isAuthenticated || token) {
+    return <Navigate to="/dashboard" replace />;
+>>>>>>> Stashed changes
   }
 
 
@@ -170,7 +187,10 @@ function App() {
 
 
   useEffect(() => {
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
     // Validate environment configuration on app startup
 
     const validateEnvironment = async () => {
@@ -186,9 +206,13 @@ function App() {
         if (success) {
 
           // Check for existing session on app load
+<<<<<<< Updated upstream
 
           const token = localStorage.getItem('access_token');
 
+=======
+          const token = localStorage.getItem('access_token');
+>>>>>>> Stashed changes
           if (token && !isAuthenticated) {
 
             getCurrentUser();
@@ -322,9 +346,12 @@ function App() {
           }
 
         />
+<<<<<<< Updated upstream
 
 
 
+=======
+>>>>>>> Stashed changes
 
 
         {/* Protected Routes */}
