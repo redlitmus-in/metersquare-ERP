@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { validateSupabaseConnection } from '@/utils/environment';
-
+ 
 // Pages
 import LoginPage from '@/pages/LoginPage';
 import LoginPageOTP from '@/pages/LoginPageOTP';
@@ -14,119 +14,91 @@ import ProcessFlowPage from '@/pages/ProcessFlowPage';
 // ProcessFlowPage removed - replaced with WorkflowStatusPage
 import ProfilePage from '@/pages/ProfilePage';
 import AnalyticsPage from '@/pages/AnalyticsPage';
-import WorkflowStatusPage from '@/pages/WorkflowStatusPage';
 import ProcurementDashboard from '@/pages/ProcurementDashboard';
-
+import WorkflowStatusPage from '@/pages/WorkflowStatusPage';
+ 
+// Role-specific dashboards
+import {
+  TechnicalDirectorDashboard,
+  ProjectManagerDashboard,
+  ProcurementOfficerDashboard,
+  SiteSupervisorDashboard,
+  MEPSupervisorDashboard,
+  EstimationDashboard,
+  AccountsDashboard,
+  DesignDashboard
+} from '@/pages/dashboards';
+ 
 // Procurement sub-pages
+import PurchaseRequestsPage from '@/pages/procurement/PurchaseRequestsPage';
 import VendorQuotationsPage from '@/pages/procurement/VendorQuotationsPage';
 import ApprovalsPage from '@/pages/procurement/ApprovalsPage';
 import DeliveriesPage from '@/pages/procurement/DeliveriesPage';
-
+ 
 // Workflow pages
 import MaterialDispatchProductionPage from '@/pages/workflows/MaterialDispatchProductionPage';
 import MaterialDispatchSitePage from '@/pages/workflows/MaterialDispatchSitePage';
-
+ 
 // Layout
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-
+import RoleBasedRedirect from '@/components/routing/RoleBasedRedirect';
+ 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // DEVELOPMENT MODE: Skip authentication
-  const DEV_MODE_SKIP_AUTH = true;
-  
-  if (DEV_MODE_SKIP_AUTH) {
-    return <>{children}</>;
-  }
-  
   const { isAuthenticated, isLoading } = useAuthStore();
   const token = localStorage.getItem('access_token');
-  const demoUser = localStorage.getItem('demo_user');
-  
-  // Allow demo users and OTP users even if auth state isn't fully loaded
-  const isDemoUser = (token === 'demo-token' || token === 'otp-demo-token') && demoUser;
-
-  if (isLoading && !isDemoUser) {
+ 
+  if (isLoading && !token) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" />
       </div>
     );
   }
-
-  if (!isAuthenticated && !isDemoUser) {
+ 
+  if (!isAuthenticated && !token) {
     return <Navigate to="/login" replace />;
   }
-
+ 
   return <>{children}</>;
 };
-
+ 
 // Public Route Component (redirects if authenticated)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // DEVELOPMENT MODE: Skip authentication - auto redirect to dashboard
-  const DEV_MODE_SKIP_AUTH = true;
-  
-  if (DEV_MODE_SKIP_AUTH) {
-    return <Navigate to="/dashboard" replace />;
-  }
-  
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, user, getRoleDashboard } = useAuthStore();
   const token = localStorage.getItem('access_token');
-  const demoUser = localStorage.getItem('demo_user');
-  
-  // Check for demo user
-  const isDemoUser = token === 'demo-token' && demoUser;
-
-  if (isLoading && !isDemoUser) {
+ 
+  if (isLoading && !token) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" />
       </div>
     );
   }
-
-  if (isAuthenticated || isDemoUser) {
-    return <Navigate to="/dashboard" replace />;
+ 
+  if (isAuthenticated || token) {
+    const dashboardPath = getRoleDashboard();
+    return <Navigate to={dashboardPath} replace />;
   }
-
+ 
   return <>{children}</>;
 };
-
+ 
 function App() {
   const { getCurrentUser, isAuthenticated } = useAuthStore();
   const [isEnvironmentValid, setIsEnvironmentValid] = useState<boolean | null>(null);
-  
-  // DEVELOPMENT MODE: Skip authentication
-  const DEV_MODE_SKIP_AUTH = true;
-
+ 
   useEffect(() => {
-    // In dev mode, skip all validation
-    if (DEV_MODE_SKIP_AUTH) {
-      setIsEnvironmentValid(true);
-      return;
-    }
-    
-    // Check if this is a demo user first
-    const token = localStorage.getItem('access_token');
-    const demoUser = localStorage.getItem('demo_user');
-    
-    if ((token === 'demo-token' || token === 'otp-demo-token') && demoUser) {
-      // For demo users, skip environment validation
-      setIsEnvironmentValid(true);
-      if (!isAuthenticated) {
-        getCurrentUser();
-      }
-      return;
-    }
-    
     // Validate environment configuration on app startup
     const validateEnvironment = async () => {
       try {
         const { success } = await validateSupabaseConnection();
         setIsEnvironmentValid(success);
-        
+       
         if (success) {
           // Check for existing session on app load
+          const token = localStorage.getItem('access_token');
           if (token && !isAuthenticated) {
             getCurrentUser();
           }
@@ -136,10 +108,10 @@ function App() {
         setIsEnvironmentValid(false);
       }
     };
-
+ 
     validateEnvironment();
   }, [getCurrentUser, isAuthenticated]);
-
+ 
   // Show loading while validating environment
   if (isEnvironmentValid === null) {
     return (
@@ -151,7 +123,7 @@ function App() {
       </div>
     );
   }
-
+ 
   // Show error if environment is invalid
   if (isEnvironmentValid === false) {
     return (
@@ -170,8 +142,8 @@ function App() {
               <li>Restart the development server</li>
             </ol>
           </div>
-          <button 
-            onClick={() => window.location.reload()} 
+          <button
+            onClick={() => window.location.reload()}
             className="mt-4 px-4 py-2 bg-[#243d8a] text-white rounded hover:bg-[#243d8a]"
           >
             Retry
@@ -180,7 +152,7 @@ function App() {
       </div>
     );
   }
-
+ 
   return (
     <div className="App">
       <Toaster position="top-right" richColors />
@@ -194,16 +166,8 @@ function App() {
             </PublicRoute>
           }
         />
-        <Route
-          path="/login-old"
-          element={
-            <PublicRoute>
-              <LoginPage />
-            </PublicRoute>
-          }
-        />
-
-
+ 
+ 
         {/* Protected Routes */}
         <Route
           path="/"
@@ -214,9 +178,20 @@ function App() {
           }
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<ModernDashboard />} />
-          <Route path="procurement/requests" element={<ProcurementDashboard />} />
-          <Route path="procurement/purchase-requests/edit/:id" element={<ProcurementDashboard />} />
+          <Route path="dashboard" element={<RoleBasedRedirect><ModernDashboard /></RoleBasedRedirect>} />
+         
+          {/* Role-specific dashboard routes */}
+          <Route path="dashboard/technical-director" element={<TechnicalDirectorDashboard />} />
+          <Route path="dashboard/project-manager" element={<ProjectManagerDashboard />} />
+          <Route path="dashboard/procurement" element={<ProcurementOfficerDashboard />} />
+          <Route path="dashboard/site-supervisor" element={<SiteSupervisorDashboard />} />
+          <Route path="dashboard/mep-supervisor" element={<MEPSupervisorDashboard />} />
+          <Route path="dashboard/estimation" element={<EstimationDashboard />} />
+          <Route path="dashboard/accounts" element={<AccountsDashboard />} />
+          <Route path="dashboard/design" element={<DesignDashboard />} />
+          <Route path="procurement" element={<ProcurementDashboard />} />
+          <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
+          <Route path="procurement/purchase-requests/edit/:id" element={<PurchaseRequestsPage />} />
           <Route path="procurement/quotations" element={<VendorQuotationsPage />} />
           <Route path="procurement/vendor-quotations/edit/:id" element={<VendorQuotationsPage />} />
           <Route path="procurement/approvals" element={<ApprovalsPage />} />
@@ -233,12 +208,12 @@ function App() {
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
-
+ 
         {/* Catch all route */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </div>
   );
 }
-
+ 
 export default App;
