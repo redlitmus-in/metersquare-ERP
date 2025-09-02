@@ -29,6 +29,7 @@ import {
 } from '@/pages/dashboards';
 
 // Procurement sub-pages
+import PurchaseRequestsPage from '@/pages/procurement/PurchaseRequestsPage';
 import ApprovalsPage from '@/pages/procurement/ApprovalsPage';
 import VendorQuotationsPage from '@/pages/procurement/VendorQuotationsPage';
 import DeliveriesPage from '@/pages/procurement/DeliveriesPage';
@@ -187,8 +188,8 @@ function App() {
           <Route path="dashboard/accounts" element={<AccountsDashboard />} />
           <Route path="dashboard/design" element={<DesignDashboard />} />
           <Route path="procurement" element={<ProcurementDashboard />} />
-          <Route path="procurement/requests" element={<ApprovalsPage />} />
-          <Route path="procurement/purchase-requests/edit/:id" element={<ApprovalsPage />} />
+          <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
+          <Route path="procurement/purchase-requests/edit/:id" element={<PurchaseRequestsPage />} />
           <Route path="procurement/quotations" element={<VendorQuotationsPage />} />
           <Route path="procurement/vendor-quotations/edit/:id" element={<VendorQuotationsPage />} />
           <Route path="procurement/approvals" element={<ApprovalsPage />} />

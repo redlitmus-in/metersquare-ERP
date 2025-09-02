@@ -253,7 +253,13 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                     <div className="flex items-center">
                       <Link
                         to={item.href}
-                        onClick={() => setSidebarOpen(false)}
+                        onClick={() => {
+                          setSidebarOpen(false);
+                          // Auto-expand when navigating to parent
+                          if (!expandedSections.includes(item.name.toLowerCase())) {
+                            toggleSection(item.name.toLowerCase());
+                          }
+                        }}
                         title={isCollapsed ? item.name : ''}
                         className={clsx(
                           'flex-1 group flex items-center transition-all duration-200 text-xs font-medium rounded-lg',

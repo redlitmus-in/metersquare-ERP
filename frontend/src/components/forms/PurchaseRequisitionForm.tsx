@@ -70,7 +70,12 @@ interface PurchaseRequisitionFormData {
   status: 'draft' | 'submitted' | 'pending_approval' | 'approved' | 'rejected' | 'revision_required';
 }
 
-const PurchaseRequisitionForm: React.FC = () => {
+interface PurchaseRequisitionFormProps {
+  onClose?: () => void;
+  showAsPage?: boolean;
+}
+
+const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClose, showAsPage }) => {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [activeTab, setActiveTab] = useState('details');
@@ -689,6 +694,7 @@ const PurchaseRequisitionForm: React.FC = () => {
               type="button"
               variant="outline"
               className="flex items-center gap-2"
+              onClick={onClose}
             >
               <X className="w-4 h-4" />
               Cancel
