@@ -39,14 +39,14 @@ def create_app():
     initialize_sqlalchemy(app)  # Init SQLAlchemy ORM
     
     # Create all tables
-    with app.app_context():
-        db.create_all()
+    # with app.app_context():
+    #     db.create_all()
 
     initialize_routes(app)  # Register routes
 
     return app
 
-app = create_app()
-
 if __name__ == "__main__":
-    app.run(debug=True, use_reloader=False, port=5000, threaded=True)
+    app = create_app()
+    port = int(os.getenv("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
