@@ -38,6 +38,9 @@ def create_app():
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         return response
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes

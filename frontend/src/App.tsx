@@ -89,10 +89,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
 
   if (isLoading && !token) {
 
+=======
+  if (isLoading && !token) {
+>>>>>>> Stashed changes
 =======
   if (isLoading && !token) {
 >>>>>>> Stashed changes
@@ -113,10 +117,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
 
   if (!isAuthenticated && !token) {
 
+=======
+  if (!isAuthenticated && !token) {
+>>>>>>> Stashed changes
 =======
   if (!isAuthenticated && !token) {
 >>>>>>> Stashed changes
@@ -145,10 +153,14 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
 
   if (isLoading && !token) {
 
+=======
+  if (isLoading && !token) {
+>>>>>>> Stashed changes
 =======
   if (isLoading && !token) {
 >>>>>>> Stashed changes
@@ -169,6 +181,7 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
 
   if (isAuthenticated || token) {
@@ -178,6 +191,8 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return <Navigate to={dashboardPath} replace />;
 
 =======
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
   if (isAuthenticated || token) {
@@ -204,7 +219,10 @@ function App() {
   useEffect(() => {
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 =======
@@ -226,9 +244,13 @@ function App() {
           // Check for existing session on app load
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
           const token = localStorage.getItem('access_token');
 
+=======
+          const token = localStorage.getItem('access_token');
+>>>>>>> Stashed changes
 =======
           const token = localStorage.getItem('access_token');
 >>>>>>> Stashed changes
@@ -370,9 +392,12 @@ function App() {
         />
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
 
 
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 =======
