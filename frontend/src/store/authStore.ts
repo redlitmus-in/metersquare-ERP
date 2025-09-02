@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { User, LoginRequest, LoginResponse } from '@/types';
 import { apiWrapper, API_ENDPOINTS } from '@/api/config';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface AuthState {
   user: User | null;

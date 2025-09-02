@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
+import { formatDate, formatDateForInput, getTodayFormatted } from '@/utils/dateFormatter';
 import {
   Package,
   User,
@@ -31,6 +32,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -252,8 +254,7 @@ const PurchaseRequisitionForm: React.FC = () => {
                       <Calendar className="w-4 h-4 text-gray-500" />
                       Date Required
                     </Label>
-                    <Input 
-                      type="date"
+                    <DateInput 
                       {...register('dateRequired', { required: true })}
                       className="h-11 border-gray-200 focus:border-red-500"
                       placeholder="dd/mm/yyyy"

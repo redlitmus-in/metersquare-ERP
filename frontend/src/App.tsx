@@ -6,6 +6,7 @@ import { validateSupabaseConnection } from '@/utils/environment';
 
 // Pages
 import LoginPage from '@/pages/LoginPage';
+import LoginPageOTP from '@/pages/LoginPageOTP';
 import ModernDashboard from '@/pages/ModernDashboard';
 import TasksPage from '@/pages/TasksPage';
 import ProjectsPage from '@/pages/ProjectsPage';
@@ -22,6 +23,10 @@ import VendorQuotationsPage from '@/pages/procurement/VendorQuotationsPage';
 import ApprovalsPage from '@/pages/procurement/ApprovalsPage';
 import DeliveriesPage from '@/pages/procurement/DeliveriesPage';
 
+// Workflow pages
+import MaterialDispatchProductionPage from '@/pages/workflows/MaterialDispatchProductionPage';
+import MaterialDispatchSitePage from '@/pages/workflows/MaterialDispatchSitePage';
+
 // Layout
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -32,8 +37,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const token = localStorage.getItem('access_token');
   const demoUser = localStorage.getItem('demo_user');
   
-  // Allow demo users even if auth state isn't fully loaded
-  const isDemoUser = token === 'demo-token' && demoUser;
+  // Allow demo users and OTP users even if auth state isn't fully loaded
+  const isDemoUser = (token === 'demo-token' || token === 'otp-demo-token') && demoUser;
 
   if (isLoading && !isDemoUser) {
     return (
@@ -83,7 +88,7 @@ function App() {
     const token = localStorage.getItem('access_token');
     const demoUser = localStorage.getItem('demo_user');
     
-    if (token === 'demo-token' && demoUser) {
+    if ((token === 'demo-token' || token === 'otp-demo-token') && demoUser) {
       // For demo users, skip environment validation
       setIsEnvironmentValid(true);
       if (!isAuthenticated) {
@@ -167,6 +172,14 @@ function App() {
             </PublicRoute>
           }
         />
+        <Route
+          path="/login-old"
+          element={
+            <PublicRoute>
+              <LoginPage />
+            </PublicRoute>
+          }
+        />
 
 
         {/* Protected Routes */}
@@ -194,6 +207,8 @@ function App() {
           <Route path="projects/:id/edit" element={<ProjectsPage />} />
           <Route path="process-flow" element={<ProcessFlowPage />} />
           <Route path="workflow-status" element={<WorkflowStatusPage />} />
+          <Route path="workflows/material-dispatch-production" element={<MaterialDispatchProductionPage />} />
+          <Route path="workflows/material-dispatch-site" element={<MaterialDispatchSitePage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>

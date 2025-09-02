@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
+import { formatDate, formatDateForInput, getTodayFormatted } from '@/utils/dateFormatter';
 import {
   Building,
   FileText,
@@ -27,6 +28,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -289,8 +291,7 @@ const VendorScopeOfWorkForm: React.FC = () => {
                       <Calendar className="w-4 h-4 text-red-500" />
                       Start Date
                     </Label>
-                    <Input
-                      type="date"
+                    <DateInput
                       placeholder="dd/mm/yyyy"
                       {...register('startDate', { required: 'Start date is required' })}
                       className="focus:border-red-500 focus:ring-red-500"
@@ -302,8 +303,7 @@ const VendorScopeOfWorkForm: React.FC = () => {
                       <Calendar className="w-4 h-4 text-red-500" />
                       Completion Date
                     </Label>
-                    <Input
-                      type="date"
+                    <DateInput
                       placeholder="dd/mm/yyyy"
                       {...register('completionDate', { required: 'Completion date is required' })}
                       className="focus:border-red-500 focus:ring-red-500"

@@ -60,7 +60,7 @@ interface ApprovalAction {
 }
 
 interface ApprovalWorkflowProps {
-  documentType: 'purchase_requisition' | 'vendor_quotation' | 'work_order';
+  documentType: 'purchase_requisition' | 'vendor_quotation' | 'work_order' | 'material_requisition';
   documentId: string;
   currentUserRole: string;
 }

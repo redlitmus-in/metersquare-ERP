@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { formatDate, parseDateFromDDMMYYYY } from '@/utils/dateFormatter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
@@ -79,8 +81,8 @@ const PurchaseRequestsList: React.FC = () => {
       priority: 'high',
       totalAmount: 45000,
       currency: 'AED',
-      createdDate: '2024-08-20',
-      requiredDate: '2024-08-27',
+      createdDate: '20/08/2024',
+      requiredDate: '27/08/2024',
       approvalLevel: 'Project Manager',
       flags: { qtySpec: true, cost: false, pm: false },
       items: 12
@@ -97,8 +99,8 @@ const PurchaseRequestsList: React.FC = () => {
       priority: 'medium',
       totalAmount: 78500,
       currency: 'AED',
-      createdDate: '2024-08-19',
-      requiredDate: '2024-08-30',
+      createdDate: '19/08/2024',
+      requiredDate: '30/08/2024',
       approvalLevel: 'Technical Director',
       flags: { qtySpec: true, cost: true, pm: true },
       items: 25
@@ -115,8 +117,8 @@ const PurchaseRequestsList: React.FC = () => {
       priority: 'urgent',
       totalAmount: 125000,
       currency: 'AED',
-      createdDate: '2024-08-18',
-      requiredDate: '2024-08-25',
+      createdDate: '18/08/2024',
+      requiredDate: '25/08/2024',
       approvalLevel: 'Accounts',
       flags: { qtySpec: true, cost: true, pm: false },
       items: 45
@@ -133,8 +135,8 @@ const PurchaseRequestsList: React.FC = () => {
       priority: 'low',
       totalAmount: 32000,
       currency: 'AED',
-      createdDate: '2024-08-17',
-      requiredDate: '2024-09-05',
+      createdDate: '17/08/2024',
+      requiredDate: '05/09/2024',
       approvalLevel: 'Estimation',
       flags: { qtySpec: false, cost: false, pm: false },
       items: 8
@@ -151,8 +153,8 @@ const PurchaseRequestsList: React.FC = () => {
       priority: 'medium',
       totalAmount: 15000,
       currency: 'AED',
-      createdDate: '2024-08-21',
-      requiredDate: '2024-08-28',
+      createdDate: '21/08/2024',
+      requiredDate: '28/08/2024',
       approvalLevel: 'Site Supervisor',
       flags: { qtySpec: false, cost: false, pm: false },
       items: 30
@@ -194,10 +196,10 @@ const PurchaseRequestsList: React.FC = () => {
     // Date range filter
     if (dateRange.start && dateRange.end) {
       filtered = filtered.filter(pr => {
-        const createdDate = new Date(pr.createdDate);
+        const createdDate = parseDateFromDDMMYYYY(pr.createdDate);
         const startDate = new Date(dateRange.start);
         const endDate = new Date(dateRange.end);
-        return createdDate >= startDate && createdDate <= endDate;
+        return createdDate && createdDate >= startDate && createdDate <= endDate;
       });
     }
 
@@ -206,7 +208,9 @@ const PurchaseRequestsList: React.FC = () => {
       let comparison = 0;
       switch (sortBy) {
         case 'date':
-          comparison = new Date(a.createdDate).getTime() - new Date(b.createdDate).getTime();
+          const dateA = parseDateFromDDMMYYYY(a.createdDate);
+          const dateB = parseDateFromDDMMYYYY(b.createdDate);
+          comparison = (dateA?.getTime() || 0) - (dateB?.getTime() || 0);
           break;
         case 'amount':
           comparison = a.totalAmount - b.totalAmount;
@@ -359,16 +363,14 @@ const PurchaseRequestsList: React.FC = () => {
                   </SelectContent>
                 </Select>
 
-                <Input
-                  type="date"
-                  placeholder="Start Date"
+                <DateInput
+                  placeholder="Start Date (dd/mm/yyyy)"
                   value={dateRange.start}
                   onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
                 />
 
-                <Input
-                  type="date"
-                  placeholder="End Date"
+                <DateInput
+                  placeholder="End Date (dd/mm/yyyy)"
                   value={dateRange.end}
                   onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
                 />

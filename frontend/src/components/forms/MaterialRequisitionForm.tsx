@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
+import { formatDate, formatDateForInput, getTodayFormatted } from '@/utils/dateFormatter';
 import {
   Package,
   Factory,
@@ -28,6 +29,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -316,8 +318,7 @@ const MaterialRequisitionForm: React.FC = () => {
                       <Calendar className="w-4 h-4 text-[#243d8a]" />
                       Request Date
                     </Label>
-                    <Input
-                      type="date"
+                    <DateInput
                       placeholder="dd/mm/yyyy"
                       {...register('requestDate', { required: 'Request date is required' })}
                       className="focus:border-[#243d8a] focus:ring-[#243d8a]"
@@ -329,8 +330,7 @@ const MaterialRequisitionForm: React.FC = () => {
                       <Calendar className="w-4 h-4 text-[#243d8a]" />
                       Required Date
                     </Label>
-                    <Input
-                      type="date"
+                    <DateInput
                       placeholder="dd/mm/yyyy"
                       {...register('requiredDate', { required: 'Required date is required' })}
                       className="focus:border-[#243d8a] focus:ring-[#243d8a]"

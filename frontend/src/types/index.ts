@@ -25,6 +25,8 @@ export interface User extends BaseEntity {
   department?: string;
   phone?: string;
   avatar_url?: string;
+  address?: string;
+  bio?: string;
   is_active: boolean;
 }
 
@@ -43,6 +45,8 @@ export interface UserUpdate {
   department?: string;
   phone?: string;
   avatar_url?: string;
+  address?: string;
+  bio?: string;
 }
 
 // Role Types

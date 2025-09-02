@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Task, TaskCreate, TaskUpdate, TaskStatus, Priority } from '@/types';
 import { apiWrapper, API_ENDPOINTS } from '@/api/config';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface TaskState {
   tasks: Task[];

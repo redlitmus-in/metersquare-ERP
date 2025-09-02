@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { formatDate } from '@/utils/dateFormatter';
 import {
   Plus,
   FolderOpen,
@@ -33,6 +34,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -437,7 +439,7 @@ const ProjectsPage: React.FC = () => {
 
                   <div className="flex items-center gap-2 text-sm text-gray-500">
                     <Calendar className="w-4 h-4" />
-                    <span>{new Date(project.startDate).toLocaleDateString()} - {new Date(project.endDate).toLocaleDateString()}</span>
+                    <span>{formatDate(project.startDate)} - {formatDate(project.endDate)}</span>
                   </div>
 
                   <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -528,8 +530,8 @@ const ProjectsPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm">
-                          <p>{new Date(project.startDate).toLocaleDateString()}</p>
-                          <p className="text-xs text-gray-500">to {new Date(project.endDate).toLocaleDateString()}</p>
+                          <p>{formatDate(project.startDate)}</p>
+                          <p className="text-xs text-gray-500">to {formatDate(project.endDate)}</p>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -657,9 +659,8 @@ const ProjectsPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="startDate">Start Date</Label>
-                <Input
+                <DateInput
                   id="startDate"
-                  type="date"
                   placeholder="dd/mm/yyyy"
                   value={newProject.startDate}
                   onChange={(e) => setNewProject({...newProject, startDate: e.target.value})}
@@ -667,9 +668,8 @@ const ProjectsPage: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="endDate">End Date</Label>
-                <Input
+                <DateInput
                   id="endDate"
-                  type="date"
                   placeholder="dd/mm/yyyy"
                   value={newProject.endDate}
                   onChange={(e) => setNewProject({...newProject, endDate: e.target.value})}

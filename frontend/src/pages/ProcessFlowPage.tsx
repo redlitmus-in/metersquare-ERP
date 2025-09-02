@@ -557,8 +557,8 @@ const ProcessFlowPage: React.FC = () => {
                   variant="outline" 
                   size="sm"
                   onClick={() => {
-                    const nodeData = workflowNodes.find(n => n.id === selectedNode);
-                    alert(`Viewing documents for: ${nodeData?.label}\n\nThis would show all related documents for this workflow step.`);
+                    const nodeData = currentWorkflow.nodes.find((n: any) => n.id === selectedNode);
+                    alert(`Viewing documents for: ${nodeData?.title}\n\nThis would show all related documents for this workflow step.`);
                   }}
                 >
                   <FileText className="w-4 h-4 mr-2" />
@@ -569,8 +569,8 @@ const ProcessFlowPage: React.FC = () => {
                   variant="outline" 
                   size="sm"
                   onClick={() => {
-                    const nodeData = workflowNodes.find(n => n.id === selectedNode);
-                    alert(`Assigning user to: ${nodeData?.label}\n\nThis would open a user assignment dialog.`);
+                    const nodeData = currentWorkflow.nodes.find((n: any) => n.id === selectedNode);
+                    alert(`Assigning user to: ${nodeData?.title}\n\nThis would open a user assignment dialog.`);
                   }}
                 >
                   <Users className="w-4 h-4 mr-2" />
@@ -581,8 +581,8 @@ const ProcessFlowPage: React.FC = () => {
                   variant="outline" 
                   size="sm"
                   onClick={() => {
-                    const nodeData = workflowNodes.find(n => n.id === selectedNode);
-                    alert(`History for: ${nodeData?.label}\n\nTimeline:\n- Created: 2 days ago\n- Approved: 1 day ago\n- Current status: ${nodeData?.status || 'Active'}`);
+                    const nodeData = currentWorkflow.nodes.find((n: any) => n.id === selectedNode);
+                    alert(`History for: ${nodeData?.title}\n\nTimeline:\n- Created: 2 days ago\n- Approved: 1 day ago\n- Current status: ${nodeData?.status || 'Active'}`);
                   }}
                 >
                   <Clock className="w-4 h-4 mr-2" />
@@ -593,8 +593,8 @@ const ProcessFlowPage: React.FC = () => {
                   variant="outline" 
                   size="sm"
                   onClick={() => {
-                    const nodeData = workflowNodes.find(n => n.id === selectedNode);
-                    alert(`Analytics for: ${nodeData?.label}\n\n- Average processing time: 2.3 days\n- Success rate: 95%\n- Bottleneck score: Low`);
+                    const nodeData = currentWorkflow.nodes.find((n: any) => n.id === selectedNode);
+                    alert(`Analytics for: ${nodeData?.title}\n\n- Average processing time: 2.3 days\n- Success rate: 95%\n- Bottleneck score: Low`);
                   }}
                 >
                   <BarChart3 className="w-4 h-4 mr-2" />
