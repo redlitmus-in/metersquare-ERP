@@ -40,10 +40,17 @@ interface PurchaseDetails {
   created_by: string;
   date: string;
   created_at: string;
-  updated_at: string;
-  status: string;
+  updated_at?: string;
+  status?: string;
   total_amount: number;
   materials: Material[];
+  site_location?: string;
+  purpose?: string;
+  user_id?: number;
+  user_name?: string;
+  file_path?: string;
+  material_ids?: number[];
+  approvals?: any[];
   notes?: string;
   department?: string;
   delivery_address?: string;
@@ -67,6 +74,7 @@ interface PurchaseDetails {
 const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({ isOpen, onClose, purchaseId }) => {
   const [loading, setLoading] = useState(true);
   const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null);
+  const [projectName, setProjectName] = useState<string>('');  
 
   useEffect(() => {
     if (isOpen && purchaseId) {
@@ -96,18 +104,25 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({ isOpen, onC
           sum + (m.quantity * m.cost), 0
         );
         
-        setPurchaseDetails({
+        const details = {
           ...purchase,
           materials,
           total_amount: totalAmount,
-          status: purchase.status || 'pending',
-          department: purchase.department || 'Procurement',
-          payment_terms: purchase.payment_terms || 'Net 30 days',
-          approval_status: purchase.approval_status || 'pending_approval',
-          // Map backend fields
-          created_by: purchase.created_by || purchase.user_name || 'Unknown',
-          requested_by: purchase.requested_by || purchase.user_name || 'Unknown'
-        });
+          // Keep all original API response fields
+          site_location: purchase.site_location,
+          purpose: purchase.purpose,
+          user_id: purchase.user_id,
+          user_name: purchase.user_name,
+          file_path: purchase.file_path,
+          material_ids: purchase.material_ids,
+          approvals: purchase.approvals || []
+        };
+        setPurchaseDetails(details);
+        
+        // Set project name based on project_id
+        if (details.project_id) {
+          setProjectName(`Project ${details.project_id}`);
+        }
       } else {
         toast.error(response.data.message || 'Failed to fetch purchase details');
         onClose();
@@ -231,381 +246,143 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({ isOpen, onC
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            {/* Quick Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <div className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <Hash className="w-5 h-5 text-[#243d8a]" />
-                  <Badge className="bg-[#243d8a]/10 text-[#243d8a] border-0 text-xs">
-                    Reference
-                  </Badge>
+            {/* API Response Data */}
+            <div className="bg-white border rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Purchase Request Information</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Purchase Request No.</p>
+                  <p className="font-medium text-lg">PR-2024-{String(purchaseDetails.purchase_id).padStart(3, '0')}</p>
                 </div>
-                <p className="font-bold text-lg text-gray-900">
-                  PR-2024-{String(purchaseDetails.purchase_id).padStart(3, '0')}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {purchaseDetails.reference_number ? `Ref: ${purchaseDetails.reference_number}` : 'Purchase Request ID'}
-                </p>
-              </div>
-
-              <div className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <Building2 className="w-5 h-5 text-purple-600" />
-                  <Badge className="bg-purple-100 text-purple-700 border-0 text-xs">
-                    Project
-                  </Badge>
+                <div>
+                  <p className="text-sm text-gray-600">Project</p>
+                  <p className="font-medium text-lg">{projectName || `Project ${purchaseDetails.project_id}` || 'General'}</p>
                 </div>
-                <p className="font-bold text-lg text-gray-900">
-                  {purchaseDetails.project_id ? `Project ${purchaseDetails.project_id}` : 'General'}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {purchaseDetails.cost_center || 'Main Operations'}
-                </p>
-              </div>
-
-              <div className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <Timer className="w-5 h-5 text-amber-600" />
-                  <Badge className={`${getStatusColor(purchaseDetails.status || 'pending')} border-0 text-xs`}>
-                    {(purchaseDetails.status || 'pending').replace(/_/g, ' ')}
-                  </Badge>
+                <div>
+                  <p className="text-sm text-gray-600">Requested By</p>
+                  <p className="font-medium">{purchaseDetails.requested_by}</p>
                 </div>
-                <p className="font-bold text-lg text-gray-900">Status</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {purchaseDetails.approval_status === 'approved' ? 'Approved' : 
-                   purchaseDetails.approval_status === 'rejected' ? 'Rejected' : 'Pending Approval'}
-                </p>
-              </div>
-
-              <div className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <Banknote className="w-5 h-5 text-green-600" />
-                  <Badge className="bg-green-100 text-green-700 border-0 text-xs">
-                    Total
-                  </Badge>
+                <div>
+                  <p className="text-sm text-gray-600">Created By</p>
+                  <p className="font-medium">{purchaseDetails.created_by}</p>
                 </div>
-                <p className="font-bold text-xl text-[#243d8a]">
-                  AED {purchaseDetails.total_amount.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {purchaseDetails.budget_allocated ? 
-                    `Budget: AED ${purchaseDetails.budget_allocated.toLocaleString()}` : 
-                    purchaseDetails.payment_terms || 'Net 30 days'}
-                </p>
-              </div>
-            </div>
-
-            {/* Detailed Information Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-              {/* Requester Information */}
-              <div className="bg-white border rounded-lg p-5">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
-                  <User className="w-4 h-4 text-[#243d8a]" />
-                  Requester Information
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <UserCheck className="w-4 h-4 text-gray-400 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Requested By</p>
-                      <p className="text-sm font-medium text-gray-900">{purchaseDetails.requested_by || 'N/A'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <User className="w-4 h-4 text-gray-400 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Created By</p>
-                      <p className="text-sm font-medium text-gray-900">{purchaseDetails.created_by || 'System'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Briefcase className="w-4 h-4 text-gray-400 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Department</p>
-                      <p className="text-sm font-medium text-gray-900">{purchaseDetails.department || 'Procurement'}</p>
-                    </div>
-                  </div>
-                  {purchaseDetails.approved_by && (
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-500">Approved By</p>
-                        <p className="text-sm font-medium text-gray-900">{purchaseDetails.approved_by}</p>
-                      </div>
-                    </div>
-                  )}
+                <div>
+                  <p className="text-sm text-gray-600">Site Location</p>
+                  <p className="font-medium">{purchaseDetails.site_location || 'N/A'}</p>
                 </div>
-              </div>
-
-              {/* Timeline Information */}
-              <div className="bg-white border rounded-lg p-5">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
-                  <Calendar className="w-4 h-4 text-[#243d8a]" />
-                  Timeline
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <Clock className="w-4 h-4 text-gray-400 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Request Date</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {formatDateShort(purchaseDetails.date || purchaseDetails.created_at)}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {getTimeAgo(purchaseDetails.date || purchaseDetails.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Clock className="w-4 h-4 text-gray-400 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Last Updated</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {formatDate(purchaseDetails.updated_at)}
-                      </p>
-                    </div>
-                  </div>
-                  {purchaseDetails.approval_date && (
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-500">Approval Date</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {formatDateShort(purchaseDetails.approval_date)}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                <div>
+                  <p className="text-sm text-gray-600">Purpose</p>
+                  <p className="font-medium">{purchaseDetails.purpose || 'N/A'}</p>
                 </div>
-              </div>
-
-              {/* Additional Details */}
-              <div className="bg-white border rounded-lg p-5">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
-                  <FolderOpen className="w-4 h-4 text-[#243d8a]" />
-                  Additional Details
-                </h3>
-                <div className="space-y-3">
-                  {purchaseDetails.vendor_details?.name && (
-                    <div className="flex items-start gap-3">
-                      <Building2 className="w-4 h-4 text-gray-400 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-500">Preferred Vendor</p>
-                        <p className="text-sm font-medium text-gray-900">{purchaseDetails.vendor_details.name}</p>
-                      </div>
-                    </div>
-                  )}
-                  {purchaseDetails.cost_center && (
-                    <div className="flex items-start gap-3">
-                      <Banknote className="w-4 h-4 text-gray-400 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-500">Cost Center</p>
-                        <p className="text-sm font-medium text-gray-900">{purchaseDetails.cost_center}</p>
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex items-start gap-3">
-                    <Banknote className="w-4 h-4 text-gray-400 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Payment Terms</p>
-                      <p className="text-sm font-medium text-gray-900">{purchaseDetails.payment_terms || 'Net 30 days'}</p>
-                    </div>
+                <div>
+                  <p className="text-sm text-gray-600">Date</p>
+                  <p className="font-medium">{purchaseDetails.date}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Created At</p>
+                  <p className="font-medium">{purchaseDetails.created_at}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">User</p>
+                  <p className="font-medium">{purchaseDetails.user_name || purchaseDetails.requested_by || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Status</p>
+                  <p className="font-medium">
+                    <Badge className="bg-amber-100 text-amber-700 border-amber-300">
+                      {purchaseDetails.status || 'Pending'}
+                    </Badge>
+                  </p>
+                </div>
+                {purchaseDetails.file_path && (
+                  <div>
+                    <p className="text-sm text-gray-600">Attachment</p>
+                    <p className="font-medium text-blue-600">{purchaseDetails.file_path.split('/').pop() || 'Document attached'}</p>
                   </div>
-                  {purchaseDetails.attachments && purchaseDetails.attachments.length > 0 && (
-                    <div className="flex items-start gap-3">
-                      <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-500">Attachments</p>
-                        <p className="text-sm font-medium text-gray-900">{purchaseDetails.attachments.length} file(s)</p>
-                      </div>
-                    </div>
-                  )}
+                )}
+                <div>
+                  <p className="text-sm text-gray-600">Total Materials</p>
+                  <p className="font-medium">{purchaseDetails.materials?.length || 0} items</p>
                 </div>
               </div>
             </div>
 
-            {/* Delivery & Additional Info */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              {purchaseDetails.delivery_address && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-5">
-                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-3">
-                    <MapPin className="w-4 h-4 text-blue-600" />
-                    Delivery Information
-                  </h3>
-                  <p className="text-sm text-gray-700 leading-relaxed">{purchaseDetails.delivery_address}</p>
-                  {purchaseDetails.vendor_details?.contact && (
-                    <div className="mt-3 pt-3 border-t border-blue-200">
-                      <div className="flex items-center gap-4 text-sm">
-                        {purchaseDetails.vendor_details.contact && (
-                          <span className="flex items-center gap-1 text-gray-600">
-                            <Phone className="w-3 h-3" />
-                            {purchaseDetails.vendor_details.contact}
-                          </span>
-                        )}
-                        {purchaseDetails.vendor_details.email && (
-                          <span className="flex items-center gap-1 text-gray-600">
-                            <Mail className="w-3 h-3" />
-                            {purchaseDetails.vendor_details.email}
-                          </span>
-                        )}
-                      </div>
+            {/* Approvals Array */}
+            {purchaseDetails.approvals && purchaseDetails.approvals.length > 0 && (
+              <div className="bg-white border rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Approvals</h3>
+                <div className="space-y-2">
+                  {purchaseDetails.approvals.map((approval: any, index: number) => (
+                    <div key={index} className="p-3 bg-gray-50 rounded">
+                      <pre className="text-sm">{JSON.stringify(approval, null, 2)}</pre>
                     </div>
-                  )}
+                  ))}
                 </div>
-              )}
-              
-              {purchaseDetails.justification && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-5">
-                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-3">
-                    <FileText className="w-4 h-4 text-green-600" />
-                    Business Justification
-                  </h3>
-                  <p className="text-sm text-gray-700 leading-relaxed">{purchaseDetails.justification}</p>
-                </div>
-              )}
-            </div>
-
-            {purchaseDetails.rejection_reason && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-5 mb-6">
-                <h3 className="text-sm font-semibold text-red-800 flex items-center gap-2 mb-3">
-                  <XCircle className="w-4 h-4 text-red-600" />
-                  Rejection Reason
-                </h3>
-                <p className="text-sm text-red-700 leading-relaxed">{purchaseDetails.rejection_reason}</p>
+                {purchaseDetails.approvals.length === 0 && (
+                  <p className="text-gray-500">No approvals yet</p>
+                )}
               </div>
             )}
 
-            {/* Materials Table */}
-            <div className="bg-white border rounded-lg overflow-hidden mb-6">
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-5 py-3 border-b">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <Package className="w-4 h-4 text-[#243d8a]" />
-                  Materials List
-                  <Badge className="bg-[#243d8a]/10 text-[#243d8a] border-0">
-                    {purchaseDetails.materials.length} items
-                  </Badge>
-                </h3>
+            {/* Materials Data */}
+            <div className="bg-white border rounded-lg overflow-hidden">
+              <div className="px-6 py-4 bg-gray-50 border-b">
+                <h3 className="text-lg font-semibold text-gray-900">Material Details ({purchaseDetails.materials.length} items)</h3>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[800px]">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">#</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Item Details</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Qty</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Unit</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Unit Cost</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Total</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Priority</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Required</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white">
-                    {purchaseDetails.materials.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
-                          <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                          <p className="text-sm">No materials added to this request</p>
-                        </td>
-                      </tr>
-                    ) : (
-                      purchaseDetails.materials.map((material, index) => (
-                        <motion.tr 
-                          key={material.material_id || index} 
-                          className="hover:bg-gray-50 transition-colors"
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                        >
-                          <td className="px-4 py-3 text-sm text-gray-500 font-medium">
-                            {index + 1}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="min-w-[200px]">
-                              <p className="text-sm font-semibold text-gray-900">{material.item_name || material.description}</p>
-                              {material.category && (
-                                <p className="text-xs text-gray-600 mt-1">
-                                  <span className="font-medium">Category:</span> {material.category}
-                                </p>
-                              )}
-                              {material.specification && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                  <span className="font-medium">Spec:</span> {material.specification}
-                                </p>
-                              )}
-                              {material.design_reference && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                  <span className="font-medium">Design Ref:</span> {material.design_reference}
-                                </p>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-sm font-bold text-gray-900">{material.quantity}</span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-sm text-gray-600">{material.unit}</span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <span className="text-sm text-gray-700">AED {material.cost.toLocaleString()}</span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <span className="text-sm font-bold text-[#243d8a]">
-                              AED {(material.quantity * material.cost).toLocaleString()}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <Badge className={`${getPriorityColor(material.priority || 'medium')} border text-xs font-medium`}>
-                              {(material.priority || 'medium').toUpperCase()}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-xs text-gray-600">
-                              {material.required_date ? formatDateShort(material.required_date) : 'ASAP'}
-                            </span>
-                          </td>
-                        </motion.tr>
-                      ))
-                    )}
-                  </tbody>
-                  <tfoot className="bg-gradient-to-r from-gray-50 to-gray-100 border-t-2">
-                    <tr>
-                      <td colSpan={5} className="px-4 py-4 text-right">
-                        <span className="text-sm font-semibold text-gray-600">Subtotal:</span>
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        <span className="text-sm text-gray-700">
-                          AED {purchaseDetails.total_amount.toLocaleString()}
-                        </span>
-                      </td>
-                      <td colSpan={2}></td>
-                    </tr>
-                    <tr className="border-t">
-                      <td colSpan={5} className="px-4 py-4 text-right">
-                        <span className="text-base font-bold text-gray-700">Total Amount:</span>
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        <span className="text-xl font-bold text-[#243d8a]">
-                          AED {purchaseDetails.total_amount.toLocaleString()}
-                        </span>
-                      </td>
-                      <td colSpan={2}></td>
-                    </tr>
-                  </tfoot>
-                </table>
+              <div className="p-6 space-y-4">
+                {purchaseDetails.materials.map((material, index) => (
+                  <div key={material.material_id || index} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex justify-between items-start mb-3">
+                      <h4 className="font-semibold text-gray-900">
+                        {index + 1}. {material.description}
+                      </h4>
+                      <Badge className={`${
+                        material.priority?.toLowerCase() === 'urgent' ? 'bg-red-100 text-red-700' :
+                        material.priority?.toLowerCase() === 'high' ? 'bg-orange-100 text-orange-700' :
+                        material.priority?.toLowerCase() === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-green-100 text-green-700'
+                      }`}>
+                        {material.priority || 'Normal'}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-500">Specification:</span>
+                        <p className="font-medium">{material.specification}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Category:</span>
+                        <p className="font-medium">{material.category}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Quantity:</span>
+                        <p className="font-medium">{material.quantity} {material.unit}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Unit Cost:</span>
+                        <p className="font-medium">AED {material.cost.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Total Cost:</span>
+                        <p className="font-semibold text-blue-600">AED {(material.quantity * material.cost).toLocaleString()}</p>
+                      </div>
+                      {material.design_reference && (
+                        <div>
+                          <span className="text-gray-500">Design Ref:</span>
+                          <p className="font-medium">{material.design_reference}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700 font-medium">Total Amount:</span>
+                    <span className="text-2xl font-bold text-blue-700">AED {purchaseDetails.total_amount.toLocaleString()}</span>
+                  </div>
+                </div>
               </div>
             </div>
-
-            {/* Notes */}
-            {purchaseDetails.notes && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-5">
-                <h3 className="text-sm font-semibold text-amber-800 flex items-center gap-2 mb-3">
-                  <AlertCircle className="w-4 h-4 text-amber-600" />
-                  Special Notes & Instructions
-                </h3>
-                <p className="text-sm text-amber-900 leading-relaxed whitespace-pre-wrap">{purchaseDetails.notes}</p>
-              </div>
-            )}
           </motion.div>
           ) : (
             <div className="text-center py-16">

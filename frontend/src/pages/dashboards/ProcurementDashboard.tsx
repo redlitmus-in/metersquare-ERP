@@ -4,6 +4,7 @@ import PurchaseDetailsModal from '@/components/modals/PurchaseDetailsModal';
 import { motion } from 'framer-motion';
 import { apiClient } from '@/api/config';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/store/authStore';
 import {
   Package,
   Users,
@@ -33,7 +34,10 @@ import {
   Loader2,
   Trash2,
   Mail,
-  ChevronDown
+  MailCheck,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,6 +45,14 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
 import VendorQuotationForm from '@/components/forms/VendorQuotationForm';
 
@@ -80,6 +92,10 @@ interface VendorQuotation {
 
 const ProcurementDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const userRole = user?.role || '';
+  const userName = user?.full_name || user?.name || '';
+  
   const [activeView, setActiveView] = useState<'dashboard' | 'purchase' | 'vendor'>('dashboard');
   const [selectedPR, setSelectedPR] = useState<string | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -93,6 +109,19 @@ const ProcurementDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [metrics, setMetrics] = useState<MetricCard[]>([]);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [emailedPRs, setEmailedPRs] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(7);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    prId: string;
+    prNumber: string;
+  }>({
+    isOpen: false,
+    prId: '',
+    prNumber: ''
+  });
 
   // Fetch data from APIs
   useEffect(() => {
@@ -105,6 +134,9 @@ const ProcurementDashboard: React.FC = () => {
     try {
       setLoading(true);
       const response = await apiClient.get('/all_purchase');
+      
+      console.log('API Response:', response.data); // Debug log
+      console.log('Number of purchase requests:', response.data.purchase_requests?.length || 0); // Debug log
       
       if (response.data.success) {
         // Transform API data to match our frontend structure
@@ -144,7 +176,71 @@ const ProcurementDashboard: React.FC = () => {
           };
         });
         
-        setPurchaseRequests(transformedRequests);
+        // Filter requests based on user role
+        let filteredByRole = transformedRequests;
+        
+        // Filter based on user role - show only requests created by users with same role
+        if (userRole) {
+          // For specific roles, show only their department's requests
+          switch(userRole.toLowerCase()) {
+            case 'site supervisor':
+            case 'site_supervisor':
+              filteredByRole = transformedRequests.filter(pr => 
+                pr.requester.toLowerCase().includes('site supervisor') ||
+                pr.requester.toLowerCase().includes('site')
+              );
+              break;
+            case 'mep supervisor':
+            case 'mep_supervisor':
+              filteredByRole = transformedRequests.filter(pr => 
+                pr.requester.toLowerCase().includes('mep supervisor') ||
+                pr.requester.toLowerCase().includes('mep')
+              );
+              break;
+            case 'procurement':
+            case 'procurement manager':
+              filteredByRole = transformedRequests.filter(pr => 
+                pr.requester.toLowerCase().includes('procurement')
+              );
+              break;
+            case 'project manager':
+            case 'project_manager':
+              // Project managers see all project-related requests
+              filteredByRole = transformedRequests;
+              break;
+            case 'admin':
+            case 'administrator':
+              // Admins see everything
+              filteredByRole = transformedRequests;
+              break;
+            default:
+              // For other roles, show requests they created
+              filteredByRole = transformedRequests.filter(pr => 
+                pr.requester === userName || 
+                pr.requester.toLowerCase().includes(userRole.toLowerCase())
+              );
+          }
+        }
+        
+        console.log('Filtered by role:', filteredByRole); // Debug log
+        console.log('User role:', userRole); // Debug log
+        
+        setPurchaseRequests(filteredByRole);
+        
+        // Initialize emailedPRs set based on email_sent status
+        const emailedSet = new Set<string>();
+        transformedRequests.forEach(pr => {
+          if (pr.originalData?.email_sent) {
+            emailedSet.add(pr.id);
+          }
+        });
+        console.log('Initialized emailed PRs:', Array.from(emailedSet)); // Debug log
+        console.log('Purchase requests with email_sent status:', transformedRequests.map(pr => ({
+          id: pr.id,
+          prNumber: pr.prNumber,
+          email_sent: pr.originalData?.email_sent
+        }))); // Debug log
+        setEmailedPRs(emailedSet);
         
         // Calculate metrics based on real data
         const totalValue = transformedRequests.reduce((sum: number, pr: PurchaseRequest) => sum + pr.amount, 0);
@@ -333,42 +429,81 @@ const ProcurementDashboard: React.FC = () => {
     }
   };
 
-  const handleDeletePR = async (prId: string, prNumber: string) => {
-    if (window.confirm(`Are you sure you want to delete ${prNumber}? This action cannot be undone.`)) {
-      try {
-        // Show loading toast
-        const loadingToast = toast.loading(`Deleting ${prNumber}...`);
+  const handleDeletePR = (prId: string, prNumber: string) => {
+    // Check if already deleting
+    if (deletingIds.has(prId)) {
+      toast.warning('Delete operation already in progress');
+      return;
+    }
+
+    // Open confirmation dialog
+    setDeleteConfirm({
+      isOpen: true,
+      prId: prId,
+      prNumber: prNumber
+    });
+  };
+
+  const confirmDelete = async () => {
+    const { prId, prNumber } = deleteConfirm;
+    
+    try {
+      // Add to deleting set
+      setDeletingIds(prev => new Set(prev).add(prId));
+      
+      // Close dialog
+      setDeleteConfirm({ isOpen: false, prId: '', prNumber: '' });
+      
+      // Show loading toast
+      const loadingToast = toast.loading(`Deleting ${prNumber}...`);
+      
+      const response = await apiClient.delete(`/purchase/${prId}`);
+      
+      // Dismiss loading toast
+      toast.dismiss(loadingToast);
+      
+      // Check for success in multiple ways for backward compatibility
+      const isSuccess = response.data.success || 
+                       response.status === 200 || 
+                       response.data.message?.includes('successfully');
+      
+      if (isSuccess) {
+        // Update local state immediately for better UX
+        setPurchaseRequests(prev => prev.filter(pr => pr.id !== prId));
         
-        const response = await apiClient.delete(`/purchase/${prId}`);
+        // Show success message
+        toast.success(response.data.message || `Purchase request ${prNumber} deleted successfully`);
         
-        if (response.data.success) {
-          // Dismiss loading toast
-          toast.dismiss(loadingToast);
-          
-          // Update local state immediately for better UX
-          setPurchaseRequests(prev => prev.filter(pr => pr.id !== prId));
-          
-          // Refresh data from server to ensure consistency
-          await fetchPurchaseRequests();
-          
-          toast.success(`Purchase request ${prNumber} deleted successfully`);
-        } else {
-          toast.dismiss(loadingToast);
-          toast.error(response.data.error || 'Failed to delete purchase request');
-        }
-      } catch (error: any) {
-        console.error('Error deleting purchase request:', error);
-        
-        // Check if the error is 404 (already deleted)
-        if (error.response?.status === 404) {
-          // Remove from local state and refresh
-          setPurchaseRequests(prev => prev.filter(pr => pr.id !== prId));
-          await fetchPurchaseRequests();
-          toast.info(`${prNumber} has already been deleted`);
-        } else {
-          toast.error(error.response?.data?.error || 'Failed to delete purchase request');
-        }
+        // Refresh data from server after a short delay
+        setTimeout(() => {
+          fetchPurchaseRequests();
+        }, 500);
+      } else {
+        toast.error(response.data.error || response.data.message || 'Failed to delete purchase request');
       }
+    } catch (error: any) {
+      console.error('Error deleting purchase request:', error);
+      
+      // Check if the error is 404 (already deleted)
+      if (error.response?.status === 404) {
+        // Remove from local state and refresh
+        setPurchaseRequests(prev => prev.filter(pr => pr.id !== prId));
+        toast.info(`${prNumber} has already been deleted`);
+        
+        // Refresh list
+        setTimeout(() => {
+          fetchPurchaseRequests();
+        }, 500);
+      } else {
+        toast.error(error.response?.data?.error || error.response?.data?.message || 'Failed to delete purchase request');
+      }
+    } finally {
+      // Remove from deleting set
+      setDeletingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(prId);
+        return newSet;
+      });
     }
   };
 
@@ -377,25 +512,44 @@ const ProcurementDashboard: React.FC = () => {
       // Show loading toast
       const loadingToast = toast.loading(`Sending email for ${pr.prNumber}...`);
       
+      // Log the purchase ID for debugging
+      console.log('Sending email for purchase ID:', pr.id, 'PR Number:', pr.prNumber);
+      
       const response = await apiClient.get(`/purchase_email/${pr.id}`);
       
       toast.dismiss(loadingToast);
       
       if (response.data.success) {
-        toast.success(`Email sent to procurement team for ${pr.prNumber}`);
+        // Add to emailed PRs set
+        setEmailedPRs(prev => new Set(prev).add(pr.id));
+        toast.success(response.data.message || `Email sent successfully for ${pr.prNumber}`);
+        
+        // Refresh the purchase requests data to get updated email_sent status
+        setTimeout(() => {
+          fetchPurchaseRequests();
+        }, 1000);
       } else {
-        toast.error(response.data.error || 'Failed to send email');
+        toast.error(response.data.message || response.data.error || 'Failed to send email');
       }
     } catch (error: any) {
       console.error('Error sending email:', error);
+      toast.dismiss(); // Dismiss any loading toasts
       
-      // Check if the purchase request exists
-      if (error.response?.status === 404) {
+      // Better error handling
+      if (error.response?.status === 401) {
+        toast.error('You are not authorized to send emails. Please check your permissions.');
+      } else if (error.response?.status === 404) {
         toast.error(`Purchase request ${pr.prNumber} not found. It may have been deleted.`);
         // Refresh the list
         await fetchPurchaseRequests();
+      } else if (error.response?.status === 403) {
+        toast.error('You do not have permission to send emails for this purchase request.');
+      } else if (error.response?.data?.error) {
+        toast.error(error.response.data.error);
+      } else if (error.response?.data?.message) {
+        toast.error(error.response.data.message);
       } else {
-        toast.error(error.response?.data?.error || 'Failed to send email to procurement team');
+        toast.error('Failed to send email. Please check your internet connection and try again.');
       }
     }
   };
@@ -650,7 +804,19 @@ const ProcurementDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {purchaseRequests.length === 0 ? (
+                    {(() => {
+                      // Calculate pagination directly without search filtering
+                      const totalItems = purchaseRequests.length;
+                      const totalPages = Math.ceil(totalItems / itemsPerPage);
+                      const startIndex = (currentPage - 1) * itemsPerPage;
+                      const endIndex = startIndex + itemsPerPage;
+                      const paginatedData = purchaseRequests.slice(startIndex, endIndex);
+                      
+                      // Store total pages for pagination controls
+                      const paginationInfo = { totalPages, currentPage, totalItems };
+                      
+                      if (paginatedData.length === 0) {
+                        return (
                       <tr>
                         <td colSpan={8} className="px-6 py-12 text-center">
                           <div className="text-gray-500">
@@ -667,8 +833,10 @@ const ProcurementDashboard: React.FC = () => {
                           </div>
                         </td>
                       </tr>
-                    ) : (
-                    purchaseRequests.map((pr) => (
+                        );
+                      }
+                      
+                      return paginatedData.map((pr) => (
                       <motion.tr 
                         key={pr.id}
                         initial={{ opacity: 0 }}
@@ -691,11 +859,21 @@ const ProcurementDashboard: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                              <span className="text-xs font-medium text-gray-600">
-                                {pr.requester.split(' ').map(n => n[0]).join('')}
-                              </span>
-                            </div>
+                            <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                              {(() => {
+                                // Generate role abbreviation
+                                const role = pr.requester.toLowerCase();
+                                if (role.includes('site supervisor')) return 'SST';
+                                if (role.includes('mep supervisor')) return 'MEP';
+                                if (role.includes('procurement')) return 'PROC';
+                                if (role.includes('project manager')) return 'PM';
+                                if (role.includes('estimation')) return 'EST';
+                                if (role.includes('technical director')) return 'TD';
+                                if (role.includes('admin')) return 'ADM';
+                                // Default: use first letters of role
+                                return pr.requester.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 3);
+                              })()}
+                            </span>
                             <span className="text-sm text-gray-900">{pr.requester}</span>
                           </div>
                         </td>
@@ -735,34 +913,121 @@ const ProcurementDashboard: React.FC = () => {
                               variant="ghost" 
                               size="sm"
                               onClick={() => handleEditPR(pr)}
-                              title="Edit Purchase Request"
+                              disabled={emailedPRs.has(pr.id)}
+                              title={emailedPRs.has(pr.id) ? "Cannot edit after email sent" : "Edit Purchase Request"}
+                              className={emailedPRs.has(pr.id) ? "opacity-50 cursor-not-allowed" : ""}
                             >
                               <Edit className="w-4 h-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleSendMailToProcurement(pr)}
-                              title="Send Mail to Procurement"
+                              onClick={() => !emailedPRs.has(pr.id) && handleSendMailToProcurement(pr)}
+                              disabled={emailedPRs.has(pr.id)}
+                              title={emailedPRs.has(pr.id) ? "Email already sent" : "Send Mail to Procurement"}
+                              className={emailedPRs.has(pr.id) ? "text-green-600 hover:text-green-700" : ""}
                             >
-                              <Mail className="w-4 h-4" />
+                              {emailedPRs.has(pr.id) ? (
+                                <MailCheck className="w-4 h-4" />
+                              ) : (
+                                <Mail className="w-4 h-4" />
+                              )}
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDeletePR(pr.id, pr.prNumber)}
-                              title="Delete Request"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              disabled={deletingIds.has(pr.id) || emailedPRs.has(pr.id)}
+                              title={emailedPRs.has(pr.id) ? "Cannot delete after email sent" : "Delete Request"}
+                              className={`text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                emailedPRs.has(pr.id) ? "cursor-not-allowed" : ""
+                              }`}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              {deletingIds.has(pr.id) ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
                             </Button>
                           </div>
                         </td>
                       </motion.tr>
-                    )))}
+                    ));
+                    })()}
                   </tbody>
                 </table>
               </div>
+              
+              {/* Pagination Controls */}
+              {(() => {
+                const totalItems = purchaseRequests.length;
+                const totalPages = Math.ceil(totalItems / itemsPerPage);
+                
+                if (totalPages <= 1) return null;
+                
+                return (
+                  <div className="px-6 py-4 border-t bg-gray-50">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-700">
+                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} entries
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                          disabled={currentPage === 1}
+                          className="flex items-center gap-1"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                          Previous
+                        </Button>
+                        
+                        {/* Page Numbers */}
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum;
+                            if (totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1;
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i;
+                            } else {
+                              pageNum = currentPage - 2 + i;
+                            }
+                            
+                            if (pageNum < 1 || pageNum > totalPages) return null;
+                            
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={currentPage === pageNum ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setCurrentPage(pageNum)}
+                                className="w-10"
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                          disabled={currentPage === totalPages}
+                          className="flex items-center gap-1"
+                        >
+                          Next
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1101,6 +1366,42 @@ const ProcurementDashboard: React.FC = () => {
         }}
         purchaseId={selectedPR || ''}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog 
+        open={deleteConfirm.isOpen} 
+        onOpenChange={(open) => !open && setDeleteConfirm({ isOpen: false, prId: '', prNumber: '' })}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-5 h-5" />
+              Delete Purchase Request
+            </DialogTitle>
+            <DialogDescription className="pt-3">
+              Are you sure you want to delete <span className="font-semibold">{deleteConfirm.prNumber}</span>? 
+              This action cannot be undone and will permanently remove this purchase request and all associated materials.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:flex sm:justify-between gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteConfirm({ isOpen: false, prId: '', prNumber: '' })}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Yes, Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

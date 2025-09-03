@@ -5,6 +5,7 @@ import { formatDate, formatDateForInput, getTodayFormatted } from '@/utils/dateF
 import { apiClient } from '@/api/config';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { useAuthStore } from '@/store/authStore';
 import {
   Package,
   User,
@@ -78,6 +79,14 @@ interface PurchaseRequisitionFormProps {
 }
 
 const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClose, showAsPage, existingData, isEditMode }) => {
+  // Initialize useForm first to get setValue
+  const { register, handleSubmit, watch, formState: { errors }, setValue, getValues } = useForm<PurchaseRequisitionFormData>();
+  
+  // Get current user from auth store
+  const { user } = useAuthStore();
+  const currentUserName = user?.full_name || user?.name || 'Site Supervisor';
+  const currentUserRole = user?.role || 'Site Supervisor';
+  
   const [materials, setMaterials] = useState<Material[]>([]);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [activeTab, setActiveTab] = useState('details');
@@ -91,28 +100,128 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
 
   // Initialize form with existing data in edit mode
   useEffect(() => {
+    // Always set requested_by to current user
+    setValue('requested_by', currentUserName);
+    
     if (isEditMode && existingData) {
-      // Set project ID
-      setSelectedProjectId(existingData.project_id || null);
+      // Set project ID - handle both direct data and originalData from dashboard
+      const purchaseData = existingData.originalData || existingData;
       
-      // Set form values
-      setValue('projectName', existingData.project || '');
-      setValue('requestedBy', existingData.requester || '');
-      setValue('department', existingData.department || '');
-      setValue('requestDate', formatDateForInput(existingData.date || new Date().toISOString()));
-      setValue('requiredDate', formatDateForInput(existingData.requiredDate || new Date().toISOString()));
-      setValue('deliveryAddress', existingData.deliveryAddress || '');
-      setValue('notes', existingData.notes || '');
+      // Set project ID
+      const projectId = purchaseData.project_id || existingData.project_id;
+      if (projectId) {
+        setSelectedProjectId(projectId);
+        setValue('project_id', projectId);
+      }
+      
+      // Set all form values based on the actual register names
+      // Site location
+      setValue('site_location', purchaseData.site_location || '');
+      
+      // Requested by - always use current user in edit mode too
+      setValue('requested_by', currentUserName);
+      
+      // Date
+      const dateValue = purchaseData.date || existingData.date;
+      if (dateValue) {
+        setValue('date', formatDateForInput(dateValue));
+      } else {
+        setValue('date', getTodayFormatted());
+      }
+      
+      // Purpose/Justification
+      setValue('purpose', purchaseData.purpose || '');
+      
+      // Additional fields if they exist in your form
+      setValue('justification', purchaseData.justification || purchaseData.purpose || '');
       
       // Load materials if available
-      if (existingData.items > 0) {
-        // In edit mode, we would fetch materials from API
+      const materialsData = purchaseData.materials || existingData.materials || [];
+      
+      // Set design references if available
+      // Check for design_reference at purchase level or from first material
+      if (purchaseData.design_reference) {
+        setDesignReference(purchaseData.design_reference);
+        setValue('designReferences', [purchaseData.design_reference]);
+      } else if (purchaseData.design_references) {
+        setDesignReference(purchaseData.design_references.join(', '));
+        setValue('designReferences', purchaseData.design_references);
+      } else if (materialsData && materialsData.length > 0 && materialsData[0].design_reference) {
+        // If no purchase-level design reference, get from first material
+        setDesignReference(materialsData[0].design_reference);
+      }
+      if (materialsData.length > 0) {
+        const formattedMaterials = materialsData.map((m: any, index: number) => ({
+          id: `material_${m.material_id || index}_${Date.now()}`,
+          material_id: m.material_id, // Preserve original material_id for updates
+          description: m.description || m.item_name || '',
+          specification: m.specification || '',
+          unit: m.unit || 'pcs',
+          quantity: m.quantity || 1,
+          cost: m.cost || 0,
+          priority: m.priority || 'Medium',
+          category: m.category || 'General',
+          design_reference: m.design_reference || ''
+        }));
+        
+        setMaterials(formattedMaterials);
+        
+        // Calculate and set total cost
+        const total = formattedMaterials.reduce((sum, m) => sum + (m.quantity * m.cost), 0);
+        setValue('totalEstimatedCost', total);
+      } else if (existingData.items > 0 && existingData.id) {
+        // Fallback: fetch materials from API if not included
         fetchExistingMaterials(existingData.id);
+      }
+      
+      // Set approval flags if they exist
+      if (purchaseData.approvals) {
+        setValue('approvalFlags', {
+          qtySpec: purchaseData.approvals.qtySpec || false,
+          cost: purchaseData.approvals.cost || false
+        });
+      }
+      
+      // Set status
+      setValue('status', purchaseData.status || 'draft');
+      
+      // Mark tabs as completed if we have data
+      if (purchaseData.site_location && purchaseData.requested_by) {
+        setDetailsCompleted(true);
+      }
+      if (materialsData.length > 0) {
+        setMaterialsCompleted(true);
       }
     }
   }, [isEditMode, existingData, setValue]);
 
-  const { register, handleSubmit, watch, formState: { errors }, setValue, getValues } = useForm<PurchaseRequisitionFormData>();
+  // Fetch existing materials from API
+  const fetchExistingMaterials = async (purchaseId: string) => {
+    try {
+      const response = await apiClient.get(`/purchase/${purchaseId}`);
+      if (response.data.success) {
+        const purchaseData = response.data.purchase;
+        const materialsData = purchaseData.materials || [];
+        
+        if (materialsData.length > 0) {
+          setMaterials(materialsData.map((m: any) => ({
+            id: Date.now().toString() + Math.random(),
+            description: m.description || m.item_name || '',
+            specification: m.specification || '',
+            unit: m.unit || 'pcs',
+            quantity: m.quantity || 1,
+            cost: m.cost || 0,
+            priority: m.priority || 'Medium',
+            category: m.category || 'General',
+            design_reference: m.design_reference || ''
+          })));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching materials:', error);
+      toast.error('Failed to load materials');
+    }
+  };
 
   const addMaterial = () => {
     const newMaterial: Material = {
@@ -167,12 +276,37 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
   };
 
   const formatDateForBackend = (dateStr: string) => {
-    const parts = dateStr.split('/');
-    if (parts.length === 3) {
-      const [day, month, year] = parts;
-      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    try {
+      if (!dateStr) {
+        // Return today's date if no date provided
+        const today = new Date();
+        return today.toISOString().split('T')[0];
+      }
+      
+      // Check if already in YYYY-MM-DD format
+      if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return dateStr;
+      }
+      
+      // Convert from DD/MM/YYYY to YYYY-MM-DD
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        const [day, month, year] = parts;
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      }
+      
+      // If it's an ISO string, extract just the date part
+      if (dateStr.includes('T')) {
+        return dateStr.split('T')[0];
+      }
+      
+      return dateStr;
+    } catch (error) {
+      console.error('Date formatting error:', error);
+      // Return today's date as fallback
+      const today = new Date();
+      return today.toISOString().split('T')[0];
     }
-    return dateStr;
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -203,23 +337,36 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
   };
 
   const onSubmit = async (data: PurchaseRequisitionFormData) => {
+    console.log('Form submission started', { data, isEditMode, existingData });
+    
     if (!selectedProjectId) {
       toast.error('Please select a project');
+      setIsUploading(false);
       return;
     }
 
     if (!validateMaterialsTab()) {
       toast.error('Please complete all material information');
+      setIsUploading(false);
       return;
     }
 
     setIsUploading(true);
 
+    // Get values directly from form state for reliability
+    const formValues = getValues();
+    const dateValue = watch('date') || formValues.date || getTodayFormatted();
+    const siteLocation = watch('site_location') || formValues.site_location || '';
+    const purposeValue = watch('purpose') || formValues.purpose || '';
+
+    console.log('Form values:', { dateValue, siteLocation, purposeValue, selectedProjectId });
+
     const payload = {
       project_id: selectedProjectId,
-      site_location: data.site_location,
-      date: formatDateForBackend(data.date),
-      purpose: data.purpose,
+      site_location: siteLocation,
+      requested_by: currentUserName, // Use current logged-in user or default
+      date: formatDateForBackend(dateValue),
+      purpose: purposeValue,
       design_reference: designReference || '', // Add at purchase level
       materials: materials.map(m => ({
         description: m.description,
@@ -236,13 +383,59 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
     console.log('Submitting payload:', payload);
 
     try {
-      // Step 1: Create purchase requisition
-      const response = await apiClient.post('/purchase', payload);
-      console.log('Purchase Response:', response.data);
+      let response;
+      let purchaseId;
       
-      const purchaseId = response.data.purchase_id;
+      if (isEditMode && existingData?.id) {
+        // Update existing purchase requisition
+        // Construct update payload matching backend expectations
+        const updatePayload = {
+          requested_by: currentUserName, // Use current logged-in user or default
+          site_location: siteLocation,
+          date: formatDateForBackend(dateValue),
+          project_id: selectedProjectId,
+          purpose: purposeValue,
+          file_path: existingData.originalData?.file_path || '', // Preserve existing file path
+          materials: materials.map((m) => {
+            // Build material object matching backend structure
+            const materialData: any = {
+              project_id: selectedProjectId,
+              description: m.description,
+              specification: m.specification,
+              unit: m.unit,
+              quantity: m.quantity,
+              category: m.category,
+              cost: m.cost,
+              priority: m.priority,
+              design_reference: m.design_reference || designReference || ''
+            };
+            
+            // Only include material_id if it exists (for updating existing materials)
+            if (m.material_id) {
+              materialData.material_id = m.material_id;
+            }
+            
+            return materialData;
+          })
+        };
+        
+        console.log('Update Payload:', updatePayload);
+        response = await apiClient.put(`/purchase/${existingData.id}`, updatePayload);
+        console.log('Update Response:', response.data);
+        purchaseId = existingData.id;
+      } else {
+        // Create new purchase requisition  
+        response = await apiClient.post('/purchase', payload);
+        console.log('Purchase Response:', response.data);
+        purchaseId = response.data.purchase_id;
+      }
       
-      // Step 2: Upload files if any attachments exist
+      // Check if the response was successful
+      if (!response.data.success && response.data.error) {
+        throw new Error(response.data.error);
+      }
+      
+      // Step 2: Upload files if any attachments exist (for both new and updated purchases)
       if (attachments.length > 0 && purchaseId) {
         console.log(`Uploading ${attachments.length} file(s) for purchase ID: ${purchaseId}`);
         
@@ -264,23 +457,25 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
             console.log(`File ${file.name} uploaded successfully:`, uploadResponse.data);
           } catch (uploadError: any) {
             console.error(`Failed to upload file ${file.name}:`, uploadError);
-            toast.warning(`File ${file.name} could not be uploaded. Purchase requisition was created successfully.`);
+            toast.warning(`File ${file.name} could not be uploaded. Purchase requisition was ${isEditMode ? 'updated' : 'created'} successfully.`);
           }
         }
       }
       
-      toast.success('Purchase Requisition submitted successfully!');
+      toast.success(isEditMode ? 'Purchase Requisition updated successfully!' : 'Purchase Requisition submitted successfully!');
       
-      // Reset form
-      setMaterials([]);
-      setAttachments([]);
-      setSelectedProjectId(null);
-      setDesignReference('');
-      setActiveTab('details');
-      setValue('site_location', '');
-      setValue('purpose', '');
-      setValue('date', '');
-      setValue('requested_by', '');
+      if (!isEditMode) {
+        // Reset form only for new submissions
+        setMaterials([]);
+        setAttachments([]);
+        setSelectedProjectId(null);
+        setDesignReference('');
+        setActiveTab('details');
+        setValue('site_location', '');
+        setValue('purpose', '');
+        setValue('date', '');
+        // Don't reset requested_by as it's always current user
+      }
       setDetailsCompleted(false);
       setMaterialsCompleted(false);
       
@@ -290,7 +485,11 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       }
     } catch (error: any) {
       console.error('Submission error:', error);
-      toast.error(`Failed to submit: ${error.response?.data?.message || error.message}`);
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          error.message || 
+                          `Failed to ${isEditMode ? 'update' : 'submit'} purchase requisition`;
+      toast.error(errorMessage);
     } finally {
       setIsUploading(false);
     }
@@ -369,7 +568,11 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                     </Label>
                     <Select 
                       value={selectedProjectId?.toString()} 
-                      onValueChange={(value) => setSelectedProjectId(parseInt(value))}
+                      onValueChange={(value) => {
+                        const projectId = parseInt(value);
+                        setSelectedProjectId(projectId);
+                        setValue('project_id', projectId);
+                      }}
                     >
                       <SelectTrigger className="h-11 border-gray-200 focus:border-red-500">
                         <SelectValue placeholder="Select project" />
@@ -399,19 +602,17 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                       <User className="w-4 h-4 text-gray-500" />
                       Requested By
                     </Label>
-                    <Select
-                      value={watch('requested_by')}
-                      onValueChange={(value) => setValue('requested_by', value)}
-                    >
-                      <SelectTrigger className="h-11 border-gray-200 focus:border-red-500">
-                        <SelectValue placeholder="Select requester" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Site Supervisor">Site Supervisor</SelectItem>
-                        <SelectItem value="MEP Supervisor">MEP Supervisor</SelectItem>
-                        <SelectItem value="Procurement Manager">Procurement Manager</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="relative">
+                      <Input
+                        {...register('requested_by')}
+                        value={currentUserName}
+                        readOnly
+                        className="h-11 bg-gray-50 border-gray-200 cursor-not-allowed pr-20"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                        {currentUserRole}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -420,7 +621,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                       Date Required
                     </Label>
                     <DateInput 
-                      value={watch('date')}
+                      value={watch('date') || getTodayFormatted()}
                       onChange={(value) => setValue('date', value)}
                       className="h-11 border-gray-200 focus:border-red-500"
                       placeholder="dd/mm/yyyy"
@@ -873,12 +1074,12 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                 {isUploading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Submitting...
+                    {isEditMode ? 'Updating...' : 'Submitting...'}
                   </>
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    Submit for Approval
+                    {isEditMode ? 'Update Requisition' : 'Submit for Approval'}
                   </>
                 )}
               </Button>

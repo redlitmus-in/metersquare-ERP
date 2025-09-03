@@ -17,6 +17,7 @@ class Purchase(db.Model):
     material_ids = db.Column(ARRAY(db.Integer))  # Store as array of integers
     file_path = db.Column(db.String(255), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
+    email_sent = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     created_by = db.Column(db.String(255), nullable=False)
     last_modified_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
@@ -38,6 +39,7 @@ class Purchase(db.Model):
             'material_ids': self.material_ids,
             'file_path': self.file_path,
             'is_deleted': self.is_deleted,
+            'email_sent': self.email_sent,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             'created_by': self.created_by,
             "last_modified_at": self.last_modified_at.isoformat() if self.last_modified_at else None,

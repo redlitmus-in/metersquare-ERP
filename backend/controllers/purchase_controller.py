@@ -3,10 +3,10 @@ import os
 from flask import g, request, jsonify, current_app
 from sqlalchemy import and_
 from sqlalchemy.orm import joinedload
+from sqlalchemy.orm.attributes import flag_modified
 from models.approval import Approval
 from models.material import Material
 from models.purchase import Purchase
-from models.request_item import RequisitionItem
 from models.role import Role
 from config.db import db
 from datetime import datetime
@@ -14,6 +14,7 @@ from config.logging import get_logger
 from werkzeug.utils import secure_filename
 from supabase import create_client, Client
 from utils.email_service import *
+from utils.email_service import EmailService
 log = get_logger()
 
 def create_purchase_request():
@@ -127,17 +128,25 @@ def get_all_purchase_request():
             return jsonify({"error": "Not logged in"}), 401
 
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        if not role or role.role not in ['siteSupervisor', 'mepSupervisor', 'procurement']:
+        allowed_roles = ['siteSupervisor', 'mepSupervisor', 'procurement', 'projectManager', 'technicalDirector', 'estimation', 'accounts', 'design']
+        if not role or role.role not in allowed_roles:
             return jsonify({
-                'error': 'Invalid role. Only Site Supervisor, MEP Supervisor, or Procurement team can view requisitions'
+                'error': 'Invalid role. Access denied for viewing purchase requisitions'
             }), 403
 
         # 🔹 Fetch purchases based on role
-        # Procurement can see all purchases, supervisors only see their own
         if role.role == 'procurement':
+            # Procurement team can see all purchases
             purchases = Purchase.query.filter_by(is_deleted=False).all()
+            print(f"DEBUG: Procurement user {current_user['full_name']} - Found {len(purchases)} purchases") # Debug log
+        elif role.role in ['projectManager', 'technicalDirector', 'estimation', 'accounts', 'design']:
+            # Management roles can see all purchases for approval workflows
+            purchases = Purchase.query.filter_by(is_deleted=False).all()
+            print(f"DEBUG: Management role {role.role} user {current_user['full_name']} - Found {len(purchases)} purchases") # Debug log
         else:
+            # Site/MEP supervisors can only see their own purchases
             purchases = Purchase.query.filter_by(is_deleted=False, user_id=current_user['user_id']).all()
+            print(f"DEBUG: Supervisor role {role.role} user {current_user['full_name']} - Found {len(purchases)} purchases for user_id {current_user['user_id']}") # Debug log
 
         purchase_list = []
 
@@ -197,6 +206,7 @@ def get_all_purchase_request():
                 'material_ids': material_ids,
                 'materials': material_data,     # ✅ nested materials
                 'file_path': purchase.file_path,
+                'email_sent': purchase.email_sent,
                 'created_at': purchase.created_at,
                 'created_by': purchase.created_by,
                 'approvals': approval_data       # ✅ nested approvals
@@ -283,6 +293,7 @@ def get_purchase_request_by_id(purchase_id):
             'material_ids': purchase.material_ids,
             'materials': materials,   # ✅ nested
             'file_path': purchase.file_path,
+            'email_sent': purchase.email_sent,
             'created_at': purchase.created_at,
             'created_by': purchase.created_by,
             'approvals': approvals    # ✅ nested
@@ -327,6 +338,10 @@ def update_purchase_request(purchase_id):
 
         # 🔹 3. Handle materials
         new_materials = data.get("materials", [])
+        
+        # Log initial state
+        log.info(f"Initial material_ids for purchase {purchase_id}: {purchase.material_ids}")
+        
         for mat in new_materials:
             material_id = mat.get("material_id")
 
@@ -352,6 +367,7 @@ def update_purchase_request(purchase_id):
 
                 # ✅ Ensure material_id is in purchase.material_ids
                 if material_id not in purchase.material_ids:
+                    log.info(f"Adding existing material_id {material_id} to purchase.material_ids")
                     purchase.material_ids.append(material_id)
 
             else:
@@ -372,13 +388,30 @@ def update_purchase_request(purchase_id):
                 db.session.flush()  # ✅ ensures new_material.material_id is generated before commit
 
                 # ✅ Append new material_id to purchase
+                log.info(f"Created new material with ID {new_material.material_id}")
                 if new_material.material_id not in purchase.material_ids:
+                    log.info(f"Adding new material_id {new_material.material_id} to purchase.material_ids")
                     purchase.material_ids.append(new_material.material_id)
 
+        # Log state before forcing update
+        log.info(f"Material_ids before forcing update: {purchase.material_ids}")
+        
+        # 🔹 Force PostgreSQL to recognize the array mutation
+        # This is crucial for ARRAY columns - we need to reassign the array
+        temp_ids = list(purchase.material_ids)  # Create a new list object
+        purchase.material_ids = temp_ids
+        flag_modified(purchase, 'material_ids')  # Explicitly mark the field as modified
+        
+        log.info(f"Material_ids after forcing update: {purchase.material_ids}")
+        
         # 🔹 Save purchase with updated material_ids
         purchase.last_modified_by = current_user['full_name']
         db.session.add(purchase)
         db.session.commit()
+        
+        # Verify the update by re-fetching
+        db.session.refresh(purchase)
+        log.info(f"Final material_ids after commit and refresh: {purchase.material_ids}")
 
         return jsonify({
             "success": True,
@@ -415,7 +448,10 @@ def delete_purchase(purchase_id):
         # 4️⃣ Save changes
         db.session.commit()
 
-        return jsonify({"message": f"Purchase {purchase_id} and related records deleted successfully"}), 200
+        return jsonify({
+            "success": True,
+            "message": f"Purchase {purchase_id} and related records deleted successfully"
+        }), 200
 
     except Exception as e:
         db.session.rollback()
@@ -563,6 +599,11 @@ def send_purchase_request_email(purchase_id):
             success = email_service.send_purchase_request_notification(purchase_data, materials, requester_info)
         
         if success:
+            # Update the email_sent status in database
+            purchase.email_sent = True
+            purchase.last_modified_by = current_user['full_name']
+            db.session.commit()
+            
             return jsonify({'success': True, 'message': f'Email sent for purchase request #{purchase_id}'}), 200
         else:
             return jsonify({'success': False, 'message': f'Failed to send email for purchase request #{purchase_id}'}), 500
