@@ -38,46 +38,143 @@ def send_otp(email_id):
         subject = "Your OTP Code"
 
         body = f"""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <!-- (Your HTML/CSS email template here, same as you provided) -->
-            <style>
-            /* ... your CSS styles ... */
-            </style>
-        </head>
-        <body>
-            <div class="wrapper">
-                <div class="email-container">
-                    <div class="header">
-                        <h1 class="logo">ERP</h1>
-                    </div>
-                    <div class="content">
-                        <h2 class="title">Welcome to ERP</h2>
-                        <p class="message">
-                            We're excited to have you join us! To ensure the security of your account,
-                            please use the verification code below to complete your registration.
-                        </p>
-                        <div class="otp-container">
-                            <div class="otp-code">{otp}</div>
-                            <div class="timer">
-                                This code will expire in <strong>5 minutes</strong>
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body {{
+                        margin: 0;
+                        padding: 0;
+                        font-family: Arial, Helvetica, sans-serif;
+                        background-color: #f4f6fb;
+                        color: #333;
+                    }}
+                    .wrapper {{
+                        width: 100%;
+                        padding: 30px 0;
+                        background-color: #f4f6fb;
+                    }}
+                    .email-container {{
+                        max-width: 600px;
+                        margin: 0 auto;
+                        background-color: #ffffff;
+                        border-radius: 10px;
+                        overflow: hidden;
+                        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+                        border: 1px solid #e0e6f5;
+                    }}
+                    .header {{
+                        background-color: #243d8a; /* Brand Blue */
+                        color: white;
+                        text-align: center;
+                        padding: 25px;
+                    }}
+                    .header .logo {{
+                        margin: 0;
+                        font-size: 26px;
+                        font-weight: bold;
+                        letter-spacing: 0.5px;
+                    }}
+                    .content {{
+                        padding: 35px 25px;
+                        text-align: center;
+                    }}
+                    .content .title {{
+                        font-size: 22px;
+                        font-weight: bold;
+                        color: #243d8a;
+                        margin-bottom: 18px;
+                    }}
+                    .content .message {{
+                        font-size: 15px;
+                        line-height: 1.6;
+                        color: #444;
+                        margin-bottom: 28px;
+                    }}
+                    .otp-container {{
+                        margin: 25px auto;
+                        display: inline-block;
+                        padding: 18px 28px;
+                        border: 2px solid #243d8a;
+                        border-radius: 8px;
+                        background-color: #f0f4ff;
+                    }}
+                    .otp-code {{
+                        font-size: 30px;
+                        font-weight: bold;
+                        letter-spacing: 6px;
+                        color: #243d8a;
+                        margin-bottom: 12px;
+                    }}
+                    .timer {{
+                        font-size: 13px;
+                        color: #555;
+                    }}
+                    .warning {{
+                        font-size: 13px;
+                        color: #777;
+                        margin-top: 25px;
+                        line-height: 1.5;
+                    }}
+                    .signature {{
+                        text-align: left;
+                        margin-top: 35px;
+                        font-size: 14px;
+                        color: #444;
+                    }}
+                    .signature strong {{
+                        color: #243d8a;
+                    }}
+                    .footer {{
+                        background-color: #f4f6fb;
+                        text-align: center;
+                        padding: 18px;
+                        border-top: 1px solid #e0e6f5;
+                    }}
+                    .footer-text {{
+                        font-size: 12px;
+                        color: #888;
+                        margin: 0;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="wrapper">
+                    <div class="email-container">
+                        <div class="header">
+                            <h1 class="logo">Meter Square</h1>
+                        </div>
+                        <div class="content">
+                            <h2 class="title">Welcome to Meter Square</h2>
+                            <p class="message">
+                                We're excited to have you on board! To secure your account,
+                                please use the verification code below to complete your registration.
+                            </p>
+                            <div class="otp-container">
+                                <div class="otp-code">{otp}</div>
+                                <div class="timer">
+                                    This code will expire in <strong>5 minutes</strong>
+                                </div>
+                            </div>
+                            <div class="warning">
+                                If you did not request this verification code, you can safely ignore this email.
+                                Your account security is our top priority.
+                            </div>
+
+                            <div class="signature">
+                                Best regards,<br>
+                                <strong>Redlitmus Team</strong>
                             </div>
                         </div>
-                        <div class="warning">
-                            If you didn't request this verification code, please ignore this email.
-                            Your account security is important to us.
+                        <div class="footer">
+                            <p class="footer-text">© 2025 Meter Square. All rights reserved.</p>
                         </div>
                     </div>
-                    <div class="footer">
-                        <p class="footer-text">Thank you for choosing</p>
-                        <p class="company">ERP</p>
-                    </div>
                 </div>
-            </div>
-        </body>
-        </html>
-        """
+            </body>
+            </html>
+            """
 
         message = MIMEMultipart()
         message["From"] = sender_email
