@@ -117,7 +117,7 @@ def create_purchase_request():
 
     except Exception as e:
         db.session.rollback()
-        print(f"Error creating purchase request: {str(e)}")
+        log.error(f"Error creating purchase request: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 def get_all_purchase_request():
@@ -489,3 +489,65 @@ def file_upload(purchase_id):
     except Exception as e:
         log.error(f"File upload error: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+
+def send_purchase_request_email(purchase_id):
+    """API to manually trigger email for a purchase request"""
+    try:
+        current_user = g.user
+        user_id = current_user['user_id']
+        user_name = current_user['full_name']
+        if not current_user:
+            return jsonify({"error": "Not logged in"}), 401
+
+        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
+        if not role or role.role not in ['siteSupervisor', 'mepSupervisor', 'procurement', 'projectManager', 'technicalDirector']:
+            return jsonify({'error': 'Insufficient permissions'}), 403
+
+        purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
+        if not purchase:
+            return jsonify({'error': 'Purchase request not found'}), 404
+
+        materials = []
+        if purchase.material_ids:
+            material_objects = Material.query.filter(
+                and_(
+                    Material.is_deleted == False,
+                    Material.material_id.in_(purchase.material_ids)
+                )
+            ).all()
+            for mat in material_objects:
+                materials.append({
+                    'description': mat.description,
+                    'specification': mat.specification,
+                    'unit': mat.unit,
+                    'quantity': mat.quantity,
+                    'category': mat.category,
+                    'cost': mat.cost,
+                    'priority': mat.priority,
+                    'design_reference': mat.design_reference
+                })
+
+        purchase_data = {
+            'purchase_id': purchase.purchase_id,
+            'site_location': purchase.site_location,
+            'date': purchase.date,
+            'project_id': purchase.project_id,
+            'purpose': purchase.purpose,
+            'file_path': purchase.file_path
+        }
+
+        requester_info = {
+            'full_name': purchase.requested_by,
+            'email': current_user.get('email', ''),
+            'role': role.role
+        }
+
+        email_service = EmailService()
+        if email_service.send_purchase_request_notification(purchase_data, materials, requester_info):
+            return jsonify({'success': True, 'message': f'Email sent for purchase request #{purchase_id}'}), 200
+        else:
+            return jsonify({'success': False, 'message': f'Failed to send email for purchase request #{purchase_id}'}), 500
+
+    except Exception as e:
+        log.error(f"Error in send_purchase_request_email: {str(e)}")
+        return jsonify({'error': str(e)}), 500
