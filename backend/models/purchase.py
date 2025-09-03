@@ -9,6 +9,7 @@ class Purchase(db.Model):
     
     purchase_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     project_id = db.Column(db.Integer, nullable=True)
+    user_id = db.Column(db.Integer, nullable=True)
     requested_by = db.Column(db.String(255), nullable=False)
     site_location = db.Column(db.String(255), nullable=False)
     date = db.Column(db.String(255), nullable=False)
@@ -29,6 +30,7 @@ class Purchase(db.Model):
         return {
             'purchase_id': self.purchase_id,
             'project_id': self.project_id,
+            'user_id': self.user_id,
             'requested_by': self.requested_by,
             'site_location': self.site_location,
             'date': self.date,

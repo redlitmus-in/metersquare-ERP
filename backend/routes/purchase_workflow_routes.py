@@ -16,8 +16,20 @@ def get_all_purchase_route():
     return get_all_purchase_request()
 
 @purchase_workflow_routes.route('/purchase/<int:purchase_id>', methods=['GET'])
+@jwt_required
 def view_purchase_route(purchase_id):
     return get_purchase_request_by_id(purchase_id)
+
+
+@purchase_workflow_routes.route('/purchase/<int:purchase_id>', methods=['PUT'])
+@jwt_required
+def update_purchase_request_route(purchase_id):
+    return update_purchase_request(purchase_id)
+
+@purchase_workflow_routes.route('/purchase/<int:purchase_id>', methods=['DELETE'])
+@jwt_required
+def delete_purchase_route(purchase_id):
+    return delete_purchase(purchase_id)
 
 @purchase_workflow_routes.route('/upload_file/<int:purchase_id>', methods=['POST'])
 @jwt_required

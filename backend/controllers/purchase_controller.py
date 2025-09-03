@@ -1,26 +1,29 @@
+import json
 import os
 from flask import g, request, jsonify, current_app
 from sqlalchemy import and_
+from sqlalchemy.orm import joinedload
+from models.approval import Approval
 from models.material import Material
 from models.purchase import Purchase
+from models.request_item import RequisitionItem
 from models.role import Role
 from config.db import db
 from datetime import datetime
 from config.logging import get_logger
 from werkzeug.utils import secure_filename
 from supabase import create_client, Client
-
+from utils.email_service import *
 log = get_logger()
 
 def create_purchase_request():
-    try: 
+    try:
         current_user = g.user
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        # Validate role
-        if not role or role.role not in ['siteEngineer', 'mepSupervisor']:
+        if not role or role.role not in ['siteSupervisor', 'mepSupervisor']:
             return jsonify({
                 'error': 'Invalid role. Only Site Supervisor or MEP Supervisor can create requisition'
             }), 403
@@ -31,11 +34,28 @@ def create_purchase_request():
             return jsonify({"error": "Materials must be a non-empty list"}), 400
 
         material_ids = []
-        
+        quantities = []
+        costs = []
+
         # Start transaction
         db.session.begin_nested()
 
-        # Loop through material items
+        # Step 1: Create the Purchase header (initially empty material_ids)
+        new_purchase = Purchase(
+            requested_by=current_user['full_name'],
+            site_location=data.get('site_location'),
+            date=data.get('date'),
+            project_id=data.get('project_id'),
+            purpose=data.get('purpose'),
+            material_ids=[],  # Update later
+            file_path=data.get('file_path'),
+            created_by=current_user['full_name'],
+            user_id=current_user['user_id']
+        )
+        db.session.add(new_purchase)
+        db.session.commit()  # So new_purchase.purchase_id is available
+
+        # Step 2: Create Materials and collect their IDs
         for material in materials_data:
             new_material = Material(
                 project_id=data.get('project_id'),
@@ -47,30 +67,47 @@ def create_purchase_request():
                 cost=material.get('cost'),
                 priority=material.get('priority'),
                 design_reference=material.get('design_reference'),
-                created_at=datetime.utcnow(),
                 created_by=current_user['full_name']
             )
             db.session.add(new_material)
-            db.session.flush()  # Use flush to assign ID without committing
+            db.session.commit()  # To get new_material.material_id
+
             material_ids.append(new_material.material_id)
+            quantities.append(new_material.quantity)
+            costs.append(new_material.cost)
 
-        # Now create purchase entry with material_ids as a list of integers
-        new_purchase = Purchase(
-            requested_by=current_user['full_name'],
-            site_location=data.get('site_location'),
-            date=data.get('date'),
-            project_id=data.get('project_id'),
-            purpose=data.get('purpose'),
-            material_ids=material_ids,  # This must be list of ints, no conversion needed
-            file_path=data.get('file_path'),
-            created_at=datetime.utcnow(),
-            created_by=current_user['full_name']
-        )
-        db.session.add(new_purchase)
-        
-        # Commit the entire transaction
+        # # Step 3: Create ONE RequisitionItem with all material_ids as a list
+        # total_quantity = sum(quantities)
+        # total_cost = sum((q * c if c else 0) for q, c in zip(quantities, costs))
+
+        # requisition_item = RequisitionItem(
+        #     purchase_id=new_purchase.purchase_id,
+        #     material_id=material_ids,  # pass list here, e.g. [12, 34]
+        #     quantity_requested=total_quantity,
+        #     unit_cost=None,  # or some calculated/average unit cost
+        #     total_cost=total_cost,
+        #     created_by=current_user['full_name']
+        # )
+        # db.session.add(requisition_item)
+
+        # Step 4: Update Purchase.material_ids with all material ids
+        new_purchase.material_ids = material_ids
+
         db.session.commit()
-
+                
+        materials_data = []
+        for material in materials_data:
+            materials_data.append({
+                'description': material.get('description'),
+                'specification': material.get('specification'),
+                'unit': material.get('unit'),
+                'quantity': material.get('quantity'),
+                'category': material.get('category'),
+                'cost': material.get('cost'),
+                'priority': material.get('priority'),
+                'design_reference': material.get('design_reference')
+            })
+     
         return jsonify({
             'success': True,
             'message': 'Purchase requisition created successfully',
@@ -79,32 +116,39 @@ def create_purchase_request():
         }), 200
 
     except Exception as e:
-        # Rollback the main transaction
         db.session.rollback()
         print(f"Error creating purchase request: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 def get_all_purchase_request():
     try:
-        # Fetch all purchases where is_deleted=False (assuming Purchase has is_deleted column)
-        purchases = Purchase.query.filter_by(is_deleted=False).all()
+        current_user = g.user
+        if not current_user:
+            return jsonify({"error": "Not logged in"}), 401
 
-        # Prepare list to hold all materials for all purchases
-        all_materials = []
+        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
+        if not role or role.role not in ['siteSupervisor', 'mepSupervisor', 'procurement']:
+            return jsonify({
+                'error': 'Invalid role. Only Site Supervisor, MEP Supervisor, or Procurement team can view requisitions'
+            }), 403
 
-        # For each purchase, get its material_ids and query Materials
+        # 🔹 Fetch purchases created by this user (if required)
+        purchases = Purchase.query.filter_by(is_deleted=False, user_id=current_user['user_id']).all()
+
+        purchase_list = []
+
         for purchase in purchases:
-            if not purchase.material_ids:
-                continue
-            # Query materials for this purchase (filter is_deleted=False and material_id in purchase.material_ids)
+            material_ids = purchase.material_ids if purchase.material_ids else []
+
+            # Fetch related materials for this purchase
             materials = Material.query.filter(
                 Material.is_deleted == False,
-                Material.material_id.in_(purchase.material_ids)
+                Material.material_id.in_(material_ids)
             ).all()
-            
-            # Convert materials to dict for JSON serialization
+
+            material_data = []
             for mat in materials:
-                all_materials.append({
+                material_data.append({
                     'material_id': mat.material_id,
                     'project_id': mat.project_id,
                     'description': mat.description,
@@ -119,53 +163,76 @@ def get_all_purchase_request():
                     'created_by': mat.created_by
                 })
 
-        # Serialize purchases to dicts for JSON response
-        purchase_list = []
-        for p in purchases:
+            # Fetch approvals for this purchase
+            approvals = Approval.query.filter_by(purchase_id=purchase.purchase_id).all()
+            approval_data = []
+            for app in approvals:
+                approval_data.append({
+                    'approval_id': app.approval_id,
+                    'reviewer_role': app.reviewer_role,
+                    'status': app.status,
+                    'comments': app.comments,
+                    'reviewed_at': app.reviewed_at,
+                    'reviewed_by': app.reviewed_by,
+                    'created_at': app.created_at,
+                    'created_by': app.created_by,
+                    'last_modified_at': app.last_modified_at,
+                    'last_modified_by': app.last_modified_by
+                })
+
+            # Build final purchase response (✅ includes materials + approvals)
             purchase_list.append({
-                'purchase_id': p.purchase_id,
-                'requested_by': p.requested_by,
-                'site_location': p.site_location,
-                'date': p.date,
-                'project_id': p.project_id,
-                'purpose': p.purpose,
-                'material_ids': p.material_ids,
-                'file_path': p.file_path,
-                'created_at': p.created_at,
-                'created_by': p.created_by
+                'purchase_id': purchase.purchase_id,
+                'user_id': purchase.user_id,
+                'user_name': current_user['full_name'],
+                'requested_by': purchase.requested_by,
+                'site_location': purchase.site_location,
+                'date': purchase.date,
+                'project_id': purchase.project_id,
+                'purpose': purchase.purpose,
+                'material_ids': material_ids,
+                'materials': material_data,     # ✅ nested materials
+                'file_path': purchase.file_path,
+                'created_at': purchase.created_at,
+                'created_by': purchase.created_by,
+                'approvals': approval_data       # ✅ nested approvals
             })
 
         return jsonify({
             'success': True,
             'message': 'Purchase requests fetched successfully',
-            'purchase_requests': purchase_list,
-            'materials': all_materials
+            'purchase_requests': purchase_list
         }), 200
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 def get_purchase_request_by_id(purchase_id):
     try:
-        # Fetch the purchase by ID, assuming it has an is_deleted flag
-        purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
+        current_user = g.user
+        if not current_user:
+            return jsonify({"error": "Not logged in"}), 401
 
+        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
+        if not role or role.role not in ['siteSupervisor', 'mepSupervisor', 'procurement']:
+            return jsonify({
+                'error': 'Invalid role. Only Site Supervisor, MEP Supervisor, or Procurement team can view requisitions'
+            }), 403
+
+        # 🔹 Fetch purchase by ID
+        purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
         if not purchase:
             return jsonify({'error': 'Purchase request not found'}), 404
 
-        # Get materials linked to this purchase
+        # 🔹 Get related materials
         material_ids = purchase.material_ids or []
         materials = []
-
         if material_ids:
             material_objects = Material.query.filter(
-                and_(
-                    Material.is_deleted == False,
-                    Material.material_id.in_(material_ids)
-                )
+                Material.is_deleted == False,
+                Material.material_id.in_(material_ids)
             ).all()
 
-            # Serialize materials
             for mat in material_objects:
                 materials.append({
                     'material_id': mat.material_id,
@@ -181,29 +248,174 @@ def get_purchase_request_by_id(purchase_id):
                     'created_at': mat.created_at,
                     'created_by': mat.created_by
                 })
-        # Serialize purchase
+
+        # 🔹 Get approvals
+        approvals = []
+        approval_objects = Approval.query.filter_by(purchase_id=purchase.purchase_id).all()
+        for appr in approval_objects:
+            approvals.append({
+                'approval_id': appr.approval_id,
+                'status': appr.status,
+                'reviewer_role': appr.reviewer_role,
+                'reviewed_by': appr.reviewed_by,
+                'reviewed_at': appr.reviewed_at,
+                'comments': getattr(appr, 'comments', None),
+                'created_at': appr.created_at,
+                'created_by': appr.created_by,
+                'last_modified_at': appr.last_modified_at,
+                'last_modified_by': appr.last_modified_by
+            })
+
+        # 🔹 Final purchase response with nested materials & approvals
         purchase_data = {
             'purchase_id': purchase.purchase_id,
             'requested_by': purchase.requested_by,
+            'user_id': purchase.user_id,
+            'user_name': current_user['full_name'],
             'site_location': purchase.site_location,
             'date': purchase.date,
             'project_id': purchase.project_id,
             'purpose': purchase.purpose,
             'material_ids': purchase.material_ids,
+            'materials': materials,   # ✅ nested
             'file_path': purchase.file_path,
             'created_at': purchase.created_at,
-            'created_by': purchase.created_by
+            'created_by': purchase.created_by,
+            'approvals': approvals    # ✅ nested
         }
 
         return jsonify({
             'success': True,
             'message': 'Purchase request fetched successfully',
-            'purchase': purchase_data,
-            'materials': materials
+            'purchase': purchase_data
         }), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def update_purchase_request(purchase_id):
+    try:
+        current_user = g.user
+        data = request.get_json()
+
+        # 🔹 1. Fetch purchase by ID
+        purchase = Purchase.query.filter_by(
+            purchase_id=purchase_id, is_deleted=False
+        ).first()
+        if not purchase:
+            return jsonify({'error': 'Purchase request not found'}), 404
+
+        # 🔹 2. Update purchase fields
+        purchase.requested_by = data.get('requested_by', purchase.requested_by)
+        purchase.site_location = data.get('site_location', purchase.site_location)
+        purchase.date = data.get('date', purchase.date)
+        purchase.project_id = data.get('project_id', purchase.project_id)
+        purchase.purpose = data.get('purpose', purchase.purpose)
+        purchase.file_path = data.get('file_path', purchase.file_path)
+        purchase.last_modified_by = current_user['full_name']
+
+        # 🔹 Ensure material_ids is a list
+        if not purchase.material_ids:
+            purchase.material_ids = []
+        elif isinstance(purchase.material_ids, str):  
+            import json
+            purchase.material_ids = json.loads(purchase.material_ids)
+
+        # 🔹 3. Handle materials
+        new_materials = data.get("materials", [])
+        for mat in new_materials:
+            material_id = mat.get("material_id")
+
+            if material_id:
+                # ---- Update existing material ----
+                material = Material.query.filter_by(
+                    material_id=material_id, is_deleted=False
+                ).first()
+                if not material:
+                    return jsonify({'error': f'Material with ID {material_id} not found'}), 404
+
+                material.project_id = mat.get('project_id', material.project_id)
+                material.description = mat.get('description', material.description)
+                material.specification = mat.get('specification', material.specification)
+                material.unit = mat.get('unit', material.unit)
+                material.quantity = mat.get('quantity', material.quantity)
+                material.category = mat.get('category', material.category)
+                material.cost = mat.get('cost', material.cost)
+                material.priority = mat.get('priority', material.priority)
+                material.design_reference = mat.get('design_reference', material.design_reference)
+                material.last_modified_by = current_user['full_name']
+                db.session.add(material)
+
+                # ✅ Ensure material_id is in purchase.material_ids
+                if material_id not in purchase.material_ids:
+                    purchase.material_ids.append(material_id)
+
+            else:
+                # ---- Create new material ----
+                new_material = Material(
+                    project_id=mat.get("project_id"),
+                    description=mat.get("description"),
+                    specification=mat.get("specification"),
+                    unit=mat.get("unit"),
+                    quantity=mat.get("quantity"),
+                    category=mat.get("category"),
+                    cost=mat.get("cost"),
+                    priority=mat.get("priority"),
+                    design_reference=mat.get("design_reference"),
+                    created_by=current_user['full_name']
+                )
+                db.session.add(new_material)
+                db.session.flush()  # ✅ ensures new_material.material_id is generated before commit
+
+                # ✅ Append new material_id to purchase
+                if new_material.material_id not in purchase.material_ids:
+                    purchase.material_ids.append(new_material.material_id)
+
+        # 🔹 Save purchase with updated material_ids
+        purchase.last_modified_by = current_user['full_name']
+        db.session.add(purchase)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Purchase request updated successfully",
+            "purchase_id": purchase.purchase_id,
+            "material_ids": purchase.material_ids
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+def delete_purchase(purchase_id):
+    try:
+        # 1️⃣ Find the purchase
+        purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
+
+        if not purchase:
+            return jsonify({"message": "Purchase not found"}), 404
+
+        # if purchase:
+        #     item = RequisitionItem.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
+        #     if item:
+        #         item.is_deleted = True
+        if purchase.material_ids:  # make sure it's not empty/null
+            materials = Material.query.filter(
+                Material.material_id.in_(purchase.material_ids),  # ✅ use IN instead of =
+                Material.is_deleted == False
+            ).all()
+            for mat in materials:
+                mat.is_deleted = True
+
+        purchase.is_deleted = True
+        # 4️⃣ Save changes
+        db.session.commit()
+
+        return jsonify({"message": f"Purchase {purchase_id} and related records deleted successfully"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 supabase_url = os.environ.get('SUPABASE_URL')
 supabase_key = os.environ.get('SUPABASE_KEY') # Use service role for uploading
