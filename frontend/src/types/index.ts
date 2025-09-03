@@ -7,20 +7,21 @@ export interface BaseEntity {
 
 // User Types - matching database exactly (camelCase)
 export enum UserRole {
-  TECHNICAL_DIRECTOR = 'technicalDirector',
-  PROJECT_MANAGER = 'projectManager',
-  PROCUREMENT = 'procurement',
   SITE_SUPERVISOR = 'siteSupervisor',
   MEP_SUPERVISOR = 'mepSupervisor',
+  PROCUREMENT = 'procurement',
+  PROJECT_MANAGER = 'projectManager',
+  DESIGN = 'design',
   ESTIMATION = 'estimation',
   ACCOUNTS = 'accounts',
-  DESIGN = 'design',
+  TECHNICAL_DIRECTOR = 'technicalDirector',
 }
 
 export interface User extends BaseEntity {
   email: string;
   full_name: string;
-  role_id: UserRole;
+  role_id: UserRole | number | string; // Can be numeric ID from backend or role string
+  role_name?: string; // Optional role name from backend
   department?: string;
   phone?: string;
   avatar_url?: string;

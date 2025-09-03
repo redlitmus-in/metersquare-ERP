@@ -209,6 +209,7 @@ def handle_get_logged_in_user():
                 "full_name": current_user.get("full_name"),
                 "phone": current_user.get("phone"),
                 "role": role_name,
+                "role_id": current_user.get("role_id"),  # Include numeric role_id
                 "department": current_user.get("department"),
                 "is_active": current_user.get("is_active")
             },

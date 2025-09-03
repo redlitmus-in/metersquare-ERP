@@ -101,10 +101,12 @@ apiClient.interceptors.response.use(
 // API endpoints
 export const API_ENDPOINTS = {
   AUTH: {
-    LOGIN: '/auth/login',
-    REGISTER: '/auth/register',
-    LOGOUT: '/auth/logout',
-    ME: '/auth/me',
+    LOGIN: '/login',
+    REGISTER: '/register',
+    LOGOUT: '/logout',
+    ME: '/self',
+    VERIFY_OTP: '/verification_otp',
+    SEND_OTP: '/send_otp',
   },
   USERS: {
     LIST: '/users',
@@ -144,6 +146,12 @@ export const API_ENDPOINTS = {
     PROJECTS_PROGRESS: '/analytics/projects/progress',
     FINANCIAL_REPORT: '/analytics/reports/financial',
     PRODUCTIVITY_REPORT: '/analytics/reports/productivity',
+  },
+  PROCUREMENT: {
+    PURCHASE_REQUISITION: '/purchase',
+    VENDOR_QUOTATIONS: '/vendor-quotations',
+    MATERIAL_REQUISITIONS: '/material-requisitions',
+    DELIVERIES: '/deliveries',
   },
 };
 

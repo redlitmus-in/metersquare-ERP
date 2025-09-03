@@ -269,10 +269,10 @@ const ModernDashboard: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">
-            Welcome back, {user?.full_name}!
+            Projects Overview
           </h1>
           <p className="text-xs text-gray-600 mt-0.5">
-            Here's your projects overview
+            Monitor your active projects and recent activity
           </p>
         </div>
         <div className="flex items-center gap-2 mt-3 md:mt-0">

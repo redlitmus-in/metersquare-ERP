@@ -48,54 +48,8 @@ const MaterialDispatchProductionPage: React.FC = () => {
   const [showWorkflow, setShowWorkflow] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
 
-  // Mock data for material dispatch requests
-  const materialDispatches: MaterialDispatch[] = [
-    {
-      id: '1',
-      requisitionNumber: 'MRF-2024-001',
-      projectName: 'Marina Bay Residential - Joinery',
-      factorySection: 'Joinery Workshop',
-      requestedBy: 'John Tan - Factory Supervisor',
-      requestDate: '2024-08-25',
-      status: 'pending_approval',
-      totalItems: 15,
-      totalValue: 12500,
-      qtySpecFlag: false,
-      bulkQtyApproved: false,
-      currentApprover: 'Project Manager',
-      productionStage: 'requested'
-    },
-    {
-      id: '2',
-      requisitionNumber: 'MRF-2024-002',
-      projectName: 'Orchard Tower - Furniture',
-      factorySection: 'Furniture Production',
-      requestedBy: 'Sarah Chen - Production Lead',
-      requestDate: '2024-08-24',
-      status: 'dispatched',
-      totalItems: 8,
-      totalValue: 8750,
-      qtySpecFlag: true,
-      bulkQtyApproved: true,
-      currentApprover: '',
-      productionStage: 'dispatched'
-    },
-    {
-      id: '3',
-      requisitionNumber: 'MRF-2024-003',
-      projectName: 'Sentosa Resort - Custom Fixtures',
-      factorySection: 'Custom Workshop',
-      requestedBy: 'Michael Lim - Workshop Manager',
-      requestDate: '2024-08-23',
-      status: 'in_production',
-      totalItems: 22,
-      totalValue: 18900,
-      qtySpecFlag: true,
-      bulkQtyApproved: true,
-      currentApprover: '',
-      productionStage: 'in_production'
-    }
-  ];
+  // Initialize empty material dispatches - will be fetched from API
+  const [materialDispatches, setMaterialDispatches] = useState<MaterialDispatch[]>([]);
 
   const getStatusConfig = (status: MaterialDispatch['status']) => {
     const configs = {

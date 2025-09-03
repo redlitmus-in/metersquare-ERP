@@ -86,91 +86,14 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
     };
   }, [showPanel]);
 
-  // Mock notifications data
+  // Initialize empty notifications - will be fetched from API
   useEffect(() => {
-    const mockNotifications: Notification[] = [
-      {
-        id: '1',
-        type: 'approval',
-        title: 'Purchase Requisition Approval',
-        message: 'PR-2024-001 requires your approval for Marina Bay project',
-        timestamp: new Date(Date.now() - 5 * 60000),
-        read: false,
-        priority: 'urgent',
-        category: 'approval',
-        actionRequired: true,
-        actionUrl: '/approval/PR-2024-001',
-        actionLabel: 'Review Now',
-        metadata: {
-          documentId: 'PR-2024-001',
-          documentType: 'purchase_requisition',
-          amount: 45000,
-          sender: 'John Tan',
-          project: 'Marina Bay Residences'
-        }
-      },
-      {
-        id: '2',
-        type: 'alert',
-        title: 'Cost Overrun Alert',
-        message: 'Project budget exceeded by 15% for Orchard Office',
-        timestamp: new Date(Date.now() - 30 * 60000),
-        read: false,
-        priority: 'high',
-        category: 'project',
-        metadata: {
-          project: 'Orchard Office Fit-out',
-          amount: 125000
-        }
-      },
-      {
-        id: '3',
-        type: 'success',
-        title: 'Vendor Quotation Approved',
-        message: 'VQ-2024-002 has been approved by all stakeholders',
-        timestamp: new Date(Date.now() - 2 * 3600000),
-        read: true,
-        priority: 'medium',
-        category: 'vendor',
-        metadata: {
-          documentId: 'VQ-2024-002',
-          documentType: 'vendor_quotation',
-          amount: 98000
-        }
-      },
-      {
-        id: '4',
-        type: 'reminder',
-        title: 'Payment Due Reminder',
-        message: 'Invoice payment due in 3 days for ABC Contractors',
-        timestamp: new Date(Date.now() - 4 * 3600000),
-        read: false,
-        priority: 'high',
-        category: 'procurement',
-        actionRequired: true,
-        actionLabel: 'Process Payment',
-        metadata: {
-          amount: 75000,
-          sender: 'ABC Contractors Pte Ltd'
-        }
-      },
-      {
-        id: '5',
-        type: 'update',
-        title: 'Delivery Status Update',
-        message: 'Materials for PR-2024-003 delivered to site',
-        timestamp: new Date(Date.now() - 24 * 3600000),
-        read: true,
-        priority: 'low',
-        category: 'procurement',
-        metadata: {
-          documentId: 'PR-2024-003',
-          project: 'Sentosa Resort'
-        }
-      }
-    ];
-
-    setNotifications(mockNotifications);
+    // TODO: Fetch notifications from API
+    // const fetchNotifications = async () => {
+    //   const response = await apiClient.get('/notifications');
+    //   setNotifications(response.data);
+    // };
+    // fetchNotifications();
   }, []);
 
   const getNotificationIcon = (type: Notification['type']) => {

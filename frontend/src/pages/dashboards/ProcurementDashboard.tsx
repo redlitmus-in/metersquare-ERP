@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DocumentViewModal from '@/components/DocumentViewModal';
 import { motion } from 'framer-motion';
+import { apiClient } from '@/api/config';
+import { toast } from 'sonner';
 import {
   Package,
   Users,
@@ -27,7 +29,8 @@ import {
   Award,
   Target,
   Zap,
-  Shield
+  Shield,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -80,79 +83,172 @@ const ProcurementDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVendorQuote, setSelectedVendorQuote] = useState<VendorQuotation | null>(null);
   const [showVendorModal, setShowVendorModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
+  const [metrics, setMetrics] = useState<MetricCard[]>([]);
 
-  // Metrics data
-  const metrics: MetricCard[] = [
-    {
-      title: 'Total Purchase Value',
-      value: 'AED 1,245,890',
-      change: 12.5,
-      icon: Banknote,
-      color: 'bg-green-500',
-      trend: 'up'
-    },
-    {
-      title: 'Active Requisitions',
-      value: 28,
-      change: -5.2,
-      icon: FileText,
-      color: 'bg-[#243d8a]',
-      trend: 'down'
-    },
-    {
-      title: 'Pending Approvals',
-      value: 15,
-      change: 25.0,
-      icon: Clock,
-      color: 'bg-amber-500',
-      trend: 'up'
-    },
-    {
-      title: 'Vendor Performance',
-      value: '92%',
-      change: 3.8,
-      icon: Award,
-      color: 'bg-purple-500',
-      trend: 'up'
-    }
-  ];
+  // Fetch purchase requests from API
+  useEffect(() => {
+    fetchPurchaseRequests();
+  }, []);
 
-  // Purchase requests data
-  const purchaseRequests: PurchaseRequest[] = [
-    {
-      id: '1',
-      prNumber: 'PR-2024-001',
-      project: 'Marina Bay Residences',
-      requester: 'John Tan',
-      amount: 45000,
-      status: 'pending',
-      priority: 'high',
-      date: '2024-01-15',
-      items: 12
-    },
-    {
-      id: '2',
-      prNumber: 'PR-2024-002',
-      project: 'Orchard Office Fit-out',
-      requester: 'Sarah Chen',
-      amount: 78500,
-      status: 'approved',
-      priority: 'medium',
-      date: '2024-01-14',
-      items: 8
-    },
-    {
-      id: '3',
-      prNumber: 'PR-2024-003',
-      project: 'Sentosa Resort',
-      requester: 'David Lim',
-      amount: 23400,
-      status: 'in_progress',
-      priority: 'urgent',
-      date: '2024-01-13',
-      items: 5
+  const fetchPurchaseRequests = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.get('/all_purchase');
+      
+      if (response.data.success) {
+        // Transform API data to match our frontend structure
+        const transformedRequests = response.data.purchase_requests.map((pr: any, index: number) => {
+          // Find materials for this purchase request
+          const materials = response.data.materials.filter((m: any) => 
+            pr.material_ids?.includes(m.material_id)
+          );
+          
+          // Calculate total amount from materials
+          const totalAmount = materials.reduce((sum: number, m: any) => 
+            sum + (m.quantity * m.cost), 0
+          );
+          
+          // Get priority from first material (or default to 'medium')
+          const priority = materials[0]?.priority?.toLowerCase() || 'medium';
+          
+          return {
+            id: pr.purchase_id.toString(),
+            prNumber: `PR-2024-${String(pr.purchase_id).padStart(3, '0')}`,
+            project: pr.project_id ? `Project ${pr.project_id}` : 'General Purchase',
+            requester: pr.requested_by || pr.created_by || 'Unknown',
+            amount: totalAmount,
+            status: 'pending' as const, // Default status, will be updated from workflow
+            priority: priority as 'low' | 'medium' | 'high' | 'urgent',
+            date: pr.date || pr.created_at || new Date().toISOString(),
+            items: materials.length
+          };
+        });
+        
+        setPurchaseRequests(transformedRequests);
+        
+        // Calculate metrics based on real data
+        const totalValue = transformedRequests.reduce((sum: number, pr: PurchaseRequest) => sum + pr.amount, 0);
+        const pendingCount = transformedRequests.filter((pr: PurchaseRequest) => pr.status === 'pending').length;
+        const approvedCount = transformedRequests.filter((pr: PurchaseRequest) => pr.status === 'approved').length;
+        
+        setMetrics([
+          {
+            title: 'Total Purchase Value',
+            value: `AED ${totalValue.toLocaleString()}`,
+            change: 12.5, // You can calculate this from historical data
+            icon: Banknote,
+            color: 'bg-green-500',
+            trend: 'up'
+          },
+          {
+            title: 'Active Requisitions',
+            value: transformedRequests.length,
+            change: -5.2,
+            icon: FileText,
+            color: 'bg-[#243d8a]',
+            trend: 'down'
+          },
+          {
+            title: 'Pending Approvals',
+            value: pendingCount,
+            change: 25.0,
+            icon: Clock,
+            color: 'bg-amber-500',
+            trend: 'up'
+          },
+          {
+            title: 'Vendor Performance',
+            value: '92%', // This would come from vendor metrics API
+            change: 3.8,
+            icon: Award,
+            color: 'bg-purple-500',
+            trend: 'up'
+          }
+        ]);
+      } else {
+        toast.error('Failed to fetch purchase requests');
+        // Set empty data on error
+        setPurchaseRequests([]);
+        setMetrics([
+          {
+            title: 'Total Purchase Value',
+            value: 'AED 0',
+            change: 0,
+            icon: Banknote,
+            color: 'bg-green-500',
+            trend: 'up'
+          },
+          {
+            title: 'Active Requisitions',
+            value: 0,
+            change: 0,
+            icon: FileText,
+            color: 'bg-[#243d8a]',
+            trend: 'down'
+          },
+          {
+            title: 'Pending Approvals',
+            value: 0,
+            change: 0,
+            icon: Clock,
+            color: 'bg-amber-500',
+            trend: 'up'
+          },
+          {
+            title: 'Vendor Performance',
+            value: '0%',
+            change: 0,
+            icon: Award,
+            color: 'bg-purple-500',
+            trend: 'up'
+          }
+        ]);
+      }
+    } catch (error: any) {
+      console.error('Error fetching purchase requests:', error);
+      toast.error(error.response?.data?.error || 'Failed to fetch purchase requests');
+      setPurchaseRequests([]);
+      // Set default metrics on error
+      setMetrics([
+        {
+          title: 'Total Purchase Value',
+          value: 'AED 0',
+          change: 0,
+          icon: Banknote,
+          color: 'bg-green-500',
+          trend: 'up'
+        },
+        {
+          title: 'Active Requisitions',
+          value: 0,
+          change: 0,
+          icon: FileText,
+          color: 'bg-[#243d8a]',
+          trend: 'down'
+        },
+        {
+          title: 'Pending Approvals',
+          value: 0,
+          change: 0,
+          icon: Clock,
+          color: 'bg-amber-500',
+          trend: 'up'
+        },
+        {
+          title: 'Vendor Performance',
+          value: '0%',
+          change: 0,
+          icon: Award,
+          color: 'bg-purple-500',
+          trend: 'up'
+        }
+      ]);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   // Vendor quotations data
   const vendorQuotations: VendorQuotation[] = [
@@ -251,6 +347,18 @@ const ProcurementDashboard: React.FC = () => {
         documentId={selectedPR}
         currentUserRole="Estimation"
       />
+    );
+  }
+
+  // Show loading spinner while fetching data
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-[#243d8a] mx-auto mb-4" />
+          <p className="text-gray-600">Loading procurement data...</p>
+        </div>
+      </div>
     );
   }
 
@@ -455,7 +563,25 @@ const ProcurementDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {purchaseRequests.map((pr) => (
+                    {purchaseRequests.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-12 text-center">
+                          <div className="text-gray-500">
+                            <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                            <p className="text-lg font-medium">No purchase requisitions found</p>
+                            <p className="text-sm mt-1">Create your first purchase requisition to get started</p>
+                            <Button 
+                              onClick={() => setActiveView('purchase')}
+                              className="mt-4 bg-[#243d8a] hover:bg-[#243d8a]/90"
+                            >
+                              <Plus className="w-4 h-4 mr-2" />
+                              Create Purchase Request
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                    purchaseRequests.map((pr) => (
                       <motion.tr 
                         key={pr.id}
                         initial={{ opacity: 0 }}
@@ -525,7 +651,7 @@ const ProcurementDashboard: React.FC = () => {
                           </div>
                         </td>
                       </motion.tr>
-                    ))}
+                    )))}
                   </tbody>
                 </table>
               </div>

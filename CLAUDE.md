@@ -394,6 +394,12 @@ npm run preview         # Preview production build
 
 ## 🔒 Development Rules & Standards
 
+### Currency Configuration
+- **DEFAULT CURRENCY**: AED (United Arab Emirates Dirham)
+- **ALWAYS use AED** as the currency symbol in all displays
+- Format: `AED {amount.toLocaleString()}` for proper number formatting
+- DO NOT use INR (₹) or any other currency symbols
+
 ### API Configuration
 - **NEVER hardcode API URLs** in frontend code (no localhost, IP addresses, or direct URLs)
 - **ALWAYS use `VITE_API_BASE_URL`** environment variable for API endpoints

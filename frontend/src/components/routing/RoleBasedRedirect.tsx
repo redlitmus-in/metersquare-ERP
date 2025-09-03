@@ -1,7 +1,7 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
-import { getRoleDashboardPath } from '@/utils/roleRouting';
+import { getRoleSlug } from '@/utils/roleRouting';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 interface RoleBasedRedirectProps {
@@ -9,11 +9,12 @@ interface RoleBasedRedirectProps {
 }
 
 /**
- * Component that handles role-based redirection
- * Redirects users to their role-specific dashboard if accessing generic /dashboard
+ * Component that handles authentication redirection
+ * Ensures users are authenticated before accessing protected routes
+ * and redirects them to their role-specific dashboard
  */
 const RoleBasedRedirect: React.FC<RoleBasedRedirectProps> = ({ children }) => {
-  const { user, isAuthenticated, isLoading } = useAuthStore();
+  const { user, isAuthenticated, isLoading, getRoleDashboard } = useAuthStore();
   const location = useLocation();
 
   // Show loading state while checking authentication
@@ -30,10 +31,10 @@ const RoleBasedRedirect: React.FC<RoleBasedRedirectProps> = ({ children }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If user is accessing generic /dashboard, redirect to role-specific dashboard
-  if (location.pathname === '/dashboard' && user.role_id) {
-    const roleDashboard = getRoleDashboardPath(user.role_id);
-    return <Navigate to={roleDashboard} replace />;
+  // If user is authenticated and at root, redirect to role-specific dashboard
+  if (location.pathname === '/') {
+    const dashboardPath = getRoleDashboard();
+    return <Navigate to={dashboardPath} replace />;
   }
 
   // Otherwise, render children

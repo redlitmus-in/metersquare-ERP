@@ -46,6 +46,7 @@ import OTPInput from '@/components/OTPInput';
 import { AnimatePresence } from 'framer-motion';
 import { authApi } from '@/api/auth';
 import { getRoleDashboardPath } from '@/utils/roleRouting';
+import { clearAllCachedData } from '@/utils/clearCache';
 import './LoginPage.css';
 
 const loginSchema = z.object({
@@ -107,6 +108,9 @@ const LoginPage: React.FC = () => {
         });
         return;
       }
+      
+      // Clear any stale cached data before login
+      clearAllCachedData();
 
       setUserEmail(data.email);
       setUserRole(data.role);

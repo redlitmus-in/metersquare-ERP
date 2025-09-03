@@ -7,8 +7,7 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
-  BarChart3,
-  Activity
+  BarChart3
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { useAuthStore } from '@/store/authStore';
@@ -49,28 +48,13 @@ const BaseDashboard: React.FC<BaseDashboardProps> = ({
         animate={{ opacity: 1, y: 0 }}
         className="mb-8"
       >
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {title || `${roleName} Dashboard`}
-            </h1>
-            {subtitle && (
-              <p className="text-gray-600 mt-1">{subtitle}</p>
-            )}
-          </div>
-          <div className={`px-4 py-2 bg-${roleColor}-100 text-${roleColor}-800 rounded-lg font-semibold`}>
-            {roleName}
-          </div>
-        </div>
-        
-        {/* Current Role Indicator */}
-        <div className="flex items-center gap-2 text-sm text-gray-500 mt-2">
-          <Activity className="w-4 h-4" />
-          <span>Logged in as: {user?.full_name || 'User'}</span>
-          <span className="text-gray-400">•</span>
-          <span>Role: {roleName}</span>
-          <span className="text-gray-400">•</span>
-          <span>Department: {user?.department || 'N/A'}</span>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {title || `${roleName} Dashboard`}
+          </h1>
+          {subtitle && (
+            <p className="text-gray-600 mt-1">{subtitle}</p>
+          )}
         </div>
       </motion.div>
 

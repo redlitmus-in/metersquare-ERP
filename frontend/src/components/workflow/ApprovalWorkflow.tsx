@@ -75,75 +75,10 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({
   const [comments, setComments] = useState('');
   const [showHistory, setShowHistory] = useState(false);
 
-  // Mock approval chain data
-  const approvalSteps: ApprovalStep[] = [
-    {
-      id: '1',
-      role: 'Site Supervisor',
-      approver: 'John Tan',
-      status: 'approved',
-      date: '2024-01-15 09:30 AM',
-      comments: 'Urgent requirement for ongoing project',
-      duration: '2 hours'
-    },
-    {
-      id: '2',
-      role: 'Procurement',
-      approver: 'Sarah Chen',
-      status: 'approved',
-      date: '2024-01-15 11:45 AM',
-      comments: 'Vendor verification completed. Best price confirmed.',
-      flags: { qtySpecFlag: true, costFlag: false },
-      duration: '3 hours'
-    },
-    {
-      id: '3',
-      role: 'Estimation',
-      approver: 'David Lim',
-      status: 'in-review',
-      date: 'In Progress',
-      flags: { qtySpecFlag: false, costFlag: false }
-    },
-    {
-      id: '4',
-      role: 'Project Manager',
-      approver: 'Jennifer Wong',
-      status: 'pending'
-    },
-    {
-      id: '5',
-      role: 'Technical Director',
-      approver: 'Michael Tan',
-      status: 'pending'
-    }
-  ];
+  // Initialize empty approval steps - will be fetched from API
+  const [approvalSteps, setApprovalSteps] = useState<ApprovalStep[]>([]);
 
-  const approvalHistory = [
-    {
-      id: '1',
-      action: 'Document Created',
-      user: 'John Tan',
-      role: 'Site Supervisor',
-      date: '2024-01-15 09:00 AM',
-      type: 'create'
-    },
-    {
-      id: '2',
-      action: 'Submitted for Approval',
-      user: 'John Tan',
-      role: 'Site Supervisor',
-      date: '2024-01-15 09:30 AM',
-      type: 'submit'
-    },
-    {
-      id: '3',
-      action: 'Approved with Comments',
-      user: 'Sarah Chen',
-      role: 'Procurement',
-      date: '2024-01-15 11:45 AM',
-      type: 'approve',
-      comments: 'Vendor verification completed'
-    },
+  const [approvalHistory, setApprovalHistory] = useState([
     {
       id: '4',
       action: 'Under Review',
@@ -152,7 +87,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({
       date: '2024-01-15 02:30 PM',
       type: 'review'
     }
-  ];
+  ]);
 
   const getStatusColor = (status: ApprovalStep['status']) => {
     switch (status) {

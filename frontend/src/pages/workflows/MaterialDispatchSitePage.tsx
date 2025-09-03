@@ -52,60 +52,8 @@ const MaterialDispatchSitePage: React.FC = () => {
   const [showWorkflow, setShowWorkflow] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
 
-  // Mock data for site material dispatch
-  const siteDispatches: SiteDispatch[] = [
-    {
-      id: '1',
-      deliveryNoteNumber: 'DN-2024-001',
-      projectName: 'Marina Bay Residential - Block A',
-      siteLocation: 'Marina Bay Construction Site',
-      requestedBy: 'John Tan - Site Supervisor',
-      supervisorType: 'site',
-      requestDate: '2024-08-25',
-      status: 'pending_approval',
-      totalItems: 25,
-      totalValue: 18500,
-      qtySpecReqFlag: false,
-      bulkQtyDispatched: false,
-      currentApprover: 'Project Manager',
-      deliveryStage: 'requested',
-      urgency: 'high'
-    },
-    {
-      id: '2',
-      deliveryNoteNumber: 'DN-2024-002',
-      projectName: 'Orchard Tower - MEP Installation',
-      siteLocation: 'Orchard Tower Site',
-      requestedBy: 'Sarah Chen - MEP Supervisor',
-      supervisorType: 'mep',
-      requestDate: '2024-08-24',
-      status: 'dispatched',
-      totalItems: 15,
-      totalValue: 12750,
-      qtySpecReqFlag: true,
-      bulkQtyDispatched: true,
-      currentApprover: '',
-      deliveryStage: 'bulk_dispatched',
-      urgency: 'normal'
-    },
-    {
-      id: '3',
-      deliveryNoteNumber: 'DN-2024-003',
-      projectName: 'Sentosa Resort - Fixtures Installation',
-      siteLocation: 'Sentosa Resort Site',
-      requestedBy: 'Michael Lim - Factory Supervisor',
-      supervisorType: 'factory',
-      requestDate: '2024-08-23',
-      status: 'delivered',
-      totalItems: 12,
-      totalValue: 8900,
-      qtySpecReqFlag: true,
-      bulkQtyDispatched: true,
-      currentApprover: '',
-      deliveryStage: 'site_delivered',
-      urgency: 'urgent'
-    }
-  ];
+  // Initialize empty site dispatches - will be fetched from API
+  const [siteDispatches, setSiteDispatches] = useState<SiteDispatch[]>([]);
 
   const getStatusConfig = (status: SiteDispatch['status']) => {
     const configs = {

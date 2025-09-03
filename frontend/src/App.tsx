@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { validateSupabaseConnection } from '@/utils/environment';
+import { setupCacheValidator } from '@/utils/clearCache';
 
 // Pages
 import { LoginPage } from '@/pages/auth/LoginPage';
@@ -42,6 +43,8 @@ import MaterialDispatchSitePage from '@/pages/workflows/MaterialDispatchSitePage
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import RoleBasedRedirect from '@/components/routing/RoleBasedRedirect';
+import RoleRouteWrapper from '@/components/routing/RoleRouteWrapper';
+import RoleDashboard from '@/components/routing/RoleDashboard';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -89,6 +92,9 @@ function App() {
   const [isEnvironmentValid, setIsEnvironmentValid] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // Setup cache validation for role mismatches
+    setupCacheValidator();
+    
     // Validate environment configuration on app startup
     const validateEnvironment = async () => {
       try {
@@ -166,49 +172,53 @@ function App() {
           }
         />
 
-        {/* Protected Routes */}
+        {/* Root redirect to login or dashboard */}
         <Route
           path="/"
           element={
             <ProtectedRoute>
-              <DashboardLayout />
+              <RoleBasedRedirect />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Protected Routes with Role Prefix */}
+        <Route
+          path="/:role"
+          element={
+            <ProtectedRoute>
+              <RoleRouteWrapper />
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<RoleBasedRedirect><ModernDashboard /></RoleBasedRedirect>} />
-         
-          {/* Role-specific dashboard routes */}
-          <Route path="dashboard/technical-director" element={<TechnicalDirectorDashboard />} />
-          <Route path="dashboard/project-manager" element={<ProjectManagerDashboard />} />
-          <Route path="dashboard/procurement" element={<ProcurementOfficerDashboard />} />
-          <Route path="dashboard/site-supervisor" element={<SiteSupervisorDashboard />} />
-          <Route path="dashboard/mep-supervisor" element={<MEPSupervisorDashboard />} />
-          <Route path="dashboard/estimation" element={<EstimationDashboard />} />
-          <Route path="dashboard/accounts" element={<AccountsDashboard />} />
-          <Route path="dashboard/design" element={<DesignDashboard />} />
-          <Route path="procurement" element={<ProcurementDashboard />} />
-          <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
-          <Route path="procurement/purchase-requests/edit/:id" element={<PurchaseRequestsPage />} />
-          <Route path="procurement/quotations" element={<VendorQuotationsPage />} />
-          <Route path="procurement/vendor-quotations/edit/:id" element={<VendorQuotationsPage />} />
-          <Route path="procurement/approvals" element={<ApprovalsPage />} />
-          <Route path="procurement/deliveries" element={<DeliveriesPage />} />
-          <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
-          <Route path="tasks" element={<TasksPage />} />
-          <Route path="projects" element={<ProjectsPage />} />
-          <Route path="projects/:id" element={<ProjectsPage />} />
-          <Route path="projects/:id/edit" element={<ProjectsPage />} />
-          <Route path="process-flow" element={<ProcessFlowPage />} />
-          <Route path="workflow-status" element={<WorkflowStatusPage />} />
-          <Route path="workflows/material-dispatch-production" element={<MaterialDispatchProductionPage />} />
-          <Route path="workflows/material-dispatch-site" element={<MaterialDispatchSitePage />} />
-          <Route path="analytics" element={<AnalyticsPage />} />
-          <Route path="profile" element={<ProfilePage />} />
+          <Route element={<DashboardLayout />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            
+            {/* Main Routes - Use RoleDashboard for dynamic dashboard loading */}
+            <Route path="dashboard" element={<RoleDashboard />} />
+            <Route path="procurement" element={<ProcurementDashboard />} />
+            <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
+            <Route path="procurement/purchase-requests/edit/:id" element={<PurchaseRequestsPage />} />
+            <Route path="procurement/quotations" element={<VendorQuotationsPage />} />
+            <Route path="procurement/vendor-quotations/edit/:id" element={<VendorQuotationsPage />} />
+            <Route path="procurement/approvals" element={<ApprovalsPage />} />
+            <Route path="procurement/deliveries" element={<DeliveriesPage />} />
+            <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
+            <Route path="tasks" element={<TasksPage />} />
+            <Route path="projects" element={<ProjectsPage />} />
+            <Route path="projects/:id" element={<ProjectsPage />} />
+            <Route path="projects/:id/edit" element={<ProjectsPage />} />
+            <Route path="process-flow" element={<ProcessFlowPage />} />
+            <Route path="workflow-status" element={<WorkflowStatusPage />} />
+            <Route path="workflows/material-dispatch-production" element={<MaterialDispatchProductionPage />} />
+            <Route path="workflows/material-dispatch-site" element={<MaterialDispatchSitePage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+          </Route>
         </Route>
 
-        {/* Catch all route */}
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        {/* Catch all route - redirect to login */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </div>
   );

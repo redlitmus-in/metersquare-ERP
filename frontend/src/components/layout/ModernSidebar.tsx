@@ -10,6 +10,8 @@ import {
   ChartBarIcon,
   ArrowPathIcon,
   UserIcon,
+  UserCircleIcon,
+  ArrowRightOnRectangleIcon,
   ShoppingCartIcon,
   Cog6ToothIcon,
   ChevronRightIcon,
@@ -31,7 +33,7 @@ import {
 } from '@heroicons/react/24/solid';
 import { useAuthStore } from '@/store/authStore';
 import { UserRole } from '@/types';
-import { getRoleDisplayName, getRoleThemeColor } from '@/utils/roleRouting';
+import { getRoleDisplayName, getRoleThemeColor, buildRolePath } from '@/utils/roleRouting';
 import { clsx } from 'clsx';
 
 interface NavigationItem {
@@ -59,6 +61,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
     const saved = localStorage.getItem('sidebarCollapsed');
     return saved === 'true';
   });
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
 
   // Listen for storage changes to sync collapsed state across components
   React.useEffect(() => {
@@ -94,37 +97,42 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
 
   // Enhanced navigation with sections and colors
   const getNavigationItems = (): NavigationItem[] => {
+    const roleId = user?.role_id;
+    
+    // Build role-prefixed paths
+    const buildPath = (path: string) => buildRolePath(roleId || '', path);
+    
     const baseItems: NavigationItem[] = [
       { 
         name: `Dashboard`, 
-        href: dashboardPath, 
+        href: buildPath('/dashboard'), 
         icon: HomeIcon, 
         iconSolid: HomeSolid,
         color: 'text-[#243d8a]'
       },
       { 
         name: 'Procurement', 
-        href: '/procurement', 
+        href: buildPath('/procurement'), 
         icon: ShoppingCartIcon, 
         iconSolid: ShoppingSolid,
         color: 'text-red-600',
         children: [
-          { name: 'Purchase Requests', href: '/procurement/requests', icon: DocumentTextIcon, iconSolid: DocumentTextIcon },
-          { name: 'Vendor Quotations', href: '/procurement/quotations', icon: BuildingOfficeIcon, iconSolid: BuildingOfficeIcon },
-          { name: 'Approvals', href: '/procurement/approvals', icon: ClipboardDocumentCheckIcon, iconSolid: ClipboardDocumentCheckIcon },
-          { name: 'Deliveries', href: '/procurement/deliveries', icon: TruckIcon, iconSolid: TruckIcon }
+          { name: 'Purchase Requests', href: buildPath('/procurement/requests'), icon: DocumentTextIcon, iconSolid: DocumentTextIcon },
+          { name: 'Vendor Quotations', href: buildPath('/procurement/quotations'), icon: BuildingOfficeIcon, iconSolid: BuildingOfficeIcon },
+          { name: 'Approvals', href: buildPath('/procurement/approvals'), icon: ClipboardDocumentCheckIcon, iconSolid: ClipboardDocumentCheckIcon },
+          { name: 'Deliveries', href: buildPath('/procurement/deliveries'), icon: TruckIcon, iconSolid: TruckIcon }
         ]
       },
       { 
         name: 'Pending Actions', 
-        href: '/tasks', 
+        href: buildPath('/tasks'), 
         icon: CheckCircleIcon, 
         iconSolid: CheckCircleIcon,
         color: 'text-green-600'
       },
       { 
         name: 'Workflow Status', 
-        href: '/workflow-status', 
+        href: buildPath('/workflow-status'), 
         icon: ArrowPathIcon, 
         iconSolid: ArrowPathIcon,
         color: 'text-purple-600'
@@ -133,8 +141,8 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
 
     const managerItems: NavigationItem[] = [
       { 
-        name: 'Team', 
-        href: '/users', 
+        name: 'Projects', 
+        href: buildPath('/projects'), 
         icon: UsersIcon, 
         iconSolid: UsersSolid,
         color: 'text-cyan-600'
@@ -144,7 +152,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
     const executiveItems: NavigationItem[] = [
       { 
         name: 'Analytics', 
-        href: '/analytics', 
+        href: buildPath('/analytics'), 
         icon: ChartBarIcon, 
         iconSolid: ChartSolid,
         color: 'text-orange-600'
@@ -168,10 +176,22 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
   const navigation = getNavigationItems();
 
   const isPathActive = (href: string) => {
-    if (href === '/dashboard') {
-      return location.pathname === href;
+    // Extract the base path from both href and location
+    const pathParts = location.pathname.split('/').filter(Boolean);
+    const hrefParts = href.split('/').filter(Boolean);
+    
+    // Remove role prefix from comparison if present
+    if (pathParts.length > 0 && hrefParts.length > 0) {
+      const locationBasePath = pathParts.slice(1).join('/');
+      const hrefBasePath = hrefParts.slice(1).join('/');
+      
+      if (hrefBasePath === 'dashboard') {
+        return locationBasePath === 'dashboard';
+      }
+      return locationBasePath.startsWith(hrefBasePath);
     }
-    return location.pathname.startsWith(href);
+    
+    return false;
   };
 
   const SidebarContent = () => (
@@ -398,28 +418,80 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
           })}
         </nav>
 
-        {/* User Info Section */}
+        {/* User Info Section with Dropdown */}
         {user && (
           <div className="mt-4 pt-3 border-t border-gray-100">
-            <div className="bg-gradient-to-r from-gray-50 to-[#243d8a]/5 rounded-lg p-3 border border-gray-200">
-              <div className="flex items-center space-x-3">
-                <div className="relative">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#243d8a] to-[#243d8a] flex items-center justify-center shadow-md">
-                    <span className="text-white font-bold text-xs">
-                      {user.full_name.charAt(0).toUpperCase()}
-                    </span>
+            <div className="relative">
+              {/* User Info Button - Clickable */}
+              <button
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className="w-full bg-gradient-to-r from-gray-50 to-[#243d8a]/5 rounded-lg p-3 border border-gray-200 hover:border-[#243d8a]/30 transition-all duration-200"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="relative">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#243d8a] to-[#243d8a] flex items-center justify-center shadow-md">
+                        <span className="text-white font-bold text-xs">
+                          {user.full_name.split(' ')[0].charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                    </div>
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="text-xs font-semibold text-gray-900 truncate">
+                        {user.full_name.split(' ').slice(0, -1).join(' ') || user.full_name}
+                      </p>
+                      <p className="text-[10px] text-gray-600 truncate">
+                        {roleName}
+                      </p>
+                    </div>
                   </div>
-                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                  {!isCollapsed && (
+                    <ChevronDownIcon 
+                      className={clsx(
+                        "w-4 h-4 text-gray-400 transition-transform duration-200",
+                        userDropdownOpen ? "transform rotate-180" : ""
+                      )} 
+                    />
+                  )}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold text-gray-900 truncate">
-                    {user.full_name}
-                  </p>
-                  <p className="text-[10px] text-gray-600 truncate">
-                    {roleName}
-                  </p>
-                </div>
-              </div>
+              </button>
+
+              {/* Dropdown Menu */}
+              <AnimatePresence>
+                {userDropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50"
+                  >
+                    <Link
+                      to="/profile"
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        setSidebarOpen(false);
+                      }}
+                      className="flex items-center px-4 py-3 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+                    >
+                      <UserCircleIcon className="w-4 h-4 text-gray-500 mr-3" />
+                      <span>Profile Settings</span>
+                    </Link>
+                    
+                    <button
+                      onClick={() => {
+                        const { logout } = useAuthStore.getState();
+                        logout();
+                      }}
+                      className="w-full flex items-center px-4 py-3 text-xs font-medium text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200 border-t border-gray-100"
+                    >
+                      <ArrowRightOnRectangleIcon className="w-4 h-4 text-gray-500 mr-3" />
+                      <span>Sign Out</span>
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         )}

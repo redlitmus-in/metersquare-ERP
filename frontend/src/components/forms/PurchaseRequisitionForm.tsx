@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { formatDate, formatDateForInput, getTodayFormatted } from '@/utils/dateFormatter';
+import { apiClient } from '@/api/config';
+import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   Package,
   User,
@@ -20,7 +23,6 @@ import {
   MapPin,
   Paperclip,
   ChevronRight,
-  Save,
   Send,
   X,
   Calculator,
@@ -44,20 +46,18 @@ interface Material {
   specification: string;
   unit: string;
   quantity: number;
-  estimatedCost: number;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  cost: number;
+  priority: 'Low' | 'Medium' | 'High' | 'Urgent';
   category: string;
-  referenceDesign?: string;
+  design_reference?: string;
 }
 
 interface PurchaseRequisitionFormData {
-  requisitionNumber: string;
-  projectId: string;
-  projectName: string;
-  siteLocation: string;
-  requestedBy: string;
-  department: string;
-  dateRequired: string;
+  project_id: number;
+  site_location: string;
+  requested_by: string;
+  date: string;
+  purpose: string;
   materials: Material[];
   justification: string;
   attachments: File[];
@@ -80,8 +80,14 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
   const [attachments, setAttachments] = useState<File[]>([]);
   const [activeTab, setActiveTab] = useState('details');
   const [showPreview, setShowPreview] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [detailsCompleted, setDetailsCompleted] = useState(false);
+  const [materialsCompleted, setMaterialsCompleted] = useState(false);
+  const [designReference, setDesignReference] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
-  const { register, handleSubmit, watch, formState: { errors }, setValue } = useForm<PurchaseRequisitionFormData>();
+  const { register, handleSubmit, watch, formState: { errors }, setValue, getValues } = useForm<PurchaseRequisitionFormData>();
 
   const addMaterial = () => {
     const newMaterial: Material = {
@@ -90,10 +96,10 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       specification: '',
       unit: 'pcs',
       quantity: 1,
-      estimatedCost: 0,
-      priority: 'medium',
+      cost: 0,
+      priority: 'Medium',
       category: '',
-      referenceDesign: ''
+      design_reference: ''
     };
     setMaterials([...materials, newMaterial]);
   };
@@ -109,40 +115,167 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
   };
 
   const calculateTotal = () => {
-    return materials.reduce((sum, m) => sum + (m.quantity * m.estimatedCost), 0);
+    return materials.reduce((sum, m) => sum + (m.quantity * m.cost), 0);
+  };
+
+  const validateDetailsTab = () => {
+    const values = getValues();
+    return selectedProjectId && values.site_location && values.requested_by && values.date && values.purpose;
+  };
+
+  const validateMaterialsTab = () => {
+    return materials.length > 0 && materials.every(m => 
+      m.description && m.specification && m.quantity > 0 && m.category
+    );
+  };
+
+  const handleTabChange = (value: string) => {
+    if (value === 'materials' && !validateDetailsTab()) {
+      toast.error('Please fill all required fields in Details tab first');
+      return;
+    }
+    if (value === 'attachments' && !validateMaterialsTab()) {
+      toast.error('Please add at least one material with complete information');
+      return;
+    }
+    setActiveTab(value);
+  };
+
+  const formatDateForBackend = (dateStr: string) => {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    return dateStr;
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setAttachments([...attachments, ...Array.from(e.target.files)]);
+      const files = Array.from(e.target.files);
+      const validFiles = files.filter(file => {
+        // Check file size (10MB limit)
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`File ${file.name} is too large. Maximum size is 10MB.`);
+          return false;
+        }
+        // Check file type
+        const validTypes = ['application/pdf', 'application/msword', 
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-excel', 
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'image/png', 'image/jpeg', 'image/jpg'];
+        if (!validTypes.includes(file.type)) {
+          toast.error(`File ${file.name} has invalid format. Supported formats: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG`);
+          return false;
+        }
+        return true;
+      });
+      setAttachments([...attachments, ...validFiles]);
+      // Reset the input
+      e.target.value = '';
     }
   };
 
-  const onSubmit = (data: PurchaseRequisitionFormData) => {
-    console.log('Submitting Purchase Requisition:', { ...data, materials, attachments });
-    
+  const onSubmit = async (data: PurchaseRequisitionFormData) => {
+    if (!selectedProjectId) {
+      toast.error('Please select a project');
+      return;
+    }
+
+    if (!validateMaterialsTab()) {
+      toast.error('Please complete all material information');
+      return;
+    }
+
+    setIsUploading(true);
+
+    const payload = {
+      project_id: selectedProjectId,
+      site_location: data.site_location,
+      date: formatDateForBackend(data.date),
+      purpose: data.purpose,
+      design_reference: designReference || '', // Add at purchase level
+      materials: materials.map(m => ({
+        description: m.description,
+        specification: m.specification,
+        unit: m.unit,
+        quantity: m.quantity,
+        category: m.category,
+        cost: m.cost,
+        priority: m.priority,
+        design_reference: designReference || m.design_reference || ''
+      }))
+    };
+
+    console.log('Submitting payload:', payload);
+
     try {
-      // Initialize workflow according to PDF requirements
-      const { initializeWorkflow } = require('@/utils/workflowIntegration');
-      const workflow = initializeWorkflow(
-        'purchase_requisition',
-        `PR-${Date.now()}`, 
-        { ...data, materials, attachments }
-      );
+      // Step 1: Create purchase requisition
+      const response = await apiClient.post('/purchase', payload);
+      console.log('Purchase Response:', response.data);
       
-      console.log('Workflow initialized:', workflow);
-      alert(`Purchase Requisition submitted successfully!\nWorkflow ID: ${workflow.workflowId}\nNext Step: ${workflow.currentStep}\n\n(Backend integration required for full functionality)`);
-    } catch (error) {
-      console.error('Workflow initialization error:', error);
-      alert('Purchase Requisition submitted! (Workflow integration pending)');
+      const purchaseId = response.data.purchase_id;
+      
+      // Step 2: Upload files if any attachments exist
+      if (attachments.length > 0 && purchaseId) {
+        console.log(`Uploading ${attachments.length} file(s) for purchase ID: ${purchaseId}`);
+        
+        // Upload each file
+        for (const file of attachments) {
+          const formData = new FormData();
+          formData.append('file', file);
+          
+          try {
+            const uploadResponse = await apiClient.post(
+              `/upload_file/${purchaseId}`,
+              formData,
+              {
+                headers: {
+                  'Content-Type': 'multipart/form-data',
+                }
+              }
+            );
+            console.log(`File ${file.name} uploaded successfully:`, uploadResponse.data);
+          } catch (uploadError: any) {
+            console.error(`Failed to upload file ${file.name}:`, uploadError);
+            toast.warning(`File ${file.name} could not be uploaded. Purchase requisition was created successfully.`);
+          }
+        }
+      }
+      
+      toast.success('Purchase Requisition submitted successfully!');
+      
+      // Reset form
+      setMaterials([]);
+      setAttachments([]);
+      setSelectedProjectId(null);
+      setDesignReference('');
+      setActiveTab('details');
+      setValue('site_location', '');
+      setValue('purpose', '');
+      setValue('date', '');
+      setValue('requested_by', '');
+      setDetailsCompleted(false);
+      setMaterialsCompleted(false);
+      
+      // Close form if callback provided
+      if (onClose) {
+        onClose();
+      }
+    } catch (error: any) {
+      console.error('Submission error:', error);
+      toast.error(`Failed to submit: ${error.response?.data?.message || error.message}`);
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const priorityColors = {
-    low: 'bg-slate-100 text-slate-700 border-slate-300',
-    medium: 'bg-red-100 text-red-700 border-red-300',
-    high: 'bg-amber-100 text-amber-700 border-amber-300',
-    urgent: 'bg-red-100 text-red-700 border-red-300'
+    Low: 'bg-slate-100 text-slate-700 border-slate-300',
+    Medium: 'bg-red-100 text-red-700 border-red-300',
+    High: 'bg-amber-100 text-amber-700 border-amber-300',
+    Urgent: 'bg-red-100 text-red-700 border-red-300'
   };
 
   return (
@@ -177,8 +310,8 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       </motion.div>
 
       <form onSubmit={handleSubmit(onSubmit)}>
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid grid-cols-4 w-full max-w-2xl bg-white shadow-sm border">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+          <TabsList className="grid grid-cols-3 w-full max-w-2xl bg-white shadow-sm border">
             <TabsTrigger value="details" className="data-[state=active]:bg-red-50">
               <FileText className="w-4 h-4 mr-2" />
               Details
@@ -186,10 +319,6 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
             <TabsTrigger value="materials" className="data-[state=active]:bg-red-50">
               <Package className="w-4 h-4 mr-2" />
               Materials
-            </TabsTrigger>
-            <TabsTrigger value="approvals" className="data-[state=active]:bg-red-50">
-              <Check className="w-4 h-4 mr-2" />
-              Approvals
             </TabsTrigger>
             <TabsTrigger value="attachments" className="data-[state=active]:bg-red-50">
               <Paperclip className="w-4 h-4 mr-2" />
@@ -213,14 +342,17 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                       <Building className="w-4 h-4 text-gray-500" />
                       Project Name
                     </Label>
-                    <Select>
+                    <Select 
+                      value={selectedProjectId?.toString()} 
+                      onValueChange={(value) => setSelectedProjectId(parseInt(value))}
+                    >
                       <SelectTrigger className="h-11 border-gray-200 focus:border-red-500">
                         <SelectValue placeholder="Select project" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="proj1">Marina Bay Residences - Tower A</SelectItem>
-                        <SelectItem value="proj2">Orchard Central Office Fit-out</SelectItem>
-                        <SelectItem value="proj3">Sentosa Resort Renovation</SelectItem>
+                        <SelectItem value="1">Project Alpha</SelectItem>
+                        <SelectItem value="2">Project Beta</SelectItem>
+                        <SelectItem value="3">Project Gamma</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -231,8 +363,8 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                       Site Location
                     </Label>
                     <Input 
-                      {...register('siteLocation', { required: true })}
-                      placeholder="Enter site location"
+                      {...register('site_location', { required: true })}
+                      placeholder="Enter site location (e.g., Erode)"
                       className="h-11 border-gray-200 focus:border-red-500"
                     />
                   </div>
@@ -242,14 +374,17 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                       <User className="w-4 h-4 text-gray-500" />
                       Requested By
                     </Label>
-                    <Select>
+                    <Select
+                      value={watch('requested_by')}
+                      onValueChange={(value) => setValue('requested_by', value)}
+                    >
                       <SelectTrigger className="h-11 border-gray-200 focus:border-red-500">
                         <SelectValue placeholder="Select requester" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="supervisor1">John Tan - Site Supervisor</SelectItem>
-                        <SelectItem value="supervisor2">Sarah Lim - MEP Supervisor</SelectItem>
-                        <SelectItem value="procurement">David Lee - Procurement</SelectItem>
+                        <SelectItem value="Site Supervisor">Site Supervisor</SelectItem>
+                        <SelectItem value="MEP Supervisor">MEP Supervisor</SelectItem>
+                        <SelectItem value="Procurement Manager">Procurement Manager</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -260,7 +395,8 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                       Date Required
                     </Label>
                     <DateInput 
-                      {...register('dateRequired', { required: true })}
+                      value={watch('date')}
+                      onChange={(value) => setValue('date', value)}
                       className="h-11 border-gray-200 focus:border-red-500"
                       placeholder="dd/mm/yyyy"
                     />
@@ -273,10 +409,38 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                     Justification / Purpose
                   </Label>
                   <textarea 
-                    {...register('justification')}
+                    {...register('purpose', { required: true })}
                     className="w-full min-h-[100px] p-3 border border-gray-200 rounded-lg focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                    placeholder="Explain the purpose and urgency of this requisition..."
+                    placeholder="Explain the purpose and urgency of this requisition (e.g., Foundation materials)..."
                   />
+                </div>
+
+                {/* Navigation Buttons for Details Tab */}
+                <div className="flex flex-col sm:flex-row justify-between mt-6 gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={onClose}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (validateDetailsTab()) {
+                        setDetailsCompleted(true);
+                        setActiveTab('materials');
+                      } else {
+                        toast.error('Please fill all required fields');
+                      }
+                    }}
+                    className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto flex items-center justify-center gap-2"
+                  >
+                    Next: Materials
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -354,11 +518,13 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                                 <SelectValue placeholder="Select category" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="hardware">Hardware</SelectItem>
-                                <SelectItem value="electrical">Electrical</SelectItem>
-                                <SelectItem value="plumbing">Plumbing</SelectItem>
-                                <SelectItem value="furniture">Furniture</SelectItem>
-                                <SelectItem value="finishes">Finishes</SelectItem>
+                                <SelectItem value="Structural">Structural</SelectItem>
+                                <SelectItem value="Building Material">Building Material</SelectItem>
+                                <SelectItem value="Hardware">Hardware</SelectItem>
+                                <SelectItem value="Electrical">Electrical</SelectItem>
+                                <SelectItem value="Plumbing">Plumbing</SelectItem>
+                                <SelectItem value="Furniture">Furniture</SelectItem>
+                                <SelectItem value="Finishes">Finishes</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -386,6 +552,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                               <SelectContent>
                                 <SelectItem value="pcs">Pieces</SelectItem>
                                 <SelectItem value="kg">Kilogram</SelectItem>
+                                <SelectItem value="bag">Bag</SelectItem>
                                 <SelectItem value="m">Meter</SelectItem>
                                 <SelectItem value="sqm">Sq. Meter</SelectItem>
                                 <SelectItem value="box">Box</SelectItem>
@@ -407,8 +574,8 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                               <Banknote className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                               <Input
                                 type="number"
-                                value={material.estimatedCost}
-                                onChange={(e) => updateMaterial(material.id, 'estimatedCost', parseFloat(e.target.value))}
+                                value={material.cost}
+                                onChange={(e) => updateMaterial(material.id, 'cost', parseFloat(e.target.value))}
                                 className="pl-9 border-gray-200"
                               />
                             </div>
@@ -419,9 +586,9 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                           <div className="space-y-2">
                             <Label className="text-xs font-semibold text-gray-600">Design Reference</Label>
                             <Input
-                              value={material.referenceDesign}
-                              onChange={(e) => updateMaterial(material.id, 'referenceDesign', e.target.value)}
-                              placeholder="Drawing/Design reference"
+                              value={material.design_reference}
+                              onChange={(e) => updateMaterial(material.id, 'design_reference', e.target.value)}
+                              placeholder="Drawing/Design reference (e.g., DR-001)"
                               className="border-gray-200"
                             />
                           </div>
@@ -435,10 +602,10 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="low">Low Priority</SelectItem>
-                                <SelectItem value="medium">Medium Priority</SelectItem>
-                                <SelectItem value="high">High Priority</SelectItem>
-                                <SelectItem value="urgent">Urgent</SelectItem>
+                                <SelectItem value="Low">Low Priority</SelectItem>
+                                <SelectItem value="Medium">Medium Priority</SelectItem>
+                                <SelectItem value="High">High Priority</SelectItem>
+                                <SelectItem value="Urgent">Urgent</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -448,7 +615,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-gray-600">Subtotal:</span>
                             <span className="font-semibold text-lg text-red-600">
-                              AED {(material.quantity * material.estimatedCost).toLocaleString()}
+                              AED {(material.quantity * material.cost).toLocaleString()}
                             </span>
                           </div>
                         </div>
@@ -479,104 +646,33 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                     </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
-          {/* Approvals Tab */}
-          <TabsContent value="approvals">
-            <Card className="shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
-                <CardTitle className="flex items-center gap-2">
-                  <Check className="w-5 h-5 text-red-600" />
-                  Approval Workflow
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="space-y-6">
-                  {/* Approval Flags */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <Layers className="w-5 h-5 text-amber-600" />
-                          <span className="font-semibold text-gray-800">Quantity & Specification</span>
-                        </div>
-                        <Badge className="bg-amber-100 text-amber-700 border border-amber-300">
-                          Pending
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-3">
-                        Requires approval from Estimation Department
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
-                        <span className="text-xs text-gray-500">Awaiting submission</span>
-                      </div>
-                    </div>
-
-                    <div className="bg-green-50 rounded-xl p-4 border border-green-200">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <Banknote className="w-5 h-5 text-green-600" />
-                          <span className="font-semibold text-gray-800">Cost Approval</span>
-                        </div>
-                        <Badge className="bg-green-100 text-green-700 border border-green-300">
-                          Pending
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-3">
-                        Requires approval from Project Manager
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                        <span className="text-xs text-gray-500">Awaiting submission</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Approval Chain */}
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                      <User className="w-5 h-5 text-gray-600" />
-                      Approval Chain
-                    </h3>
-                    <div className="space-y-3">
-                      {[
-                        { role: 'Site Supervisor', name: 'John Tan', status: 'current', icon: User },
-                        { role: 'Procurement', name: 'Pending', status: 'pending', icon: Package },
-                        { role: 'Estimation', name: 'Pending', status: 'pending', icon: Calculator },
-                        { role: 'Project Manager', name: 'Pending', status: 'pending', icon: Building },
-                        { role: 'Technical Director', name: 'Pending', status: 'pending', icon: Check }
-                      ].map((approver, index) => (
-                        <div key={index} className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            approver.status === 'current' ? 'bg-red-100 text-red-600' :
-                            approver.status === 'approved' ? 'bg-green-100 text-green-600' :
-                            'bg-gray-100 text-gray-400'
-                          }`}>
-                            <approver.icon className="w-5 h-5" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="font-medium text-sm text-gray-800">{approver.role}</p>
-                                <p className="text-xs text-gray-500">{approver.name}</p>
-                              </div>
-                              {approver.status === 'current' && (
-                                <Badge className="bg-red-100 text-red-700 text-xs">
-                                  Current Step
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          {index < 4 && (
-                            <ChevronRight className="w-4 h-4 text-gray-300" />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                {/* Navigation Buttons for Materials Tab */}
+                <div className="flex flex-col sm:flex-row justify-between mt-6 gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setActiveTab('details')}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2"
+                  >
+                    <ChevronRight className="w-4 h-4 rotate-180" />
+                    Back to Details
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (validateMaterialsTab()) {
+                        setMaterialsCompleted(true);
+                        setActiveTab('attachments');
+                      } else {
+                        toast.error('Please add at least one material with complete information');
+                      }
+                    }}
+                    className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto flex items-center justify-center gap-2"
+                  >
+                    Next: Attachments
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -594,7 +690,40 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
               <CardContent className="p-6">
                 <div className="space-y-6">
                   {/* Upload Area */}
-                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-red-400 transition-colors">
+                  <div 
+                    className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-red-400 transition-colors cursor-pointer"
+                    onClick={() => document.getElementById('file-upload')?.click()}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.add('border-red-400', 'bg-red-50');
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove('border-red-400', 'bg-red-50');
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove('border-red-400', 'bg-red-50');
+                      const files = Array.from(e.dataTransfer.files);
+                      const validFiles = files.filter(file => {
+                        if (file.size > 10 * 1024 * 1024) {
+                          toast.error(`File ${file.name} is too large. Maximum size is 10MB.`);
+                          return false;
+                        }
+                        const validTypes = ['application/pdf', 'application/msword', 
+                          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                          'application/vnd.ms-excel', 
+                          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                          'image/png', 'image/jpeg', 'image/jpg'];
+                        if (!validTypes.includes(file.type)) {
+                          toast.error(`File ${file.name} has invalid format.`);
+                          return false;
+                        }
+                        return true;
+                      });
+                      setAttachments([...attachments, ...validFiles]);
+                    }}
+                  >
                     <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600 mb-2">Drop files here or click to upload</p>
                     <p className="text-xs text-gray-500 mb-4">
@@ -606,13 +735,17 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                       onChange={handleFileUpload}
                       className="hidden"
                       id="file-upload"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
                     />
-                    <Label htmlFor="file-upload">
-                      <Button type="button" variant="outline" className="cursor-pointer">
-                        <Upload className="w-4 h-4 mr-2" />
-                        Select Files
-                      </Button>
-                    </Label>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      className="pointer-events-none"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Select Files
+                    </Button>
                   </div>
 
                   {/* Attached Files */}
@@ -656,59 +789,214 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                     <Input
                       placeholder="Enter drawing number or reference ID"
                       className="bg-white border-gray-200"
+                      value={designReference}
+                      onChange={(e) => setDesignReference(e.target.value)}
                     />
                   </div>
+                </div>
+
+                {/* Navigation for Attachments Tab */}
+                <div className="flex justify-start mt-6">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setActiveTab('materials')}
+                    className="flex items-center gap-2"
+                  >
+                    <ChevronRight className="w-4 h-4 rotate-180" />
+                    Back to Materials
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
 
-        {/* Action Buttons */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col md:flex-row gap-4 justify-between mt-6"
-        >
-          <div className="flex gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowPreview(true)}
-              className="flex items-center gap-2"
-            >
-              <FileText className="w-4 h-4" />
-              Preview
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              Save Draft
-            </Button>
-          </div>
-          <div className="flex gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex items-center gap-2"
-              onClick={onClose}
-            >
-              <X className="w-4 h-4" />
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white flex items-center gap-2"
-            >
-              <Send className="w-4 h-4" />
-              Submit for Approval
-            </Button>
-          </div>
-        </motion.div>
+        {/* Action Buttons - Only show on Attachments tab */}
+        {activeTab === 'attachments' && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col sm:flex-row gap-4 justify-between mt-6"
+          >
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowPreviewModal(true)}
+                className="flex items-center justify-center gap-2 w-full sm:w-auto"
+              >
+                <FileText className="w-4 h-4" />
+                Preview
+              </Button>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex items-center justify-center gap-2 w-full sm:w-auto"
+                onClick={onClose}
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isUploading || !validateDetailsTab() || !validateMaterialsTab()}
+                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white flex items-center justify-center gap-2 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUploading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    Submit for Approval
+                  </>
+                )}
+              </Button>
+            </div>
+          </motion.div>
+        )}
       </form>
+
+      {/* Preview Modal */}
+      <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <FileText className="w-5 h-5 text-red-600" />
+              Purchase Requisition Preview
+            </DialogTitle>
+            <DialogDescription>
+              Review your purchase requisition before submission
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 mt-4">
+            {/* Project Details */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                <Building className="w-4 h-4" />
+                Project Details
+              </h3>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600">Project ID:</span>
+                  <span className="ml-2 font-medium">{selectedProjectId || 'Not selected'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Site Location:</span>
+                  <span className="ml-2 font-medium">{getValues('site_location') || 'Not specified'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Requested By:</span>
+                  <span className="ml-2 font-medium">{getValues('requested_by') || 'Not specified'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Date:</span>
+                  <span className="ml-2 font-medium">{getValues('date') || 'Not specified'}</span>
+                </div>
+              </div>
+              <div className="mt-3">
+                <span className="text-gray-600">Purpose:</span>
+                <p className="mt-1 font-medium">{getValues('purpose') || 'Not specified'}</p>
+              </div>
+            </div>
+
+            {/* Materials */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                <Package className="w-4 h-4" />
+                Materials ({materials.length})
+              </h3>
+              {materials.length > 0 ? (
+                <div className="space-y-2">
+                  {materials.map((material, index) => (
+                    <div key={material.id} className="bg-white p-3 rounded border border-gray-200">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{index + 1}. {material.description}</p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            {material.specification} | {material.quantity} {material.unit} × AED {material.cost}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <Badge className={priorityColors[material.priority]}>
+                            {material.priority}
+                          </Badge>
+                          <p className="text-sm font-semibold mt-1">
+                            AED {(material.quantity * material.cost).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="border-t pt-2 mt-2">
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold">Total Amount:</span>
+                      <span className="text-lg font-bold text-red-600">
+                        AED {calculateTotal().toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-sm">No materials added</p>
+              )}
+            </div>
+
+            {/* Attachments */}
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                <Paperclip className="w-4 h-4" />
+                Attachments ({attachments.length})
+              </h3>
+              {attachments.length > 0 ? (
+                <div className="space-y-2">
+                  {attachments.map((file, index) => (
+                    <div key={index} className="flex items-center gap-2 text-sm">
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      <span>{file.name}</span>
+                      <span className="text-gray-500">({(file.size / 1024).toFixed(2)} KB)</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-sm">No files attached</p>
+              )}
+              {designReference && (
+                <div className="mt-3 pt-3 border-t">
+                  <span className="text-gray-600 text-sm">Design Reference:</span>
+                  <p className="font-medium text-sm mt-1">{designReference}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setShowPreviewModal(false)}
+            >
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                setShowPreviewModal(false);
+                handleSubmit(onSubmit)();
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={!validateDetailsTab() || !validateMaterialsTab()}
+            >
+              <Send className="w-4 h-4 mr-2" />
+              Submit Now
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

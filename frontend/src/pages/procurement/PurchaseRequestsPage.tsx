@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Download, Eye, Edit2, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Search, Filter, Download, Eye, Edit2, Trash2, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useAuthStore } from '@/store/authStore';
 import { UserRole } from '@/types';
 import { toast } from 'sonner';
+import { apiClient } from '@/api/config';
 
 const PurchaseRequestsPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -23,61 +24,69 @@ const PurchaseRequestsPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
 
-  // Mock data for purchase requests
-  const [purchaseRequests, setPurchaseRequests] = useState([
-    {
-      id: 'PR-2024-001',
-      project: 'Mall of Asia - Phase 2',
-      requestor: 'John Smith',
-      requestorId: 'siteSupervisor',
-      department: 'Site Operations',
-      date: '2024-01-15',
-      status: 'pending',
-      amount: 45000,
-      items: 5,
-      priority: 'high',
-      currentApprover: 'procurement'
-    },
-    {
-      id: 'PR-2024-002',
-      project: 'Tech Park Building A',
-      requestor: 'Sarah Johnson',
-      requestorId: 'siteSupervisor2',
-      department: 'MEP',
-      date: '2024-01-16',
-      status: 'approved',
-      amount: 125000,
-      items: 12,
-      priority: 'medium',
-      currentApprover: null
-    },
-    {
-      id: 'PR-2024-003',
-      project: 'Residential Complex B',
-      requestor: 'Mike Wilson',
-      requestorId: 'siteSupervisor3',
-      department: 'Factory',
-      date: '2024-01-17',
-      status: 'rejected',
-      amount: 35000,
-      items: 3,
-      priority: 'low',
-      currentApprover: null
-    },
-    {
-      id: 'PR-2024-004',
-      project: 'Office Tower C',
-      requestor: 'Emily Davis',
-      requestorId: 'siteSupervisor',
-      department: 'Procurement',
-      date: '2024-01-18',
-      status: 'in_review',
-      amount: 85000,
-      items: 8,
-      priority: 'high',
-      currentApprover: 'projectManager'
+  // Initialize empty purchase requests - will be fetched from API
+  const [purchaseRequests, setPurchaseRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch purchase requests from API
+  useEffect(() => {
+    fetchPurchaseRequests();
+  }, []);
+
+  const fetchPurchaseRequests = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await apiClient.get('/all_purchase');
+      
+      if (response.data.success) {
+        // Transform the API data to match our frontend structure
+        const transformedRequests = response.data.purchase_requests.map((pr: any) => {
+          // Find materials for this purchase request
+          const materials = response.data.materials.filter((m: any) => 
+            pr.material_ids?.includes(m.material_id)
+          );
+          
+          // Calculate total amount from materials
+          const totalAmount = materials.reduce((sum: number, m: any) => 
+            sum + (m.quantity * m.cost), 0
+          );
+          
+          // Get priority from first material (or default to 'Medium')
+          const priority = materials[0]?.priority || 'Medium';
+          
+          return {
+            id: `PR-${pr.purchase_id}`,
+            purchase_id: pr.purchase_id,
+            project: pr.project_id ? `Project ${pr.project_id}` : 'N/A',
+            requestor: pr.requested_by || pr.created_by,
+            requestorId: pr.created_by,
+            department: 'Site Operations',
+            date: pr.date || pr.created_at,
+            status: 'pending', // Default status, will be updated from workflow
+            amount: totalAmount,
+            items: materials.length,
+            priority: priority.toLowerCase(),
+            site_location: pr.site_location,
+            purpose: pr.purpose,
+            materials: materials,
+            currentApprover: 'procurement'
+          };
+        });
+        
+        setPurchaseRequests(transformedRequests);
+      } else {
+        setError('Failed to fetch purchase requests');
+      }
+    } catch (err: any) {
+      console.error('Error fetching purchase requests:', err);
+      setError(err.response?.data?.error || 'Failed to fetch purchase requests');
+      setPurchaseRequests([]);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
   // Role-based permissions
   const canCreateRequest = () => {
@@ -332,7 +341,7 @@ const PurchaseRequestsPage: React.FC = () => {
               <div>
                 <p className="text-sm text-gray-600">Total Value</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  ₹{filteredRequests.reduce((sum, r) => sum + r.amount, 0).toLocaleString()}
+                  AED {filteredRequests.reduce((sum, r) => sum + r.amount, 0).toLocaleString()}
                 </p>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -364,6 +373,8 @@ const PurchaseRequestsPage: React.FC = () => {
                 className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
+                aria-label="Filter by status"
+                title="Filter by status"
               >
                 <option value="all">All Status</option>
                 <option value="pending">Pending</option>
@@ -394,6 +405,29 @@ const PurchaseRequestsPage: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+              <span className="ml-2 text-gray-600">Loading purchase requests...</span>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <p className="text-red-500 mb-4">{error}</p>
+              <Button onClick={fetchPurchaseRequests} variant="outline">
+                Try Again
+              </Button>
+            </div>
+          ) : filteredRequests.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 mb-4">No purchase requests found</p>
+              {canCreateRequest() && (
+                <Button onClick={() => setIsFormOpen(true)} className="bg-red-500 hover:bg-red-600">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create First Request
+                </Button>
+              )}
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -446,7 +480,7 @@ const PurchaseRequestsPage: React.FC = () => {
                       {request.date}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      ₹{request.amount.toLocaleString()}
+                      AED {request.amount.toLocaleString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Badge className={getPriorityColor(request.priority)}>
@@ -510,6 +544,7 @@ const PurchaseRequestsPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+          )}
         </CardContent>
       </Card>
 
@@ -520,7 +555,10 @@ const PurchaseRequestsPage: React.FC = () => {
             <DialogHeader>
               <DialogTitle>New Purchase Request</DialogTitle>
             </DialogHeader>
-            <PurchaseRequisitionForm onClose={() => setIsFormOpen(false)} />
+            <PurchaseRequisitionForm onClose={() => {
+              setIsFormOpen(false);
+              fetchPurchaseRequests(); // Refresh data after form submission
+            }} />
           </DialogContent>
         </Dialog>
       )}

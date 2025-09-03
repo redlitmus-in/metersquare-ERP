@@ -41,8 +41,8 @@ interface WorkflowStatus {
 }
 
 const WorkflowStatusPage: React.FC = () => {
-  // Mock workflow data - would come from backend
-  const mockWorkflows: WorkflowStatus[] = [
+  // Initialize empty workflows - will be fetched from API
+  const [workflows, setWorkflows] = React.useState<WorkflowStatus[]>([
     {
       id: 'WF-PR-001',
       documentType: 'purchase_requisition',
@@ -105,7 +105,7 @@ const WorkflowStatusPage: React.FC = () => {
         }
       ]
     }
-  ];
+  ]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -143,7 +143,7 @@ const WorkflowStatusPage: React.FC = () => {
       </div>
 
       <div className="grid gap-6">
-        {mockWorkflows.map((workflow) => {
+        {workflows.map((workflow) => {
           const config = WORKFLOW_CONFIGS[workflow.documentType];
           
           return (
