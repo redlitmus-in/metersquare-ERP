@@ -79,8 +79,13 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({ isOpen, onC
   useEffect(() => {
     if (isOpen && purchaseId) {
       fetchPurchaseDetails();
+      fetchProjects();
     }
   }, [isOpen, purchaseId]);
+
+  const fetchProjects = async () => {
+    // Projects fetching logic if needed
+  };
 
   const fetchPurchaseDetails = async () => {
     try {

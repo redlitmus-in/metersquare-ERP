@@ -342,6 +342,10 @@ def update_purchase_request(purchase_id):
         # Log initial state
         log.info(f"Initial material_ids for purchase {purchase_id}: {purchase.material_ids}")
         
+        
+        # Log initial state
+        log.info(f"Initial material_ids for purchase {purchase_id}: {purchase.material_ids}")
+        
         for mat in new_materials:
             material_id = mat.get("material_id")
 
@@ -368,6 +372,7 @@ def update_purchase_request(purchase_id):
                 # ✅ Ensure material_id is in purchase.material_ids
                 if material_id not in purchase.material_ids:
                     log.info(f"Adding existing material_id {material_id} to purchase.material_ids")
+                    log.info(f"Adding existing material_id {material_id} to purchase.material_ids")
                     purchase.material_ids.append(material_id)
 
             else:
@@ -389,9 +394,23 @@ def update_purchase_request(purchase_id):
 
                 # ✅ Append new material_id to purchase
                 log.info(f"Created new material with ID {new_material.material_id}")
+                log.info(f"Created new material with ID {new_material.material_id}")
                 if new_material.material_id not in purchase.material_ids:
                     log.info(f"Adding new material_id {new_material.material_id} to purchase.material_ids")
+                    log.info(f"Adding new material_id {new_material.material_id} to purchase.material_ids")
                     purchase.material_ids.append(new_material.material_id)
+
+        # Log state before forcing update
+        log.info(f"Material_ids before forcing update: {purchase.material_ids}")
+        
+        # 🔹 Force PostgreSQL to recognize the array mutation
+        # This is crucial for ARRAY columns - we need to reassign the array
+        temp_ids = list(purchase.material_ids)  # Create a new list object
+        purchase.material_ids = temp_ids
+        flag_modified(purchase, 'material_ids')  # Explicitly mark the field as modified
+        
+        log.info(f"Material_ids after forcing update: {purchase.material_ids}")
+        
 
         # Log state before forcing update
         log.info(f"Material_ids before forcing update: {purchase.material_ids}")
@@ -408,6 +427,10 @@ def update_purchase_request(purchase_id):
         purchase.last_modified_by = current_user['full_name']
         db.session.add(purchase)
         db.session.commit()
+        
+        # Verify the update by re-fetching
+        db.session.refresh(purchase)
+        log.info(f"Final material_ids after commit and refresh: {purchase.material_ids}")
         
         # Verify the update by re-fetching
         db.session.refresh(purchase)
@@ -448,6 +471,10 @@ def delete_purchase(purchase_id):
         # 4️⃣ Save changes
         db.session.commit()
 
+        return jsonify({
+            "success": True,
+            "message": f"Purchase {purchase_id} and related records deleted successfully"
+        }), 200
         return jsonify({
             "success": True,
             "message": f"Purchase {purchase_id} and related records deleted successfully"

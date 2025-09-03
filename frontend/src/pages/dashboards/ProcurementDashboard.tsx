@@ -90,11 +90,11 @@ interface VendorQuotation {
   items: number;
 }
 
-const ProcurementDashboard: React.FC = () => {
+const ProcurementDashboard: React.FC = (): React.ReactElement => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const userRole = user?.role || '';
-  const userName = user?.full_name || user?.name || '';
+  const userRole = (user as any)?.role || '';
+  const userName = (user as any)?.full_name || (user as any)?.name || '';
   
   const [activeView, setActiveView] = useState<'dashboard' | 'purchase' | 'vendor'>('dashboard');
   const [selectedPR, setSelectedPR] = useState<string | null>(null);
@@ -185,21 +185,21 @@ const ProcurementDashboard: React.FC = () => {
           switch(userRole.toLowerCase()) {
             case 'site supervisor':
             case 'site_supervisor':
-              filteredByRole = transformedRequests.filter(pr => 
+              filteredByRole = transformedRequests.filter((pr: PurchaseRequest) => 
                 pr.requester.toLowerCase().includes('site supervisor') ||
                 pr.requester.toLowerCase().includes('site')
               );
               break;
             case 'mep supervisor':
             case 'mep_supervisor':
-              filteredByRole = transformedRequests.filter(pr => 
+              filteredByRole = transformedRequests.filter((pr: PurchaseRequest) => 
                 pr.requester.toLowerCase().includes('mep supervisor') ||
                 pr.requester.toLowerCase().includes('mep')
               );
               break;
             case 'procurement':
             case 'procurement manager':
-              filteredByRole = transformedRequests.filter(pr => 
+              filteredByRole = transformedRequests.filter((pr: PurchaseRequest) => 
                 pr.requester.toLowerCase().includes('procurement')
               );
               break;
@@ -215,7 +215,7 @@ const ProcurementDashboard: React.FC = () => {
               break;
             default:
               // For other roles, show requests they created
-              filteredByRole = transformedRequests.filter(pr => 
+              filteredByRole = transformedRequests.filter((pr: PurchaseRequest) => 
                 pr.requester === userName || 
                 pr.requester.toLowerCase().includes(userRole.toLowerCase())
               );
@@ -229,13 +229,13 @@ const ProcurementDashboard: React.FC = () => {
         
         // Initialize emailedPRs set based on email_sent status
         const emailedSet = new Set<string>();
-        transformedRequests.forEach(pr => {
+        transformedRequests.forEach((pr: PurchaseRequest) => {
           if (pr.originalData?.email_sent) {
             emailedSet.add(pr.id);
           }
         });
         console.log('Initialized emailed PRs:', Array.from(emailedSet)); // Debug log
-        console.log('Purchase requests with email_sent status:', transformedRequests.map(pr => ({
+        console.log('Purchase requests with email_sent status:', transformedRequests.map((pr: PurchaseRequest) => ({
           id: pr.id,
           prNumber: pr.prNumber,
           email_sent: pr.originalData?.email_sent
@@ -836,7 +836,7 @@ const ProcurementDashboard: React.FC = () => {
                         );
                       }
                       
-                      return paginatedData.map((pr) => (
+                      return paginatedData.map((pr: PurchaseRequest) => (
                       <motion.tr 
                         key={pr.id}
                         initial={{ opacity: 0 }}
@@ -952,7 +952,7 @@ const ProcurementDashboard: React.FC = () => {
                           </div>
                         </td>
                       </motion.tr>
-                    ));
+                      ));
                     })()}
                   </tbody>
                 </table>
