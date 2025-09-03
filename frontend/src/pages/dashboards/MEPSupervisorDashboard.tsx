@@ -149,7 +149,7 @@ const MEPSupervisorDashboard: React.FC = () => {
         <div className="grid grid-cols-2 gap-3">
           <Button 
             className="bg-cyan-600 hover:bg-cyan-700 flex items-center gap-2"
-            onClick={() => navigate('/procurement/requests')}
+            onClick={() => navigate('/procurement')}
           >
             <FileText className="w-4 h-4" />
             New Request

@@ -24,7 +24,8 @@ import {
   FileText,
   ShoppingCart,
   Truck,
-  Settings
+  Settings,
+  X
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -72,7 +73,11 @@ interface MaterialRequisitionData {
   specialHandling: string;
 }
 
-const MaterialRequisitionForm: React.FC = () => {
+interface MaterialRequisitionFormProps {
+  onClose?: () => void;
+}
+
+const MaterialRequisitionForm: React.FC<MaterialRequisitionFormProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState('basic');
   const [materialItems, setMaterialItems] = useState<MaterialItem[]>([
     {
@@ -149,6 +154,11 @@ const MaterialRequisitionForm: React.FC = () => {
       status: 'pending'
     };
     console.log('Material Requisition:', requisitionData);
+    
+    // Close form after successful submission
+    if (onClose) {
+      onClose();
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -749,6 +759,14 @@ const MaterialRequisitionForm: React.FC = () => {
                 <p className="text-xs mt-1">This requisition will be submitted for quantity & specification approval</p>
               </div>
               <div className="flex gap-3">
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={onClose}
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  Cancel
+                </Button>
                 <Button type="button" variant="outline">
                   <Save className="w-4 h-4 mr-1" />
                   Save Draft

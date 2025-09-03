@@ -161,7 +161,7 @@ const EstimationDashboard: React.FC = () => {
         <div className="grid grid-cols-2 gap-3">
           <Button 
             className="bg-amber-600 hover:bg-amber-700 flex items-center gap-2"
-            onClick={() => navigate('/procurement/quotations')}
+            onClick={() => navigate('/procurement')}
           >
             <Calculator className="w-4 h-4" />
             New Quote
@@ -177,7 +177,7 @@ const EstimationDashboard: React.FC = () => {
           <Button 
             variant="outline" 
             className="flex items-center gap-2"
-            onClick={() => navigate('/procurement/approvals')}
+            onClick={() => navigate('/procurement')}
           >
             <CheckCircle className="w-4 h-4" />
             Approvals

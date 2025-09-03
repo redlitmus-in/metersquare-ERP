@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DocumentViewModal from '@/components/DocumentViewModal';
+import PurchaseDetailsModal from '@/components/modals/PurchaseDetailsModal';
 import { motion } from 'framer-motion';
 import { apiClient } from '@/api/config';
 import { toast } from 'sonner';
@@ -30,7 +30,10 @@ import {
   Target,
   Zap,
   Shield,
-  Loader2
+  Loader2,
+  Trash2,
+  Mail,
+  ChevronDown
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,7 +43,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
 import VendorQuotationForm from '@/components/forms/VendorQuotationForm';
-import ApprovalWorkflow from '@/components/workflow/ApprovalWorkflow';
 
 interface MetricCard {
   title: string;
@@ -61,6 +63,8 @@ interface PurchaseRequest {
   priority: 'low' | 'medium' | 'high' | 'urgent';
   date: string;
   items: number;
+  originalData?: any; // Store original API data
+  materials?: any[]; // Store materials array
 }
 
 interface VendorQuotation {
@@ -76,8 +80,11 @@ interface VendorQuotation {
 
 const ProcurementDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [activeView, setActiveView] = useState<'dashboard' | 'purchase' | 'vendor' | 'approval'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'purchase' | 'vendor'>('dashboard');
   const [selectedPR, setSelectedPR] = useState<string | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingPR, setEditingPR] = useState<PurchaseRequest | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -87,9 +94,11 @@ const ProcurementDashboard: React.FC = () => {
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [metrics, setMetrics] = useState<MetricCard[]>([]);
 
-  // Fetch purchase requests from API
+  // Fetch data from APIs
   useEffect(() => {
     fetchPurchaseRequests();
+    fetchVendorQuotations();
+    fetchNotifications();
   }, []);
 
   const fetchPurchaseRequests = async () => {
@@ -100,10 +109,16 @@ const ProcurementDashboard: React.FC = () => {
       if (response.data.success) {
         // Transform API data to match our frontend structure
         const transformedRequests = response.data.purchase_requests.map((pr: any, index: number) => {
-          // Find materials for this purchase request
-          const materials = response.data.materials.filter((m: any) => 
-            pr.material_ids?.includes(m.material_id)
-          );
+          // Materials are nested within each purchase request
+          const materials = pr.materials || [];
+          
+          // If no nested materials, try to find from the flat materials array
+          if (materials.length === 0 && response.data.materials && pr.material_ids) {
+            pr.material_ids.forEach((mid: number) => {
+              const found = response.data.materials.find((m: any) => m.material_id === mid);
+              if (found) materials.push(found);
+            });
+          }
           
           // Calculate total amount from materials
           const totalAmount = materials.reduce((sum: number, m: any) => 
@@ -117,12 +132,15 @@ const ProcurementDashboard: React.FC = () => {
             id: pr.purchase_id.toString(),
             prNumber: `PR-2024-${String(pr.purchase_id).padStart(3, '0')}`,
             project: pr.project_id ? `Project ${pr.project_id}` : 'General Purchase',
-            requester: pr.requested_by || pr.created_by || 'Unknown',
+            requester: pr.requested_by || pr.user_name || pr.created_by || 'Unknown',
             amount: totalAmount,
             status: 'pending' as const, // Default status, will be updated from workflow
             priority: priority as 'low' | 'medium' | 'high' | 'urgent',
             date: pr.date || pr.created_at || new Date().toISOString(),
-            items: materials.length
+            items: materials.length,
+            // Store original data for edit
+            originalData: pr,
+            materials: materials
           };
         });
         
@@ -250,54 +268,37 @@ const ProcurementDashboard: React.FC = () => {
     }
   };
 
-  // Vendor quotations data
-  const vendorQuotations: VendorQuotation[] = [
-    {
-      id: '1',
-      vqNumber: 'VQ-2024-001',
-      vendor: 'ABC Contractors Pte Ltd',
-      project: 'Marina Bay Residences',
-      amount: 125000,
-      status: 'under_review',
-      validUntil: '2024-02-15',
-      items: 15
-    },
-    {
-      id: '2',
-      vqNumber: 'VQ-2024-002',
-      vendor: 'XYZ Builders',
-      project: 'Orchard Office',
-      amount: 98000,
-      status: 'approved',
-      validUntil: '2024-02-20',
-      items: 10
+  // Fetch vendor quotations from API (placeholder for now)
+  const [vendorQuotations, setVendorQuotations] = useState<VendorQuotation[]>([]);
+  
+  const fetchVendorQuotations = async () => {
+    try {
+      // TODO: Replace with actual API call when backend is ready
+      // const response = await apiClient.get('/vendor_quotations');
+      
+      // For now, use empty array as no hardcoded data
+      setVendorQuotations([]);
+    } catch (error) {
+      console.error('Error fetching vendor quotations:', error);
+      setVendorQuotations([]);
     }
-  ];
+  };
 
-  // Notifications
-  const notifications = [
-    {
-      id: '1',
-      type: 'approval',
-      message: 'PR-2024-004 requires your approval',
-      time: '5 min ago',
-      urgent: true
-    },
-    {
-      id: '2',
-      type: 'update',
-      message: 'Vendor quotation VQ-2024-003 has been updated',
-      time: '1 hour ago',
-      urgent: false
-    },
-    {
-      id: '3',
-      type: 'alert',
-      message: 'Material delivery delayed for PR-2024-002',
-      time: '2 hours ago',
-      urgent: true
+  // Fetch notifications from API (placeholder for now)
+  const [notifications, setNotifications] = useState<any[]>([]);
+  
+  const fetchNotifications = async () => {
+    try {
+      // TODO: Replace with actual API call when backend is ready
+      // const response = await apiClient.get('/notifications');
+      
+      // For now, use empty array as no hardcoded data
+      setNotifications([]);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      setNotifications([]);
     }
-  ];
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -332,23 +333,148 @@ const ProcurementDashboard: React.FC = () => {
     }
   };
 
-  if (activeView === 'purchase') {
-    return <PurchaseRequisitionForm />;
-  }
+  const handleDeletePR = async (prId: string, prNumber: string) => {
+    if (window.confirm(`Are you sure you want to delete ${prNumber}? This action cannot be undone.`)) {
+      try {
+        // Show loading toast
+        const loadingToast = toast.loading(`Deleting ${prNumber}...`);
+        
+        const response = await apiClient.delete(`/purchase/${prId}`);
+        
+        if (response.data.success) {
+          // Dismiss loading toast
+          toast.dismiss(loadingToast);
+          
+          // Update local state immediately for better UX
+          setPurchaseRequests(prev => prev.filter(pr => pr.id !== prId));
+          
+          // Refresh data from server to ensure consistency
+          await fetchPurchaseRequests();
+          
+          toast.success(`Purchase request ${prNumber} deleted successfully`);
+        } else {
+          toast.dismiss(loadingToast);
+          toast.error(response.data.error || 'Failed to delete purchase request');
+        }
+      } catch (error: any) {
+        console.error('Error deleting purchase request:', error);
+        
+        // Check if the error is 404 (already deleted)
+        if (error.response?.status === 404) {
+          // Remove from local state and refresh
+          setPurchaseRequests(prev => prev.filter(pr => pr.id !== prId));
+          await fetchPurchaseRequests();
+          toast.info(`${prNumber} has already been deleted`);
+        } else {
+          toast.error(error.response?.data?.error || 'Failed to delete purchase request');
+        }
+      }
+    }
+  };
 
-  if (activeView === 'vendor') {
-    return <VendorQuotationForm />;
-  }
+  const handleSendMailToProcurement = async (pr: PurchaseRequest) => {
+    try {
+      // Show loading toast
+      const loadingToast = toast.loading(`Sending email for ${pr.prNumber}...`);
+      
+      const response = await apiClient.get(`/purchase_email/${pr.id}`);
+      
+      toast.dismiss(loadingToast);
+      
+      if (response.data.success) {
+        toast.success(`Email sent to procurement team for ${pr.prNumber}`);
+      } else {
+        toast.error(response.data.error || 'Failed to send email');
+      }
+    } catch (error: any) {
+      console.error('Error sending email:', error);
+      
+      // Check if the purchase request exists
+      if (error.response?.status === 404) {
+        toast.error(`Purchase request ${pr.prNumber} not found. It may have been deleted.`);
+        // Refresh the list
+        await fetchPurchaseRequests();
+      } else {
+        toast.error(error.response?.data?.error || 'Failed to send email to procurement team');
+      }
+    }
+  };
 
-  if (activeView === 'approval' && selectedPR) {
+  const handleViewPR = (prId: string) => {
+    // Directly open modal - let the modal handle fetching and error states
+    setSelectedPR(prId);
+    setShowDetailsModal(true);
+  };
+
+  const handleEditPR = async (pr: PurchaseRequest) => {
+    try {
+      // Show loading toast
+      const loadingToast = toast.loading('Loading purchase details...');
+      
+      const response = await apiClient.get(`/purchase/${pr.id}`);
+      toast.dismiss(loadingToast);
+      
+      if (response.data.success) {
+        // Backend returns 'purchase' not 'purchase_request'
+        const purchase = response.data.purchase;
+        const materials = purchase.materials || [];
+        const totalAmount = materials.reduce((sum: number, m: any) => 
+          sum + (m.quantity * m.cost), 0
+        );
+        
+        const updatedPR = {
+          ...pr,
+          amount: totalAmount,
+          items: materials.length,
+          // Pass the full purchase data for editing
+          originalData: purchase,
+          materials: materials
+        };
+        
+        setEditingPR(updatedPR);
+        setShowEditModal(true);
+      } else {
+        toast.error('Purchase request not found');
+        await fetchPurchaseRequests();
+      }
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        toast.error('Purchase request no longer exists');
+        await fetchPurchaseRequests();
+      } else {
+        // Still open the edit form with existing data
+        setEditingPR(pr);
+        setShowEditModal(true);
+      }
+    }
+  };
+
+  if (activeView === 'purchase' || showEditModal) {
     return (
-      <ApprovalWorkflow 
-        documentType="purchase_requisition"
-        documentId={selectedPR}
-        currentUserRole="Estimation"
+      <PurchaseRequisitionForm 
+        existingData={editingPR}
+        isEditMode={!!editingPR}
+        onClose={() => {
+          setActiveView('dashboard');
+          setShowEditModal(false);
+          setEditingPR(null);
+          fetchPurchaseRequests(); // Refresh data after form submission
+        }} 
       />
     );
   }
+
+  if (activeView === 'vendor') {
+    return (
+      <VendorQuotationForm 
+        onClose={() => {
+          setActiveView('dashboard');
+          fetchVendorQuotations(); // Refresh data after form submission
+        }} 
+      />
+    );
+  }
+
 
   // Show loading spinner while fetching data
   if (loading) {
@@ -392,52 +518,6 @@ const ProcurementDashboard: React.FC = () => {
               />
             </div>
             
-            {/* Notifications */}
-            <div className="relative">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="relative"
-              >
-                <Bell className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-              </Button>
-              
-              {showNotifications && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border z-50"
-                >
-                  <div className="p-4 border-b">
-                    <h3 className="font-semibold text-gray-800">Notifications</h3>
-                  </div>
-                  <div className="max-h-96 overflow-y-auto">
-                    {notifications.map(notif => (
-                      <div key={notif.id} className="p-4 border-b hover:bg-gray-50 cursor-pointer">
-                        <div className="flex items-start gap-3">
-                          {notif.urgent && <AlertCircle className="w-4 h-4 text-red-500 mt-0.5" />}
-                          <div className="flex-1">
-                            <p className="text-sm text-gray-800">{notif.message}</p>
-                            <p className="text-xs text-gray-500 mt-1">{notif.time}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </div>
-            
-            {/* Quick Actions */}
-            <Button
-              onClick={() => setActiveView('purchase')}
-              className="bg-[#243d8a] hover:bg-[#243d8a]/90 text-white"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              New PR
-            </Button>
           </div>
         </div>
       </motion.div>
@@ -512,6 +592,13 @@ const ProcurementDashboard: React.FC = () => {
                   Purchase Requisitions
                 </CardTitle>
                 <div className="flex items-center gap-3">
+                  <Button
+                    onClick={() => setActiveView('purchase')}
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    New Purchase Request
+                  </Button>
                   <Select value={filterStatus} onValueChange={setFilterStatus}>
                     <SelectTrigger className="w-40">
                       <SelectValue placeholder="Filter status" />
@@ -628,25 +715,46 @@ const ProcurementDashboard: React.FC = () => {
                           </Badge>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {pr.date}
+                          {new Date(pr.date).toLocaleDateString('en-US', { 
+                            year: 'numeric', 
+                            month: 'short', 
+                            day: 'numeric' 
+                          })}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => {
-                                setSelectedPR(pr.id);
-                                setActiveView('approval');
-                              }}
+                              onClick={() => handleViewPR(pr.id)}
+                              title="View Details"
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleEditPR(pr)}
+                              title="Edit Purchase Request"
+                            >
                               <Edit className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm">
-                              <MoreVertical className="w-4 h-4" />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleSendMailToProcurement(pr)}
+                              title="Send Mail to Procurement"
+                            >
+                              <Mail className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeletePR(pr.id, pr.prNumber)}
+                              title="Delete Request"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
                         </td>
@@ -982,20 +1090,16 @@ const ProcurementDashboard: React.FC = () => {
       </Tabs>
 
       {/* Vendor Quotation View Modal */}
-      <DocumentViewModal
-        isOpen={showVendorModal}
+      {/* Purchase Details Modal */}
+      <PurchaseDetailsModal
+        isOpen={showDetailsModal}
         onClose={() => {
-          setShowVendorModal(false);
-          setSelectedVendorQuote(null);
+          setShowDetailsModal(false);
+          setSelectedPR(null);
+          // Refresh data when modal closes
+          fetchPurchaseRequests();
         }}
-        documentType="Vendor Quotation"
-        documentData={selectedVendorQuote}
-        onEdit={() => {
-          setShowVendorModal(false);
-          if (selectedVendorQuote) {
-            navigate(`/procurement/vendor-quotations/edit/${selectedVendorQuote.id}`);
-          }
-        }}
+        purchaseId={selectedPR || ''}
       />
     </div>
   );

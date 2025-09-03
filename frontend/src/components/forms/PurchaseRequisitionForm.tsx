@@ -73,9 +73,11 @@ interface PurchaseRequisitionFormData {
 interface PurchaseRequisitionFormProps {
   onClose?: () => void;
   showAsPage?: boolean;
+  existingData?: any;
+  isEditMode?: boolean;
 }
 
-const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClose, showAsPage }) => {
+const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClose, showAsPage, existingData, isEditMode }) => {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [activeTab, setActiveTab] = useState('details');
@@ -86,6 +88,29 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
   const [designReference, setDesignReference] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+
+  // Initialize form with existing data in edit mode
+  useEffect(() => {
+    if (isEditMode && existingData) {
+      // Set project ID
+      setSelectedProjectId(existingData.project_id || null);
+      
+      // Set form values
+      setValue('projectName', existingData.project || '');
+      setValue('requestedBy', existingData.requester || '');
+      setValue('department', existingData.department || '');
+      setValue('requestDate', formatDateForInput(existingData.date || new Date().toISOString()));
+      setValue('requiredDate', formatDateForInput(existingData.requiredDate || new Date().toISOString()));
+      setValue('deliveryAddress', existingData.deliveryAddress || '');
+      setValue('notes', existingData.notes || '');
+      
+      // Load materials if available
+      if (existingData.items > 0) {
+        // In edit mode, we would fetch materials from API
+        fetchExistingMaterials(existingData.id);
+      }
+    }
+  }, [isEditMode, existingData, setValue]);
 
   const { register, handleSubmit, watch, formState: { errors }, setValue, getValues } = useForm<PurchaseRequisitionFormData>();
 
@@ -292,8 +317,8 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
               <Package className="w-8 h-8" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Purchase Requisition Form</h1>
-              <p className="text-gray-600 mt-1">Create and submit material purchase requests</p>
+              <h1 className="text-2xl font-bold">{isEditMode ? 'Edit Purchase Requisition' : 'Purchase Requisition Form'}</h1>
+              <p className="text-gray-600 mt-1">{isEditMode ? 'Update purchase request details' : 'Create and submit material purchase requests'}</p>
             </div>
           </div>
           <div className="flex items-center gap-3 mt-4 md:mt-0">

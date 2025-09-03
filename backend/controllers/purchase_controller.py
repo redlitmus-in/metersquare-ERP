@@ -6,14 +6,12 @@ from sqlalchemy.orm import joinedload
 from models.approval import Approval
 from models.material import Material
 from models.purchase import Purchase
-from models.request_item import RequisitionItem
 from models.role import Role
 from config.db import db
 from datetime import datetime
 from config.logging import get_logger
 from werkzeug.utils import secure_filename
 from supabase import create_client, Client
-from utils.email_service import *
 log = get_logger()
 
 def create_purchase_request():
@@ -132,8 +130,12 @@ def get_all_purchase_request():
                 'error': 'Invalid role. Only Site Supervisor, MEP Supervisor, or Procurement team can view requisitions'
             }), 403
 
-        # 🔹 Fetch purchases created by this user (if required)
-        purchases = Purchase.query.filter_by(is_deleted=False, user_id=current_user['user_id']).all()
+        # 🔹 Fetch purchases based on role
+        # Procurement can see all purchases, supervisors only see their own
+        if role.role == 'procurement':
+            purchases = Purchase.query.filter_by(is_deleted=False).all()
+        else:
+            purchases = Purchase.query.filter_by(is_deleted=False, user_id=current_user['user_id']).all()
 
         purchase_list = []
 
@@ -198,10 +200,42 @@ def get_all_purchase_request():
                 'approvals': approval_data       # ✅ nested approvals
             })
 
+        # Collect all unique materials from all purchases
+        all_materials = []
+        all_material_ids = set()
+        for purchase in purchases:
+            if purchase.material_ids:
+                for mid in purchase.material_ids:
+                    all_material_ids.add(mid)
+        
+        # Fetch all unique materials
+        if all_material_ids:
+            materials = Material.query.filter(
+                Material.is_deleted == False,
+                Material.material_id.in_(list(all_material_ids))
+            ).all()
+            
+            for mat in materials:
+                all_materials.append({
+                    'material_id': mat.material_id,
+                    'project_id': mat.project_id,
+                    'description': mat.description,
+                    'specification': mat.specification,
+                    'unit': mat.unit,
+                    'quantity': mat.quantity,
+                    'category': mat.category,
+                    'cost': mat.cost,
+                    'priority': mat.priority,
+                    'design_reference': mat.design_reference,
+                    'created_at': mat.created_at.isoformat() if mat.created_at else None,
+                    'created_by': mat.created_by
+                })
+        
         return jsonify({
             'success': True,
             'message': 'Purchase requests fetched successfully',
-            'purchase_requests': purchase_list
+            'purchase_requests': purchase_list,
+            'materials': all_materials  # Include materials array for frontend
         }), 200
 
     except Exception as e:

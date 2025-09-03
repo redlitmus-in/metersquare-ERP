@@ -110,7 +110,7 @@ const SiteSupervisorDashboard: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Button 
             className="bg-orange-600 hover:bg-orange-700 flex flex-col items-center gap-2 h-20"
-            onClick={() => navigate('/procurement/requests')}
+            onClick={() => navigate('/procurement')}
           >
             <Package className="w-5 h-5" />
             <span className="text-xs">Request Materials</span>

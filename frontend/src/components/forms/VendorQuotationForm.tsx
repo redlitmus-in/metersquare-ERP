@@ -107,7 +107,12 @@ interface VendorQuotationFormData {
   };
 }
 
-const VendorQuotationForm: React.FC = () => {
+interface VendorQuotationFormProps {
+  onClose?: () => void;
+  quotation?: any; // For editing existing quotation
+}
+
+const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quotation }) => {
   const [quotationItems, setQuotationItems] = useState<QuotationItem[]>([]);
   const [activeTab, setActiveTab] = useState('vendor');
   const [showComparison, setShowComparison] = useState(false);
@@ -185,6 +190,11 @@ const VendorQuotationForm: React.FC = () => {
     // - Route to Project Manager -> Estimation -> Technical Director
     // - Set up rejection/revision loops for scope changes
     alert('Vendor Quotation submitted! (Workflow integration pending)');
+    
+    // Close form after successful submission
+    if (onClose) {
+      onClose();
+    }
   };
 
   return (
@@ -1093,6 +1103,7 @@ const VendorQuotationForm: React.FC = () => {
               type="button"
               variant="outline"
               className="flex items-center gap-2"
+              onClick={onClose}
             >
               <X className="w-4 h-4" />
               Cancel

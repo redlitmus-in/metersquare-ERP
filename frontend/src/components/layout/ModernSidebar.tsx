@@ -117,9 +117,6 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
         iconSolid: ShoppingSolid,
         color: 'text-red-600',
         children: [
-          { name: 'Purchase Requests', href: buildPath('/procurement/requests'), icon: DocumentTextIcon, iconSolid: DocumentTextIcon },
-          { name: 'Vendor Quotations', href: buildPath('/procurement/quotations'), icon: BuildingOfficeIcon, iconSolid: BuildingOfficeIcon },
-          { name: 'Approvals', href: buildPath('/procurement/approvals'), icon: ClipboardDocumentCheckIcon, iconSolid: ClipboardDocumentCheckIcon },
           { name: 'Deliveries', href: buildPath('/procurement/deliveries'), icon: TruckIcon, iconSolid: TruckIcon }
         ]
       },
@@ -384,7 +381,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.2 }}
-                      className="ml-4 mt-1 space-y-0.5 border-l-2 border-red-100 pl-4"
+                      className="ml-6 mt-2 space-y-1 border-l-2 border-red-100 pl-3"
                     >
                       {item.children?.map((child) => {
                         const isChildActive = isPathActive(child.href);
@@ -396,17 +393,27 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
                             to={child.href}
                             onClick={() => setSidebarOpen(false)}
                             className={clsx(
-                              'group flex items-center px-3 py-2.5 text-xs font-medium rounded-lg transition-all duration-200',
+                              'group flex items-center px-3 py-2 text-xs font-medium rounded-lg transition-all duration-200 relative',
                               isChildActive
                                 ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-800 border border-red-200 shadow-sm'
                                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'
                             )}
                           >
+                            {/* Active indicator for submenu items */}
+                            {isChildActive && (
+                              <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-0.5 h-4 bg-red-500 rounded-r-full"></div>
+                            )}
                             <ChildIcon className={clsx(
-                              'w-4 h-4 mr-2.5 transition-colors duration-200',
+                              'w-4 h-4 mr-3 transition-colors duration-200 flex-shrink-0',
                               isChildActive ? 'text-red-600' : 'text-gray-400 group-hover:text-gray-600'
                             )} />
-                            <span>{child.name}</span>
+                            <span className="truncate">{child.name}</span>
+                            
+                            {/* Hover effect for submenu items */}
+                            <div className={clsx(
+                              "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg",
+                              'bg-gradient-to-r from-red-500/5 to-red-500/10'
+                            )}></div>
                           </Link>
                         );
                       })}

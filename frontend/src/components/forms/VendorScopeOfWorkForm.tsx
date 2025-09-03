@@ -23,7 +23,8 @@ import {
   Save,
   Send,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  X
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -69,7 +70,11 @@ interface VendorScopeData {
   safetyRequirements: string;
 }
 
-const VendorScopeOfWorkForm: React.FC = () => {
+interface VendorScopeOfWorkFormProps {
+  onClose?: () => void;
+}
+
+const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState('basic');
   const [boqItems, setBOQItems] = useState<BOQItem[]>([
     {
@@ -134,6 +139,11 @@ const VendorScopeOfWorkForm: React.FC = () => {
       status: 'draft'
     };
     console.log('Vendor Scope of Work:', scopeData);
+    
+    // Close form after successful submission
+    if (onClose) {
+      onClose();
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -656,6 +666,14 @@ const VendorScopeOfWorkForm: React.FC = () => {
                 <p className="text-xs mt-1">This form will be submitted for procurement approval</p>
               </div>
               <div className="flex gap-3">
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={onClose}
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  Cancel
+                </Button>
                 <Button type="button" variant="outline">
                   <Save className="w-4 h-4 mr-1" />
                   Save Draft

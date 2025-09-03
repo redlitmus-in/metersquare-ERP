@@ -30,9 +30,6 @@ import {
 } from '@/pages/dashboards';
 
 // Procurement sub-pages
-import PurchaseRequestsPage from '@/pages/procurement/PurchaseRequestsPage';
-import ApprovalsPage from '@/pages/procurement/ApprovalsPage';
-import VendorQuotationsPage from '@/pages/procurement/VendorQuotationsPage';
 import DeliveriesPage from '@/pages/procurement/DeliveriesPage';
 
 // Workflow pages
@@ -197,11 +194,6 @@ function App() {
             {/* Main Routes - Use RoleDashboard for dynamic dashboard loading */}
             <Route path="dashboard" element={<RoleDashboard />} />
             <Route path="procurement" element={<ProcurementDashboard />} />
-            <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
-            <Route path="procurement/purchase-requests/edit/:id" element={<PurchaseRequestsPage />} />
-            <Route path="procurement/quotations" element={<VendorQuotationsPage />} />
-            <Route path="procurement/vendor-quotations/edit/:id" element={<VendorQuotationsPage />} />
-            <Route path="procurement/approvals" element={<ApprovalsPage />} />
             <Route path="procurement/deliveries" element={<DeliveriesPage />} />
             <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
             <Route path="tasks" element={<TasksPage />} />
