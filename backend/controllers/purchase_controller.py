@@ -6,12 +6,14 @@ from sqlalchemy.orm import joinedload
 from models.approval import Approval
 from models.material import Material
 from models.purchase import Purchase
+from models.request_item import RequisitionItem
 from models.role import Role
 from config.db import db
 from datetime import datetime
 from config.logging import get_logger
 from werkzeug.utils import secure_filename
 from supabase import create_client, Client
+from utils.email_service import *
 log = get_logger()
 
 def create_purchase_request():
@@ -200,42 +202,10 @@ def get_all_purchase_request():
                 'approvals': approval_data       # ✅ nested approvals
             })
 
-        # Collect all unique materials from all purchases
-        all_materials = []
-        all_material_ids = set()
-        for purchase in purchases:
-            if purchase.material_ids:
-                for mid in purchase.material_ids:
-                    all_material_ids.add(mid)
-        
-        # Fetch all unique materials
-        if all_material_ids:
-            materials = Material.query.filter(
-                Material.is_deleted == False,
-                Material.material_id.in_(list(all_material_ids))
-            ).all()
-            
-            for mat in materials:
-                all_materials.append({
-                    'material_id': mat.material_id,
-                    'project_id': mat.project_id,
-                    'description': mat.description,
-                    'specification': mat.specification,
-                    'unit': mat.unit,
-                    'quantity': mat.quantity,
-                    'category': mat.category,
-                    'cost': mat.cost,
-                    'priority': mat.priority,
-                    'design_reference': mat.design_reference,
-                    'created_at': mat.created_at.isoformat() if mat.created_at else None,
-                    'created_by': mat.created_by
-                })
-        
         return jsonify({
             'success': True,
             'message': 'Purchase requests fetched successfully',
-            'purchase_requests': purchase_list,
-            'materials': all_materials  # Include materials array for frontend
+            'purchase_requests': purchase_list
         }), 200
 
     except Exception as e:
@@ -577,7 +547,22 @@ def send_purchase_request_email(purchase_id):
         }
 
         email_service = EmailService()
-        if email_service.send_purchase_request_notification(purchase_data, materials, requester_info):
+        
+        # Determine which email method to use based on user role
+        if role.role == 'procurement':
+            # Procurement sends to project manager only
+            procurement_info = {
+                'full_name': user_name,
+                'user_id': user_id,
+                'email': current_user.get('email', ''),
+                'role': role.role
+            }
+            success = email_service.send_procurement_to_project_manager_notification(purchase_data, materials, requester_info, procurement_info)
+        else:
+            # All other roles (siteSupervisor, mepSupervisor, projectManager, technicalDirector) send to all procurement
+            success = email_service.send_purchase_request_notification(purchase_data, materials, requester_info)
+        
+        if success:
             return jsonify({'success': True, 'message': f'Email sent for purchase request #{purchase_id}'}), 200
         else:
             return jsonify({'success': False, 'message': f'Failed to send email for purchase request #{purchase_id}'}), 500
