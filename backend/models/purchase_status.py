@@ -8,7 +8,7 @@ class PurchaseStatus(db.Model):
     status_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     purchase_id = db.Column(db.Integer, db.ForeignKey('public.purchase.purchase_id'), nullable=False)
     role = db.Column(db.String(50), nullable=False)  # 'projectManager', 'estimation', 'technicalDirector', etc.
-    status = db.Column(db.String(50), nullable=False)  # 'pending', 'accepted', 'rejected'
+    status = db.Column(db.String(50), nullable=False)  # 'pending', 'approved', 'rejected'
     decision_by_user_id = db.Column(db.Integer,nullable=False)
     decision_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     rejection_reason = db.Column(db.String(255), nullable=True)

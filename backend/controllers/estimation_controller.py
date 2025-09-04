@@ -37,8 +37,8 @@ def estimation_approval_workflow():
         rejection_type = data.get('rejection_type', '').lower()  # 'cost' or 'pm_flag'
         
         # Validate estimation_status
-        if estimation_status not in ['accept', 'reject']:
-            return jsonify({'error': 'estimation_status must be either "accept" or "reject"'}), 400
+        if estimation_status not in ['approved', 'reject']:
+            return jsonify({'error': 'estimation_status must be either "approved" or "reject"'}), 400
         
         # If rejecting, require rejection reason and type
         if estimation_status == 'reject':
@@ -56,7 +56,7 @@ def estimation_approval_workflow():
         existing_estimation_status = PurchaseStatus.get_absolute_latest_status_by_role(purchase_id, 'estimation')
         log.info(f"Existing estimation status for purchase #{purchase_id}: {existing_estimation_status.status if existing_estimation_status else 'None'}")
         
-        if existing_estimation_status and existing_estimation_status.status in ['accepted', 'rejected']:
+        if existing_estimation_status and existing_estimation_status.status in ['approved', 'rejected']:
             # Check if there's a more recent status from other roles that indicates resubmission
             latest_pm_status = PurchaseStatus.get_absolute_latest_status_by_role(purchase_id, 'projectManager')
             latest_procurement_status = PurchaseStatus.get_absolute_latest_status_by_role(purchase_id, 'procurement')
@@ -68,7 +68,7 @@ def estimation_approval_workflow():
             purchase_modified_after_estimation = purchase.last_modified_at and existing_estimation_status.created_at and purchase.last_modified_at > existing_estimation_status.created_at
             
             pm_approved_after_estimation = (latest_pm_status and 
-                                          latest_pm_status.status == 'accepted' and 
+                                          latest_pm_status.status == 'approved' and 
                                           latest_pm_status.created_at > existing_estimation_status.created_at)
             
             procurement_resubmitted_after_estimation = (latest_procurement_status and 
@@ -142,7 +142,7 @@ def estimation_approval_workflow():
             new_status = PurchaseStatus.create_new_status(
                 purchase_id=purchase_id,
                 role='estimation',
-                status='accepted' if estimation_status == 'accept' else 'rejected',
+                status='approved' if estimation_status == 'approved' else 'rejected',
                 decision_by_user_id=user_id,
                 reject_category=rejection_type,
                 rejection_reason=rejection_reason if estimation_status == 'reject' else None,
@@ -171,7 +171,7 @@ def estimation_approval_workflow():
                           existing_estimation_status.status == 'rejected' and 
                           (pm_approved_after_estimation or procurement_resubmitted_after_estimation or purchase_modified_after_estimation))
         
-        if estimation_status == 'accept':
+        if estimation_status == 'approved':
             # Estimation approves - send to Technical Director
             email_success = email_service.send_estimation_to_technical_director_notification(
                 purchase_data, materials, requester_info, estimation_info
