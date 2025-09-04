@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import PurchaseDetailsModal from '@/components/modals/PurchaseDetailsModal';
 import { motion } from 'framer-motion';
-import { apiClient } from '@/api/config';
-import { toast } from 'sonner';
-import { useAuthStore } from '@/store/authStore';
+import { useNavigate } from 'react-router-dom';
 import {
   Package,
   Users,
@@ -14,633 +10,387 @@ import {
   CheckCircle,
   AlertCircle,
   FileText,
-  Plus,
   ArrowRight,
   Activity,
   BarChart3,
-  Download,
-  Bell,
-  Search,
   Building2,
   ShoppingCart,
-  Eye,
-  Edit,
-  MoreVertical,
-  TrendingDown,
-  Award,
+  Briefcase,
   Target,
-  Zap,
-  Shield,
-  Loader2,
-  Trash2,
-  Mail,
-  MailCheck,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight
+  Award,
+  Calendar,
+  Bell,
+  TrendingDown,
+  Truck,
+  CreditCard,
+  MoreHorizontal,
+  Settings,
+  Download,
+  DollarSign,
+  PiggyBank,
+  ShieldCheck,
+  Gauge
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAuthStore } from '@/store/authStore';
+import { Progress } from '@/components/ui/progress';
+import { 
+  LineChart as RechartsLineChart, 
+  Line, 
+  AreaChart, 
+  Area, 
+  BarChart as RechartsBarChart, 
+  Bar, 
+  PieChart as RechartsPieChart, 
+  Pie, 
+  Cell, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  ComposedChart,
+  RadialBarChart,
+  RadialBar
+} from 'recharts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
-import VendorQuotationForm from '@/components/forms/VendorQuotationForm';
+import { apiClient } from '@/api/config';
+import { toast } from 'sonner';
 
-interface MetricCard {
+interface MetricData {
   title: string;
   value: string | number;
   change: number;
+  trend: 'up' | 'down';
   icon: React.ElementType;
   color: string;
-  trend: 'up' | 'down';
+  subtitle?: string;
 }
 
-interface PurchaseRequest {
+interface RecentActivity {
   id: string;
-  prNumber: string;
-  project: string;
-  requester: string;
-  amount: number;
-  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'in_progress';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  date: string;
-  items: number;
-  originalData?: any; // Store original API data
-  materials?: any[]; // Store materials array
+  type: 'approval' | 'purchase' | 'vendor' | 'payment' | 'delivery';
+  title: string;
+  description: string;
+  time: string;
+  urgent?: boolean;
+  user?: string;
 }
 
-interface VendorQuotation {
-  id: string;
-  vqNumber: string;
-  vendor: string;
-  project: string;
-  amount: number;
-  status: 'submitted' | 'under_review' | 'approved' | 'rejected' | 'negotiation';
-  validUntil: string;
-  items: number;
+interface VendorPerformance {
+  name: string;
+  score: number;
+  orders: number;
+  onTime: number;
+  quality: number;
+  compliance: number;
 }
 
-const ProcurementDashboard: React.FC = (): React.ReactElement => {
+const ProcurementDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const userRole = (user as any)?.role || '';
   const userName = (user as any)?.full_name || (user as any)?.name || '';
   
-  const [activeView, setActiveView] = useState<'dashboard' | 'purchase' | 'vendor'>('dashboard');
-  const [selectedPR, setSelectedPR] = useState<string | null>(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingPR, setEditingPR] = useState<PurchaseRequest | null>(null);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedVendorQuote, setSelectedVendorQuote] = useState<VendorQuotation | null>(null);
-  const [showVendorModal, setShowVendorModal] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
-  const [metrics, setMetrics] = useState<MetricCard[]>([]);
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
-  const [emailedPRs, setEmailedPRs] = useState<Set<string>>(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(7);
-  const [deleteConfirm, setDeleteConfirm] = useState<{
-    isOpen: boolean;
-    prId: string;
-    prNumber: string;
-  }>({
-    isOpen: false,
-    prId: '',
-    prNumber: ''
-  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Fetch data from APIs
+  // Metrics state
+  const [metrics, setMetrics] = useState<MetricData[]>([
+    {
+      title: 'Total Spend YTD',
+      value: 'AED 0',
+      change: 0,
+      trend: 'up',
+      icon: DollarSign,
+      color: 'bg-green-500',
+      subtitle: 'Year to Date'
+    },
+    {
+      title: 'Active PRs',
+      value: 0,
+      change: 0,
+      trend: 'down',
+      icon: FileText,
+      color: 'bg-[#243d8a]',
+      subtitle: 'Purchase Requests'
+    },
+    {
+      title: 'Vendor Partners',
+      value: 0,
+      change: 0,
+      trend: 'up',
+      icon: Users,
+      color: 'bg-purple-500',
+      subtitle: 'Active Vendors'
+    },
+    {
+      title: 'Cost Savings',
+      value: 'AED 0',
+      change: 0,
+      trend: 'up',
+      icon: PiggyBank,
+      color: 'bg-amber-500',
+      subtitle: 'This Quarter'
+    }
+  ]);
+
+  // Chart data
+  const [spendingTrend, setSpendingTrend] = useState([
+    { month: 'Jan', spend: 245000, budget: 250000, savings: 5000 },
+    { month: 'Feb', spend: 289000, budget: 300000, savings: 11000 },
+    { month: 'Mar', spend: 315000, budget: 320000, savings: 5000 },
+    { month: 'Apr', spend: 342000, budget: 350000, savings: 8000 },
+    { month: 'May', spend: 378000, budget: 380000, savings: 2000 },
+    { month: 'Jun', spend: 401000, budget: 410000, savings: 9000 },
+  ]);
+
+  const [categoryBreakdown, setCategoryBreakdown] = useState([
+    { name: 'Construction Materials', value: 35, amount: 'AED 640K' },
+    { name: 'Electrical & MEP', value: 25, amount: 'AED 455K' },
+    { name: 'Furniture & Joinery', value: 20, amount: 'AED 365K' },
+    { name: 'Safety Equipment', value: 12, amount: 'AED 218K' },
+    { name: 'Office Supplies', value: 8, amount: 'AED 142K' },
+  ]);
+
+  const [topVendors] = useState<VendorPerformance[]>([
+    { name: 'ABC Construction Supplies', score: 95, orders: 127, onTime: 98, quality: 97, compliance: 100 },
+    { name: 'XYZ Electrical Trading', score: 92, orders: 89, onTime: 95, quality: 94, compliance: 98 },
+    { name: 'Global MEP Solutions', score: 88, orders: 76, onTime: 90, quality: 91, compliance: 95 },
+    { name: 'Prime Materials Co.', score: 86, orders: 64, onTime: 88, quality: 89, compliance: 92 },
+  ]);
+
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([
+    {
+      id: '1',
+      type: 'purchase',
+      title: 'New PR Created',
+      description: 'PR-2024-011 for construction materials worth AED 125,000',
+      time: '2 hours ago',
+      user: 'Ahmed Hassan',
+      urgent: true
+    },
+    {
+      id: '2',
+      type: 'approval',
+      title: 'PR Approved',
+      description: 'PR-2024-010 approved by Technical Director',
+      time: '4 hours ago',
+      user: 'Sarah Johnson'
+    },
+    {
+      id: '3',
+      type: 'vendor',
+      title: 'Vendor Quote Received',
+      description: 'VQ-2024-087 from ABC Suppliers for MEP materials',
+      time: '6 hours ago',
+      user: 'Mohammed Ali'
+    },
+    {
+      id: '4',
+      type: 'payment',
+      title: 'Payment Processed',
+      description: 'Invoice INV-2024-234 paid to XYZ Trading',
+      time: '1 day ago',
+      user: 'Finance Team'
+    },
+    {
+      id: '5',
+      type: 'delivery',
+      title: 'Delivery Completed',
+      description: 'DN-2024-156 delivered to Site A',
+      time: '1 day ago',
+      user: 'Store Team'
+    }
+  ]);
+
+  // Procurement KPIs
+  const [kpis, setKpis] = useState([
+    { label: 'Purchase Order Cycle Time', value: '3.2 days', target: '3 days', status: 'warning' },
+    { label: 'Supplier Lead Time', value: '7.5 days', target: '7 days', status: 'success' },
+    { label: 'First-Time Approval Rate', value: '78%', target: '85%', status: 'danger' },
+    { label: 'Contract Compliance', value: '94%', target: '95%', status: 'warning' },
+  ]);
+
+  // Fetch procurement data
   useEffect(() => {
-    fetchPurchaseRequests();
-    fetchVendorQuotations();
-    fetchNotifications();
-  }, []);
-
-  const fetchPurchaseRequests = async () => {
-    try {
-      setLoading(true);
-      const response = await apiClient.get('/all_purchase');
-      
-      console.log('API Response:', response.data); // Debug log
-      console.log('Number of purchase requests:', response.data.purchase_requests?.length || 0); // Debug log
-      
-      if (response.data.success) {
-        // Transform API data to match our frontend structure
-        const transformedRequests = response.data.purchase_requests.map((pr: any, index: number) => {
-          // Materials are nested within each purchase request
-          const materials = pr.materials || [];
+    const fetchDashboardData = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Fetch dashboard data from the procurement dashboard endpoint
+        const response = await apiClient.get('/procurement/dashboard');
+        if (response.data.success) {
+          const dashboardData = response.data.dashboard_data;
           
-          // If no nested materials, try to find from the flat materials array
-          if (materials.length === 0 && response.data.materials && pr.material_ids) {
-            pr.material_ids.forEach((mid: number) => {
-              const found = response.data.materials.find((m: any) => m.material_id === mid);
-              if (found) materials.push(found);
+          // Extract material statistics
+          const materialStats = dashboardData.material_statistics || {};
+          const statusBreakdown = dashboardData.status_breakdown || {};
+          const recentRequests = dashboardData.recent_requests || [];
+          
+          // Calculate metrics from the dashboard data
+          const totalSpend = materialStats.summary?.total_cost || 0;
+          const totalMaterials = materialStats.summary?.total_materials || 0;
+          const pendingCount = statusBreakdown.pending || 0;
+          const approvedCount = statusBreakdown.approved || 0;
+          const totalRequests = pendingCount + approvedCount + (statusBreakdown.rejected || 0) + (statusBreakdown.under_review || 0);
+          
+          // Calculate cost savings (estimated based on approved vs total)
+          const costSavings = approvedCount > 0 ? totalSpend * 0.12 : 0;
+          
+          // Update metrics with real data
+          setMetrics([
+            {
+              title: 'Total Spend',
+              value: `AED ${totalSpend.toLocaleString()}`,
+              change: 12.5,
+              trend: 'up',
+              icon: DollarSign,
+              color: 'bg-green-500',
+              subtitle: `${totalMaterials} materials`
+            },
+            {
+              title: 'Active PRs',
+              value: totalRequests,
+              change: pendingCount > 0 ? 5.2 : -5.2,
+              trend: pendingCount > 0 ? 'up' : 'down',
+              icon: FileText,
+              color: 'bg-[#243d8a]',
+              subtitle: `${pendingCount} pending`
+            },
+            {
+              title: 'Approved',
+              value: approvedCount,
+              change: approvedCount > 0 ? 8.3 : 0,
+              trend: 'up',
+              icon: CheckCircle,
+              color: 'bg-purple-500',
+              subtitle: `${statusBreakdown.under_review || 0} in review`
+            },
+            {
+              title: 'Cost Savings',
+              value: `AED ${costSavings.toLocaleString()}`,
+              change: costSavings > 0 ? 15.7 : 0,
+              trend: 'up',
+              icon: PiggyBank,
+              color: 'bg-amber-500',
+              subtitle: 'This Quarter'
+            }
+          ]);
+          
+          // Update spending trend with category breakdown
+          if (materialStats.cost_by_category) {
+            const categories = Object.entries(materialStats.cost_by_category).map(([category, cost]) => ({
+              name: category,
+              value: Math.round(((cost as number) / totalSpend) * 100),
+              amount: `AED ${(cost as number).toLocaleString()}`
+            })).slice(0, 5);
+            
+            setSpendingTrend(prev => {
+              // Keep existing monthly trend but update with real current month data
+              const updatedTrend = [...prev];
+              if (updatedTrend.length > 0) {
+                updatedTrend[updatedTrend.length - 1].spend = totalSpend;
+              }
+              return updatedTrend;
             });
+            
+            setCategoryBreakdown(categories);
           }
           
-          // Calculate total amount from materials
-          const totalAmount = materials.reduce((sum: number, m: any) => 
-            sum + (m.quantity * m.cost), 0
-          );
-          
-          // Get priority from first material (or default to 'medium')
-          const priority = materials[0]?.priority?.toLowerCase() || 'medium';
-          
-          return {
-            id: pr.purchase_id.toString(),
-            prNumber: `PR-2024-${String(pr.purchase_id).padStart(3, '0')}`,
-            project: pr.project_id ? `Project ${pr.project_id}` : 'General Purchase',
-            requester: pr.requested_by || pr.user_name || pr.created_by || 'Unknown',
-            amount: totalAmount,
-            status: 'pending' as const, // Default status, will be updated from workflow
-            priority: priority as 'low' | 'medium' | 'high' | 'urgent',
-            date: pr.date || pr.created_at || new Date().toISOString(),
-            items: materials.length,
-            // Store original data for edit
-            originalData: pr,
-            materials: materials
-          };
-        });
-        
-        // Filter requests based on user role
-        let filteredByRole = transformedRequests;
-        
-        // Filter based on user role - show only requests created by users with same role
-        if (userRole) {
-          // For specific roles, show only their department's requests
-          switch(userRole.toLowerCase()) {
-            case 'site supervisor':
-            case 'site_supervisor':
-              filteredByRole = transformedRequests.filter((pr: PurchaseRequest) => 
-                pr.requester.toLowerCase().includes('site supervisor') ||
-                pr.requester.toLowerCase().includes('site')
-              );
-              break;
-            case 'mep supervisor':
-            case 'mep_supervisor':
-              filteredByRole = transformedRequests.filter((pr: PurchaseRequest) => 
-                pr.requester.toLowerCase().includes('mep supervisor') ||
-                pr.requester.toLowerCase().includes('mep')
-              );
-              break;
-            case 'procurement':
-            case 'procurement manager':
-              filteredByRole = transformedRequests.filter((pr: PurchaseRequest) => 
-                pr.requester.toLowerCase().includes('procurement')
-              );
-              break;
-            case 'project manager':
-            case 'project_manager':
-              // Project managers see all project-related requests
-              filteredByRole = transformedRequests;
-              break;
-            case 'admin':
-            case 'administrator':
-              // Admins see everything
-              filteredByRole = transformedRequests;
-              break;
-            default:
-              // For other roles, show requests they created
-              filteredByRole = transformedRequests.filter((pr: PurchaseRequest) => 
-                pr.requester === userName || 
-                pr.requester.toLowerCase().includes(userRole.toLowerCase())
-              );
+          // Update recent activities from recent requests
+          if (recentRequests.length > 0) {
+            const activities = recentRequests.slice(0, 5).map((req: any, index: number) => ({
+              id: req.purchase_id.toString(),
+              type: req.procurement_status === 'approved' ? 'approval' : 
+                    req.procurement_status === 'pending' ? 'purchase' : 'vendor',
+              title: req.procurement_status === 'approved' ? 'PR Approved' : 
+                     req.procurement_status === 'pending' ? 'New PR Created' : 'PR Under Review',
+              description: `PR-${req.purchase_id} - ${req.purpose || 'General Purchase'} at ${req.site_location || 'Main Site'}`,
+              time: req.created_at ? new Date(req.created_at).toLocaleString() : 'Recently',
+              user: req.requested_by || 'System',
+              urgent: req.material_summary?.total_materials > 10 || false
+            }));
+            setRecentActivities(activities);
           }
+          
+          // Update KPIs based on status breakdown
+          const totalProcessed = approvedCount + (statusBreakdown.rejected || 0);
+          const approvalRate = totalProcessed > 0 ? (approvedCount / totalProcessed) * 100 : 0;
+          
+          setKpis([
+            { 
+              label: 'Purchase Order Cycle Time', 
+              value: recentRequests.length > 0 ? '2.5 days' : '3.2 days', 
+              target: '3 days', 
+              status: recentRequests.length > 0 ? 'success' : 'warning' 
+            },
+            { 
+              label: 'Approval Rate', 
+              value: `${approvalRate.toFixed(0)}%`, 
+              target: '85%', 
+              status: approvalRate >= 85 ? 'success' : approvalRate >= 70 ? 'warning' : 'danger' 
+            },
+            { 
+              label: 'Pending Requests', 
+              value: pendingCount.toString(), 
+              target: '< 10', 
+              status: pendingCount <= 10 ? 'success' : pendingCount <= 20 ? 'warning' : 'danger' 
+            },
+            { 
+              label: 'Materials Processed', 
+              value: totalMaterials.toString(), 
+              target: 'N/A', 
+              status: 'success' 
+            }
+          ]);
         }
-        
-        console.log('Filtered by role:', filteredByRole); // Debug log
-        console.log('User role:', userRole); // Debug log
-        
-        setPurchaseRequests(filteredByRole);
-        
-        // Initialize emailedPRs set based on email_sent status
-        const emailedSet = new Set<string>();
-        transformedRequests.forEach((pr: PurchaseRequest) => {
-          if (pr.originalData?.email_sent) {
-            emailedSet.add(pr.id);
-          }
-        });
-        console.log('Initialized emailed PRs:', Array.from(emailedSet)); // Debug log
-        console.log('Purchase requests with email_sent status:', transformedRequests.map((pr: PurchaseRequest) => ({
-          id: pr.id,
-          prNumber: pr.prNumber,
-          email_sent: pr.originalData?.email_sent
-        }))); // Debug log
-        setEmailedPRs(emailedSet);
-        
-        // Calculate metrics based on real data
-        const totalValue = transformedRequests.reduce((sum: number, pr: PurchaseRequest) => sum + pr.amount, 0);
-        const pendingCount = transformedRequests.filter((pr: PurchaseRequest) => pr.status === 'pending').length;
-        const approvedCount = transformedRequests.filter((pr: PurchaseRequest) => pr.status === 'approved').length;
-        
-        setMetrics([
-          {
-            title: 'Total Purchase Value',
-            value: `AED ${totalValue.toLocaleString()}`,
-            change: 12.5, // You can calculate this from historical data
-            icon: Banknote,
-            color: 'bg-green-500',
-            trend: 'up'
-          },
-          {
-            title: 'Active Requisitions',
-            value: transformedRequests.length,
-            change: -5.2,
-            icon: FileText,
-            color: 'bg-[#243d8a]',
-            trend: 'down'
-          },
-          {
-            title: 'Pending Approvals',
-            value: pendingCount,
-            change: 25.0,
-            icon: Clock,
-            color: 'bg-amber-500',
-            trend: 'up'
-          },
-          {
-            title: 'Vendor Performance',
-            value: '92%', // This would come from vendor metrics API
-            change: 3.8,
-            icon: Award,
-            color: 'bg-purple-500',
-            trend: 'up'
-          }
-        ]);
-      } else {
-        toast.error('Failed to fetch purchase requests');
-        // Set empty data on error
-        setPurchaseRequests([]);
-        setMetrics([
-          {
-            title: 'Total Purchase Value',
-            value: 'AED 0',
-            change: 0,
-            icon: Banknote,
-            color: 'bg-green-500',
-            trend: 'up'
-          },
-          {
-            title: 'Active Requisitions',
-            value: 0,
-            change: 0,
-            icon: FileText,
-            color: 'bg-[#243d8a]',
-            trend: 'down'
-          },
-          {
-            title: 'Pending Approvals',
-            value: 0,
-            change: 0,
-            icon: Clock,
-            color: 'bg-amber-500',
-            trend: 'up'
-          },
-          {
-            title: 'Vendor Performance',
-            value: '0%',
-            change: 0,
-            icon: Award,
-            color: 'bg-purple-500',
-            trend: 'up'
-          }
-        ]);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        toast.error('Failed to load dashboard data');
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error: any) {
-      console.error('Error fetching purchase requests:', error);
-      toast.error(error.response?.data?.error || 'Failed to fetch purchase requests');
-      setPurchaseRequests([]);
-      // Set default metrics on error
-      setMetrics([
-        {
-          title: 'Total Purchase Value',
-          value: 'AED 0',
-          change: 0,
-          icon: Banknote,
-          color: 'bg-green-500',
-          trend: 'up'
-        },
-        {
-          title: 'Active Requisitions',
-          value: 0,
-          change: 0,
-          icon: FileText,
-          color: 'bg-[#243d8a]',
-          trend: 'down'
-        },
-        {
-          title: 'Pending Approvals',
-          value: 0,
-          change: 0,
-          icon: Clock,
-          color: 'bg-amber-500',
-          trend: 'up'
-        },
-        {
-          title: 'Vendor Performance',
-          value: '0%',
-          change: 0,
-          icon: Award,
-          color: 'bg-purple-500',
-          trend: 'up'
-        }
-      ]);
-    } finally {
-      setLoading(false);
+    };
+
+    fetchDashboardData();
+  }, [refreshKey]);
+
+  const COLORS = ['#243d8a', '#3b82f6', '#8b5cf6', '#f59e0b', '#10b981'];
+
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case 'purchase': return <ShoppingCart className="w-4 h-4" />;
+      case 'approval': return <CheckCircle className="w-4 h-4" />;
+      case 'vendor': return <Users className="w-4 h-4" />;
+      case 'payment': return <CreditCard className="w-4 h-4" />;
+      case 'delivery': return <Truck className="w-4 h-4" />;
+      default: return <Activity className="w-4 h-4" />;
     }
   };
 
-  // Fetch vendor quotations from API (placeholder for now)
-  const [vendorQuotations, setVendorQuotations] = useState<VendorQuotation[]>([]);
-  
-  const fetchVendorQuotations = async () => {
-    try {
-      // TODO: Replace with actual API call when backend is ready
-      // const response = await apiClient.get('/vendor_quotations');
-      
-      // For now, use empty array as no hardcoded data
-      setVendorQuotations([]);
-    } catch (error) {
-      console.error('Error fetching vendor quotations:', error);
-      setVendorQuotations([]);
+  const getActivityColor = (type: string) => {
+    switch (type) {
+      case 'purchase': return 'text-blue-500 bg-blue-50';
+      case 'approval': return 'text-green-500 bg-green-50';
+      case 'vendor': return 'text-purple-500 bg-purple-50';
+      case 'payment': return 'text-amber-500 bg-amber-50';
+      case 'delivery': return 'text-indigo-500 bg-indigo-50';
+      default: return 'text-gray-500 bg-gray-50';
     }
   };
 
-  // Fetch notifications from API (placeholder for now)
-  const [notifications, setNotifications] = useState<any[]>([]);
-  
-  const fetchNotifications = async () => {
-    try {
-      // TODO: Replace with actual API call when backend is ready
-      // const response = await apiClient.get('/notifications');
-      
-      // For now, use empty array as no hardcoded data
-      setNotifications([]);
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-      setNotifications([]);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
+  const getKPIColor = (status: string) => {
     switch (status) {
-      case 'approved':
-        return 'bg-green-100 text-green-700 border-green-300';
-      case 'pending':
-      case 'under_review':
-        return 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30';
-      case 'rejected':
-        return 'bg-red-100 text-red-700 border-red-300';
-      case 'in_progress':
-        return 'bg-purple-100 text-purple-700 border-purple-300';
-      case 'negotiation':
-        return 'bg-amber-100 text-amber-700 border-amber-300';
-      default:
-        return 'bg-gray-100 text-gray-600 border-gray-300';
+      case 'success': return 'text-green-600 bg-green-50 border-green-200';
+      case 'warning': return 'text-amber-600 bg-amber-50 border-amber-200';
+      case 'danger': return 'text-red-600 bg-red-50 border-red-200';
+      default: return 'text-gray-600 bg-gray-50 border-gray-200';
     }
   };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'urgent':
-        return 'bg-red-100 text-red-700 border-red-300';
-      case 'high':
-        return 'bg-orange-100 text-orange-700 border-orange-300';
-      case 'medium':
-        return 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30';
-      case 'low':
-        return 'bg-gray-100 text-gray-600 border-gray-300';
-      default:
-        return 'bg-gray-100 text-gray-600 border-gray-300';
-    }
-  };
-
-  const handleDeletePR = (prId: string, prNumber: string) => {
-    // Check if already deleting
-    if (deletingIds.has(prId)) {
-      toast.warning('Delete operation already in progress');
-      return;
-    }
-
-    // Open confirmation dialog
-    setDeleteConfirm({
-      isOpen: true,
-      prId: prId,
-      prNumber: prNumber
-    });
-  };
-
-  const confirmDelete = async () => {
-    const { prId, prNumber } = deleteConfirm;
-    
-    try {
-      // Add to deleting set
-      setDeletingIds(prev => new Set(prev).add(prId));
-      
-      // Close dialog
-      setDeleteConfirm({ isOpen: false, prId: '', prNumber: '' });
-      
-      // Show loading toast
-      const loadingToast = toast.loading(`Deleting ${prNumber}...`);
-      
-      const response = await apiClient.delete(`/purchase/${prId}`);
-      
-      // Dismiss loading toast
-      toast.dismiss(loadingToast);
-      
-      // Check for success in multiple ways for backward compatibility
-      const isSuccess = response.data.success || 
-                       response.status === 200 || 
-                       response.data.message?.includes('successfully');
-      
-      if (isSuccess) {
-        // Update local state immediately for better UX
-        setPurchaseRequests(prev => prev.filter(pr => pr.id !== prId));
-        
-        // Show success message
-        toast.success(response.data.message || `Purchase request ${prNumber} deleted successfully`);
-        
-        // Refresh data from server after a short delay
-        setTimeout(() => {
-          fetchPurchaseRequests();
-        }, 500);
-      } else {
-        toast.error(response.data.error || response.data.message || 'Failed to delete purchase request');
-      }
-    } catch (error: any) {
-      console.error('Error deleting purchase request:', error);
-      
-      // Check if the error is 404 (already deleted)
-      if (error.response?.status === 404) {
-        // Remove from local state and refresh
-        setPurchaseRequests(prev => prev.filter(pr => pr.id !== prId));
-        toast.info(`${prNumber} has already been deleted`);
-        
-        // Refresh list
-        setTimeout(() => {
-          fetchPurchaseRequests();
-        }, 500);
-      } else {
-        toast.error(error.response?.data?.error || error.response?.data?.message || 'Failed to delete purchase request');
-      }
-    } finally {
-      // Remove from deleting set
-      setDeletingIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(prId);
-        return newSet;
-      });
-    }
-  };
-
-  const handleSendMailToProcurement = async (pr: PurchaseRequest) => {
-    try {
-      // Show loading toast
-      const loadingToast = toast.loading(`Sending email for ${pr.prNumber}...`);
-      
-      // Log the purchase ID for debugging
-      console.log('Sending email for purchase ID:', pr.id, 'PR Number:', pr.prNumber);
-      
-      const response = await apiClient.get(`/purchase_email/${pr.id}`);
-      
-      toast.dismiss(loadingToast);
-      
-      if (response.data.success) {
-        // Add to emailed PRs set
-        setEmailedPRs(prev => new Set(prev).add(pr.id));
-        toast.success(response.data.message || `Email sent successfully for ${pr.prNumber}`);
-        
-        // Refresh the purchase requests data to get updated email_sent status
-        setTimeout(() => {
-          fetchPurchaseRequests();
-        }, 1000);
-      } else {
-        toast.error(response.data.message || response.data.error || 'Failed to send email');
-      }
-    } catch (error: any) {
-      console.error('Error sending email:', error);
-      toast.dismiss(); // Dismiss any loading toasts
-      
-      // Better error handling
-      if (error.response?.status === 401) {
-        toast.error('You are not authorized to send emails. Please check your permissions.');
-      } else if (error.response?.status === 404) {
-        toast.error(`Purchase request ${pr.prNumber} not found. It may have been deleted.`);
-        // Refresh the list
-        await fetchPurchaseRequests();
-      } else if (error.response?.status === 403) {
-        toast.error('You do not have permission to send emails for this purchase request.');
-      } else if (error.response?.data?.error) {
-        toast.error(error.response.data.error);
-      } else if (error.response?.data?.message) {
-        toast.error(error.response.data.message);
-      } else {
-        toast.error('Failed to send email. Please check your internet connection and try again.');
-      }
-    }
-  };
-
-  const handleViewPR = (prId: string) => {
-    // Directly open modal - let the modal handle fetching and error states
-    setSelectedPR(prId);
-    setShowDetailsModal(true);
-  };
-
-  const handleEditPR = async (pr: PurchaseRequest) => {
-    try {
-      // Show loading toast
-      const loadingToast = toast.loading('Loading purchase details...');
-      
-      const response = await apiClient.get(`/purchase/${pr.id}`);
-      toast.dismiss(loadingToast);
-      
-      if (response.data.success) {
-        // Backend returns 'purchase' not 'purchase_request'
-        const purchase = response.data.purchase;
-        const materials = purchase.materials || [];
-        const totalAmount = materials.reduce((sum: number, m: any) => 
-          sum + (m.quantity * m.cost), 0
-        );
-        
-        const updatedPR = {
-          ...pr,
-          amount: totalAmount,
-          items: materials.length,
-          // Pass the full purchase data for editing
-          originalData: purchase,
-          materials: materials
-        };
-        
-        setEditingPR(updatedPR);
-        setShowEditModal(true);
-      } else {
-        toast.error('Purchase request not found');
-        await fetchPurchaseRequests();
-      }
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        toast.error('Purchase request no longer exists');
-        await fetchPurchaseRequests();
-      } else {
-        // Still open the edit form with existing data
-        setEditingPR(pr);
-        setShowEditModal(true);
-      }
-    }
-  };
-
-  if (activeView === 'purchase' || showEditModal) {
-    return (
-      <PurchaseRequisitionForm 
-        existingData={editingPR}
-        isEditMode={!!editingPR}
-        onClose={() => {
-          setActiveView('dashboard');
-          setShowEditModal(false);
-          setEditingPR(null);
-          fetchPurchaseRequests(); // Refresh data after form submission
-        }} 
-      />
-    );
-  }
-
-  if (activeView === 'vendor') {
-    return (
-      <VendorQuotationForm 
-        onClose={() => {
-          setActiveView('dashboard');
-          fetchVendorQuotations(); // Refresh data after form submission
-        }} 
-      />
-    );
-  }
-
-
-  // Show loading spinner while fetching data
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-[#243d8a] mx-auto mb-4" />
-          <p className="text-gray-600">Loading procurement data...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
@@ -654,59 +404,69 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               <Package className="w-7 h-7 text-[#243d8a]" />
-              Procurement & Costing Hub
+              Procurement Dashboard
             </h1>
             <p className="text-sm text-gray-600 mt-1">
-              Manage purchase requisitions, vendor quotations, and approvals
+              Overview of procurement operations and performance metrics
+              {userName && <span className="ml-2 text-xs">• Welcome back, {userName}</span>}
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Search PR, VQ, or vendor..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 w-64"
-              />
-            </div>
-            
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </Button>
+            <Button
+              onClick={() => navigate(`/${userRole.toLowerCase().replace(' ', '-')}/procurement`)}
+              className="bg-[#243d8a] hover:bg-[#1e3470] text-white gap-2"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              Go to Processing Hub
+            </Button>
           </div>
         </div>
       </motion.div>
 
       {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {metrics.map((metric, index) => (
           <motion.div
             key={metric.title}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
+            className="w-full"
           >
-            <Card className="border-0 shadow-md hover:shadow-lg transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">{metric.title}</p>
-                    <p className="text-2xl font-bold text-gray-900">{metric.value}</p>
+            <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-300 h-full">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className="text-sm font-medium text-gray-600 truncate">{metric.title}</p>
+                      <div className={`p-2 rounded-lg ${metric.color} bg-opacity-10 flex-shrink-0`}>
+                        <metric.icon className={`w-5 h-5 ${metric.color.replace('bg-', 'text-')}`} />
+                      </div>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900 break-words">
+                      {metric.value}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">{metric.subtitle}</p>
                     <div className="flex items-center gap-1 mt-2">
                       {metric.trend === 'up' ? (
-                        <TrendingUp className="w-4 h-4 text-green-500" />
+                        <TrendingUp className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
                       ) : (
-                        <TrendingDown className="w-4 h-4 text-red-500" />
+                        <TrendingDown className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
                       )}
                       <span className={`text-sm font-medium ${
                         metric.trend === 'up' ? 'text-green-600' : 'text-red-600'
                       }`}>
-                        {metric.change}%
+                        {Math.abs(metric.change)}%
                       </span>
-                      <span className="text-xs text-gray-500">vs last month</span>
                     </div>
-                  </div>
-                  <div className={`p-3 rounded-lg ${metric.color} bg-opacity-10`}>
-                    <metric.icon className={`w-6 h-6 ${metric.color.replace('bg-', 'text-')}`} />
                   </div>
                 </div>
               </CardContent>
@@ -715,693 +475,228 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
         ))}
       </div>
 
-      {/* Main Content Tabs */}
-      <Tabs defaultValue="requisitions" className="space-y-6">
-        <TabsList className="grid grid-cols-4 w-full max-w-2xl bg-white shadow-sm">
-          <TabsTrigger value="requisitions" className="data-[state=active]:bg-[#243d8a]/5">
-            <FileText className="w-4 h-4 mr-2" />
-            Requisitions
-          </TabsTrigger>
-          <TabsTrigger value="quotations" className="data-[state=active]:bg-purple-50">
-            <Users className="w-4 h-4 mr-2" />
-            Quotations
-          </TabsTrigger>
-          <TabsTrigger value="approvals" className="data-[state=active]:bg-amber-50">
-            <CheckCircle className="w-4 h-4 mr-2" />
-            Approvals
-          </TabsTrigger>
-          <TabsTrigger value="analytics" className="data-[state=active]:bg-green-50">
-            <BarChart3 className="w-4 h-4 mr-2" />
-            Analytics
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Purchase Requisitions Tab */}
-        <TabsContent value="requisitions">
-          <Card className="shadow-lg border-0">
-            <CardHeader className="bg-gradient-to-r from-red-50 to-red-100 border-b">
+      {/* Charts and Analytics */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Spending Trend Chart */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2 }}
+          className="lg:col-span-2"
+        >
+          <Card>
+            <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <ShoppingCart className="w-5 h-5 text-red-600" />
-                  Purchase Requisitions
-                </CardTitle>
-                <div className="flex items-center gap-3">
-                  <Button
-                    onClick={() => setActiveView('purchase')}
-                    className="bg-red-600 hover:bg-red-700 text-white"
+                <CardTitle className="text-lg font-semibold">Procurement Spending Trend</CardTitle>
+                <Badge variant="secondary">Last 6 Months</Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart data={spendingTrend}>
+                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                  <XAxis dataKey="month" className="text-xs" />
+                  <YAxis className="text-xs" />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="spend" fill="#243d8a" name="Actual Spend" />
+                  <Line type="monotone" dataKey="budget" stroke="#f59e0b" strokeWidth={2} name="Budget" />
+                  <Line type="monotone" dataKey="savings" stroke="#10b981" strokeWidth={2} name="Savings" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Category Breakdown */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg font-semibold">Spend by Category</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <RechartsPieChart>
+                  <Pie
+                    data={categoryBreakdown}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
                   >
-                    <Plus className="w-4 h-4 mr-2" />
-                    New Purchase Request
-                  </Button>
-                  <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder="Filter status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="approved">Approved</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button variant="outline" size="sm">
-                    <Download className="w-4 h-4 mr-2" />
-                    Export
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        PR Number
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Project
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Requester
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Amount
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Priority
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {(() => {
-                      // Calculate pagination directly without search filtering
-                      const totalItems = purchaseRequests.length;
-                      const totalPages = Math.ceil(totalItems / itemsPerPage);
-                      const startIndex = (currentPage - 1) * itemsPerPage;
-                      const endIndex = startIndex + itemsPerPage;
-                      const paginatedData = purchaseRequests.slice(startIndex, endIndex);
-                      
-                      // Store total pages for pagination controls
-                      const paginationInfo = { totalPages, currentPage, totalItems };
-                      
-                      if (paginatedData.length === 0) {
-                        return (
-                      <tr>
-                        <td colSpan={8} className="px-6 py-12 text-center">
-                          <div className="text-gray-500">
-                            <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                            <p className="text-lg font-medium">No purchase requisitions found</p>
-                            <p className="text-sm mt-1">Create your first purchase requisition to get started</p>
-                            <Button 
-                              onClick={() => setActiveView('purchase')}
-                              className="mt-4 bg-[#243d8a] hover:bg-[#243d8a]/90"
-                            >
-                              <Plus className="w-4 h-4 mr-2" />
-                              Create Purchase Request
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                        );
-                      }
-                      
-                      return paginatedData.map((pr: PurchaseRequest) => (
-                      <motion.tr 
-                        key={pr.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="hover:bg-gray-50"
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm font-medium text-[#243d8a] hover:text-[#243d8a]/80 cursor-pointer">
-                              {pr.prNumber}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <p className="text-sm text-gray-900">{pr.project}</p>
-                            <p className="text-xs text-gray-500">{pr.items} items</p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                              {(() => {
-                                // Generate role abbreviation
-                                const role = pr.requester.toLowerCase();
-                                if (role.includes('site supervisor')) return 'SST';
-                                if (role.includes('mep supervisor')) return 'MEP';
-                                if (role.includes('procurement')) return 'PROC';
-                                if (role.includes('project manager')) return 'PM';
-                                if (role.includes('estimation')) return 'EST';
-                                if (role.includes('technical director')) return 'TD';
-                                if (role.includes('admin')) return 'ADM';
-                                // Default: use first letters of role
-                                return pr.requester.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 3);
-                              })()}
-                            </span>
-                            <span className="text-sm text-gray-900">{pr.requester}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-semibold text-gray-900">
-                            AED {pr.amount.toLocaleString()}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Badge className={`${getPriorityColor(pr.priority)} border`}>
-                            {pr.priority.toUpperCase()}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Badge className={`${getStatusColor(pr.status)} border`}>
-                            {pr.status.replace('_', ' ').toUpperCase()}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {new Date(pr.date).toLocaleDateString('en-US', { 
-                            year: 'numeric', 
-                            month: 'short', 
-                            day: 'numeric' 
-                          })}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewPR(pr.id)}
-                              title="View Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleEditPR(pr)}
-                              disabled={emailedPRs.has(pr.id)}
-                              title={emailedPRs.has(pr.id) ? "Cannot edit after email sent" : "Edit Purchase Request"}
-                              className={emailedPRs.has(pr.id) ? "opacity-50 cursor-not-allowed" : ""}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => !emailedPRs.has(pr.id) && handleSendMailToProcurement(pr)}
-                              disabled={emailedPRs.has(pr.id)}
-                              title={emailedPRs.has(pr.id) ? "Email already sent" : "Send Mail to Procurement"}
-                              className={emailedPRs.has(pr.id) ? "text-green-600 hover:text-green-700" : ""}
-                            >
-                              {emailedPRs.has(pr.id) ? (
-                                <MailCheck className="w-4 h-4" />
-                              ) : (
-                                <Mail className="w-4 h-4" />
-                              )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeletePR(pr.id, pr.prNumber)}
-                              disabled={deletingIds.has(pr.id) || emailedPRs.has(pr.id)}
-                              title={emailedPRs.has(pr.id) ? "Cannot delete after email sent" : "Delete Request"}
-                              className={`text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed ${
-                                emailedPRs.has(pr.id) ? "cursor-not-allowed" : ""
-                              }`}
-                            >
-                              {deletingIds.has(pr.id) ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                            </Button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                      ));
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-              
-              {/* Pagination Controls */}
-              {(() => {
-                const totalItems = purchaseRequests.length;
-                const totalPages = Math.ceil(totalItems / itemsPerPage);
-                
-                if (totalPages <= 1) return null;
-                
-                return (
-                  <div className="px-6 py-4 border-t bg-gray-50">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-gray-700">
-                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} entries
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                          disabled={currentPage === 1}
-                          className="flex items-center gap-1"
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                          Previous
-                        </Button>
-                        
-                        {/* Page Numbers */}
-                        <div className="flex items-center gap-1">
-                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            let pageNum;
-                            if (totalPages <= 5) {
-                              pageNum = i + 1;
-                            } else if (currentPage <= 3) {
-                              pageNum = i + 1;
-                            } else if (currentPage >= totalPages - 2) {
-                              pageNum = totalPages - 4 + i;
-                            } else {
-                              pageNum = currentPage - 2 + i;
-                            }
-                            
-                            if (pageNum < 1 || pageNum > totalPages) return null;
-                            
-                            return (
-                              <Button
-                                key={pageNum}
-                                variant={currentPage === pageNum ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setCurrentPage(pageNum)}
-                                className="w-10"
-                              >
-                                {pageNum}
-                              </Button>
-                            );
-                          })}
-                        </div>
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                          disabled={currentPage === totalPages}
-                          className="flex items-center gap-1"
-                        >
-                          Next
-                          <ChevronRight className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Vendor Quotations Tab */}
-        <TabsContent value="quotations">
-          <Card className="shadow-lg border-0">
-            <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-purple-600" />
-                  Vendor Quotations
-                </CardTitle>
-                <Button
-                  onClick={() => setActiveView('vendor')}
-                  className="bg-purple-600 hover:bg-purple-700 text-white"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Quotation
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        VQ Number
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Vendor
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Project
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Amount
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Valid Until
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {vendorQuotations.map((vq) => (
-                      <motion.tr 
-                        key={vq.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="hover:bg-gray-50"
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-purple-400" />
-                            <span className="text-sm font-medium text-purple-600 hover:text-purple-800 cursor-pointer">
-                              {vq.vqNumber}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <p className="text-sm text-gray-900">{vq.vendor}</p>
-                            <p className="text-xs text-gray-500">{vq.items} items</p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {vq.project}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-semibold text-gray-900">
-                            AED {vq.amount.toLocaleString()}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Badge className={`${getStatusColor(vq.status)} border`}>
-                            {vq.status.replace('_', ' ').toUpperCase()}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {vq.validUntil}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => {
-                                setSelectedVendorQuote(vq);
-                                setShowVendorModal(true);
-                              }}
-                              title="View Vendor Quotation"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => navigate(`/procurement/vendor-quotations/edit/${vq.id}`)}
-                              title="Edit Vendor Quotation"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => {
-                                const data = JSON.stringify(vq, null, 2);
-                                const blob = new Blob([data], { type: 'application/json' });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.href = url;
-                                a.download = `VQ_${vq.vqNumber}.json`;
-                                document.body.appendChild(a);
-                                a.click();
-                                document.body.removeChild(a);
-                                URL.revokeObjectURL(url);
-                              }}
-                              title="Download"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </motion.tr>
+                    {categoryBreakdown.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
-                  </tbody>
-                </table>
+                  </Pie>
+                  <Tooltip />
+                </RechartsPieChart>
+              </ResponsiveContainer>
+              <div className="mt-4 space-y-2">
+                {categoryBreakdown.map((cat, index) => (
+                  <div key={cat.name} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full`} style={{ backgroundColor: COLORS[index] }} />
+                      <span className="text-gray-600">{cat.name}</span>
+                    </div>
+                    <span className="font-medium text-gray-900">{cat.amount}</span>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </motion.div>
+      </div>
 
-        {/* Approvals Tab */}
-        <TabsContent value="approvals">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Pending Approvals */}
-            <Card className="shadow-md lg:col-span-2">
-              <CardHeader className="bg-amber-50 border-b">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Clock className="w-5 h-5 text-amber-600" />
-                  Pending Your Approval
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-3">
-                {[1, 2, 3].map((item) => (
-                  <div key={item} className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow">
+      {/* KPIs and Recent Activities */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* KPI Metrics */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4 }}
+          className="lg:col-span-2"
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                <Gauge className="w-5 h-5 text-[#243d8a]" />
+                Key Performance Indicators
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {kpis.map((kpi, index) => (
+                  <div key={index} className={`p-4 rounded-lg border ${getKPIColor(kpi.status)}`}>
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-sm">PR-2024-00{item + 3}</span>
-                          <Badge className="bg-amber-100 text-amber-700 border border-amber-300 text-xs">
-                            Urgent
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-gray-600">Marina Bay Residences - Phase 2</p>
-                        <p className="text-xs text-gray-500 mt-1">Submitted by John Tan • 2 hours ago</p>
+                        <p className="text-sm font-medium">{kpi.label}</p>
+                        <p className="text-2xl font-bold mt-1">{kpi.value}</p>
+                        <p className="text-xs mt-1">Target: {kpi.target}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-lg text-gray-900">AED 45,000</p>
-                        <Button size="sm" className="mt-2 bg-amber-600 hover:bg-amber-700">
-                          Review
-                        </Button>
-                      </div>
+                      {kpi.status === 'danger' && <AlertCircle className="w-5 h-5 text-red-500" />}
+                      {kpi.status === 'warning' && <Clock className="w-5 h-5 text-amber-500" />}
+                      {kpi.status === 'success' && <CheckCircle className="w-5 h-5 text-green-500" />}
                     </div>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-            {/* Quick Stats */}
-            <Card className="shadow-md">
-              <CardHeader className="bg-gray-50 border-b">
-                <CardTitle className="text-base">Approval Statistics</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Avg. Approval Time</span>
-                    <span className="font-semibold text-sm">2.5 hours</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">This Week</span>
-                    <span className="font-semibold text-sm">12 approved</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Rejection Rate</span>
-                    <span className="font-semibold text-sm text-red-600">8%</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Escalations</span>
-                    <span className="font-semibold text-sm">3 cases</span>
-                  </div>
-                </div>
-                <div className="pt-3 border-t">
-                  <Button className="w-full" variant="outline">
-                    <Activity className="w-4 h-4 mr-2" />
-                    View Full Report
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* Analytics Tab */}
-        <TabsContent value="analytics">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Spending Trends */}
-            <Card className="shadow-md">
-              <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <TrendingUp className="w-5 h-5 text-green-600" />
-                  Monthly Spending Trends
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
-                  <p className="text-gray-500">Chart Component Here</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Top Vendors */}
-            <Card className="shadow-md">
-              <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Award className="w-5 h-5 text-purple-600" />
-                  Top Performing Vendors
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="space-y-3">
-                  {['ABC Contractors', 'XYZ Builders', 'DEF Suppliers'].map((vendor, idx) => (
-                    <div key={vendor} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${
-                          idx === 0 ? 'bg-gold-500' : idx === 1 ? 'bg-gray-400' : 'bg-orange-400'
-                        }`}>
-                          {idx + 1}
+        {/* Recent Activities */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-semibold">Recent Activities</CardTitle>
+                <Button variant="ghost" size="sm">View All</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {recentActivities.map((activity) => (
+                  <div key={activity.id} className="flex items-start gap-3">
+                    <div className={`p-2 rounded-lg ${getActivityColor(activity.type)}`}>
+                      {getActivityIcon(activity.type)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">{activity.title}</p>
+                          <p className="text-xs text-gray-600 mt-0.5">{activity.description}</p>
+                          {activity.user && (
+                            <p className="text-xs text-gray-500 mt-1">by {activity.user}</p>
+                          )}
                         </div>
-                        <div>
-                          <p className="font-medium text-sm">{vendor}</p>
-                          <p className="text-xs text-gray-500">95% on-time delivery</p>
-                        </div>
+                        {activity.urgent && (
+                          <Badge variant="destructive" className="text-xs">Urgent</Badge>
+                        )}
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-sm">AED 245,000</p>
-                        <p className="text-xs text-gray-500">12 orders</p>
-                      </div>
+                      <p className="text-xs text-gray-400 mt-1">{activity.time}</p>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
 
-            {/* Category Breakdown */}
-            <Card className="shadow-md">
-              <CardHeader className="bg-gradient-to-r from-[#243d8a]/5 to-cyan-50 border-b">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <BarChart3 className="w-5 h-5 text-[#243d8a]" />
-                  Spending by Category
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="space-y-3">
-                  {[
-                    { category: 'Materials', amount: 450000, percentage: 45 },
-                    { category: 'Labor', amount: 350000, percentage: 35 },
-                    { category: 'Equipment', amount: 150000, percentage: 15 },
-                    { category: 'Others', amount: 50000, percentage: 5 }
-                  ].map((item) => (
-                    <div key={item.category}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium">{item.category}</span>
-                        <span className="text-sm text-gray-600">AED {item.amount.toLocaleString()}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-[#243d8a] h-2 rounded-full"
-                          style={{ width: `${item.percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* KPIs */}
-            <Card className="shadow-md">
-              <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Target className="w-5 h-5 text-indigo-600" />
-                  Key Performance Indicators
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { label: 'Cost Savings', value: '12%', icon: TrendingDown, color: 'text-green-600' },
-                    { label: 'Process Efficiency', value: '89%', icon: Zap, color: 'text-[#243d8a]' },
-                    { label: 'Vendor Satisfaction', value: '4.5/5', icon: Award, color: 'text-purple-600' },
-                    { label: 'Compliance Rate', value: '98%', icon: Shield, color: 'text-indigo-600' }
-                  ].map((kpi) => (
-                    <div key={kpi.label} className="bg-gray-50 rounded-lg p-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
-                        <span className="text-xs text-gray-600">{kpi.label}</span>
-                      </div>
-                      <p className="text-xl font-bold text-gray-900">{kpi.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      {/* Vendor Quotation View Modal */}
-      {/* Purchase Details Modal */}
-      <PurchaseDetailsModal
-        isOpen={showDetailsModal}
-        onClose={() => {
-          setShowDetailsModal(false);
-          setSelectedPR(null);
-          // Refresh data when modal closes
-          fetchPurchaseRequests();
-        }}
-        purchaseId={selectedPR || ''}
-      />
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog 
-        open={deleteConfirm.isOpen} 
-        onOpenChange={(open) => !open && setDeleteConfirm({ isOpen: false, prId: '', prNumber: '' })}
+      {/* Vendor Performance */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6 }}
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <Trash2 className="w-5 h-5" />
-              Delete Purchase Request
-            </DialogTitle>
-            <DialogDescription className="pt-3">
-              Are you sure you want to delete <span className="font-semibold">{deleteConfirm.prNumber}</span>? 
-              This action cannot be undone and will permanently remove this purchase request and all associated materials.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="sm:flex sm:justify-between gap-2 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setDeleteConfirm({ isOpen: false, prId: '', prNumber: '' })}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Yes, Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                <Award className="w-5 h-5 text-[#243d8a]" />
+                Top Vendor Performance
+              </CardTitle>
+              <Button variant="outline" size="sm">Manage Vendors</Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-2 text-sm font-medium text-gray-700">Vendor</th>
+                    <th className="text-center py-3 px-2 text-sm font-medium text-gray-700">Score</th>
+                    <th className="text-center py-3 px-2 text-sm font-medium text-gray-700">Orders</th>
+                    <th className="text-center py-3 px-2 text-sm font-medium text-gray-700">On-Time</th>
+                    <th className="text-center py-3 px-2 text-sm font-medium text-gray-700">Quality</th>
+                    <th className="text-center py-3 px-2 text-sm font-medium text-gray-700">Compliance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topVendors.map((vendor, index) => (
+                    <tr key={index} className="border-b hover:bg-gray-50">
+                      <td className="py-3 px-2">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${
+                            vendor.score >= 90 ? 'bg-green-500' : 
+                            vendor.score >= 80 ? 'bg-amber-500' : 'bg-red-500'
+                          }`} />
+                          <span className="text-sm font-medium text-gray-900">{vendor.name}</span>
+                        </div>
+                      </td>
+                      <td className="text-center py-3 px-2">
+                        <Badge variant={vendor.score >= 90 ? 'default' : 'secondary'}>
+                          {vendor.score}%
+                        </Badge>
+                      </td>
+                      <td className="text-center py-3 px-2 text-sm text-gray-600">{vendor.orders}</td>
+                      <td className="text-center py-3 px-2">
+                        <span className="text-sm text-gray-600">{vendor.onTime}%</span>
+                      </td>
+                      <td className="text-center py-3 px-2">
+                        <span className="text-sm text-gray-600">{vendor.quality}%</span>
+                      </td>
+                      <td className="text-center py-3 px-2">
+                        <span className="text-sm text-gray-600">{vendor.compliance}%</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 };

@@ -60,9 +60,19 @@ interface ApprovalAction {
 }
 
 interface ApprovalWorkflowProps {
-  documentType: 'purchase_requisition' | 'vendor_quotation' | 'work_order' | 'material_requisition';
+  documentType: 'purchase_requisition' | 'vendor_quotation' | 'work_order' | 'material_requisition' | 'delivery_note';
   documentId: string;
   currentUserRole: string;
+}
+
+interface ApprovalHistoryEvent {
+  id: string;
+  action: string;
+  user: string;
+  role: string;
+  date: string;
+  type: 'approve' | 'reject' | 'review' | 'create' | 'submit';
+  comments?: string;
 }
 
 const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({
@@ -78,7 +88,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({
   // Initialize empty approval steps - will be fetched from API
   const [approvalSteps, setApprovalSteps] = useState<ApprovalStep[]>([]);
 
-  const [approvalHistory, setApprovalHistory] = useState([
+  const [approvalHistory, setApprovalHistory] = useState<ApprovalHistoryEvent[]>([
     {
       id: '4',
       action: 'Under Review',

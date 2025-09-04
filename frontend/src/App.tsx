@@ -29,8 +29,14 @@ import {
   DesignDashboard
 } from '@/pages/dashboards';
 
-// Procurement sub-pages
-import DeliveriesPage from '@/pages/procurement/DeliveriesPage';
+// Procurement pages (now in roles folder)
+import { 
+  ProcurementHub,
+  DeliveriesPage,
+  ApprovalsPage,
+  PurchaseRequestsPage,
+  VendorQuotationsPage
+} from '@/roles/procurement/pages';
 
 // Workflow pages
 import MaterialDispatchProductionPage from '@/pages/workflows/MaterialDispatchProductionPage';
@@ -191,9 +197,9 @@ function App() {
           <Route element={<DashboardLayout />}>
             <Route index element={<Navigate to="dashboard" replace />} />
             
-            {/* Main Routes - Use RoleDashboard for dynamic dashboard loading */}
+            {/* Main Routes - Use role-based dashboard for main dashboard, ProcurementHub for procurement section */}
             <Route path="dashboard" element={<RoleDashboard />} />
-            <Route path="procurement" element={<ProcurementDashboard />} />
+            <Route path="procurement" element={<ProcurementHub />} />
             <Route path="procurement/deliveries" element={<DeliveriesPage />} />
             <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
             <Route path="tasks" element={<TasksPage />} />

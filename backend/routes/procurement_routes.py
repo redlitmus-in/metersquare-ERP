@@ -10,7 +10,7 @@ def get_all_procurement_route():
     """Get all procurement requests that have been sent via email"""
     return get_all_procurement()
 
-@procurement_routes.route('/dashboard', methods=['GET'])
+@procurement_routes.route('/procurement/dashboard', methods=['GET'])
 @jwt_required
 def get_procurement_dashboard_route():
     """Get procurement dashboard data"""

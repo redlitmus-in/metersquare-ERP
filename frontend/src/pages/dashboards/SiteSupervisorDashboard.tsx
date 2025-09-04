@@ -298,11 +298,12 @@ const SiteSupervisorDashboard: React.FC = () => {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value as any)}
-            className="h-8 min-w-[120px] text-sm border border-gray-300 rounded-md px-3 bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent cursor-pointer"
-          >
+        <select
+  aria-label="Select Period"
+  value={selectedPeriod}
+  onChange={(e) => setSelectedPeriod(e.target.value as any)}
+  className="h-8 min-w-[120px] text-sm border border-gray-300 rounded-md px-3 bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent cursor-pointer"
+>
             <option value="day">Today</option>
             <option value="week">This Week</option>
             <option value="month">This Month</option>

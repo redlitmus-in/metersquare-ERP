@@ -440,6 +440,7 @@ const ApprovalsPage: React.FC = () => {
                 className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
+                aria-label="Filter by document type"
               >
                 <option value="all">All Types</option>
                 <option value="purchase_requisition">Purchase Requisitions</option>
@@ -451,6 +452,7 @@ const ApprovalsPage: React.FC = () => {
                 className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
+                aria-label="Filter by status"
               >
                 <option value="all">All Status</option>
                 <option value="pending">Pending</option>
@@ -557,7 +559,7 @@ const ApprovalsPage: React.FC = () => {
             <ApprovalWorkflow 
               documentType={selectedApproval.documentType}
               documentId={selectedApproval.documentId}
-              currentUserRole={user?.role_id || ''}
+              currentUserRole={String(user?.role_id || user?.role || '')}
             />
           )}
         </DialogContent>
