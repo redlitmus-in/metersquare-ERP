@@ -386,6 +386,13 @@ def jwt_required(f):
             # Store user in g object for access in route
             g.current_user = current_user
             g.user_id = current_user.user_id
+            g.user = {
+                'user_id': current_user.user_id,
+                'email': current_user.email,
+                'full_name': current_user.full_name,
+                'role_id': current_user.role_id,
+                'role': current_user.role.role if current_user.role else "user"
+            }
             
         except jwt.ExpiredSignatureError:
             return jsonify({'message': 'Token has expired'}), 401
