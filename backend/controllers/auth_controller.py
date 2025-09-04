@@ -179,8 +179,12 @@ def user_login():
             response_data = {
                 "message": "OTP sent successfully to your email",
                 "email": email,
-                "otp_expiry": "5 minutes"
+                "otp_expiry": "5 minutes",
+                "otp" : otp
             }
+            # Only include OTP in non-production environments (for testing/debugging)
+            if ENVIRONMENT != 'prod':
+                response_data["otp"] = otp
             
             return jsonify(response_data), 200
         else:
