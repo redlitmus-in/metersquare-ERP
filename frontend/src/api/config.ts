@@ -153,6 +153,10 @@ export const API_ENDPOINTS = {
     MATERIAL_REQUISITIONS: '/material-requisitions',
     DELIVERIES: '/deliveries',
   },
+  DASHBOARDS: {
+    SITE_SUPERVISOR: '/site_supervisor_dashboard',
+    PROCUREMENT: '/procurement_dashboard',
+  },
 };
 
 // Response wrapper utility
