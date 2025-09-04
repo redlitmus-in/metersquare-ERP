@@ -620,6 +620,26 @@ def send_purchase_request_email(purchase_id):
                 'email': current_user.get('email', ''),
                 'role': role.role
             }
+            
+            # Create procurement status entry when sending to PM
+            try:
+                from models.purchase_status import PurchaseStatus
+                procurement_status = PurchaseStatus.create_new_status(
+                    purchase_id=purchase_id,
+                    role='procurement',
+                    status='approved',  # Procurement approved and sending to PM
+                    decision_by_user_id=user_id,
+                    comments=f'Procurement reviewed and sent to Project Manager for approval',
+                    created_by=user_name
+                )
+                db.session.add(procurement_status)
+                db.session.commit()  # Commit the status entry immediately
+                log.info(f"Created and committed procurement status entry for purchase #{purchase_id}")
+            except Exception as e:
+                db.session.rollback()
+                log.error(f"Error creating procurement status entry: {str(e)}")
+                # Continue with email even if status creation fails
+            
             success = email_service.send_procurement_to_project_manager_notification(purchase_data, materials, requester_info, procurement_info)
         else:
             # All other roles (siteSupervisor, mepSupervisor, projectManager, technicalDirector) send to all procurement
