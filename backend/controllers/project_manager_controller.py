@@ -138,7 +138,7 @@ def pm_approval_workflow():
                 receiver_role=receiver_role,
                 status='approved' if purchase_status == 'approved' else 'rejected',
                 decision_by_user_id=user_id,
-                rejection_reason=rejection_reason if purchase_status == 'reject' else None,
+                rejection_reason=rejection_reason if purchase_status == 'rejected' else None,
                 comments=comments,
                 created_by=user_name
             )
@@ -192,7 +192,7 @@ def pm_approval_workflow():
             'comments': new_status.comments
         }
         
-        if purchase_status == 'reject':
+        if purchase_status == 'rejected':
             response_data['rejection_reason'] = new_status.rejection_reason
         
         if not email_success:
