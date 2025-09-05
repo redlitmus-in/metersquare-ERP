@@ -2550,6 +2550,393 @@ ERP System
 This is an automated email from the ERP system.
     """
 
+    def send_technical_director_to_accounts_notification(self, purchase_data: Dict, materials_data: List[Dict],
+                                                       requester_info: Dict, technical_director_info: Dict) -> bool:
+        """Send notification from Technical Director to Accounts department"""
+        try:
+            # Get accounts team emails
+            recipients = self.get_accounts_team_emails()
+            print("accounts recipients:", recipients)
+            
+            if not recipients:
+                log.error("No accounts team emails found")
+                return False
+            
+            subject = f"Purchase Request Approved by Technical Director - Ready for Payment Processing - #{purchase_data.get('purchase_id')}"
+            html_content = self._generate_technical_director_to_accounts_email_html(purchase_data, materials_data, requester_info, technical_director_info)
+            text_content = self._generate_technical_director_to_accounts_email_text(purchase_data, materials_data, requester_info, technical_director_info)
+
+            success = self._send_email(recipients, subject, html_content, text_content)
+            if success:
+                print(f"Email sent to {len(recipients)} accounts member(s)")
+            return success
+        except Exception as e:
+            log.error(f"Error sending technical director to accounts notification: {str(e)}")
+            return False
+
+    def send_technical_director_rejection_to_estimation(self, purchase_data: Dict, materials_data: List[Dict],
+                                                      requester_info: Dict, technical_director_info: Dict, rejection_reason: str) -> bool:
+        """Send rejection notification from Technical Director back to Estimation team"""
+        try:
+            # Get estimation team emails
+            recipients = self.get_estimation_team_emails()
+            print("estimation recipients for technical director rejection:", recipients)
+            
+            if not recipients:
+                log.error("No estimation team emails found")
+                return False
+            
+            subject = f"Purchase Request Rejected by Technical Director - Requires Estimation Review - #{purchase_data.get('purchase_id')}"
+            html_content = self._generate_technical_director_rejection_email_html(purchase_data, materials_data, requester_info, technical_director_info, rejection_reason)
+            text_content = self._generate_technical_director_rejection_email_text(purchase_data, materials_data, requester_info, technical_director_info, rejection_reason)
+
+            success = self._send_email(recipients, subject, html_content, text_content)
+            if success:
+                print(f"Technical director rejection email sent to {len(recipients)} estimation member(s)")
+            return success
+        except Exception as e:
+            log.error(f"Error sending technical director rejection to estimation: {str(e)}")
+            return False
+
+    def get_accounts_team_emails(self) -> List[str]:
+        """Get all accounts team email addresses"""
+        try:
+            from models.user import User
+            from models.role import Role
+            
+            accounts_role = Role.query.filter_by(role='accounts', is_deleted=False).first()
+            if not accounts_role:
+                return None
+            
+            users = User.query.filter_by(
+                role_id=accounts_role.role_id,
+                is_deleted=False,
+                is_active=True
+            ).all()
+
+            emails = [u.email for u in users if u.email]
+            print("accounts team emails:", emails)
+            return emails if emails else None
+        except Exception as e:
+            log.error(f"Error fetching accounts team emails: {str(e)}")
+            return None
+
+    def _generate_technical_director_to_accounts_email_html(self, purchase_data: Dict, materials_data: List[Dict],
+                                                          requester_info: Dict, technical_director_info: Dict) -> str:
+        """Generate HTML email content for technical director to accounts notification"""
+        total_cost = sum((mat.get('quantity', 0) * mat.get('cost', 0)) for mat in materials_data)
+        project = Project.query.filter_by(project_id=purchase_data['project_id']).first()
+        materials_table = ""
+        for i, mat in enumerate(materials_data, 1):
+            materials_table += f"""
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{i}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('category', 'N/A')}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('description', 'N/A')}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('specification', 'N/A')}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{mat.get('quantity', 0)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('unit', 'N/A')}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${mat.get('cost', 0):.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}</td>
+            </tr>
+            """
+        
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Purchase Request Approved by Technical Director</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h1 style="margin: 0; font-size: 24px;">Purchase Request Approved by Technical Director</h1>
+                <p style="margin: 10px 0 0 0; font-size: 16px;">Ready for Payment Processing</p>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h2 style="color: #495057; margin-top: 0;">Purchase Request Details</h2>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold; width: 30%;">Request ID:</td>
+                        <td style="padding: 8px;">#{purchase_data.get('purchase_id')}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Requested By:</td>
+                        <td style="padding: 8px;">{requester_info.get('full_name', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Site Location:</td>
+                        <td style="padding: 8px;">{purchase_data.get('site_location', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Date:</td>
+                        <td style="padding: 8px;">{purchase_data.get('date', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Project Name:</td>
+                        <td style="padding: 8px;">{project.project_name if project else 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Purpose:</td>
+                        <td style="padding: 8px;">{purchase_data.get('purpose', 'N/A')}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div style="background: #e8f5e8; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h2 style="color: #2d5a2d; margin-top: 0;">Technical Director Approval</h2>
+                <p style="margin: 0; font-weight: bold;">✅ This purchase request has been approved by the Technical Director and is ready for payment processing.</p>
+                <p style="margin: 10px 0 0 0;"><strong>Approved By:</strong> {technical_director_info.get('full_name', 'N/A')}</p>
+                <p style="margin: 5px 0 0 0;"><strong>Role:</strong> {technical_director_info.get('role', 'N/A')}</p>
+            </div>
+
+            <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h2 style="color: #495057; margin-top: 0;">Materials List</h2>
+                <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 12px; border: 1px solid #ddd; text-align: center;">#</th>
+                            <th style="padding: 12px; border: 1px solid #ddd;">Category</th>
+                            <th style="padding: 12px; border: 1px solid #ddd;">Description</th>
+                            <th style="padding: 12px; border: 1px solid #ddd;">Specification</th>
+                            <th style="padding: 12px; border: 1px solid #ddd; text-align: center;">Quantity</th>
+                            <th style="padding: 12px; border: 1px solid #ddd;">Unit</th>
+                            <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Unit Cost</th>
+                            <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Total Cost</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {materials_table}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: #f8f9fa; font-weight: bold;">
+                            <td colspan="7" style="padding: 12px; border: 1px solid #ddd; text-align: right;">Total Cost:</td>
+                            <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${total_cost:.2f}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div style="background: #fff3cd; padding: 20px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                <h3 style="color: #856404; margin-top: 0;">Next Steps</h3>
+                <p style="margin: 0; color: #856404;">Please process the payment for this approved purchase request. All technical requirements have been verified and approved.</p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                <p style="color: #666; font-size: 14px;">This is an automated email from the ERP system.</p>
+                <p style="color: #666; font-size: 14px;">Please do not reply to this email.</p>
+            </div>
+        </body>
+        </html>
+        """
+
+    def _generate_technical_director_to_accounts_email_text(self, purchase_data: Dict, materials_data: List[Dict],
+                                                          requester_info: Dict, technical_director_info: Dict) -> str:
+        """Generate text email content for technical director to accounts notification"""
+        total_cost = sum((mat.get('quantity', 0) * mat.get('cost', 0)) for mat in materials_data)
+        project = Project.query.filter_by(project_id=purchase_data['project_id']).first()
+        materials_text = ""
+        for i, mat in enumerate(materials_data, 1):
+            materials_text += f"{i}. {mat.get('category', 'N/A')} - {mat.get('description', 'N/A')}\n"
+            materials_text += f"   Specification: {mat.get('specification', 'N/A')}\n"
+            materials_text += f"   Quantity: {mat.get('quantity', 0)} {mat.get('unit', 'N/A')}\n"
+            materials_text += f"   Unit Cost: ${mat.get('cost', 0):.2f}\n"
+            materials_text += f"   Total Cost: ${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}\n\n"
+        
+        return f"""
+Purchase Request Approved by Technical Director
+
+Dear Accounts Team,
+
+The following purchase request has been approved by the Technical Director and is ready for payment processing:
+
+Purchase Request Details:
+- Request ID: #{purchase_data.get('purchase_id')}
+- Requested By: {requester_info.get('full_name', 'N/A')}
+- Site Location: {purchase_data.get('site_location', 'N/A')}
+- Date: {purchase_data.get('date', 'N/A')}
+- Project Name: {project.project_name if project else 'N/A'}
+- Purpose: {purchase_data.get('purpose', 'N/A')}
+
+Technical Director Approval:
+- Approved By: {technical_director_info.get('full_name', 'N/A')}
+- Role: {technical_director_info.get('role', 'N/A')}
+
+Materials List:
+{materials_text}
+
+Overall Total Cost: ${total_cost:.2f}
+
+Next Steps:
+Please process the payment for this approved purchase request. All technical requirements have been verified and approved.
+
+Best regards,
+Technical Director
+ERP System
+
+This is an automated email from the ERP system.
+    """
+
+    def _generate_technical_director_rejection_email_html(self, purchase_data: Dict, materials_data: List[Dict],
+                                                        requester_info: Dict, technical_director_info: Dict, rejection_reason: str) -> str:
+        """Generate HTML email content for technical director rejection to estimation"""
+        total_cost = sum((mat.get('quantity', 0) * mat.get('cost', 0)) for mat in materials_data)
+        project = Project.query.filter_by(project_id=purchase_data['project_id']).first()
+        materials_table = ""
+        for i, mat in enumerate(materials_data, 1):
+            materials_table += f"""
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{i}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('category', 'N/A')}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('description', 'N/A')}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('specification', 'N/A')}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{mat.get('quantity', 0)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('unit', 'N/A')}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${mat.get('cost', 0):.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}</td>
+            </tr>
+            """
+        
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Purchase Request Rejected by Technical Director</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h1 style="margin: 0; font-size: 24px;">Purchase Request Rejected by Technical Director</h1>
+                <p style="margin: 10px 0 0 0; font-size: 16px;">Requires Estimation Review</p>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h2 style="color: #495057; margin-top: 0;">Purchase Request Details</h2>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold; width: 30%;">Request ID:</td>
+                        <td style="padding: 8px;">#{purchase_data.get('purchase_id')}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Requested By:</td>
+                        <td style="padding: 8px;">{requester_info.get('full_name', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Site Location:</td>
+                        <td style="padding: 8px;">{purchase_data.get('site_location', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Date:</td>
+                        <td style="padding: 8px;">{purchase_data.get('date', 'N/A')}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Project Name:</td>
+                        <td style="padding: 8px;">{project.project_name if project else 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Purpose:</td>
+                        <td style="padding: 8px;">{purchase_data.get('purpose', 'N/A')}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div style="background: #f8d7da; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h2 style="color: #721c24; margin-top: 0;">Technical Director Rejection</h2>
+                <p style="margin: 0; font-weight: bold;">❌ This purchase request has been rejected by the Technical Director.</p>
+                <p style="margin: 10px 0 0 0;"><strong>Rejected By:</strong> {technical_director_info.get('full_name', 'N/A')}</p>
+                <p style="margin: 5px 0 0 0;"><strong>Role:</strong> {technical_director_info.get('role', 'N/A')}</p>
+                <p style="margin: 10px 0 0 0;"><strong>Rejection Reason:</strong> {rejection_reason}</p>
+            </div>
+
+            <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h2 style="color: #495057; margin-top: 0;">Materials List</h2>
+                <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 12px; border: 1px solid #ddd; text-align: center;">#</th>
+                            <th style="padding: 12px; border: 1px solid #ddd;">Category</th>
+                            <th style="padding: 12px; border: 1px solid #ddd;">Description</th>
+                            <th style="padding: 12px; border: 1px solid #ddd;">Specification</th>
+                            <th style="padding: 12px; border: 1px solid #ddd; text-align: center;">Quantity</th>
+                            <th style="padding: 12px; border: 1px solid #ddd;">Unit</th>
+                            <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Unit Cost</th>
+                            <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Total Cost</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {materials_table}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: #f8f9fa; font-weight: bold;">
+                            <td colspan="7" style="padding: 12px; border: 1px solid #ddd; text-align: right;">Total Cost:</td>
+                            <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${total_cost:.2f}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div style="background: #fff3cd; padding: 20px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                <h3 style="color: #856404; margin-top: 0;">Next Steps</h3>
+                <p style="margin: 0; color: #856404;">Please review the rejection reason and make necessary corrections to the purchase request before resubmitting.</p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                <p style="color: #666; font-size: 14px;">This is an automated email from the ERP system.</p>
+                <p style="color: #666; font-size: 14px;">Please do not reply to this email.</p>
+            </div>
+        </body>
+        </html>
+        """
+
+    def _generate_technical_director_rejection_email_text(self, purchase_data: Dict, materials_data: List[Dict],
+                                                        requester_info: Dict, technical_director_info: Dict, rejection_reason: str) -> str:
+        """Generate text email content for technical director rejection to estimation"""
+        total_cost = sum((mat.get('quantity', 0) * mat.get('cost', 0)) for mat in materials_data)
+        project = Project.query.filter_by(project_id=purchase_data['project_id']).first()
+        materials_text = ""
+        for i, mat in enumerate(materials_data, 1):
+            materials_text += f"{i}. {mat.get('category', 'N/A')} - {mat.get('description', 'N/A')}\n"
+            materials_text += f"   Specification: {mat.get('specification', 'N/A')}\n"
+            materials_text += f"   Quantity: {mat.get('quantity', 0)} {mat.get('unit', 'N/A')}\n"
+            materials_text += f"   Unit Cost: ${mat.get('cost', 0):.2f}\n"
+            materials_text += f"   Total Cost: ${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}\n\n"
+        
+        return f"""
+Purchase Request Rejected by Technical Director
+
+Dear Estimation Team,
+
+The following purchase request has been rejected by the Technical Director and requires your review:
+
+Purchase Request Details:
+- Request ID: #{purchase_data.get('purchase_id')}
+- Requested By: {requester_info.get('full_name', 'N/A')}
+- Site Location: {purchase_data.get('site_location', 'N/A')}
+- Date: {purchase_data.get('date', 'N/A')}
+- Project Name: {project.project_name if project else 'N/A'}
+- Purpose: {purchase_data.get('purpose', 'N/A')}
+
+Technical Director Rejection:
+- Rejected By: {technical_director_info.get('full_name', 'N/A')}
+- Role: {technical_director_info.get('role', 'N/A')}
+- Rejection Reason: {rejection_reason}
+
+Materials List:
+{materials_text}
+
+Overall Total Cost: ${total_cost:.2f}
+
+Next Steps:
+Please review the rejection reason and make necessary corrections to the purchase request before resubmitting.
+
+Best regards,
+Technical Director
+ERP System
+
+This is an automated email from the ERP system.
+    """
+
     def send_purchase_request_notification(self, purchase_data: Dict, materials_data: List[Dict],
                                            requester_info: Dict) -> bool:
         """Send purchase request email to procurement team"""
