@@ -15,3 +15,9 @@ def get_all_procurement_route():
 def get_procurement_dashboard_route():
     """Get procurement dashboard data"""
     return get_procurement_dashboard()
+
+@procurement_routes.route('/purchase_history/<int:purchase_id>', methods=['GET'])
+@jwt_required
+def get_purchase_id_history_route(purchase_id):
+    """Get purchase id history"""
+    return get_purchase_id_history(purchase_id)

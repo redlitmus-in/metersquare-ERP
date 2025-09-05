@@ -4,6 +4,7 @@ from flask import g, request, jsonify, current_app
 from sqlalchemy import and_
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
+from models.purchase_status import PurchaseStatus
 from models.approval import Approval
 from models.material import Material
 from models.purchase import Purchase
@@ -276,24 +277,30 @@ def get_purchase_request_by_id(purchase_id):
                     'created_by': mat.created_by
                 })
 
-        # 🔹 Get approvals
-        approvals = []
-        approval_objects = Approval.query.filter_by(purchase_id=purchase.purchase_id).all()
-        for appr in approval_objects:
-            approvals.append({
-                'approval_id': appr.approval_id,
-                'status': appr.status,
-                'reviewer_role': appr.reviewer_role,
-                'reviewed_by': appr.reviewed_by,
-                'reviewed_at': appr.reviewed_at,
-                'comments': getattr(appr, 'comments', None),
-                'created_at': appr.created_at,
-                'created_by': appr.created_by,
-                'last_modified_at': appr.last_modified_at,
-                'last_modified_by': appr.last_modified_by
-            })
+        # 🔹 Get latest status only (most recent entry for this purchase)
+        latest_status = PurchaseStatus.get_latest_status(purchase.purchase_id)
+        latest_status_info = None
+        if latest_status:
+            latest_status_info = {
+                'status_id': latest_status.status_id,
+                'purchase_id': latest_status.purchase_id,
+                'sender': latest_status.sender,
+                'receiver': latest_status.receiver,
+                'role': latest_status.role,
+                'status': latest_status.status,
+                'decision_by_user_id': latest_status.decision_by_user_id,
+                'decision_date': latest_status.decision_date.isoformat() if latest_status.decision_date else None,
+                'rejection_reason': latest_status.rejection_reason,
+                'reject_category': latest_status.reject_category,
+                'comments': latest_status.comments,
+                'is_active': latest_status.is_active,
+                'created_at': latest_status.created_at.isoformat() if latest_status.created_at else None,
+                'created_by': latest_status.created_by,
+                'last_modified_at': latest_status.last_modified_at.isoformat() if latest_status.last_modified_at else None,
+                'last_modified_by': latest_status.last_modified_by
+            }
 
-        # 🔹 Final purchase response with nested materials & approvals
+        # 🔹 Final purchase response with nested materials & latest status only
         purchase_data = {
             'purchase_id': purchase.purchase_id,
             'requested_by': purchase.requested_by,
@@ -304,12 +311,14 @@ def get_purchase_request_by_id(purchase_id):
             'project_id': purchase.project_id,
             'purpose': purchase.purpose,
             'material_ids': purchase.material_ids,
-            'materials': materials,   # ✅ nested
+            'materials': materials,   # ✅ nested materials
             'file_path': purchase.file_path,
             'email_sent': purchase.email_sent,
-            'created_at': purchase.created_at,
+            'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
             'created_by': purchase.created_by,
-            'approvals': approvals    # ✅ nested
+            'last_modified_at': purchase.last_modified_at.isoformat() if purchase.last_modified_at else None,
+            'last_modified_by': purchase.last_modified_by,
+            'latest_status': latest_status_info  # ✅ only the latest status entry
         }
 
         return jsonify({

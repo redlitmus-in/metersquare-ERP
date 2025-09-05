@@ -260,3 +260,96 @@ def get_all_procurement():
     except Exception as e:
         log.error(f"Error fetching procurement: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+def get_purchase_id_history(purchase_id):
+    try:
+        current_user = g.user
+        if not current_user:
+            return jsonify({"error": "Not logged in"}), 401
+
+        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
+        if not role or role.role not in ['siteSupervisor', 'mepSupervisor', 'procurement']:
+            return jsonify({
+                'error': 'Invalid role. Only Site Supervisor, MEP Supervisor, or Procurement team can view requisitions'
+            }), 403
+
+        # 🔹 Fetch purchase by ID
+        purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
+        if not purchase:
+            return jsonify({'error': 'Purchase request not found'}), 404
+
+        # 🔹 Get related materials
+        material_ids = purchase.material_ids or []
+        materials = []
+        if material_ids:
+            material_objects = Material.query.filter(
+                Material.is_deleted == False,
+                Material.material_id.in_(material_ids)
+            ).all()
+
+            for mat in material_objects:
+                materials.append({
+                    'material_id': mat.material_id,
+                    'project_id': mat.project_id,
+                    'description': mat.description,
+                    'specification': mat.specification,
+                    'unit': mat.unit,
+                    'quantity': mat.quantity,
+                    'category': mat.category,
+                    'cost': mat.cost,
+                    'priority': mat.priority,
+                    'design_reference': mat.design_reference,
+                    'created_at': mat.created_at,
+                    'created_by': mat.created_by
+                })
+
+        # 🔹 Get approvals
+        approvals = []
+        purchase_status_objects = PurchaseStatus.query.filter_by(purchase_id=purchase.purchase_id).all()
+        for status in purchase_status_objects:
+            approvals.append({
+                'status_id': status.status_id,
+                'purchase_id': status.purchase_id,
+                'sender': status.sender,
+                'receiver': status.receiver,
+                'role': status.role,
+                'status': status.status,
+                'decision_by_user_id': status.decision_by_user_id,
+                'decision_date': status.decision_date,
+                'rejection_reason': status.rejection_reason,
+                'sender': status.sender,
+                'receiver': status.receiver,
+                'comments': getattr(status, 'comments', None),
+                'created_at': status.created_at,
+                'created_by': status.created_by,
+                'last_modified_at': status.last_modified_at,
+                'last_modified_by': status.last_modified_by
+            })
+
+        # 🔹 Final purchase response with nested materials & approvals
+        purchase_data = {
+            'purchase_id': purchase.purchase_id,
+            'requested_by': purchase.requested_by,
+            'user_id': purchase.user_id,
+            'user_name': current_user['full_name'],
+            'site_location': purchase.site_location,
+            'date': purchase.date,
+            'project_id': purchase.project_id,
+            'purpose': purchase.purpose,
+            'material_ids': purchase.material_ids,
+            'materials': materials,   # ✅ nested
+            'file_path': purchase.file_path,
+            'email_sent': purchase.email_sent,
+            'created_at': purchase.created_at,
+            'created_by': purchase.created_by,
+            'approvals': approvals    # ✅ nested
+        }
+
+        return jsonify({
+            'success': True,
+            'message': 'Purchase request fetched successfully',
+            'purchase': purchase_data
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

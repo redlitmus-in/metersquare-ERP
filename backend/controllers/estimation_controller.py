@@ -38,7 +38,7 @@ def estimation_approval_workflow():
         
         # Validate estimation_status
         if estimation_status not in ['approved', 'rejected']:
-            return jsonify({'error': 'estimation_status must be either "approved" or "reject"'}), 400
+            return jsonify({'error': 'estimation_status must be either "approved" or "rejected"'}), 400
         
         # If rejecting, require rejection reason and type
         if estimation_status == 'rejected':
