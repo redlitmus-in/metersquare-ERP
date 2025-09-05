@@ -254,12 +254,46 @@ def get_estimation_dashboard():
         ).order_by(PurchaseStatus.created_at.desc()).all()
 
         # Get all status records where estimation is the RECEIVER (estimation team received decisions)
+        # These are purchases that were sent TO estimation team (from Project Manager)
         estimation_receiver_statuses = PurchaseStatus.query.filter(
             and_(
                 PurchaseStatus.receiver == 'estimation',
                 PurchaseStatus.is_active == True
             )
         ).order_by(PurchaseStatus.created_at.desc()).all()
+
+        # Get purchases that are in estimation workflow but haven't been processed by estimation yet
+        # These are purchases that have been approved by Project Manager but estimation hasn't acted on them
+        pm_approved_purchase_ids = PurchaseStatus.query.filter(
+            and_(
+                PurchaseStatus.sender == 'projectManager',
+                PurchaseStatus.status == 'approved',
+                PurchaseStatus.is_active == True
+            )
+        ).with_entities(PurchaseStatus.purchase_id).all()
+        
+        pm_approved_purchase_ids = [pid[0] for pid in pm_approved_purchase_ids]
+        
+        # Get purchases that estimation has already processed
+        estimation_processed_purchase_ids = [status.purchase_id for status in estimation_sender_statuses]
+        
+        # Find purchases approved by PM but not yet processed by estimation (pending for estimation)
+        estimation_sender_pending_purchases = Purchase.query.filter(
+            and_(
+                Purchase.is_deleted == False,
+                Purchase.purchase_id.in_(pm_approved_purchase_ids),
+                ~Purchase.purchase_id.in_(estimation_processed_purchase_ids)
+            )
+        ).all()
+
+        # Get purchases that were sent to estimation but estimation hasn't responded yet (receiver pending)
+        estimation_receiver_pending_purchases = Purchase.query.filter(
+            and_(
+                Purchase.is_deleted == False,
+                Purchase.purchase_id.in_(pm_approved_purchase_ids),
+                ~Purchase.purchase_id.in_([status.purchase_id for status in estimation_receiver_statuses])
+            )
+        ).all()
 
         # Process SENDER data (estimation team as sender)
         sender_approved_count = 0
@@ -269,6 +303,7 @@ def get_estimation_dashboard():
         sender_rejected_details = []
         sender_pending_details = []
 
+        # Process existing status records
         for status in estimation_sender_statuses:
             # Get purchase details
             purchase = Purchase.query.filter_by(
@@ -349,6 +384,72 @@ def get_estimation_dashboard():
             elif status.status == 'pending':
                 sender_pending_count += 1
                 sender_pending_details.append(status_detail)
+
+        # Process pending purchases (those without status records)
+        for purchase in estimation_sender_pending_purchases:
+            # Get materials for this purchase
+            materials = []
+            total_material_cost = 0
+            total_quantity = 0
+            
+            if purchase.material_ids:
+                material_objects = Material.query.filter(
+                    and_(
+                        Material.is_deleted == False,
+                        Material.material_id.in_(purchase.material_ids)
+                    )
+                ).all()
+                
+                for mat in material_objects:
+                    material_cost = float(mat.cost) if mat.cost else 0
+                    material_total = material_cost * mat.quantity
+                    total_material_cost += material_total
+                    total_quantity += mat.quantity
+                    
+                    materials.append({
+                        'material_id': mat.material_id,
+                        'description': mat.description,
+                        'specification': mat.specification,
+                        'unit': mat.unit,
+                        'quantity': mat.quantity,
+                        'category': mat.category,
+                        'unit_cost': material_cost,
+                        'total_cost': material_total,
+                        'priority': mat.priority,
+                        'design_reference': mat.design_reference
+                    })
+
+            status_detail = {
+                'status_id': None,
+                'purchase_id': purchase.purchase_id,
+                'project_id': purchase.project_id,
+                'requested_by': purchase.requested_by,
+                'site_location': purchase.site_location,
+                'date': purchase.date,
+                'purpose': purchase.purpose,
+                'file_path': purchase.file_path,
+                'materials': materials,
+                'material_count': len(materials),
+                'total_quantity': total_quantity,
+                'total_cost': round(total_material_cost, 2),
+                'status_info': {
+                    'status': 'pending',
+                    'sender': 'estimation',
+                    'receiver': None,
+                    'decision_date': None,
+                    'decision_by_user_id': None,
+                    'decision_by': None,
+                    'rejection_reason': None,
+                    'reject_category': None,
+                    'comments': None,
+                    'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
+                    'last_modified_at': purchase.last_modified_at.isoformat() if purchase.last_modified_at else None,
+                    'last_modified_by': purchase.last_modified_by
+                }
+            }
+
+            sender_pending_count += 1
+            sender_pending_details.append(status_detail)
 
         # Process RECEIVER data (estimation team as receiver)
         receiver_approved_count = 0
@@ -439,9 +540,75 @@ def get_estimation_dashboard():
                 receiver_pending_count += 1
                 receiver_pending_details.append(status_detail)
 
+        # Process receiver pending purchases (those sent to estimation but estimation hasn't responded)
+        for purchase in estimation_receiver_pending_purchases:
+            # Get materials for this purchase
+            materials = []
+            total_material_cost = 0
+            total_quantity = 0
+            
+            if purchase.material_ids:
+                material_objects = Material.query.filter(
+                    and_(
+                        Material.is_deleted == False,
+                        Material.material_id.in_(purchase.material_ids)
+                    )
+                ).all()
+                
+                for mat in material_objects:
+                    material_cost = float(mat.cost) if mat.cost else 0
+                    material_total = material_cost * mat.quantity
+                    total_material_cost += material_total
+                    total_quantity += mat.quantity
+                    
+                    materials.append({
+                        'material_id': mat.material_id,
+                        'description': mat.description,
+                        'specification': mat.specification,
+                        'unit': mat.unit,
+                        'quantity': mat.quantity,
+                        'category': mat.category,
+                        'unit_cost': material_cost,
+                        'total_cost': material_total,
+                        'priority': mat.priority,
+                        'design_reference': mat.design_reference
+                    })
+
+            status_detail = {
+                'status_id': None,
+                'purchase_id': purchase.purchase_id,
+                'project_id': purchase.project_id,
+                'requested_by': purchase.requested_by,
+                'site_location': purchase.site_location,
+                'date': purchase.date,
+                'purpose': purchase.purpose,
+                'file_path': purchase.file_path,
+                'materials': materials,
+                'material_count': len(materials),
+                'total_quantity': total_quantity,
+                'total_cost': round(total_material_cost, 2),
+                'status_info': {
+                    'status': 'pending',
+                    'sender': 'projectManager',
+                    'receiver': 'estimation',
+                    'decision_date': None,
+                    'decision_by_user_id': None,
+                    'decision_by': None,
+                    'rejection_reason': None,
+                    'reject_category': None,
+                    'comments': None,
+                    'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
+                    'last_modified_at': purchase.last_modified_at.isoformat() if purchase.last_modified_at else None,
+                    'last_modified_by': purchase.last_modified_by
+                }
+            }
+
+            receiver_pending_count += 1
+            receiver_pending_details.append(status_detail)
+
         # Calculate totals
-        sender_total = sender_approved_count + sender_rejected_count + sender_pending_count
-        receiver_total = receiver_approved_count + receiver_rejected_count + receiver_pending_count
+        sender_total = sender_approved_count + sender_rejected_count
+        receiver_total = receiver_approved_count + receiver_rejected_count
 
         # Calculate rejection breakdown for sender
         sender_cost_rejections = len([s for s in sender_rejected_details if s['status_info']['reject_category'] == 'cost'])
@@ -541,14 +708,34 @@ def get_all_estimation_purchase_request():
             )
         ).order_by(PurchaseStatus.created_at.desc()).all()
 
+        estimation_sender_statuses = PurchaseStatus.query.filter(
+            and_(
+                PurchaseStatus.sender == 'estimation',
+                PurchaseStatus.is_active == True
+            )
+        ).order_by(PurchaseStatus.created_at.desc()).all()
+
         # Use set to track unique purchase_ids and get latest status for each
         unique_purchase_ids = set()
         latest_statuses = {}
+        estimation_decisions = {}  # Track estimation team decisions
         
+        # Process estimation team decisions (sender statuses)
+        for sender_status in estimation_sender_statuses:
+            if sender_status.purchase_id not in unique_purchase_ids:
+                unique_purchase_ids.add(sender_status.purchase_id)
+                latest_statuses[sender_status.purchase_id] = sender_status
+                # Track estimation team's decision
+                estimation_decisions[sender_status.purchase_id] = sender_status.status
+
+        # Process statuses where estimation is receiver (from PM)
         for status in estimation_receiver_statuses:
             if status.purchase_id not in unique_purchase_ids:
                 unique_purchase_ids.add(status.purchase_id)
                 latest_statuses[status.purchase_id] = status
+                # If estimation hasn't made a decision yet, mark as pending
+                if status.purchase_id not in estimation_decisions:
+                    estimation_decisions[status.purchase_id] = 'pending'
 
         # Get detailed purchase information for each unique purchase
         purchase_details = []
@@ -614,7 +801,8 @@ def get_all_estimation_purchase_request():
                 'last_modified_by': purchase.last_modified_by,
                 'status_info': {
                     'status_id': status.status_id,
-                    'status': status.status,
+                    'pm_status': status.status,
+                    'estimation_status': estimation_decisions.get(purchase_id, 'pending'),
                     'sender': status.sender,
                     'receiver': status.receiver,
                     'decision_date': status.decision_date.isoformat() if status.decision_date else None,
@@ -634,23 +822,23 @@ def get_all_estimation_purchase_request():
         # Sort by latest status creation date (newest first)
         purchase_details.sort(key=lambda x: x['status_info']['created_at'], reverse=True)
 
-        # Calculate summary statistics
+        # Calculate summary statistics based on estimation status
         total_count = len(purchase_details)
-        approved_count = len([p for p in purchase_details if p['status_info']['status'] == 'approved'])
-        rejected_count = len([p for p in purchase_details if p['status_info']['status'] == 'rejected'])
-        pending_count = len([p for p in purchase_details if p['status_info']['status'] == 'pending'])
+        approved_count = len([p for p in purchase_details if p['status_info']['estimation_status'] == 'approved'])
+        rejected_count = len([p for p in purchase_details if p['status_info']['estimation_status'] == 'rejected'])
+        pending_count = len([p for p in purchase_details if p['status_info']['estimation_status'] == 'pending'])
 
-        # Calculate financial summary
+        # Calculate financial summary based on estimation status
         total_value = sum(p['total_cost'] for p in purchase_details)
-        approved_value = sum(p['total_cost'] for p in purchase_details if p['status_info']['status'] == 'approved')
-        rejected_value = sum(p['total_cost'] for p in purchase_details if p['status_info']['status'] == 'rejected')
-        pending_value = sum(p['total_cost'] for p in purchase_details if p['status_info']['status'] == 'pending')
+        approved_value = sum(p['total_cost'] for p in purchase_details if p['status_info']['estimation_status'] == 'approved')
+        rejected_value = sum(p['total_cost'] for p in purchase_details if p['status_info']['estimation_status'] == 'rejected')
+        pending_value = sum(p['total_cost'] for p in purchase_details if p['status_info']['estimation_status'] == 'pending')
 
-        # Calculate quantity summary
+        # Calculate quantity summary based on estimation status
         total_quantity = sum(p['total_quantity'] for p in purchase_details)
-        approved_quantity = sum(p['total_quantity'] for p in purchase_details if p['status_info']['status'] == 'approved')
-        rejected_quantity = sum(p['total_quantity'] for p in purchase_details if p['status_info']['status'] == 'rejected')
-        pending_quantity = sum(p['total_quantity'] for p in purchase_details if p['status_info']['status'] == 'pending')
+        approved_quantity = sum(p['total_quantity'] for p in purchase_details if p['status_info']['estimation_status'] == 'approved')
+        rejected_quantity = sum(p['total_quantity'] for p in purchase_details if p['status_info']['estimation_status'] == 'rejected')
+        pending_quantity = sum(p['total_quantity'] for p in purchase_details if p['status_info']['estimation_status'] == 'pending')
 
         response_data = {
             'success': True,
