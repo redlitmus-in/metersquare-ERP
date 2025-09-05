@@ -104,6 +104,10 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
   // Get role-based permissions
   const { permissions, canCreatePurchaseRequest } = useRolePermissions();
   
+  // Debug: Log permission check result
+  console.log('Can create purchase request:', canCreatePurchaseRequest());
+  console.log('Permissions:', permissions);
+  
   const [activeView, setActiveView] = useState<'dashboard' | 'purchase' | 'vendor'>('dashboard');
   const [selectedPR, setSelectedPR] = useState<string | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -162,9 +166,13 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
       const normalizedRole = userRole?.toLowerCase().replace(/[\s_-]+/g, '_');
       console.log('Normalized role for endpoint selection:', normalizedRole);
       
-      const endpoint = normalizedRole === 'procurement' 
-        ? '/all_procurement'  // Gets only purchases sent for approval (email_sent=true)
-        : '/all_purchase';    // Gets all purchases for other roles
+      let endpoint = '/all_purchase'; // Default endpoint
+      
+      if (normalizedRole === 'procurement') {
+        endpoint = '/all_procurement';  // Gets only purchases sent for approval (email_sent=true)
+      } else if (normalizedRole === 'project_manager') {
+        endpoint = '/projectmanager_purchases';  // Gets purchases approved by procurement for PM review
+      }
       
       console.log('Using endpoint:', endpoint);
       const response = await apiClient.get(endpoint);
@@ -179,6 +187,12 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
       if (normalizedRole === 'procurement') {
         // Procurement endpoint returns 'procurement' array
         purchaseData = response.data.procurement || [];
+      } else if (normalizedRole === 'project_manager') {
+        // Project manager endpoint returns different structure
+        purchaseData = response.data.approved_procurement_purchases || 
+                      response.data.purchase_requests || 
+                      response.data.purchases || 
+                      [];
       } else {
         // Try different possible response formats for /all_purchase
         purchaseData = response.data.purchase_requests || 

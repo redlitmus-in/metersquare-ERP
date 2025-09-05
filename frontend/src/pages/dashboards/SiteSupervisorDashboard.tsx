@@ -36,7 +36,8 @@ import {
   Timer,
   Layers,
   UserCheck,
-  Loader2
+  Loader2,
+  Plus
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -414,34 +415,38 @@ const SiteSupervisorDashboard: React.FC = () => {
   return (
     <div className="p-4 space-y-4 bg-gray-50 min-h-screen">
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">
             Site Operations Dashboard
           </h1>
           <p className="text-xs text-gray-600 mt-0.5">
             Real-time monitoring of construction sites and operations
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-        <select
-  aria-label="Select Period"
-  value={selectedPeriod}
-  onChange={(e) => setSelectedPeriod(e.target.value as any)}
-  className="h-8 min-w-[120px] text-sm border border-gray-300 rounded-md px-3 bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent cursor-pointer"
->
+        <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end">
+          <Button
+            onClick={(e) => {
+              e.preventDefault();
+              // Force navigation to procurement page
+              console.log('Procurement Hub clicked - navigating to /procurement');
+              navigate('../procurement', { replace: false });
+            }}
+            className="h-8 px-4 flex items-center gap-2 text-sm font-medium bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-all duration-200 shadow-sm hover:shadow-md"
+          >
+            <Package className="w-4 h-4" />
+            <span>Procurement Hub</span>
+          </Button>
+          <select
+            aria-label="Select Period"
+            value={selectedPeriod}
+            onChange={(e) => setSelectedPeriod(e.target.value as any)}
+            className="h-8 px-3 text-sm border border-gray-300 rounded-md bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent cursor-pointer transition-colors"
+          >
             <option value="day">Today</option>
             <option value="week">This Week</option>
             <option value="month">This Month</option>
           </select>
-          <Button
-            variant="outline"
-            onClick={() => navigate('/analytics')}
-            className="h-8 min-w-[100px] flex items-center justify-center gap-1.5 text-sm font-medium border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-colors"
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span>Analytics</span>
-          </Button>
         </div>
       </div>
 
@@ -691,15 +696,34 @@ const SiteSupervisorDashboard: React.FC = () => {
                 <HardHat className="w-4 h-4 text-orange-600" />
                 Recent Purchase Requests
               </CardTitle>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => navigate('/projects')}
-                className="text-xs h-6 px-2"
-              >
-                View All
-                <ArrowRight className="w-3 h-3 ml-1" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="default" 
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('../procurement', { replace: false });
+                  }}
+                  className="text-xs h-6 px-2 bg-orange-600 hover:bg-orange-700"
+                  title="Create New Purchase Request"
+                >
+                  <Plus className="w-3 h-3 mr-1" />
+                  Create PR
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('../procurement', { replace: false });
+                  }}
+                  className="text-xs h-6 px-2"
+                  title="View All Purchase Requests"
+                >
+                  View All
+                  <ArrowRight className="w-3 h-3 ml-1" />
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="pt-0 space-y-2">

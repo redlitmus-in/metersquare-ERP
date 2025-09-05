@@ -157,6 +157,12 @@ export const API_ENDPOINTS = {
     SITE_SUPERVISOR: '/site_supervisor_dashboard',
     PROCUREMENT: '/procurement_dashboard',
   },
+  PROJECT_MANAGER: {
+    DASHBOARD: '/project_manager/dashboard',
+    APPROVE_PURCHASE: '/pm_approval',
+    GET_PURCHASES: '/projectmanger_purchases', // Note: backend has typo
+    PURCHASE_STATUS: (id: string | number) => `/purchase_status/${id}`,
+  },
 };
 
 // Response wrapper utility

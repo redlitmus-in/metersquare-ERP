@@ -460,4 +460,6 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({ isOpen, onC
   );
 };
 
+export { PurchaseDetailsModal };
+
 export default PurchaseDetailsModal;

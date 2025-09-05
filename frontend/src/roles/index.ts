@@ -27,7 +27,11 @@ export type UserRole =
  * Get permissions for a specific role
  */
 export const getRolePermissions = (role: string) => {
-  const normalizedRole = role.toLowerCase().replace(/\s+/g, '_');
+  // Handle multiple formats: "Site Supervisor", "siteSupervisor", "site_supervisor"
+  const normalizedRole = role.toLowerCase()
+    .replace(/\s+/g, '_')  // Replace spaces with underscores
+    .replace(/([a-z])([A-Z])/g, '$1_$2')  // Convert camelCase to snake_case
+    .toLowerCase();  // Ensure all lowercase
   
   switch (normalizedRole) {
     case 'procurement':
@@ -35,6 +39,7 @@ export const getRolePermissions = (role: string) => {
       return procurementPermissions;
       
     case 'site_supervisor':
+    case 'sitesupervisor':
     case 'site':
       return siteSupervisorPermissions;
       

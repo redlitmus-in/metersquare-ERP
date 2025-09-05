@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -10,6 +10,12 @@ import {
   TrendingUp, Activity, Target, FileText, ArrowUpRight, ArrowDownRight,
   MoreVertical, Download, Filter, RefreshCw, Layers, GitBranch, Timer
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { projectManagerService, PMDashboardData } from '@/roles/project-manager/services/projectManagerService';
+import { PMMetricsCards } from '@/roles/project-manager/components/PMMetricsCards';
+import { PurchaseApprovalCard } from '@/roles/project-manager/components/PurchaseApprovalCard';
+import { ApprovalModal } from '@/roles/project-manager/components/ApprovalModal';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,25 +23,113 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const ProjectManagerDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [selectedProject, setSelectedProject] = useState('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<PMDashboardData>({
+    totalPurchases: 0,
+    pendingApprovals: 0,
+    approvedThisMonth: 0,
+    rejectedThisMonth: 0,
+    averageApprovalTime: 0,
+    recentPurchases: [],
+    approvalTrends: [],
+    categoryBreakdown: []
+  });
+  
+  // Modal states
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+  const [selectedPurchase, setSelectedPurchase] = useState<any>(null);
+  const [modalMode, setModalMode] = useState<'approve' | 'reject'>('approve');
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  // Project Timeline Data
-  const timelineData = [
-    { week: 'W1', planned: 20, actual: 18 },
-    { week: 'W2', planned: 35, actual: 32 },
-    { week: 'W3', planned: 50, actual: 48 },
-    { week: 'W4', planned: 65, actual: 60 },
-    { week: 'W5', planned: 80, actual: 75 },
-    { week: 'W6', planned: 95, actual: 87 },
-  ];
+  // Fetch dashboard data
+  const fetchDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      const data = await projectManagerService.getPMDashboardData();
+      setDashboardData(data);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast.error('Failed to fetch dashboard data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  // Resource Allocation Data
-  const resourceData = [
-    { name: 'Design', value: 25, color: '#8b5cf6' },
-    { name: 'Development', value: 40, color: '#3b82f6' },
-    { name: 'Testing', value: 20, color: '#10b981' },
-    { name: 'Deployment', value: 15, color: '#f59e0b' },
-  ];
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  // Handle approval/rejection
+  const handleApprove = (purchaseId: number) => {
+    const purchase = dashboardData.recentPurchases.find(p => p.purchase_id === purchaseId);
+    if (purchase) {
+      setSelectedPurchase(purchase);
+      setModalMode('approve');
+      setApprovalModalOpen(true);
+    }
+  };
+
+  const handleReject = (purchaseId: number) => {
+    const purchase = dashboardData.recentPurchases.find(p => p.purchase_id === purchaseId);
+    if (purchase) {
+      setSelectedPurchase(purchase);
+      setModalMode('reject');
+      setApprovalModalOpen(true);
+    }
+  };
+
+  const handleViewDetails = (purchaseId: number) => {
+    navigate(`/project-manager/purchase/${purchaseId}`);
+  };
+
+  const handleConfirmApproval = async (data: any) => {
+    try {
+      setIsProcessing(true);
+      
+      let response;
+      if (data.action === 'approve') {
+        response = await projectManagerService.approvePurchase(data.purchaseId, data.comments);
+      } else {
+        response = await projectManagerService.rejectPurchase(
+          data.purchaseId, 
+          data.rejectionReason || '', 
+          data.comments
+        );
+      }
+
+      if (response.success) {
+        toast.success(response.message || `Purchase ${data.action}d successfully`);
+
+        // Refresh data
+        await fetchDashboardData();
+        setApprovalModalOpen(false);
+        setSelectedPurchase(null);
+      } else {
+        throw new Error(response.error || 'Operation failed');
+      }
+    } catch (error: any) {
+      console.error('Error processing approval:', error);
+      toast.error(error.response?.data?.error || error.message || 'Failed to process request');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Use real data for timeline
+  const timelineData = dashboardData.approvalTrends.map((trend, idx) => ({
+    week: trend.month.substring(0, 3),
+    planned: trend.approved + trend.rejected + trend.pending,
+    actual: trend.approved
+  })).slice(0, 6);
+
+  // Resource Allocation Data from categories
+  const resourceData = dashboardData.categoryBreakdown.slice(0, 4).map((cat, idx) => ({
+    name: cat.category,
+    value: Math.round((cat.value / Math.max(1, dashboardData.categoryBreakdown.reduce((sum, c) => sum + c.value, 0))) * 100),
+    color: ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'][idx] || '#6b7280'
+  }));
 
   // Team Performance Radar
   const teamPerformance = [
@@ -47,65 +141,89 @@ const ProjectManagerDashboard: React.FC = () => {
     { skill: 'Innovation', A: 85, B: 82 },
   ];
 
-  // Task Distribution
+  // Task Distribution based on purchase status
+  const totalPurchases = Math.max(1, dashboardData.totalPurchases);
   const taskData = [
-    { status: 'Completed', count: 124, percentage: 45 },
-    { status: 'In Progress', count: 89, percentage: 32 },
-    { status: 'Pending', count: 42, percentage: 15 },
-    { status: 'Blocked', count: 22, percentage: 8 },
+    { 
+      status: 'Approved', 
+      count: dashboardData.approvedThisMonth, 
+      percentage: Math.round((dashboardData.approvedThisMonth / totalPurchases) * 100) 
+    },
+    { 
+      status: 'Pending', 
+      count: dashboardData.pendingApprovals, 
+      percentage: Math.round((dashboardData.pendingApprovals / totalPurchases) * 100) 
+    },
+    { 
+      status: 'Rejected', 
+      count: dashboardData.rejectedThisMonth, 
+      percentage: Math.round((dashboardData.rejectedThisMonth / totalPurchases) * 100) 
+    },
+    { 
+      status: 'In Process', 
+      count: Math.max(0, totalPurchases - dashboardData.approvedThisMonth - dashboardData.pendingApprovals - dashboardData.rejectedThisMonth), 
+      percentage: Math.max(0, 100 - Math.round((dashboardData.approvedThisMonth / totalPurchases) * 100) - Math.round((dashboardData.pendingApprovals / totalPurchases) * 100) - Math.round((dashboardData.rejectedThisMonth / totalPurchases) * 100)) 
+    },
   ];
 
-  // Key Metrics
+  // Key Metrics from real data (not used since we'll use PMMetricsCards)
   const metrics = [
     {
-      title: 'Active Projects',
-      value: '12',
-      change: '+2',
+      title: 'Total Purchases',
+      value: dashboardData.totalPurchases.toString(),
+      change: '+12%',
       trend: 'up' as const,
-      period: 'This month',
+      period: 'All time',
       icon: Briefcase,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
     },
     {
-      title: 'Team Members',
-      value: '48',
-      change: '+5',
+      title: 'Pending Approvals',
+      value: dashboardData.pendingApprovals.toString(),
+      change: dashboardData.pendingApprovals > 5 ? '+' + (dashboardData.pendingApprovals - 5) : '0',
+      trend: dashboardData.pendingApprovals > 5 ? 'up' as const : 'down' as const,
+      period: 'Awaiting review',
+      icon: Clock,
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50',
+    },
+    {
+      title: 'Approved This Month',
+      value: dashboardData.approvedThisMonth.toString(),
+      change: '+18%',
       trend: 'up' as const,
-      period: 'Total',
-      icon: Users,
+      period: 'Current month',
+      icon: CheckCircle2,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
     },
     {
-      title: 'Tasks Completed',
-      value: '234',
-      change: '+18%',
-      trend: 'up' as const,
-      period: 'This week',
-      icon: CheckCircle2,
+      title: 'Avg Approval Time',
+      value: `${dashboardData.averageApprovalTime} days`,
+      change: '-0.5',
+      trend: 'down' as const,
+      period: 'Processing time',
+      icon: Timer,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
     },
-    {
-      title: 'Delivery Rate',
-      value: '87%',
-      change: '-3%',
-      trend: 'down' as const,
-      period: 'On time',
-      icon: Timer,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
-    },
   ];
 
-  // Active Projects List
-  const activeProjects = [
-    { name: 'Marina Tower Complex', progress: 75, status: 'on-track', deadline: '2024-03-15', budget: 'AED 2.5M' },
-    { name: 'Business Bay Office', progress: 45, status: 'delayed', deadline: '2024-04-20', budget: 'AED 1.8M' },
-    { name: 'JBR Residential', progress: 90, status: 'on-track', deadline: '2024-02-28', budget: 'AED 3.2M' },
-    { name: 'Downtown Retail', progress: 30, status: 'at-risk', deadline: '2024-05-10', budget: 'AED 1.2M' },
-  ];
+  // Recent purchases as active projects
+  const activeProjects = dashboardData.recentPurchases.slice(0, 4).map(purchase => ({
+    id: purchase.purchase_id,
+    name: purchase.site_location,
+    progress: purchase.current_status.status === 'approved' ? 100 : 
+              purchase.current_status.status === 'rejected' ? 0 : 50,
+    status: purchase.current_status.status === 'approved' ? 'on-track' :
+            purchase.current_status.status === 'rejected' ? 'delayed' : 'at-risk',
+    deadline: purchase.date,
+    budget: `AED ${purchase.materials_summary.total_cost.toLocaleString()}`,
+    purpose: purchase.purpose
+  }));
+
+  const pendingPurchases = dashboardData.recentPurchases.filter(p => p.current_status.role !== 'projectManager');
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
@@ -120,8 +238,8 @@ const ProjectManagerDashboard: React.FC = () => {
             <Filter className="h-4 w-4 mr-2" />
             Filter
           </Button>
-          <Button variant="outline" size="icon">
-            <RefreshCw className="h-4 w-4" />
+          <Button onClick={fetchDashboardData} variant="outline" size="icon" disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="outline" size="icon">
             <Download className="h-4 w-4" />
@@ -129,42 +247,14 @@ const ProjectManagerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {metrics.map((metric, index) => (
-          <motion.div
-            key={metric.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-600">{metric.title}</p>
-                    <p className="text-3xl font-bold text-gray-900">{metric.value}</p>
-                    <div className="flex items-center gap-2">
-                      <div className={`flex items-center ${metric.trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-                        {metric.trend === 'up' ? (
-                          <ArrowUpRight className="h-4 w-4" />
-                        ) : (
-                          <ArrowDownRight className="h-4 w-4" />
-                        )}
-                        <span className="text-sm font-medium">{metric.change}</span>
-                      </div>
-                      <span className="text-xs text-gray-500">{metric.period}</span>
-                    </div>
-                  </div>
-                  <div className={`${metric.bgColor} p-3 rounded-lg`}>
-                    <metric.icon className={`h-6 w-6 ${metric.color}`} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+      {/* Key Metrics - Use PMMetricsCards component */}
+      {isLoading ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+        </div>
+      ) : (
+        <PMMetricsCards data={dashboardData} />
+      )}
 
       {/* Project Timeline & Resource Allocation */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -313,7 +403,7 @@ const ProjectManagerDashboard: React.FC = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium text-gray-700">{task.status}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-500">{task.count} tasks</span>
+                    <span className="text-sm text-gray-500">{task.count} purchases</span>
                     <Badge variant="outline">{task.percentage}%</Badge>
                   </div>
                 </div>
@@ -322,60 +412,97 @@ const ProjectManagerDashboard: React.FC = () => {
                   className="h-2"
                   style={{
                     '--progress-background': index === 0 ? '#10b981' : 
-                                            index === 1 ? '#3b82f6' :
-                                            index === 2 ? '#f59e0b' : '#ef4444'
+                                            index === 1 ? '#f59e0b' :
+                                            index === 2 ? '#ef4444' : '#3b82f6'
                   } as React.CSSProperties}
                 />
               </div>
             ))}
             <div className="pt-4 border-t">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Total Tasks</span>
-                <span className="text-lg font-bold">277</span>
+                <span className="text-sm font-medium">Total Purchases</span>
+                <span className="text-lg font-bold">{dashboardData.totalPurchases}</span>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Active Projects Table */}
+      {/* Recent Purchases / Pending Approvals */}
       <Card>
         <CardHeader>
-          <CardTitle>Active Projects</CardTitle>
+          <CardTitle>Recent Purchase Requests</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {activeProjects.map((project) => (
-              <div key={project.name} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{project.name}</h3>
-                    <div className="flex items-center gap-4 mt-1">
-                      <span className="text-sm text-gray-500">Budget: {project.budget}</span>
-                      <span className="text-sm text-gray-500">Deadline: {project.deadline}</span>
+          {isLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            </div>
+          ) : pendingPurchases.length > 0 ? (
+            <div className="space-y-4">
+              {pendingPurchases.slice(0, 3).map((purchase) => (
+                <PurchaseApprovalCard
+                  key={purchase.purchase_id}
+                  purchase={purchase}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                  onViewDetails={handleViewDetails}
+                  isLoading={isProcessing}
+                />
+              ))}
+            </div>
+          ) : activeProjects.length > 0 ? (
+            <div className="space-y-4">
+              {activeProjects.map((project) => (
+                <div key={project.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Purchase #{project.id} - {project.name}</h3>
+                      <p className="text-sm text-gray-600 mt-1">{project.purpose}</p>
+                      <div className="flex items-center gap-4 mt-1">
+                        <span className="text-sm text-gray-500">Budget: {project.budget}</span>
+                        <span className="text-sm text-gray-500">Date: {new Date(project.deadline).toLocaleDateString()}</span>
+                      </div>
                     </div>
+                    <Badge 
+                      variant={
+                        project.status === 'on-track' ? 'default' :
+                        project.status === 'delayed' ? 'destructive' : 'secondary'
+                      }
+                    >
+                      {project.status}
+                    </Badge>
                   </div>
-                  <Badge 
-                    variant={
-                      project.status === 'on-track' ? 'default' :
-                      project.status === 'delayed' ? 'destructive' : 'secondary'
-                    }
-                  >
-                    {project.status}
-                  </Badge>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Progress</span>
-                    <span className="font-medium">{project.progress}%</span>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Progress</span>
+                      <span className="font-medium">{project.progress}%</span>
+                    </div>
+                    <Progress value={project.progress} className="h-2" />
                   </div>
-                  <Progress value={project.progress} className="h-2" />
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              No purchase requests available
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Approval Modal */}
+      <ApprovalModal
+        isOpen={approvalModalOpen}
+        onClose={() => {
+          setApprovalModalOpen(false);
+          setSelectedPurchase(null);
+        }}
+        purchase={selectedPurchase}
+        mode={modalMode}
+        onConfirm={handleConfirmApproval}
+        isLoading={isProcessing}
+      />
     </div>
   );
 };

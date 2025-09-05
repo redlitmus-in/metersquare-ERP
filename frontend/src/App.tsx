@@ -38,6 +38,9 @@ import {
   VendorQuotationsPage
 } from '@/roles/procurement/pages';
 
+// Project Manager pages
+import { ProjectManagerHub } from '@/roles/project-manager';
+
 // Workflow pages
 import MaterialDispatchProductionPage from '@/pages/workflows/MaterialDispatchProductionPage';
 import MaterialDispatchSitePage from '@/pages/workflows/MaterialDispatchSitePage';
@@ -48,6 +51,21 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import RoleBasedRedirect from '@/components/routing/RoleBasedRedirect';
 import RoleRouteWrapper from '@/components/routing/RoleRouteWrapper';
 import RoleDashboard from '@/components/routing/RoleDashboard';
+
+// Role-specific Procurement Hub Component
+const RoleSpecificProcurementHub: React.FC = () => {
+  const { user } = useAuthStore();
+  
+  // Check if user is Project Manager
+  const userRole = (user as any)?.role?.toLowerCase() || '';
+  
+  if (userRole === 'project manager' || userRole === 'project_manager' || userRole === 'projectmanager') {
+    return <ProjectManagerHub />;
+  }
+  
+  // Default to ProcurementHub for all other roles
+  return <ProcurementHub />;
+};
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -197,9 +215,11 @@ function App() {
           <Route element={<DashboardLayout />}>
             <Route index element={<Navigate to="dashboard" replace />} />
             
-            {/* Main Routes - Use role-based dashboard for main dashboard, ProcurementHub for procurement section */}
+            {/* Main Routes - Use role-based dashboard for main dashboard, role-specific hub for procurement section */}
             <Route path="dashboard" element={<RoleDashboard />} />
-            <Route path="procurement" element={<ProcurementHub />} />
+            <Route path="procurement" element={
+              <RoleSpecificProcurementHub />
+            } />
             <Route path="procurement/deliveries" element={<DeliveriesPage />} />
             <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
             <Route path="tasks" element={<TasksPage />} />
