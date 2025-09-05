@@ -484,22 +484,37 @@ def get_all_technical_director_purchase_request():
         if not role or role.role.replace(" ", "").lower() != "technicaldirector":
             return jsonify({"error": "Only Technical Director can access this data"}), 403
 
-        # ✅ Single query join: PurchaseStatus + Purchase
-        statuses = (
-            db.session.query(PurchaseStatus, Purchase)
-            .join(Purchase, Purchase.purchase_id == PurchaseStatus.purchase_id)
-            .filter(
-                PurchaseStatus.receiver == "technicalDirector",
-                PurchaseStatus.is_active == True,
+        # ✅ Get unique purchase IDs that have technical director as receiver
+        unique_purchase_ids = db.session.query(PurchaseStatus.purchase_id).filter(
+            PurchaseStatus.receiver == "technicalDirector",
+            PurchaseStatus.is_active == True
+        ).distinct().all()
+        
+        unique_purchase_ids = [pid[0] for pid in unique_purchase_ids]
+        
+        if not unique_purchase_ids:
+            return jsonify({
+                "success": True,
+                "purchases": [],
+                "user_info": {
+                    "user_name": current_user.get("full_name"),
+                    "user_id": current_user.get("user_id"),
+                    "role": role.role,
+                },
+                "last_updated": datetime.utcnow().isoformat(),
+            }), 200
+        
+        # ✅ Get purchases for these unique IDs
+        purchases = Purchase.query.filter(
+            and_(
+                Purchase.purchase_id.in_(unique_purchase_ids),
                 Purchase.is_deleted == False
             )
-            .options(joinedload(PurchaseStatus.purchase))  # preload relation if defined
-            .all()
-        )
+        ).all()
 
         # ✅ Collect all material IDs at once
         all_material_ids = []
-        for _, purchase in statuses:
+        for purchase in purchases:
             if purchase.material_ids:
                 all_material_ids.extend(purchase.material_ids)
 
@@ -515,7 +530,7 @@ def get_all_technical_director_purchase_request():
 
         technical_director_data = []
 
-        for status, purchase in statuses:
+        for purchase in purchases:
             materials, total_cost, total_qty = [], 0, 0
             if purchase.material_ids:
                 for mid in purchase.material_ids:
@@ -539,6 +554,48 @@ def get_all_technical_director_purchase_request():
                         "design_reference": mat.design_reference,
                     })
 
+            # Get latest estimation status for this purchase
+            estimation_status = PurchaseStatus.query.filter(
+                and_(
+                    PurchaseStatus.purchase_id == purchase.purchase_id,
+                    PurchaseStatus.sender == 'estimation'
+                )
+            ).order_by(PurchaseStatus.created_at.desc()).first()
+
+            # Get latest technical director status for this purchase
+            technical_director_status = PurchaseStatus.query.filter(
+                and_(
+                    PurchaseStatus.purchase_id == purchase.purchase_id,
+                    PurchaseStatus.sender == 'technicalDirector'
+                )
+            ).order_by(PurchaseStatus.created_at.desc()).first()
+            
+            # Get the latest status where technical director is receiver (this is what was sent to TD)
+            latest_td_receiver_status = PurchaseStatus.query.filter(
+                and_(
+                    PurchaseStatus.purchase_id == purchase.purchase_id,
+                    PurchaseStatus.receiver == 'technicalDirector'
+                )
+            ).order_by(PurchaseStatus.created_at.desc()).first()
+
+            # Determine current workflow status
+            current_workflow_status = 'pending_estimation'
+            if estimation_status and estimation_status.status == 'approved':
+                if technical_director_status:
+                    if technical_director_status.status == 'approved':
+                        current_workflow_status = 'technical_director_approved'
+                    elif technical_director_status.status == 'rejected':
+                        current_workflow_status = 'technical_director_rejected'
+                else:
+                    current_workflow_status = 'pending_technical_director'
+            elif estimation_status and estimation_status.status == 'rejected':
+                current_workflow_status = 'estimation_rejected'
+
+            # Get latest overall status for this purchase
+            latest_overall_status = PurchaseStatus.query.filter_by(
+                purchase_id=purchase.purchase_id
+            ).order_by(PurchaseStatus.created_at.desc()).first()
+
             technical_director_data.append({
                 "purchase_id": purchase.purchase_id,
                 "project_id": purchase.project_id,
@@ -555,46 +612,27 @@ def get_all_technical_director_purchase_request():
                 "created_by": purchase.created_by,
                 "last_modified_at": purchase.last_modified_at.isoformat() if purchase.last_modified_at else None,
                 "last_modified_by": purchase.last_modified_by,
-                "status_info": {
-                    "status_id": status.status_id,
-                    "status": status.status,
-                    "sender": status.sender,
-                    "receiver": status.receiver,
-                    "decision_date": status.decision_date.isoformat() if status.decision_date else None,
-                    "decision_by_user_id": status.decision_by_user_id,
-                    "decision_by": status.decision_by_user_id,
-                    "rejection_reason": status.rejection_reason,
-                    "reject_category": status.reject_category,
-                    "comments": status.comments,
-                    "created_at": status.created_at.isoformat() if status.created_at else None,
-                    "last_modified_at": status.last_modified_at.isoformat() if status.last_modified_at else None,
-                    "last_modified_by": status.last_modified_by,
-                },
+                "current_workflow_status": current_workflow_status,
+                "estimation_status": estimation_status.status if estimation_status else 'pending',
+                "estimation_status_date": estimation_status.created_at.isoformat() if estimation_status and estimation_status.created_at else None,
+                "estimation_comments": estimation_status.comments if estimation_status else None,
+                "estimation_decision_by": estimation_status.created_by if estimation_status else None,
+                "technical_director_status": technical_director_status.status if technical_director_status else 'pending',
+                "technical_director_status_date": technical_director_status.created_at.isoformat() if technical_director_status and technical_director_status.created_at else None,
+                "technical_director_comments": technical_director_status.comments if technical_director_status else None,
+                "technical_director_rejection_reason": technical_director_status.rejection_reason if technical_director_status else None,
+                "technical_director_decision_by": technical_director_status.created_by if technical_director_status else None,
+                "latest_status": {
+                    "status": latest_overall_status.status if latest_overall_status else 'pending',
+                    "sender": latest_overall_status.sender if latest_overall_status else None,
+                    "receiver": latest_overall_status.receiver if latest_overall_status else None,
+                    "date": latest_overall_status.created_at.isoformat() if latest_overall_status and latest_overall_status.created_at else None,
+                    "decision_by": latest_overall_status.created_by if latest_overall_status else None,
+                    "comments": latest_overall_status.comments if latest_overall_status else None
+                }
             })
-
-        # ✅ Summary
-        approved = [p for p in technical_director_data if p["status_info"]["status"] == "approved"]
-        rejected = [p for p in technical_director_data if p["status_info"]["status"] == "rejected"]
-        pending = [p for p in technical_director_data if p["status_info"]["status"] == "pending"]
-
-        summary = {
-            "total_count": len(technical_director_data),
-            "approved_count": len(approved),
-            "rejected_count": len(rejected),
-            "pending_count": len(pending),
-            "total_value": round(sum(p["total_cost"] for p in technical_director_data), 2),
-            "approved_value": round(sum(p["total_cost"] for p in approved), 2),
-            "rejected_value": round(sum(p["total_cost"] for p in rejected), 2),
-            "pending_value": round(sum(p["total_cost"] for p in pending), 2),
-            "total_quantity": sum(p["total_quantity"] for p in technical_director_data),
-            "approved_quantity": sum(p["total_quantity"] for p in approved),
-            "rejected_quantity": sum(p["total_quantity"] for p in rejected),
-            "pending_quantity": sum(p["total_quantity"] for p in pending),
-        }
-
         return jsonify({
             "success": True,
-            "summary": summary,
             "purchases": technical_director_data,
             "user_info": {
                 "user_name": current_user.get("full_name"),
