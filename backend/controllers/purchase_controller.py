@@ -94,6 +94,19 @@ def create_purchase_request():
         # Step 4: Update Purchase.material_ids with all material ids
         new_purchase.material_ids = material_ids
 
+        # Step 5: Create initial status entry
+        from models.purchase_status import PurchaseStatus
+        initial_status = PurchaseStatus.create_new_status(
+            purchase_id=new_purchase.purchase_id,
+            sender_role=role.role,
+            receiver_role='procurement',
+            status='pending',  # Initial status when created
+            decision_by_user_id=current_user['user_id'],
+            comments=f'Purchase request created by {role.role}',
+            created_by=current_user['full_name']
+        )
+        db.session.add(initial_status)
+
         db.session.commit()
                 
         materials_data = []
@@ -626,7 +639,8 @@ def send_purchase_request_email(purchase_id):
                 from models.purchase_status import PurchaseStatus
                 procurement_status = PurchaseStatus.create_new_status(
                     purchase_id=purchase_id,
-                    role='procurement',
+                    sender_role='procurement',
+                    receiver_role='projectManager',
                     status='approved',  # Procurement approved and sending to PM
                     decision_by_user_id=user_id,
                     comments=f'Procurement reviewed and sent to Project Manager for approval',
@@ -643,13 +657,44 @@ def send_purchase_request_email(purchase_id):
             success = email_service.send_procurement_to_project_manager_notification(purchase_data, materials, requester_info, procurement_info)
         else:
             # All other roles (siteSupervisor, mepSupervisor, projectManager, technicalDirector) send to all procurement
+            # Create initial status entry for the requester
+            try:
+                from models.purchase_status import PurchaseStatus
+                initial_status = PurchaseStatus.create_new_status(
+                    purchase_id=purchase_id,
+                    sender_role=role.role,
+                    receiver_role='procurement',
+                    status='pending',  # Initial status when sending to procurement
+                    decision_by_user_id=user_id,
+                    comments=f'Purchase request created and sent to Procurement team',
+                    created_by=user_name
+                )
+                db.session.add(initial_status)
+                db.session.commit()  # Commit the status entry immediately
+                log.info(f"Created and committed initial status entry for purchase #{purchase_id}")
+            except Exception as e:
+                db.session.rollback()
+                log.error(f"Error creating initial status entry: {str(e)}")
+                # Continue with email even if status creation fails
+            
             success = email_service.send_purchase_request_notification(purchase_data, materials, requester_info)
         
         if success:
             # Update the email_sent status in database
             purchase.email_sent = True
             purchase.last_modified_by = current_user['full_name']
-            db.session.commit()
+            
+            # Update the existing status entry to indicate email was sent
+            try:
+                from models.purchase_status import PurchaseStatus
+                latest_status = PurchaseStatus.get_latest_status(purchase_id)
+                if latest_status:
+                    latest_status.comments = f"{latest_status.comments} (Email sent to {'procurement' if role.role != 'procurement' else 'projectManager'})"
+                    db.session.commit()
+                    log.info(f"Updated status entry to indicate email sent for purchase #{purchase_id}")
+            except Exception as e:
+                log.error(f"Error updating status comments: {str(e)}")
+                # Continue even if status update fails
             
             return jsonify({'success': True, 'message': f'Email sent for purchase request #{purchase_id}'}), 200
         else:

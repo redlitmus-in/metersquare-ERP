@@ -51,18 +51,20 @@ def _get_recent_purchase_requests(user_id):
         for purchase in recent_purchases:
             materials_summary = _summarize_materials(material_cache.get(purchase.purchase_id, []))
             # Get latest status from purchase_status table (regardless of role)
-            latest_status = PurchaseStatus.query.filter_by(
-                purchase_id=purchase.purchase_id
-            ).order_by(PurchaseStatus.created_at.desc()).first()
+            latest_status = PurchaseStatus.get_latest_status(purchase.purchase_id)
 
             recent_data.append({
                 'purchase_id': purchase.purchase_id,
                 'site_location': purchase.site_location,
                 'purpose': purchase.purpose,
                 'materials_summary': materials_summary,
-                'status': latest_status.status if latest_status else 'pending',
-                'status_by_role': latest_status.role if latest_status else None,
+                'latest_status': latest_status.status if latest_status else 'pending',
+                'status_sender': latest_status.sender if latest_status else None,
+                'status_receiver': latest_status.receiver if latest_status else None,
+                'status_role': latest_status.role if latest_status else None,
                 'status_date': latest_status.created_at.isoformat() if latest_status else None,
+                'decision_date': latest_status.decision_date.isoformat() if latest_status and latest_status.decision_date else None,
+                'status_comments': latest_status.comments if latest_status else None,
                 'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
                 'date': purchase.date
             })

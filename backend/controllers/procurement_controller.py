@@ -17,7 +17,9 @@ def _get_procurement_status_counts(requests):
     counts = Counter()
 
     for purchase in requests:
-        latest_status = PurchaseStatus.get_latest_status_by_role(purchase.purchase_id, 'procurement')
+        # Get the latest status for this purchase (regardless of sender role)
+        latest_status = PurchaseStatus.get_latest_status(purchase.purchase_id)
+        
         if latest_status:
             counts[latest_status.status.lower()] += 1
         else:
@@ -164,7 +166,9 @@ def get_procurement_dashboard():
 
         recent_data = []
         for purchase in recent_requests:
-            latest_status = PurchaseStatus.get_latest_status_by_role(purchase.purchase_id, 'procurement')
+            # Get the latest status for this purchase (regardless of sender role)
+            latest_status = PurchaseStatus.get_latest_status(purchase.purchase_id)
+            
             recent_data.append({
                 'purchase_id': purchase.purchase_id,
                 'requested_by': purchase.requested_by,
@@ -172,8 +176,12 @@ def get_procurement_dashboard():
                 'purpose': purchase.purpose,
                 'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
                 'email_sent': purchase.email_sent,
-                'procurement_status': latest_status.status if latest_status else 'pending',
-                'status_date': latest_status.decision_date.isoformat() if latest_status and latest_status.decision_date else None,
+                'latest_status': latest_status.status if latest_status else 'pending',
+                'status_sender': latest_status.sender if latest_status else None,
+                'status_receiver': latest_status.receiver if latest_status else None,
+                'status_role': latest_status.role if latest_status else None,
+                'status_date': latest_status.created_at.isoformat() if latest_status and latest_status.created_at else None,
+                'decision_date': latest_status.decision_date.isoformat() if latest_status and latest_status.decision_date else None,
                 'status_comments': latest_status.comments if latest_status else None,
                 'material_summary': _get_purchase_material_summary(purchase)
             })
@@ -229,13 +237,18 @@ def get_all_procurement():
                         'design_reference': mat.design_reference
                     })
             
-            # Get latest status
-            latest_status = PurchaseStatus.get_latest_status_by_role(purchase.purchase_id, 'procurement')
+            # Get latest status for this purchase (regardless of sender role)
+            latest_status = PurchaseStatus.get_latest_status(purchase.purchase_id)
             
             purchase_dict = purchase.to_dict()
             purchase_dict['materials'] = materials
             purchase_dict['latest_status'] = latest_status.status if latest_status else 'pending'
-            purchase_dict['status_date'] = latest_status.decision_date.isoformat() if latest_status and latest_status.decision_date else None
+            purchase_dict['status_sender'] = latest_status.sender if latest_status else None
+            purchase_dict['status_receiver'] = latest_status.receiver if latest_status else None
+            purchase_dict['status_role'] = latest_status.role if latest_status else None
+            purchase_dict['status_date'] = latest_status.created_at.isoformat() if latest_status and latest_status.created_at else None
+            purchase_dict['decision_date'] = latest_status.decision_date.isoformat() if latest_status and latest_status.decision_date else None
+            purchase_dict['status_comments'] = latest_status.comments if latest_status else None
             
             procurement_data.append(purchase_dict)
         

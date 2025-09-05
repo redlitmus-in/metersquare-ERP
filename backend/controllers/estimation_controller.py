@@ -15,7 +15,7 @@ from models.approval import Approval
 log = get_logger()
 
 def estimation_approval_workflow():
-    """Estimation team approval workflow - approve/reject with email notifications"""
+    """Estimation team approval workflow - approved/rejected with email notifications"""
     try:
         current_user = g.user
         user_id = current_user['user_id']
@@ -27,7 +27,7 @@ def estimation_approval_workflow():
         # Check if user is Estimation team
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
         if not role or role.role != 'estimation':
-            return jsonify({'error': 'Only Estimation team can approve/reject purchase requests'}), 403
+            return jsonify({'error': 'Only Estimation team can approved/rejected purchase requests'}), 403
 
         data = request.get_json()
         purchase_id = data.get('purchase_id')
@@ -37,13 +37,13 @@ def estimation_approval_workflow():
         rejection_type = data.get('rejection_type', '').lower()  # 'cost' or 'pm_flag'
         
         # Validate estimation_status
-        if estimation_status not in ['approved', 'reject']:
+        if estimation_status not in ['approved', 'rejected']:
             return jsonify({'error': 'estimation_status must be either "approved" or "reject"'}), 400
         
         # If rejecting, require rejection reason and type
-        if estimation_status == 'reject':
+        if estimation_status == 'rejected':
             if not rejection_reason or rejection_reason.strip() == '':
-                return jsonify({'error': 'rejection_reason is required when estimation_status is "reject"'}), 400
+                return jsonify({'error': 'rejection_reason is required when estimation_status is "rejected"'}), 400
             if rejection_type not in ['cost', 'pm_flag']:
                 return jsonify({'error': 'rejection_type must be either "cost" or "pm_flag" when rejecting'}), 400
 
@@ -139,13 +139,23 @@ def estimation_approval_workflow():
 
         # Create status entry in database
         try:
+            # Determine receiver role based on decision
+            if estimation_status == 'approved':
+                receiver_role = 'technicalDirector'
+            else:  # rejected
+                if rejection_type == 'cost':
+                    receiver_role = 'procurement'
+                else:  # pm_flag
+                    receiver_role = 'projectManager'
+            
             new_status = PurchaseStatus.create_new_status(
                 purchase_id=purchase_id,
-                role='estimation',
+                sender_role='estimation',
+                receiver_role=receiver_role,
                 status='approved' if estimation_status == 'approved' else 'rejected',
                 decision_by_user_id=user_id,
                 reject_category=rejection_type,
-                rejection_reason=rejection_reason if estimation_status == 'reject' else None,
+                rejection_reason=rejection_reason if estimation_status == 'rejected' else None,
                 comments=comments,
                 created_by=user_name
             )
@@ -212,13 +222,21 @@ def estimation_approval_workflow():
             'comments': new_status.comments
         }
         
-        if estimation_status == 'reject':
+        if estimation_status == 'rejected':
             response_data['rejection_reason'] = new_status.rejection_reason
             response_data['rejection_type'] = rejection_type
         
         if not email_success:
             response_data['email_warning'] = 'Status updated but email notification failed'
             log.warning(f"Purchase status updated but email failed for purchase #{purchase_id}")
+        else:
+            # Update the existing status entry to indicate email was sent
+            try:
+                new_status.comments = f"{new_status.comments} (Email sent to {receiver_role})"
+                db.session.commit()
+                log.info(f"Updated status entry to indicate email sent for purchase #{purchase_id}")
+            except Exception as e:
+                log.error(f"Error updating status comments: {str(e)}")
 
         return jsonify(response_data), 200
 

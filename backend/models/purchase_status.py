@@ -7,7 +7,9 @@ class PurchaseStatus(db.Model):
     
     status_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     purchase_id = db.Column(db.Integer, db.ForeignKey('public.purchase.purchase_id'), nullable=False)
-    role = db.Column(db.String(50), nullable=False)  # 'projectManager', 'estimation', 'technicalDirector', etc.
+    sender = db.Column(db.String(50), nullable=False) 
+    receiver = db.Column(db.String(50), nullable=False) # 'projectManager', 'estimation', 'technicalDirector', etc.
+    role = db.Column(db.String(50), nullable=False)  # The role that is taking action (same as sender for backward compatibility)
     status = db.Column(db.String(50), nullable=False)  # 'pending', 'approved', 'rejected'
     decision_by_user_id = db.Column(db.Integer,nullable=False)
     decision_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -31,6 +33,8 @@ class PurchaseStatus(db.Model):
         return {
             'status_id': self.status_id,
             'purchase_id': self.purchase_id,
+            'sender': self.sender,
+            'receiver': self.receiver,
             'role': self.role,
             'status': self.status,
             'decision_by_user_id': self.decision_by_user_id,
@@ -50,7 +54,7 @@ class PurchaseStatus(db.Model):
         """Get the latest status for a purchase by specific role"""
         return PurchaseStatus.query.filter_by(
             purchase_id=purchase_id, 
-            role=role,
+            sender=role,
             is_active=True
         ).order_by(PurchaseStatus.created_at.desc()).first()
     
@@ -59,7 +63,7 @@ class PurchaseStatus(db.Model):
         """Get the absolute latest status for a purchase by specific role, regardless of active status"""
         return PurchaseStatus.query.filter_by(
             purchase_id=purchase_id, 
-            role=role
+            sender=role
         ).order_by(PurchaseStatus.created_at.desc()).first()
     
     @staticmethod
@@ -78,19 +82,28 @@ class PurchaseStatus(db.Model):
         ).order_by(PurchaseStatus.created_at.desc()).all()
     
     @staticmethod
-    def create_new_status(purchase_id, role, status, decision_by_user_id, rejection_reason=None, reject_category=None, comments=None, created_by=None):
+    def get_latest_status(purchase_id):
+        """Get the latest status for a purchase (regardless of sender role)"""
+        return PurchaseStatus.query.filter_by(
+            purchase_id=purchase_id
+        ).order_by(PurchaseStatus.created_at.desc()).first()
+    
+    @staticmethod
+    def create_new_status(purchase_id, sender_role, receiver_role, status, decision_by_user_id, rejection_reason=None, reject_category=None, comments=None, created_by=None):
         """Create a new status entry for a specific role and deactivate previous ones for that role"""
-        # Deactivate all previous statuses for this purchase and role
+        # Deactivate all previous statuses for this purchase and sender role
         PurchaseStatus.query.filter_by(
             purchase_id=purchase_id, 
-            role=role,
+            sender=sender_role,
             is_active=True
         ).update({'is_active': False})
         
         # Create new status
         new_status = PurchaseStatus(
             purchase_id=purchase_id,
-            role=role,
+            sender=sender_role,
+            receiver=receiver_role,
+            role=sender_role,  # Set role same as sender for backward compatibility
             status=status,
             decision_by_user_id=decision_by_user_id,
             rejection_reason=rejection_reason,
@@ -101,3 +114,4 @@ class PurchaseStatus(db.Model):
         
         db.session.add(new_status)
         return new_status
+    

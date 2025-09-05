@@ -26,3 +26,10 @@ def get_procurement_approved_purchases_route():
 def get_purchase_status_details_route(purchase_id):
     return get_purchase_status_details(purchase_id)
 
+# Project Manager Dashboard
+@project_manager_routes.route('/project_manager_dashboard', methods=['GET'])
+@jwt_required
+def get_project_manager_dashboard_route():
+    """Get comprehensive project manager dashboard data"""
+    return get_project_manager_dashboard()
+
