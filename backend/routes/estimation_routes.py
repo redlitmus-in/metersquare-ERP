@@ -11,14 +11,16 @@ estimation_routes = Blueprint('estimation_routes', __name__)
 def estimation_approval_workflow_route():
     return estimation_approval_workflow()
 
-# Get Purchase with Status Information
-@estimation_routes.route('/purchase_with_status/<int:purchase_id>', methods=['GET'])
+# Estimation Dashboard
+@estimation_routes.route('/estimation_dashboard', methods=['GET'])
 @jwt_required
-def get_purchase_with_status_route(purchase_id):
-    return get_purchase_with_status(purchase_id)
+def estimation_dashboard_route():
+    return get_estimation_dashboard()
 
-# Check Estimation Approval Status
-@estimation_routes.route('/check_estimation_approval/<int:purchase_id>', methods=['GET'])
+# Get All Estimation Purchase Requests
+@estimation_routes.route('/estimation_purchase', methods=['GET'])
 @jwt_required
-def check_estimation_approval_status_route(purchase_id):
-    return check_estimation_approval_status(purchase_id)
+def get_all_estimation_purchase_request_route():
+    return get_all_estimation_purchase_request()
+
+

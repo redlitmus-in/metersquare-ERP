@@ -54,16 +54,11 @@ def estimation_approval_workflow():
 
         # Check if Estimation already made a decision, but allow resubmission
         existing_estimation_status = PurchaseStatus.get_absolute_latest_status_by_role(purchase_id, 'estimation')
-        log.info(f"Existing estimation status for purchase #{purchase_id}: {existing_estimation_status.status if existing_estimation_status else 'None'}")
         
         if existing_estimation_status and existing_estimation_status.status in ['approved', 'rejected']:
             # Check if there's a more recent status from other roles that indicates resubmission
             latest_pm_status = PurchaseStatus.get_absolute_latest_status_by_role(purchase_id, 'projectManager')
             latest_procurement_status = PurchaseStatus.get_absolute_latest_status_by_role(purchase_id, 'procurement')
-            
-            log.info(f"Latest PM status for purchase #{purchase_id}: {latest_pm_status.status if latest_pm_status else 'None'}")
-            log.info(f"Latest procurement status for purchase #{purchase_id}: {latest_procurement_status.status if latest_procurement_status else 'None'}")
-            
             # Also check if the purchase was modified after the estimation's last decision
             purchase_modified_after_estimation = purchase.last_modified_at and existing_estimation_status.created_at and purchase.last_modified_at > existing_estimation_status.created_at
             
@@ -75,23 +70,17 @@ def estimation_approval_workflow():
                                                       latest_procurement_status.created_at > existing_estimation_status.created_at)
             
             if latest_pm_status and existing_estimation_status:
-                log.info(f"Estimation status created at: {existing_estimation_status.created_at}")
                 log.info(f"PM status created at: {latest_pm_status.created_at}")
-                log.info(f"PM approved after estimation: {pm_approved_after_estimation}")
             
             if latest_procurement_status and existing_estimation_status:
                 log.info(f"Procurement status created at: {latest_procurement_status.created_at}")
-                log.info(f"Procurement resubmitted after estimation: {procurement_resubmitted_after_estimation}")
             
-            log.info(f"Purchase modified after estimation decision: {purchase_modified_after_estimation}")
             if purchase.last_modified_at and existing_estimation_status.created_at:
                 log.info(f"Purchase last modified at: {purchase.last_modified_at}")
-                log.info(f"Estimation status created at: {existing_estimation_status.created_at}")
             
             if pm_approved_after_estimation or procurement_resubmitted_after_estimation or purchase_modified_after_estimation:
                 log.info(f"Allowing estimation to make new decision for purchase #{purchase_id} - resubmission detected")
             else:
-                log.warning(f"Blocking estimation decision for purchase #{purchase_id} - no resubmission detected")
                 return jsonify({'error': f'Estimation team has already {existing_estimation_status.status} this purchase request'}), 400
 
         # Get materials for email
@@ -165,7 +154,6 @@ def estimation_approval_workflow():
             purchase.last_modified_by = user_name
             
             db.session.commit()
-            log.info(f"Purchase request #{purchase_id} {new_status.status} by Estimation team {user_name}")
         except Exception as e:
             db.session.rollback()
             log.error(f"Error updating purchase status in database: {str(e)}")
@@ -228,13 +216,11 @@ def estimation_approval_workflow():
         
         if not email_success:
             response_data['email_warning'] = 'Status updated but email notification failed'
-            log.warning(f"Purchase status updated but email failed for purchase #{purchase_id}")
         else:
             # Update the existing status entry to indicate email was sent
             try:
                 new_status.comments = f"{new_status.comments} (Email sent to {receiver_role})"
                 db.session.commit()
-                log.info(f"Updated status entry to indicate email sent for purchase #{purchase_id}")
             except Exception as e:
                 log.error(f"Error updating status comments: {str(e)}")
 
@@ -244,69 +230,455 @@ def estimation_approval_workflow():
         log.error(f"Error in estimation_approval_workflow: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-def get_purchase_with_status(purchase_id):
-    """Get purchase details with current status information"""
+def get_estimation_dashboard():
+    """Get estimation dashboard data based on purchase_status table with sender/receiver counts"""
     try:
-        # Get purchase details
-        purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
-        if not purchase:
-            return jsonify({'error': 'Purchase request not found'}), 404
+        current_user = g.user
+        user_id = current_user['user_id']
+        user_name = current_user['full_name']
+        
+        if not current_user:
+            return jsonify({"error": "Not logged in"}), 401
 
-        # Get all active role statuses
-        all_role_statuses = PurchaseStatus.get_all_role_statuses(purchase_id)
-        
-        # Get status history
-        status_history = PurchaseStatus.get_status_history(purchase_id)
-        
-        # Build response
-        purchase_data = purchase.to_dict()
-        purchase_data['role_statuses'] = [status.to_dict() for status in all_role_statuses]
-        purchase_data['status_history'] = [status.to_dict() for status in status_history]
-        
-        return jsonify({
+        # Check if user is Estimation team
+        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
+        if not role or role.role != 'estimation':
+            return jsonify({'error': 'Only Estimation team can access dashboard'}), 403
+
+        # Get all status records where estimation is the SENDER (estimation team made decisions)
+        estimation_sender_statuses = PurchaseStatus.query.filter(
+            and_(
+                PurchaseStatus.sender == 'estimation',
+                PurchaseStatus.is_active == True
+            )
+        ).order_by(PurchaseStatus.created_at.desc()).all()
+
+        # Get all status records where estimation is the RECEIVER (estimation team received decisions)
+        estimation_receiver_statuses = PurchaseStatus.query.filter(
+            and_(
+                PurchaseStatus.receiver == 'estimation',
+                PurchaseStatus.is_active == True
+            )
+        ).order_by(PurchaseStatus.created_at.desc()).all()
+
+        # Process SENDER data (estimation team as sender)
+        sender_approved_count = 0
+        sender_rejected_count = 0
+        sender_pending_count = 0
+        sender_approved_details = []
+        sender_rejected_details = []
+        sender_pending_details = []
+
+        for status in estimation_sender_statuses:
+            # Get purchase details
+            purchase = Purchase.query.filter_by(
+                purchase_id=status.purchase_id, 
+                is_deleted=False
+            ).first()
+            
+            if not purchase:
+                continue
+
+            # Get materials for this purchase
+            materials = []
+            total_material_cost = 0
+            total_quantity = 0
+            
+            if purchase.material_ids:
+                material_objects = Material.query.filter(
+                    and_(
+                        Material.is_deleted == False,
+                        Material.material_id.in_(purchase.material_ids)
+                    )
+                ).all()
+                
+                for mat in material_objects:
+                    material_cost = float(mat.cost) if mat.cost else 0
+                    material_total = material_cost * mat.quantity
+                    total_material_cost += material_total
+                    total_quantity += mat.quantity
+                    
+                    materials.append({
+                        'material_id': mat.material_id,
+                        'description': mat.description,
+                        'specification': mat.specification,
+                        'unit': mat.unit,
+                        'quantity': mat.quantity,
+                        'category': mat.category,
+                        'unit_cost': material_cost,
+                        'total_cost': material_total,
+                        'priority': mat.priority,
+                        'design_reference': mat.design_reference
+                    })
+
+            status_detail = {
+                'status_id': status.status_id,
+                'purchase_id': status.purchase_id,
+                'project_id': purchase.project_id,
+                'requested_by': purchase.requested_by,
+                'site_location': purchase.site_location,
+                'date': purchase.date,
+                'purpose': purchase.purpose,
+                'file_path': purchase.file_path,
+                'materials': materials,
+                'material_count': len(materials),
+                'total_quantity': total_quantity,
+                'total_cost': round(total_material_cost, 2),
+                'status_info': {
+                    'status': status.status,
+                    'sender': status.sender,
+                    'receiver': status.receiver,
+                    'decision_date': status.decision_date.isoformat() if status.decision_date else None,
+                    'decision_by_user_id': status.decision_by_user_id,
+                    'decision_by': status.created_by,
+                    'rejection_reason': status.rejection_reason,
+                    'reject_category': status.reject_category,
+                    'comments': status.comments,
+                    'created_at': status.created_at.isoformat() if status.created_at else None,
+                    'last_modified_at': status.last_modified_at.isoformat() if status.last_modified_at else None,
+                    'last_modified_by': status.last_modified_by
+                }
+            }
+
+            if status.status == 'approved':
+                sender_approved_count += 1
+                sender_approved_details.append(status_detail)
+            elif status.status == 'rejected':
+                sender_rejected_count += 1
+                sender_rejected_details.append(status_detail)
+            elif status.status == 'pending':
+                sender_pending_count += 1
+                sender_pending_details.append(status_detail)
+
+        # Process RECEIVER data (estimation team as receiver)
+        receiver_approved_count = 0
+        receiver_rejected_count = 0
+        receiver_pending_count = 0
+        receiver_approved_details = []
+        receiver_rejected_details = []
+        receiver_pending_details = []
+
+        for status in estimation_receiver_statuses:
+            # Get purchase details
+            purchase = Purchase.query.filter_by(
+                purchase_id=status.purchase_id, 
+                is_deleted=False
+            ).first()
+            
+            if not purchase:
+                continue
+
+            # Get materials for this purchase
+            materials = []
+            total_material_cost = 0
+            total_quantity = 0
+            
+            if purchase.material_ids:
+                material_objects = Material.query.filter(
+                    and_(
+                        Material.is_deleted == False,
+                        Material.material_id.in_(purchase.material_ids)
+                    )
+                ).all()
+                
+                for mat in material_objects:
+                    material_cost = float(mat.cost) if mat.cost else 0
+                    material_total = material_cost * mat.quantity
+                    total_material_cost += material_total
+                    total_quantity += mat.quantity
+                    
+                    materials.append({
+                        'material_id': mat.material_id,
+                        'description': mat.description,
+                        'specification': mat.specification,
+                        'unit': mat.unit,
+                        'quantity': mat.quantity,
+                        'category': mat.category,
+                        'unit_cost': material_cost,
+                        'total_cost': material_total,
+                        'priority': mat.priority,
+                        'design_reference': mat.design_reference
+                    })
+
+            status_detail = {
+                'status_id': status.status_id,
+                'purchase_id': status.purchase_id,
+                'project_id': purchase.project_id,
+                'requested_by': purchase.requested_by,
+                'site_location': purchase.site_location,
+                'date': purchase.date,
+                'purpose': purchase.purpose,
+                'file_path': purchase.file_path,
+                'materials': materials,
+                'material_count': len(materials),
+                'total_quantity': total_quantity,
+                'total_cost': round(total_material_cost, 2),
+                'status_info': {
+                    'status': status.status,
+                    'sender': status.sender,
+                    'receiver': status.receiver,
+                    'decision_date': status.decision_date.isoformat() if status.decision_date else None,
+                    'decision_by_user_id': status.decision_by_user_id,
+                    'decision_by': status.created_by,
+                    'rejection_reason': status.rejection_reason,
+                    'reject_category': status.reject_category,
+                    'comments': status.comments,
+                    'created_at': status.created_at.isoformat() if status.created_at else None,
+                    'last_modified_at': status.last_modified_at.isoformat() if status.last_modified_at else None,
+                    'last_modified_by': status.last_modified_by
+                }
+            }
+
+            if status.status == 'approved':
+                receiver_approved_count += 1
+                receiver_approved_details.append(status_detail)
+            elif status.status == 'rejected':
+                receiver_rejected_count += 1
+                receiver_rejected_details.append(status_detail)
+            elif status.status == 'pending':
+                receiver_pending_count += 1
+                receiver_pending_details.append(status_detail)
+
+        # Calculate totals
+        sender_total = sender_approved_count + sender_rejected_count + sender_pending_count
+        receiver_total = receiver_approved_count + receiver_rejected_count + receiver_pending_count
+
+        # Calculate rejection breakdown for sender
+        sender_cost_rejections = len([s for s in sender_rejected_details if s['status_info']['reject_category'] == 'cost'])
+        sender_pm_flag_rejections = len([s for s in sender_rejected_details if s['status_info']['reject_category'] == 'pm_flag'])
+
+        # Calculate rejection breakdown for receiver
+        receiver_cost_rejections = len([s for s in receiver_rejected_details if s['status_info']['reject_category'] == 'cost'])
+        receiver_pm_flag_rejections = len([s for s in receiver_rejected_details if s['status_info']['reject_category'] == 'pm_flag'])
+
+        # Calculate financial summaries
+        sender_approved_value = sum(s['total_cost'] for s in sender_approved_details)
+        sender_rejected_value = sum(s['total_cost'] for s in sender_rejected_details)
+        sender_pending_value = sum(s['total_cost'] for s in sender_pending_details)
+
+        receiver_approved_value = sum(s['total_cost'] for s in receiver_approved_details)
+        receiver_rejected_value = sum(s['total_cost'] for s in receiver_rejected_details)
+        receiver_pending_value = sum(s['total_cost'] for s in receiver_pending_details)
+
+        # Calculate quantity summaries
+        sender_approved_quantity = sum(s['total_quantity'] for s in sender_approved_details)
+        sender_rejected_quantity = sum(s['total_quantity'] for s in sender_rejected_details)
+        sender_pending_quantity = sum(s['total_quantity'] for s in sender_pending_details)
+
+        receiver_approved_quantity = sum(s['total_quantity'] for s in receiver_approved_details)
+        receiver_rejected_quantity = sum(s['total_quantity'] for s in receiver_rejected_details)
+        receiver_pending_quantity = sum(s['total_quantity'] for s in receiver_pending_details)
+
+        dashboard_data = {
             'success': True,
-            'purchase': purchase_data
-        }), 200
-    except Exception as e:
-        log.error(f"Error in get_purchase_with_status: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+            'estimation_as_sender': {
+                'total_count': sender_total,
+                'approved_count': sender_approved_count,
+                'rejected_count': sender_rejected_count,
+                'pending_count': sender_pending_count,
+                'approved_value': round(sender_approved_value, 2),
+                'rejected_value': round(sender_rejected_value, 2),
+                'pending_value': round(sender_pending_value, 2),
+                'approved_quantity': sender_approved_quantity,
+                'rejected_quantity': sender_rejected_quantity,
+                'pending_quantity': sender_pending_quantity,
+                'rejection_breakdown': {
+                    'cost_rejections': sender_cost_rejections,
+                    'pm_flag_rejections': sender_pm_flag_rejections,
+                    'other_rejections': sender_rejected_count - sender_cost_rejections - sender_pm_flag_rejections
+                }
+            },
+            'estimation_as_receiver': {
+                'total_count': receiver_total,
+                'approved_count': receiver_approved_count,
+                'rejected_count': receiver_rejected_count,
+                'pending_count': receiver_pending_count,
+                'approved_value': round(receiver_approved_value, 2),
+                'rejected_value': round(receiver_rejected_value, 2),
+                'pending_value': round(receiver_pending_value, 2),
+                'approved_quantity': receiver_approved_quantity,
+                'rejected_quantity': receiver_rejected_quantity,
+                'pending_quantity': receiver_pending_quantity,
+                'rejection_breakdown': {
+                    'cost_rejections': receiver_cost_rejections,
+                    'pm_flag_rejections': receiver_pm_flag_rejections,
+                    'other_rejections': receiver_rejected_count - receiver_cost_rejections - receiver_pm_flag_rejections
+                }
+            },
+            'summary': {
+                'total_sender_records': sender_total,
+                'total_receiver_records': receiver_total,
+                'total_unique_purchases': len(set([s['purchase_id'] for s in sender_approved_details + sender_rejected_details + sender_pending_details + receiver_approved_details + receiver_rejected_details + receiver_pending_details]))
+            }
+        }
 
-def check_estimation_approval_status(purchase_id):
-    """Check if Estimation team has approved a purchase request"""
+        return jsonify(dashboard_data), 200
+
+    except Exception as e:
+        log.error(f"Error in get_estimation_dashboard: {str(e)}")
+        return jsonify({'error': f'Failed to retrieve dashboard data: {str(e)}'}), 500
+
+def get_all_estimation_purchase_request():
+    """Get all estimation purchase requests where estimation is the receiver with detailed purchase information"""
     try:
-        # Get purchase request
-        purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
-        if not purchase:
-            return jsonify({'error': 'Purchase request not found'}), 404
+        current_user = g.user
+        user_id = current_user['user_id']
+        user_name = current_user['full_name']
+        
+        if not current_user:
+            return jsonify({"error": "Not logged in"}), 401
 
-        # Get Estimation status
-        estimation_status = PurchaseStatus.get_latest_status_by_role(purchase_id, 'estimation')
+        # Check if user is Estimation team
+        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
+        if not role or role.role != 'estimation':
+            return jsonify({'error': 'Only Estimation team can access purchase requests'}), 403
+
+        # Get all status records where estimation is the RECEIVER
+        estimation_receiver_statuses = PurchaseStatus.query.filter(
+            and_(
+                PurchaseStatus.receiver == 'estimation',
+                PurchaseStatus.is_active == True
+            )
+        ).order_by(PurchaseStatus.created_at.desc()).all()
+
+        # Use set to track unique purchase_ids and get latest status for each
+        unique_purchase_ids = set()
+        latest_statuses = {}
         
-        if not estimation_status:
-            return jsonify({
-                'success': True,
-                'purchase_id': purchase_id,
-                'estimation_status': 'pending',
-                'message': 'Estimation team has not yet reviewed this purchase request'
-            }), 200
+        for status in estimation_receiver_statuses:
+            if status.purchase_id not in unique_purchase_ids:
+                unique_purchase_ids.add(status.purchase_id)
+                latest_statuses[status.purchase_id] = status
+
+        # Get detailed purchase information for each unique purchase
+        purchase_details = []
         
-        # Get user details who made the decision
-        from models.user import User
-        decision_maker = User.query.filter_by(user_id=estimation_status.decision_by_user_id).first()
-        decision_maker_name = decision_maker.full_name if decision_maker else 'Unknown'
-        
-        return jsonify({
+        for purchase_id, status in latest_statuses.items():
+            # Get purchase details
+            purchase = Purchase.query.filter_by(
+                purchase_id=purchase_id, 
+                is_deleted=False
+            ).first()
+            
+            if not purchase:
+                continue
+
+            # Get materials for this purchase
+            materials = []
+            total_material_cost = 0
+            total_quantity = 0
+            
+            if purchase.material_ids:
+                material_objects = Material.query.filter(
+                    and_(
+                        Material.is_deleted == False,
+                        Material.material_id.in_(purchase.material_ids)
+                    )
+                ).all()
+                
+                for mat in material_objects:
+                    material_cost = float(mat.cost) if mat.cost else 0
+                    material_total = material_cost * mat.quantity
+                    total_material_cost += material_total
+                    total_quantity += mat.quantity
+                    
+                    materials.append({
+                        'material_id': mat.material_id,
+                        'description': mat.description,
+                        'specification': mat.specification,
+                        'unit': mat.unit,
+                        'quantity': mat.quantity,
+                        'category': mat.category,
+                        'unit_cost': material_cost,
+                        'total_cost': material_total,
+                        'priority': mat.priority,
+                        'design_reference': mat.design_reference
+                    })
+
+            # Create detailed purchase information
+            purchase_detail = {
+                'purchase_id': purchase.purchase_id,
+                'project_id': purchase.project_id,
+                'requested_by': purchase.requested_by,
+                'site_location': purchase.site_location,
+                'date': purchase.date,
+                'purpose': purchase.purpose,
+                'file_path': purchase.file_path,
+                'materials': materials,
+                'material_count': len(materials),
+                'total_quantity': total_quantity,
+                'total_cost': round(total_material_cost, 2),
+                'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
+                'created_by': purchase.created_by,
+                'last_modified_at': purchase.last_modified_at.isoformat() if purchase.last_modified_at else None,
+                'last_modified_by': purchase.last_modified_by,
+                'status_info': {
+                    'status_id': status.status_id,
+                    'status': status.status,
+                    'sender': status.sender,
+                    'receiver': status.receiver,
+                    'decision_date': status.decision_date.isoformat() if status.decision_date else None,
+                    'decision_by_user_id': status.decision_by_user_id,
+                    'decision_by': status.created_by,
+                    'rejection_reason': status.rejection_reason,
+                    'reject_category': status.reject_category,
+                    'comments': status.comments,
+                    'created_at': status.created_at.isoformat() if status.created_at else None,
+                    'last_modified_at': status.last_modified_at.isoformat() if status.last_modified_at else None,
+                    'last_modified_by': status.last_modified_by
+                }
+            }
+            
+            purchase_details.append(purchase_detail)
+
+        # Sort by latest status creation date (newest first)
+        purchase_details.sort(key=lambda x: x['status_info']['created_at'], reverse=True)
+
+        # Calculate summary statistics
+        total_count = len(purchase_details)
+        approved_count = len([p for p in purchase_details if p['status_info']['status'] == 'approved'])
+        rejected_count = len([p for p in purchase_details if p['status_info']['status'] == 'rejected'])
+        pending_count = len([p for p in purchase_details if p['status_info']['status'] == 'pending'])
+
+        # Calculate financial summary
+        total_value = sum(p['total_cost'] for p in purchase_details)
+        approved_value = sum(p['total_cost'] for p in purchase_details if p['status_info']['status'] == 'approved')
+        rejected_value = sum(p['total_cost'] for p in purchase_details if p['status_info']['status'] == 'rejected')
+        pending_value = sum(p['total_cost'] for p in purchase_details if p['status_info']['status'] == 'pending')
+
+        # Calculate quantity summary
+        total_quantity = sum(p['total_quantity'] for p in purchase_details)
+        approved_quantity = sum(p['total_quantity'] for p in purchase_details if p['status_info']['status'] == 'approved')
+        rejected_quantity = sum(p['total_quantity'] for p in purchase_details if p['status_info']['status'] == 'rejected')
+        pending_quantity = sum(p['total_quantity'] for p in purchase_details if p['status_info']['status'] == 'pending')
+
+        response_data = {
             'success': True,
-            'purchase_id': purchase_id,
-            'estimation_status': estimation_status.status,
-            'decision_date': estimation_status.decision_date.isoformat() if estimation_status.decision_date else None,
-            'decision_by': decision_maker_name,
-            'decision_by_user_id': estimation_status.decision_by_user_id,
-            'rejection_reason': estimation_status.rejection_reason,
-            'comments': estimation_status.comments,
-            'message': f'Estimation team has {estimation_status.status} this purchase request'
-        }), 200
+            'summary': {
+                'total_count': total_count,
+                'approved_count': approved_count,
+                'rejected_count': rejected_count,
+                'pending_count': pending_count,
+                'total_value': round(total_value, 2),
+                'approved_value': round(approved_value, 2),
+                'rejected_value': round(rejected_value, 2),
+                'pending_value': round(pending_value, 2),
+                'total_quantity': total_quantity,
+                'approved_quantity': approved_quantity,
+                'rejected_quantity': rejected_quantity,
+                'pending_quantity': pending_quantity
+            },
+            'purchases': purchase_details,
+            'user_info': {
+                'user_name': user_name,
+                'user_id': user_id,
+                'role': role.role
+            },
+            'last_updated': datetime.utcnow().isoformat()
+        }
+
+        return jsonify(response_data), 200
 
     except Exception as e:
-        log.error(f"Error checking Estimation approval status for purchase {purchase_id}: {str(e)}")
-        return jsonify({'error': 'Failed to check Estimation approval status'}), 500
+        log.error(f"Error in get_all_estimation_purchase_request: {str(e)}")
+        return jsonify({'error': f'Failed to retrieve all estimation purchase request: {str(e)}'}), 500
