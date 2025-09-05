@@ -44,17 +44,35 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'approved':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 border-green-300';
       case 'rejected':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 border-red-300';
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800 border-gray-300';
     }
   };
 
-  const isPendingPMApproval = purchase.current_status.role !== 'projectManager';
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return <CheckCircle className="h-4 w-4" />;
+      case 'rejected':
+        return <XCircle className="h-4 w-4" />;
+      case 'pending':
+        return <Clock className="h-4 w-4" />;
+      default:
+        return <AlertCircle className="h-4 w-4" />;
+    }
+  };
+
+  // Check PM status directly from the pm_status field
+  const isPendingPMApproval = purchase.pm_status === 'pending' || purchase.pm_status === null;
+  const pmStatus = purchase.pm_status || 'pending';
+  
+  // Get current workflow status for display
+  const currentWorkflowStatus = purchase.current_workflow_status || '';
 
   return (
     <motion.div
@@ -62,13 +80,31 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <Card className="hover:shadow-lg transition-shadow">
-        <CardHeader className="pb-4">
+      <Card className={`hover:shadow-lg transition-all duration-200 ${
+        isPendingPMApproval ? 'border-orange-200 bg-orange-50/30' : ''
+      }`}>
+        <CardHeader className="pb-3">
           <div className="flex justify-between items-start">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Purchase #{purchase.purchase_id}
-              </h3>
+            <div className="flex-1">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Purchase #{purchase.purchase_id}
+                </h3>
+                <Badge className={`${getStatusColor(pmStatus)} border`}>
+                  <span className="flex items-center gap-1">
+                    {getStatusIcon(pmStatus)}
+                    {isPendingPMApproval ? 'Pending PM Review' : pmStatus === 'approved' ? 'PM Approved' : 'PM Rejected'}
+                  </span>
+                </Badge>
+                {/* Show current workflow status if PM has already approved */}
+                {pmStatus === 'approved' && currentWorkflowStatus && (
+                  <Badge variant="outline" className="ml-2">
+                    {currentWorkflowStatus.replace(/_/g, ' ').split(' ').map(word => 
+                      word.charAt(0).toUpperCase() + word.slice(1)
+                    ).join(' ')}
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
                 <span className="flex items-center gap-1">
                   <MapPin className="h-4 w-4" />
@@ -78,141 +114,103 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                   <Calendar className="h-4 w-4" />
                   {formatDate(purchase.date)}
                 </span>
+                <span className="flex items-center gap-1">
+                  <DollarSign className="h-4 w-4" />
+                  <span className="font-semibold">{formatCurrency(purchase.materials_summary.total_cost)}</span>
+                </span>
               </div>
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              <Badge className={getStatusColor(purchase.procurement_approved_status.status)}>
-                Procurement: {purchase.procurement_approved_status.status}
-              </Badge>
-              {isPendingPMApproval && (
-                <Badge className="bg-orange-100 text-orange-800">
-                  <Clock className="h-3 w-3 mr-1" />
-                  Awaiting PM Review
-                </Badge>
-              )}
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          {/* Purpose */}
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-sm font-medium text-gray-700 mb-1">Purpose</p>
-            <p className="text-sm text-gray-900">{purchase.purpose}</p>
-          </div>
-
-          {/* Materials Summary */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <Package className="h-4 w-4 text-blue-600" />
-                <span className="text-xs text-blue-600 font-medium">Materials</span>
+        <CardContent className="space-y-3">
+          {/* Minimal Summary Row */}
+          <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
+            <div className="flex items-center gap-6">
+              <div>
+                <p className="text-xs text-gray-500">Materials</p>
+                <p className="text-sm font-semibold">{purchase.materials_summary.total_materials} items</p>
               </div>
-              <p className="text-lg font-semibold text-gray-900">
-                {purchase.materials_summary.total_materials}
-              </p>
-            </div>
-
-            <div className="bg-green-50 p-3 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <Package className="h-4 w-4 text-green-600" />
-                <span className="text-xs text-green-600 font-medium">Quantity</span>
+              <div>
+                <p className="text-xs text-gray-500">Total Qty</p>
+                <p className="text-sm font-semibold">{purchase.materials_summary.total_quantity}</p>
               </div>
-              <p className="text-lg font-semibold text-gray-900">
-                {purchase.materials_summary.total_quantity}
-              </p>
-            </div>
-
-            <div className="bg-purple-50 p-3 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <DollarSign className="h-4 w-4 text-purple-600" />
-                <span className="text-xs text-purple-600 font-medium">Total Cost</span>
+              <div className="max-w-xs">
+                <p className="text-xs text-gray-500">Purpose</p>
+                <p className="text-sm font-medium truncate">{purchase.purpose}</p>
               </div>
-              <p className="text-lg font-semibold text-gray-900">
-                {formatCurrency(purchase.materials_summary.total_cost)}
-              </p>
             </div>
-
-            <div className="bg-orange-50 p-3 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <AlertCircle className="h-4 w-4 text-orange-600" />
-                <span className="text-xs text-orange-600 font-medium">Categories</span>
-              </div>
-              <p className="text-lg font-semibold text-gray-900">
-                {purchase.materials_summary.categories.length}
-              </p>
-            </div>
-          </div>
-
-          {/* Categories List */}
-          {purchase.materials_summary.categories.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {purchase.materials_summary.categories.map(category => (
-                <Badge key={category} variant="outline">
+            <div className="flex items-center gap-2">
+              {purchase.materials_summary.categories.slice(0, 2).map(category => (
+                <Badge key={category} variant="outline" className="text-xs">
                   {category}
                 </Badge>
               ))}
+              {purchase.materials_summary.categories.length > 2 && (
+                <Badge variant="outline" className="text-xs">
+                  +{purchase.materials_summary.categories.length - 2}
+                </Badge>
+              )}
             </div>
-          )}
-
-          {/* Procurement Comments */}
-          {purchase.procurement_approved_status.comments && (
-            <div className="bg-blue-50 border-l-4 border-blue-400 p-3">
-              <p className="text-sm font-medium text-blue-900 mb-1">
-                Procurement Comments:
-              </p>
-              <p className="text-sm text-blue-800">
-                {purchase.procurement_approved_status.comments}
-              </p>
-            </div>
-          )}
+          </div>
 
           {/* Action Buttons */}
-          {isPendingPMApproval && (
-            <div className="flex gap-3 pt-2">
-              <Button 
-                onClick={() => onApprove(purchase.purchase_id)}
-                className="flex-1 bg-green-600 hover:bg-green-700"
-                disabled={isLoading}
-              >
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Approve
-              </Button>
-              <Button 
-                onClick={() => onReject(purchase.purchase_id)}
-                variant="destructive"
-                className="flex-1"
-                disabled={isLoading}
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Reject
-              </Button>
-              <Button 
-                onClick={() => onViewDetails(purchase.purchase_id)}
-                variant="outline"
-                disabled={isLoading}
-              >
-                View Details
-              </Button>
-            </div>
-          )}
-
-          {/* Already Reviewed */}
-          {!isPendingPMApproval && (
-            <div className="bg-gray-50 p-3 rounded-lg">
-              <p className="text-sm text-gray-600">
-                Already reviewed by Project Manager
-              </p>
-              <Button 
-                onClick={() => onViewDetails(purchase.purchase_id)}
-                variant="outline"
-                className="mt-2"
-                disabled={isLoading}
-              >
-                View Full History
-              </Button>
-            </div>
-          )}
+          <div className="flex gap-2">
+            {isPendingPMApproval ? (
+              <>
+                <Button 
+                  onClick={() => onApprove(purchase.purchase_id)}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  size="sm"
+                  disabled={isLoading}
+                >
+                  <CheckCircle className="h-4 w-4 mr-1" />
+                  Approve
+                </Button>
+                <Button 
+                  onClick={() => onReject(purchase.purchase_id)}
+                  variant="destructive"
+                  className="flex-1"
+                  size="sm"
+                  disabled={isLoading}
+                >
+                  <XCircle className="h-4 w-4 mr-1" />
+                  Reject
+                </Button>
+                <Button 
+                  onClick={() => onViewDetails(purchase.purchase_id)}
+                  variant="outline"
+                  size="sm"
+                  disabled={isLoading}
+                >
+                  View Details
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button 
+                  onClick={() => onViewDetails(purchase.purchase_id)}
+                  variant={pmStatus === 'approved' ? 'default' : pmStatus === 'rejected' ? 'destructive' : 'outline'}
+                  className="flex-1"
+                  size="sm"
+                  disabled={isLoading}
+                >
+                  View Full Details & History
+                </Button>
+                {pmStatus === 'rejected' && (
+                  <Button 
+                    onClick={() => onApprove(purchase.purchase_id)}
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    size="sm"
+                    disabled={isLoading}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Reconsider & Approve
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
         </CardContent>
       </Card>
     </motion.div>

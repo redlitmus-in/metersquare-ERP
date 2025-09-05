@@ -10,8 +10,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
   RefreshCw, Download, Search, Filter, LayoutDashboard, 
-  Package, CheckSquare, BarChart3, Bell, Settings
+  Package, CheckSquare, BarChart3, Bell, Settings,
+  Clock, CheckCircle, XCircle, AlertTriangle
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PMMetricsCards } from '../components/PMMetricsCards';
 import { PurchaseApprovalCard } from '../components/PurchaseApprovalCard';
 import { ApprovalModal } from '../components/ApprovalModal';
@@ -95,20 +98,20 @@ const ProjectManagerHub: React.FC = () => {
       );
     }
 
-    // Status filter
+    // Status filter based on PM status
     if (filterStatus !== 'all') {
       filtered = filtered.filter(p => {
         if (filterStatus === 'pending') {
-          // Pending PM approval - not yet reviewed by PM
-          return p.current_status.role !== 'projectManager';
+          // Pending PM approval - pm_status is 'pending' or null
+          return p.pm_status === 'pending' || p.pm_status === null;
         }
         if (filterStatus === 'approved') {
-          // PM approved - role is projectManager and status is approved
-          return p.current_status.role === 'projectManager' && p.current_status.status === 'approved';
+          // PM approved - pm_status is 'approved'
+          return p.pm_status === 'approved';
         }
         if (filterStatus === 'rejected') {
-          // PM rejected - role is projectManager and status is rejected
-          return p.current_status.role === 'projectManager' && p.current_status.status === 'rejected';
+          // PM rejected - pm_status is 'rejected'
+          return p.pm_status === 'rejected';
         }
         return true;
       });
@@ -182,7 +185,8 @@ const ProjectManagerHub: React.FC = () => {
     }
   };
 
-  const pendingPurchases = filteredPurchases.filter(p => p.current_status.role !== 'projectManager');
+  // Get pending purchases - those with pm_status as 'pending' or null
+  const pendingPurchases = filteredPurchases.filter(p => p.pm_status === 'pending' || p.pm_status === null);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -232,67 +236,188 @@ const ProjectManagerHub: React.FC = () => {
 
           {/* All Purchases Tab */}
           <TabsContent value="all-purchases" className="space-y-4">
-            {/* Filter Buttons */}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={filterStatus === 'all' ? 'default' : 'outline'}
-                onClick={() => setFilterStatus('all')}
-                size="sm"
-                className="flex-grow sm:flex-grow-0"
-              >
-                All
-              </Button>
-              <Button
-                variant={filterStatus === 'pending' ? 'default' : 'outline'}
-                onClick={() => setFilterStatus('pending')}
-                size="sm"
-                className="flex-grow sm:flex-grow-0"
-              >
-                Pending
-                {purchases.filter(p => p.current_status.role !== 'projectManager').length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 text-xs bg-orange-500 text-white rounded-full">
-                    {purchases.filter(p => p.current_status.role !== 'projectManager').length}
-                  </span>
-                )}
-              </Button>
-              <Button
-                variant={filterStatus === 'approved' ? 'default' : 'outline'}
-                onClick={() => setFilterStatus('approved')}
-                size="sm"
-                className="flex-grow sm:flex-grow-0"
-              >
-                Approved
-              </Button>
-              <Button
-                variant={filterStatus === 'rejected' ? 'default' : 'outline'}
-                onClick={() => setFilterStatus('rejected')}
-                size="sm"
-                className="flex-grow sm:flex-grow-0"
-              >
-                Rejected
-              </Button>
+            {/* Search and Filter Bar */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search by ID, location, or purpose..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant={filterStatus === 'all' ? 'default' : 'outline'}
+                  onClick={() => setFilterStatus('all')}
+                  size="sm"
+                  className="flex items-center gap-1"
+                >
+                  All
+                  <Badge variant="secondary" className="ml-1">
+                    {purchases.length}
+                  </Badge>
+                </Button>
+                <Button
+                  variant={filterStatus === 'pending' ? 'default' : 'outline'}
+                  onClick={() => setFilterStatus('pending')}
+                  size="sm"
+                  className={`flex items-center gap-1 ${
+                    filterStatus === 'pending' ? '' : 'hover:bg-orange-50'
+                  }`}
+                >
+                  Pending
+                  {purchases.filter(p => p.pm_status === 'pending' || p.pm_status === null).length > 0 && (
+                    <Badge className="ml-1 bg-orange-500 text-white">
+                      {purchases.filter(p => p.pm_status === 'pending' || p.pm_status === null).length}
+                    </Badge>
+                  )}
+                </Button>
+                <Button
+                  variant={filterStatus === 'approved' ? 'default' : 'outline'}
+                  onClick={() => setFilterStatus('approved')}
+                  size="sm"
+                  className={`flex items-center gap-1 ${
+                    filterStatus === 'approved' ? '' : 'hover:bg-green-50'
+                  }`}
+                >
+                  Approved
+                  <Badge variant="secondary" className="ml-1 bg-green-100 text-green-800">
+                    {purchases.filter(p => p.pm_status === 'approved').length}
+                  </Badge>
+                </Button>
+                <Button
+                  variant={filterStatus === 'rejected' ? 'default' : 'outline'}
+                  onClick={() => setFilterStatus('rejected')}
+                  size="sm"
+                  className={`flex items-center gap-1 ${
+                    filterStatus === 'rejected' ? '' : 'hover:bg-red-50'
+                  }`}
+                >
+                  Rejected
+                  <Badge variant="secondary" className="ml-1 bg-red-100 text-red-800">
+                    {purchases.filter(p => p.pm_status === 'rejected').length}
+                  </Badge>
+                </Button>
+              </div>
             </div>
 
-            {/* All Purchases List */}
-            <div className="grid grid-cols-1 gap-4">
+            {/* Status Summary */}
+            {filterStatus === 'pending' && pendingPurchases.length > 0 && (
+              <Alert className="border-orange-200 bg-orange-50">
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                <AlertDescription className="text-orange-800">
+                  You have <strong>{pendingPurchases.length}</strong> purchase{pendingPurchases.length > 1 ? 's' : ''} awaiting your review.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Purchases Grid */}
+            <div className="grid grid-cols-1 gap-3">
               {isLoading ? (
-                <div className="text-center py-8 text-gray-500">Loading...</div>
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-500">Loading purchases...</p>
+                  </div>
+                </div>
               ) : filteredPurchases.length > 0 ? (
-                filteredPurchases.map(purchase => (
-                  <PurchaseApprovalCard
-                    key={purchase.purchase_id}
-                    purchase={purchase}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                    onViewDetails={handleViewDetails}
-                    isLoading={isProcessing}
-                  />
-                ))
+                <>
+                  {/* Group by status for better organization */}
+                  {filterStatus === 'all' && (
+                    <>
+                      {/* Pending Section */}
+                      {filteredPurchases.filter(p => p.pm_status === 'pending' || p.pm_status === null).length > 0 && (
+                        <div className="space-y-3">
+                          <h3 className="text-sm font-semibold text-orange-700 flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            Pending Your Review ({filteredPurchases.filter(p => p.pm_status === 'pending' || p.pm_status === null).length})
+                          </h3>
+                          {filteredPurchases
+                            .filter(p => p.pm_status === 'pending' || p.pm_status === null)
+                            .map(purchase => (
+                              <PurchaseApprovalCard
+                                key={purchase.purchase_id}
+                                purchase={purchase}
+                                onApprove={handleApprove}
+                                onReject={handleReject}
+                                onViewDetails={handleViewDetails}
+                                isLoading={isProcessing}
+                              />
+                            ))}
+                        </div>
+                      )}
+
+                      {/* Approved Section */}
+                      {filteredPurchases.filter(p => p.pm_status === 'approved').length > 0 && (
+                        <div className="space-y-3 mt-6">
+                          <h3 className="text-sm font-semibold text-green-700 flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4" />
+                            Approved by You ({filteredPurchases.filter(p => p.pm_status === 'approved').length})
+                          </h3>
+                          {filteredPurchases
+                            .filter(p => p.pm_status === 'approved')
+                            .map(purchase => (
+                              <PurchaseApprovalCard
+                                key={purchase.purchase_id}
+                                purchase={purchase}
+                                onApprove={handleApprove}
+                                onReject={handleReject}
+                                onViewDetails={handleViewDetails}
+                                isLoading={isProcessing}
+                              />
+                            ))}
+                        </div>
+                      )}
+
+                      {/* Rejected Section */}
+                      {filteredPurchases.filter(p => p.pm_status === 'rejected').length > 0 && (
+                        <div className="space-y-3 mt-6">
+                          <h3 className="text-sm font-semibold text-red-700 flex items-center gap-2">
+                            <XCircle className="h-4 w-4" />
+                            Rejected by You ({filteredPurchases.filter(p => p.pm_status === 'rejected').length})
+                          </h3>
+                          {filteredPurchases
+                            .filter(p => p.pm_status === 'rejected')
+                            .map(purchase => (
+                              <PurchaseApprovalCard
+                                key={purchase.purchase_id}
+                                purchase={purchase}
+                                onApprove={handleApprove}
+                                onReject={handleReject}
+                                onViewDetails={handleViewDetails}
+                                isLoading={isProcessing}
+                              />
+                            ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Filtered View */}
+                  {filterStatus !== 'all' && 
+                    filteredPurchases.map(purchase => (
+                      <PurchaseApprovalCard
+                        key={purchase.purchase_id}
+                        purchase={purchase}
+                        onApprove={handleApprove}
+                        onReject={handleReject}
+                        onViewDetails={handleViewDetails}
+                        isLoading={isProcessing}
+                      />
+                    ))
+                  }
+                </>
               ) : (
-                <div className="text-center py-12 text-gray-500">
-                  <Package className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p className="text-lg">No purchases found</p>
-                  <p className="text-sm mt-1">Try adjusting your filters</p>
+                <div className="text-center py-12">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                    <Package className="h-8 w-8 text-gray-400" />
+                  </div>
+                  <p className="text-lg font-medium text-gray-900">No purchases found</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {searchTerm ? 'Try adjusting your search terms' : 'No purchases match the selected filter'}
+                  </p>
                 </div>
               )}
             </div>

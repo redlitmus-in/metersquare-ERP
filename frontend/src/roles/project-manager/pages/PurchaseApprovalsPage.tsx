@@ -50,15 +50,16 @@ const PurchaseApprovalsPage: React.FC = () => {
         date: details.purchase_details.date,
         email_sent: details.purchase_details.email_sent,
         created_at: details.purchase_details.created_at,
+        current_workflow_status: 'pending_pm_review',
+        pm_status: null,
+        pm_status_date: null,
+        pm_comments: null,
+        pm_rejection_reason: null,
+        procurement_status: 'approved',
+        procurement_status_date: new Date().toISOString(),
+        procurement_comments: '',
         materials_summary: details.purchase_details.materials_summary,
-        procurement_approved_status: {
-          status: 'approved',
-          role: 'procurement',
-          date: '',
-          decision_by_user_id: 0,
-          comments: ''
-        },
-        current_status: details.latest_pm_proc_status as any
+        status_history: []
       };
       setPurchase(purchaseData);
     } catch (error) {
@@ -112,9 +113,13 @@ const PurchaseApprovalsPage: React.FC = () => {
   };
 
   // Check if purchase is pending PM approval
-  const isPendingPMApproval = statusDetails && 
-    statusDetails.latest_pm_proc_status.role !== 'projectManager' &&
-    statusDetails.latest_pm_proc_status.status !== 'rejected';
+  // Check if the latest status exists and if it's not from PM or if PM hasn't acted yet
+  const isPendingPMApproval = statusDetails && (
+    !statusDetails.latest_pm_proc_status || 
+    !statusDetails.latest_pm_proc_status.role ||
+    (statusDetails.latest_pm_proc_status.role !== 'projectManager' &&
+     statusDetails.latest_pm_proc_status.status !== 'rejected')
+  );
 
   if (isLoading) {
     return (

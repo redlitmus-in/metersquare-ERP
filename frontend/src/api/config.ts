@@ -163,6 +163,18 @@ export const API_ENDPOINTS = {
     GET_PURCHASES: '/projectmanger_purchases', // Note: backend has typo
     PURCHASE_STATUS: (id: string | number) => `/purchase_status/${id}`,
   },
+  ESTIMATION: {
+    APPROVAL: '/estimation_approval',
+    DASHBOARD: '/estimation_dashboard',
+    PURCHASES: '/estimation_purchase',
+    PURCHASE_WITH_STATUS: (id: string | number) => `/purchase_with_status/${id}`,
+    CHECK_APPROVAL: (id: string | number) => `/check_estimation_approval/${id}`,
+  },
+  TECHNICAL_DIRECTOR: {
+    APPROVAL: '/tech_approval',
+    DASHBOARD: '/tech_dashboard',
+    PURCHASES: '/technical_purchase',
+  },
 };
 
 // Response wrapper utility
