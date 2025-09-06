@@ -142,28 +142,13 @@ def get_all_purchase_request():
             return jsonify({"error": "Not logged in"}), 401
 
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        allowed_roles = ['siteSupervisor', 'mepSupervisor', 'procurement', 'projectManager', 'technicalDirector', 'estimation', 'accounts', 'design']
+        allowed_roles = 'siteSupervisor'
         if not role or role.role not in allowed_roles:
             return jsonify({
                 'error': 'Invalid role. Access denied for viewing purchase requisitions'
             }), 403
-
-        # 🔹 Fetch purchases based on role
-        if role.role == 'procurement':
-            # Procurement team can see all purchases
-            purchases = Purchase.query.filter_by(is_deleted=False).all()
-            print(f"DEBUG: Procurement user {current_user['full_name']} - Found {len(purchases)} purchases") # Debug log
-        elif role.role in ['projectManager', 'technicalDirector', 'estimation', 'accounts', 'design']:
-            # Management roles can see all purchases for approval workflows
-            purchases = Purchase.query.filter_by(is_deleted=False).all()
-            print(f"DEBUG: Management role {role.role} user {current_user['full_name']} - Found {len(purchases)} purchases") # Debug log
-        else:
-            # Site/MEP supervisors can only see their own purchases
-            purchases = Purchase.query.filter_by(is_deleted=False, user_id=current_user['user_id']).all()
-            print(f"DEBUG: Supervisor role {role.role} user {current_user['full_name']} - Found {len(purchases)} purchases for user_id {current_user['user_id']}") # Debug log
-
         purchase_list = []
-
+        purchases = Purchase.query.filter_by(is_deleted=False).all()
         for purchase in purchases:
             material_ids = purchase.material_ids if purchase.material_ids else []
 
@@ -190,24 +175,36 @@ def get_all_purchase_request():
                     'created_by': mat.created_by
                 })
 
-            # Fetch approvals for this purchase
-            approvals = Approval.query.filter_by(purchase_id=purchase.purchase_id).all()
-            approval_data = []
-            for app in approvals:
-                approval_data.append({
-                    'approval_id': app.approval_id,
-                    'reviewer_role': app.reviewer_role,
-                    'status': app.status,
-                    'comments': app.comments,
-                    'reviewed_at': app.reviewed_at,
-                    'reviewed_by': app.reviewed_by,
-                    'created_at': app.created_at,
-                    'created_by': app.created_by,
-                    'last_modified_at': app.last_modified_at,
-                    'last_modified_by': app.last_modified_by
-                })
+            # Get latest status for this purchase
+            latest_status = PurchaseStatus.get_latest_status(purchase.purchase_id)
+            
+            # Format latest status details
+            latest_status_info = None
+            if latest_status:
+                # Determine receiver_latest_status based on sender and receiver
+                receiver_latest_status = "pending"
+                if latest_status.sender == 'accounts' and latest_status.receiver == 'accounts':
+                    receiver_latest_status = "task completed"  # task completed - waiting for accounts action
+                elif latest_status.sender == 'accounts':
+                    receiver_latest_status = latest_status.status
+                
+                latest_status_info = {
+                    'status_id': latest_status.status_id,
+                    'sender_latest_status': latest_status.status,
+                    'sender': latest_status.sender,
+                    'receiver': latest_status.receiver,
+                    'status': latest_status.status,
+                    'decision_date': latest_status.decision_date.isoformat() if latest_status.decision_date else None,
+                    'created_at': latest_status.created_at.isoformat(),
+                    'created_by': latest_status.created_by,
+                    'comments': latest_status.comments,
+                    'rejection_reason': latest_status.rejection_reason,
+                    'reject_category': latest_status.reject_category,
+                    'is_active': latest_status.is_active,
+                    'receiver_latest_status': receiver_latest_status
+                }
 
-            # Build final purchase response (✅ includes materials + approvals)
+            # Build final purchase response (✅ includes materials + latest status)
             purchase_list.append({
                 'purchase_id': purchase.purchase_id,
                 'user_id': purchase.user_id,
@@ -223,7 +220,7 @@ def get_all_purchase_request():
                 'email_sent': purchase.email_sent,
                 'created_at': purchase.created_at,
                 'created_by': purchase.created_by,
-                'approvals': approval_data       # ✅ nested approvals
+                'latest_status': latest_status_info  # ✅ latest status details
             })
 
         return jsonify({
@@ -241,8 +238,8 @@ def get_purchase_request_by_id(purchase_id):
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        if not role or role.role != 'accounts':
-            return jsonify({'error': 'Only Accounts department can view purchase details'}), 403
+        # if not role or role.role != 'accounts':
+        #     return jsonify({'error': 'Only Accounts department can view purchase details'}), 403
         purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
         if not purchase:
             return jsonify({'error': 'Purchase request not found'}), 404
@@ -501,6 +498,7 @@ def delete_purchase(purchase_id):
 supabase_url = os.environ.get('SUPABASE_URL')
 supabase_key = os.environ.get('SUPABASE_KEY') # Use service role for uploading
 SUPABASE_BUCKET = "file_upload"
+ACCOUNT_BUCKET = "account_file"
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'}
 
 # Initialize Supabase client
@@ -516,56 +514,107 @@ def file_upload(purchase_id):
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
-        # Check if file part exists
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file part in the request'}), 400
+        if current_user['role'] == 'procurement':
+            if 'file' not in request.files:
+                return jsonify({'error': 'No file part in the request'}), 400
 
-        file = request.files['file']
+            file = request.files['file']
 
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+            if file.filename == '':
+                return jsonify({'error': 'No file selected'}), 400
 
-        if not allowed_file(file.filename):
-            return jsonify({'error': 'File type not allowed'}), 400
+            if not allowed_file(file.filename):
+                return jsonify({'error': 'File type not allowed'}), 400
 
-        # Prepare file for upload
-        filename = secure_filename(file.filename)
-        file_path = f"{purchase_id}/{filename}"
-        file_content = file.read()
+            # Prepare file for upload
+            filename = secure_filename(file.filename)
+            file_path = f"{purchase_id}/{filename}"
+            file_content = file.read()
 
-        # Optional: delete existing file
-        try:
-            supabase.storage.from_(SUPABASE_BUCKET).remove([file_path])
-        except Exception as e:
-            log.warning(f"Failed to delete existing file: {e}")
+            # Optional: delete existing file
+            try:
+                supabase.storage.from_(SUPABASE_BUCKET).remove([file_path])
+            except Exception as e:
+                log.warning(f"Failed to delete existing file: {e}")
 
-        # Upload the file
-        response = supabase.storage.from_(SUPABASE_BUCKET).upload(
-            path=file_path,
-            file=file_content,
-            file_options={"content-type": file.content_type}
-        )
+            # Upload the file
+            response = supabase.storage.from_(SUPABASE_BUCKET).upload(
+                path=file_path,
+                file=file_content,
+                file_options={"content-type": file.content_type}
+            )
 
-        if isinstance(response, dict) and response.get("error"):
-            return jsonify({'error': 'Upload failed', 'details': response['error']}), 500
+            if isinstance(response, dict) and response.get("error"):
+                return jsonify({'error': 'Upload failed', 'details': response['error']}), 500
 
-        # 🔥 Build public URL manually
-        public_url = f"{file_path}"
+            # 🔥 Build public URL manually
+            public_url = f"{file_path}"
 
-        # Optionally update your database (example)
-        purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
-        if not purchase:
-            return jsonify({'error': 'Purchase request not found'}), 404
+            # Optionally update your database (example)
+            purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
+            if not purchase:
+                return jsonify({'error': 'Purchase request not found'}), 404
 
-        purchase.file_path = public_url
-        purchase.last_modified_at = datetime.utcnow()
-        db.session.commit()
+            purchase.file_path = public_url
+            purchase.last_modified_at = datetime.utcnow()
+            db.session.commit()
 
-        return jsonify({
-            'success': True,
-            'message': 'File uploaded successfully',
-            'file_url': public_url
-        }), 200
+            return jsonify({
+                'success': True,
+                'message': 'File uploaded successfully',
+                'file_url': public_url
+            }), 200
+
+        if current_user['role'] == 'accounts':
+            if 'file' not in request.files:
+                return jsonify({'error': 'No file part in the request'}), 400
+
+            file = request.files['file']
+
+            if file.filename == '':
+                return jsonify({'error': 'No file selected'}), 400
+
+            if not allowed_file(file.filename):
+                return jsonify({'error': 'File type not allowed'}), 400
+
+            # Prepare file for upload
+            filename = secure_filename(file.filename)
+            file_path = f"{purchase_id}/{filename}"
+            file_content = file.read()
+
+            # Optional: delete existing file
+            try:
+                supabase.storage.from_(ACCOUNT_BUCKET).remove([file_path])
+            except Exception as e:
+                log.warning(f"Failed to delete existing file: {e}")
+
+            # Upload the file
+            response = supabase.storage.from_(SUPABASE_BUCKET).upload(
+                path=file_path,
+                file=file_content,
+                file_options={"content-type": file.content_type}
+            )
+
+            if isinstance(response, dict) and response.get("error"):
+                return jsonify({'error': 'Upload failed', 'details': response['error']}), 500
+
+            # 🔥 Build public URL manually
+            public_url = f"{file_path}"
+
+            # Optionally update your database (example)
+            purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
+            if not purchase:
+                return jsonify({'error': 'Purchase request not found'}), 404
+
+            purchase.file_path = public_url
+            purchase.last_modified_at = datetime.utcnow()
+            db.session.commit()
+
+            return jsonify({
+                'success': True,
+                'message': 'File uploaded successfully',
+                'file_url': public_url
+            }), 200
 
     except Exception as e:
         log.error(f"File upload error: {str(e)}")

@@ -84,9 +84,9 @@ def process_payment_transaction():
             created_by=user_name
         )
 
+        # Create payment transaction
         db.session.add(payment_transaction)
-        db.session.commit()
-
+        
         # Update purchase status to indicate payment processing
         PurchaseStatus.create_new_status(
             purchase_id=purchase_id,
@@ -97,6 +97,9 @@ def process_payment_transaction():
             comments=f'Payment transaction created by {user_name}',
             created_by=user_name
         )
+        
+        # Commit both payment transaction and status creation together
+        db.session.commit()
 
         # Send notification email
         try:
@@ -264,19 +267,22 @@ def create_acknowledgement():
             created_by=user_name
         )
 
+        # Create acknowledgement
         db.session.add(acknowledgement)
-        db.session.commit()
-
+        
         # Update purchase status to indicate acknowledgement received
-        PurchaseStatus.create_new_status(
+        new_status = PurchaseStatus.create_new_status(
             purchase_id=purchase_id,
             sender_role=role.role,
             receiver_role='accounts',
-            status='acknowledgement_received',
+            status='approved',
             decision_by_user_id=user_id,
             comments=f'Acknowledgement created by {user_name}',
             created_by=user_name
         )
+        
+        # Commit both acknowledgement and status creation together
+        db.session.commit()
 
         # Send notification to accounts
         try:
@@ -699,6 +705,14 @@ def account_purchase():
             # Add latest status and material details to purchase data
             purchase_data['latest_status'] = latest_status_info
             purchase_data['material_details'] = material_details
+
+            # Add receiver_latest_status for accounts department
+            purchase_data['receiver_latest_status'] = "pending"
+            if latest_status_info and latest_status_info.get('sender') == 'accounts' and latest_status_info.get('status') == 'pending':
+                purchase_data['receiver_latest_status'] = "pending"  # waiting for payment process
+            elif latest_status_info and latest_status_info.get('sender') == 'accounts':
+                purchase_data['receiver_latest_status'] = latest_status_info.get('status', 'pending')
+
             purchase_details.append(purchase_data)
         return jsonify({
             'success': True,

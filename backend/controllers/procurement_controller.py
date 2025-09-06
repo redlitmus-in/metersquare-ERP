@@ -242,14 +242,20 @@ def get_all_procurement():
             
             purchase_dict = purchase.to_dict()
             purchase_dict['materials'] = materials
-            purchase_dict['latest_status'] = latest_status.status if latest_status else 'pending'
+            purchase_dict['sender_latest_status'] = latest_status.status if latest_status else 'pending'
             purchase_dict['status_sender'] = latest_status.sender if latest_status else None
             purchase_dict['status_receiver'] = latest_status.receiver if latest_status else None
             purchase_dict['status_role'] = latest_status.role if latest_status else None
             purchase_dict['status_date'] = latest_status.created_at.isoformat() if latest_status and latest_status.created_at else None
             purchase_dict['decision_date'] = latest_status.decision_date.isoformat() if latest_status and latest_status.decision_date else None
             purchase_dict['status_comments'] = latest_status.comments if latest_status else None
-            
+            # Set receiver_latest_status based on sender and receiver
+            purchase_dict['receiver_latest_status'] = "pending"
+            if latest_status and latest_status.sender == 'accounts' and latest_status.receiver == 'accounts':
+                purchase_dict['receiver_latest_status'] = "task completed"  # task completed - waiting for accounts action
+            elif latest_status and latest_status.sender == 'accounts':
+                purchase_dict['receiver_latest_status'] = latest_status.status
+
             procurement_data.append(purchase_dict)
         
         return jsonify({
