@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Download, Eye, Edit2, Trash2, Building2, Loader2 } from 'lucide-react';
+import { Plus, Search, Filter, Download, Eye, Edit2, Trash2, Building2 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import VendorQuotationForm from '@/components/forms/VendorQuotationForm';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -306,8 +307,8 @@ const VendorQuotationsPage: React.FC = () => {
         <CardContent>
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
-              <span className="ml-2 text-gray-600">Loading vendor quotations...</span>
+              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+              <span className="ml-4 text-gray-600">Loading vendor quotations...</span>
             </div>
           ) : error ? (
             <div className="text-center py-12">

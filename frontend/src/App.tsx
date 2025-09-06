@@ -53,7 +53,6 @@ import MaterialDispatchSitePage from '@/pages/workflows/MaterialDispatchSitePage
 
 // Layout
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import RoleBasedRedirect from '@/components/routing/RoleBasedRedirect';
 import RoleRouteWrapper from '@/components/routing/RoleRouteWrapper';
 import RoleDashboard from '@/components/routing/RoleDashboard';
@@ -66,9 +65,7 @@ const RoleSpecificProcurementHub: React.FC = () => {
   const userRole = (user as any)?.role || '';
   const userRoleLower = userRole.toLowerCase();
   
-  // Debug log to check role
   console.log('User role from backend:', userRole, 'Lowercase:', userRoleLower);
-  
   if (userRoleLower === 'project manager' || userRoleLower === 'project_manager' || userRoleLower === 'projectmanager') {
     return <ProjectManagerHub />;
   }
@@ -77,7 +74,6 @@ const RoleSpecificProcurementHub: React.FC = () => {
     return <EstimationHub />;
   }
   
-  // Check for technicalDirector (backend sends camelCase)
   if (userRole === 'technicalDirector' || userRoleLower === 'technical director' || userRoleLower === 'technical_director' || userRoleLower === 'technicaldirector') {
     return <TechnicalDirectorHub />;
   }
@@ -88,10 +84,18 @@ const RoleSpecificProcurementHub: React.FC = () => {
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, getCurrentUser } = useAuthStore();
+  const [tokenChecked, setTokenChecked] = useState(false);
   const token = localStorage.getItem('access_token');
 
-  if (isLoading && !token) {
+  useEffect(() => {
+    // Check token validity when component mounts
+    const checkToken = async () => {
+      if (token && !isAuthenticated) {
+        try {
+          await getCurrentUser();
+          // Token is invalid, getCurrentUser will handle cleanup
+        }
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" />
@@ -99,6 +103,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     );
   }
 
+  // After token check, redirect if not authenticated
   if (!isAuthenticated && !token) {
     return <Navigate to="/login" replace />;
   }
@@ -108,27 +113,20 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Public Route Component (redirects if authenticated)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading, user, getRoleDashboard } = useAuthStore();
+  const { isAuthenticated, getRoleDashboard } = useAuthStore();
   const token = localStorage.getItem('access_token');
 
-  if (isLoading && !token) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
 
-  if (isAuthenticated || token) {
+  // Redirect to dashboard if authenticated
     const dashboardPath = getRoleDashboard();
     return <Navigate to={dashboardPath} replace />;
   }
 
-  return <>{children}</>;
+  return <>{children}</>
 };
 
 function App() {
-  const { getCurrentUser, isAuthenticated } = useAuthStore();
+  const { getCurrentUser, isAuthenticated, logout } = useAuthStore();
   const [isEnvironmentValid, setIsEnvironmentValid] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -145,7 +143,13 @@ function App() {
           // Check for existing session on app load
           const token = localStorage.getItem('access_token');
           if (token && !isAuthenticated) {
-            getCurrentUser();
+            try {
+              await getCurrentUser();
+            } catch (error) {
+              // Token is invalid/expired, ensure clean logout
+              console.log('Token validation failed, cleaning up...');
+              logout();
+            }
           }
         }
       } catch (error) {
@@ -155,14 +159,14 @@ function App() {
     };
 
     validateEnvironment();
-  }, [getCurrentUser, isAuthenticated]);
+  }, [getCurrentUser, isAuthenticated, logout]);
 
   // Show loading while validating environment
   if (isEnvironmentValid === null) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <LoadingSpinner size="lg" />
+          <ModernLoadingSpinners variant="pulse-wave" size="lg" />
           <p className="mt-4 text-gray-600">Validating environment configuration...</p>
         </div>
       </div>
@@ -211,6 +215,8 @@ function App() {
             </PublicRoute>
           }
         />
+        
+        {/* Direct demo page - no auth required */}
 
         {/* Root redirect to login or dashboard */}
         <Route
@@ -241,10 +247,6 @@ function App() {
             } />
             <Route path="procurement/deliveries" element={<DeliveriesPage />} />
             <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
-            
-            {/* Estimation Routes - Support both paths for backward compatibility */}
-            <Route path="estimation" element={<EstimationHub />} />
-            <Route path="estimation-hub" element={<EstimationHub />} />
             <Route path="tasks" element={<TasksPage />} />
             <Route path="projects" element={<ProjectsPage />} />
             <Route path="projects/:id" element={<ProjectsPage />} />

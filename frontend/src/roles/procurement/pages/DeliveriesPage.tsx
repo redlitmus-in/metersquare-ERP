@@ -11,12 +11,12 @@ import {
   EyeIcon,
   EditIcon,
   PackageIcon,
-  Loader2,
   Search,
   Filter,
   Download,
   Plus
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { useNavigate } from 'react-router-dom';
 import DocumentViewModal from '@/components/DocumentViewModal';
 import { toast } from 'sonner';
@@ -323,7 +323,7 @@ const DeliveriesPage: React.FC = () => {
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-green-500" />
+              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
               <span className="ml-2 text-gray-600">Loading deliveries...</span>
             </div>
           ) : error ? (

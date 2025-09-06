@@ -41,7 +41,7 @@ import { toast } from 'sonner';
 
 import { useAuthStore } from '@/store/authStore';
 import { LoginRequest } from '@/types';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import OTPInput from '@/components/OTPInput';
 import { AnimatePresence } from 'framer-motion';
 import { authApi } from '@/api/auth';
@@ -138,8 +138,10 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const handleVerifyOTP = async () => {
-    if (otp.length !== 6) {
+  const handleVerifyOTP = async (otpValue?: string) => {
+    const otpToVerify = otpValue || otp;
+    
+    if (otpToVerify.length !== 6) {
       toast.error('Invalid OTP', {
         description: 'Please enter a 6-digit OTP'
       });
@@ -148,7 +150,7 @@ const LoginPage: React.FC = () => {
 
     try {
       // Verify OTP via backend API
-      const response = await authApi.verifyOTP(userEmail, otp);
+      const response = await authApi.verifyOTP(userEmail, otpToVerify);
       
       const roleData = availableRoles.find(r => r.value === userRole);
       
@@ -649,7 +651,7 @@ const LoginPage: React.FC = () => {
                     whileTap={{ scale: 0.99 }}
                   >
                     {isLoading ? (
-                      <LoadingSpinner size="sm" color="white" />
+                      <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                     ) : (
                       <>
                         <span>Send OTP</span>
@@ -677,9 +679,20 @@ const LoginPage: React.FC = () => {
                   <OTPInput
                     value={otp}
                     onChange={setOtp}
-                    onComplete={handleVerifyOTP}
+                    onComplete={(otpValue) => {
+                      // Auto-verify when 6 digits are entered
+                      if (otpValue.length === 6 && !isLoading) {
+                        handleVerifyOTP(otpValue);
+                      }
+                    }}
                     disabled={isLoading}
                   />
+
+                  {otp.length < 6 && (
+                    <p className="text-xs text-gray-400 text-center">
+                      Enter {6 - otp.length} more digit{6 - otp.length !== 1 ? 's' : ''} • Auto-verifies when complete
+                    </p>
+                  )}
 
                   <div className="text-center">
                     {resendTimer > 0 ? (
@@ -700,12 +713,12 @@ const LoginPage: React.FC = () => {
                   <motion.button
                     onClick={handleVerifyOTP}
                     disabled={isLoading || otp.length !== 6}
-                    className="w-full bg-[#243d8a] hover:bg-[#243d8a]/90 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="w-full bg-[#243d8a] hover:bg-[#243d8a]/90 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
                   >
                     {isLoading ? (
-                      <LoadingSpinner size="sm" color="white" />
+                      <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                     ) : (
                       <>
                         <span>Verify & Login</span>
@@ -917,32 +930,37 @@ const LoginPage: React.FC = () => {
             />
             
             
-            {/* Red Dot - Changes to green when at hub position (310, 320) */}
+            {/* Red Dot - Changes to green when touching ERP Hub */}
             <circle
               r="4"
               filter="url(#iconGlow)"
-              opacity="0.8"
             >
               <animateMotion
                 dur="15s"
                 repeatCount="indefinite"
                 path="M 120 120 Q 230 120 350 120 T 540 120 Q 600 180 540 240 Q 430 240 350 240 T 120 240 Q 60 300 120 360 Q 230 360 350 360 T 580 360 Q 540 360 350 360 Q 310 350 350 330"
               />
-              {/* Changes to green only when at hub (around 66.7% of journey) */}
+              {/* Changes to green when reaching hub at 310,320 (at 70% of path) */}
               <animate
                 attributeName="fill"
                 values="#ef4444;#ef4444;#ef4444;#ef4444;#ef4444;#ef4444;#ef4444;#ef4444;#ef4444;#ef4444;#10b981;#10b981;#10b981;#10b981;#10b981"
                 dur="15s"
                 repeatCount="indefinite"
-                keyTimes="0;0.1;0.2;0.3;0.4;0.5;0.6;0.65;0.66;0.67;0.68;0.7;0.8;0.9;1"
+                keyTimes="0;0.1;0.2;0.3;0.4;0.5;0.6;0.65;0.69;0.7;0.75;0.8;0.85;0.95;1"
+              />
+              <animate
+                attributeName="opacity"
+                values="0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.4;0"
+                dur="15s"
+                repeatCount="indefinite"
+                keyTimes="0;0.1;0.2;0.3;0.4;0.5;0.6;0.65;0.7;0.72;0.73;0.8;0.85;0.95;1"
               />
             </circle>
             
-            {/* Blue Dot - Changes to green when at hub position */}
+            {/* Blue Dot - Changes to green when touching ERP Hub */}
             <circle
               r="4"
               filter="url(#iconGlow)"
-              opacity="0.8"
             >
               <animateMotion
                 dur="15s"
@@ -950,14 +968,22 @@ const LoginPage: React.FC = () => {
                 begin="2s"
                 path="M 120 120 Q 230 120 350 120 T 540 120 Q 600 180 540 240 Q 430 240 350 240 T 120 240 Q 60 300 120 360 Q 230 360 350 360 T 580 360 Q 540 360 350 360 Q 310 350 350 330"
               />
-              {/* Changes to green only when at hub */}
+              {/* Changes to green when reaching hub at 310,320 (at 70% of path) */}
               <animate
                 attributeName="fill"
                 values="#3b82f6;#3b82f6;#3b82f6;#3b82f6;#3b82f6;#3b82f6;#3b82f6;#3b82f6;#3b82f6;#3b82f6;#10b981;#10b981;#10b981;#10b981;#10b981"
                 dur="15s"
                 begin="2s"
                 repeatCount="indefinite"
-                keyTimes="0;0.1;0.2;0.3;0.4;0.5;0.6;0.65;0.66;0.67;0.68;0.7;0.8;0.9;1"
+                keyTimes="0;0.1;0.2;0.3;0.4;0.5;0.6;0.65;0.69;0.7;0.75;0.8;0.85;0.95;1"
+              />
+              <animate
+                attributeName="opacity"
+                values="0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.4;0"
+                dur="15s"
+                begin="2s"
+                repeatCount="indefinite"
+                keyTimes="0;0.1;0.2;0.3;0.4;0.5;0.6;0.65;0.7;0.72;0.73;0.8;0.85;0.95;1"
               />
             </circle>
           </svg>

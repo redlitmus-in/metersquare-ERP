@@ -36,7 +36,6 @@ import {
   Timer,
   Layers,
   UserCheck,
-  Loader2,
   Plus
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -67,6 +66,7 @@ import {
   ReferenceLine
 } from 'recharts';
 import { apiClient, API_ENDPOINTS } from '@/api/config';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 
 interface MetricData {
   title: string;
@@ -380,7 +380,7 @@ const SiteSupervisorDashboard: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-2">
-          <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
+          <ModernLoadingSpinners variant="pulse-wave" size="lg" />
           <p className="text-sm text-gray-600">Loading dashboard...</p>
         </div>
       </div>

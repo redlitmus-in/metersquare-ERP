@@ -111,25 +111,8 @@ export const useAuthStore = create<AuthState>()(
         try {
           const token = localStorage.getItem('access_token');
           if (!token) {
-            set({ isAuthenticated: false, user: null });
+            set({ isAuthenticated: false, user: null, isLoading: false });
             return;
-          }
-
-          // Check if we have cached user data
-          const cachedUserData = localStorage.getItem('user');
-          if (cachedUserData) {
-            try {
-              const cachedUser = JSON.parse(cachedUserData);
-              set({
-                user: cachedUser,
-                isAuthenticated: true,
-                isLoading: false,
-                error: null,
-              });
-              return;
-            } catch (e) {
-              // If cached data is invalid, fetch from API
-            }
           }
 
           set({ isLoading: true });
@@ -149,14 +132,20 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
         } catch (error: any) {
+          // Clear all auth data on error
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('auth-storage');
+          
           set({
             user: null,
             isAuthenticated: false,
             isLoading: false,
-            error: 'Failed to fetch user profile',
+            error: null, // Don't set error to avoid toast messages on token expiry
           });
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('user');
+          
+          // Throw error so calling code knows it failed
+          throw error;
         }
       },
 

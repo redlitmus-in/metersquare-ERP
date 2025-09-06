@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, X, FileText, Calendar, User, Building2, Package, Banknote, Clock, AlertCircle, MapPin, Phone, Mail, Hash, FolderOpen, Briefcase, UserCheck, CheckCircle, XCircle, Timer, Edit } from 'lucide-react';
+import { X, FileText, Calendar, User, Building2, Package, Banknote, Clock, AlertCircle, MapPin, Phone, Mail, Hash, FolderOpen, Briefcase, UserCheck, CheckCircle, XCircle, Timer, Edit } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { apiClient } from '@/api/config';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -242,8 +243,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({ isOpen, onC
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16">
-              <Loader2 className="w-10 h-10 animate-spin text-[#243d8a] mb-4" />
-              <p className="text-gray-500">Loading purchase details...</p>
+              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+              <p className="text-gray-500 mt-4">Loading purchase details...</p>
             </div>
           ) : purchaseDetails ? (
           <motion.div

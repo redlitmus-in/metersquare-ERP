@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import OTPInput from '@/components/OTPInput';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import authApi from '@/api/auth';
 import { fetchRoles, Role } from '@/api/roles';
 
@@ -343,7 +343,7 @@ const LoginPageOTP: React.FC = () => {
                   whileTap={{ scale: 0.99 }}
                 >
                   {isLoading ? (
-                    <LoadingSpinner size="sm" color="white" />
+                    <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                   ) : (
                     <>
                       <span>Send OTP</span>
@@ -410,7 +410,7 @@ const LoginPageOTP: React.FC = () => {
                   whileTap={{ scale: 0.99 }}
                 >
                   {isLoading ? (
-                    <LoadingSpinner size="sm" color="white" />
+                    <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                   ) : (
                     <>
                       <span>Verify & Login</span>

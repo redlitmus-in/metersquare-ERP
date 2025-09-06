@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { getRoleSlug } from '@/utils/roleRouting';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 
 interface RoleBasedRedirectProps {
   children?: React.ReactNode;
@@ -21,7 +21,7 @@ const RoleBasedRedirect: React.FC<RoleBasedRedirectProps> = ({ children }) => {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="lg" />
+        <ModernLoadingSpinners variant="pulse-wave" size="lg" />
       </div>
     );
   }

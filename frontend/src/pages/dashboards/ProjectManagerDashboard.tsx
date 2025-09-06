@@ -10,6 +10,7 @@ import {
   TrendingUp, Activity, Target, FileText, ArrowUpRight, ArrowDownRight,
   MoreVertical, Download, Filter, RefreshCw, Layers, GitBranch, Timer
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { useNavigate } from 'react-router-dom';
 import { projectManagerService, PMDashboardData } from '@/roles/project-manager/services/projectManagerService';
 import { PMMetricsCards } from '@/roles/project-manager/components/PMMetricsCards';
@@ -214,16 +215,16 @@ const ProjectManagerDashboard: React.FC = () => {
   const activeProjects = dashboardData.recentPurchases.slice(0, 4).map(purchase => ({
     id: purchase.purchase_id,
     name: purchase.site_location,
-    progress: purchase.pm_status === 'approved' ? 100 : 
-              purchase.pm_status === 'rejected' ? 0 : 50,
-    status: purchase.pm_status === 'approved' ? 'on-track' :
-            purchase.pm_status === 'rejected' ? 'delayed' : 'at-risk',
+    progress: purchase.current_status.status === 'approved' ? 100 : 
+              purchase.current_status.status === 'rejected' ? 0 : 50,
+    status: purchase.current_status.status === 'approved' ? 'on-track' :
+            purchase.current_status.status === 'rejected' ? 'delayed' : 'at-risk',
     deadline: purchase.date,
     budget: `AED ${purchase.materials_summary.total_cost.toLocaleString()}`,
     purpose: purchase.purpose
   }));
 
-  const pendingPurchases = dashboardData.recentPurchases.filter(p => p.pm_status === 'pending' || p.pm_status === null);
+  const pendingPurchases = dashboardData.recentPurchases.filter(p => p.current_status.role !== 'projectManager');
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
@@ -239,7 +240,11 @@ const ProjectManagerDashboard: React.FC = () => {
             Filter
           </Button>
           <Button onClick={fetchDashboardData} variant="outline" size="icon" disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            {isLoading ? (
+              <ModernLoadingSpinners variant="pulse-wave" size="sm" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
           </Button>
           <Button variant="outline" size="icon">
             <Download className="h-4 w-4" />

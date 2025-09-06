@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { UserRole } from '@/types';
 import { getRoleName } from '@/utils/roleRouting';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 
 // Import all role-specific dashboards
 import TechnicalDirectorDashboard from '@/pages/dashboards/TechnicalDirectorDashboard';
@@ -23,7 +23,7 @@ const RoleDashboard: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="lg" />
+        <ModernLoadingSpinners variant="pulse-wave" size="lg" />
       </div>
     );
   }

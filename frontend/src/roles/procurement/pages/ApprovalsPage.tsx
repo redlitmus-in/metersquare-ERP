@@ -15,9 +15,9 @@ import {
   Building,
   Search,
   Filter,
-  Download,
-  Loader2
+  Download
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { useAuthStore } from '@/store/authStore';
 import { UserRole } from '@/types';
 import { toast } from 'sonner';
@@ -475,7 +475,7 @@ const ApprovalsPage: React.FC = () => {
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+          <ModernLoadingSpinners variant="pulse-wave" size="lg" />
           <span className="ml-2 text-gray-600">Loading approvals...</span>
         </div>
       ) : error ? (

@@ -72,6 +72,7 @@ import {
   Star,
   Gauge
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 
 interface ChartData {
   name: string;
@@ -352,7 +353,11 @@ const AnalyticsPage: React.FC = () => {
                   disabled={refreshing}
                   className="backdrop-blur-sm bg-white/50 border-white/30 hover:bg-white/70 flex items-center gap-2 shadow-lg"
                 >
-                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  {refreshing ? (
+                    <ModernLoadingSpinners variant="pulse-wave" size="sm" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
                   Refresh
                 </Button>
               </motion.div>

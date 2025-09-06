@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { apiClient } from '@/api/config';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { useRolePermissions } from '@/roles/shared/hooks/useRolePermissions';
 import {
   Package,
@@ -241,9 +242,18 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
                                      (pr.approvals && pr.approvals.some((a: any) => 
                                        a.reviewer_role === 'procurement' && a.status === 'approved'));
           
+          // Check if rejected by PM or any reviewer
+          const isRejected = pr.latest_status === 'rejected' || 
+                            pr.status === 'rejected' ||
+                            (pr.approvals && pr.approvals.some((a: any) => a.status === 'rejected'));
+          
           // Status logic based on role and workflow state
           const normalizedUserRole = userRole?.toLowerCase();
-          if (normalizedUserRole === 'site supervisor' || normalizedUserRole === 'site_supervisor' || normalizedUserRole === 'sitesupervisor') {
+          
+          // First check if rejected (highest priority)
+          if (isRejected) {
+            status = 'rejected';
+          } else if (normalizedUserRole === 'site supervisor' || normalizedUserRole === 'site_supervisor' || normalizedUserRole === 'sitesupervisor') {
             // Site Supervisor view
             if (procurementApproved) {
               status = 'approved'; // Procurement has approved
@@ -527,35 +537,35 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'approved':
-        return 'bg-green-100 text-green-700 border-green-300';
+        return 'bg-[#4ade80]/20 text-[#16a34a] border border-[#4ade80] font-semibold shadow-md hover:bg-[#4ade80]/30 transition-all duration-200';
       case 'pending':
       case 'under_review':
-        return 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30';
+        return 'bg-[#fbbf24]/20 text-[#d97706] border border-[#fbbf24] font-semibold shadow-md hover:bg-[#fbbf24]/30 transition-all duration-200';
       case 'submitted':
-        return 'bg-blue-100 text-blue-700 border-blue-300';
+        return 'bg-[#60a5fa]/20 text-[#2563eb] border border-[#60a5fa] font-semibold shadow-md hover:bg-[#60a5fa]/30 transition-all duration-200';
       case 'rejected':
-        return 'bg-red-100 text-red-700 border-red-300';
+        return 'bg-[#f87171]/20 text-[#dc2626] border border-[#f87171] font-semibold shadow-md hover:bg-[#f87171]/30 transition-all duration-200';
       case 'in_progress':
-        return 'bg-purple-100 text-purple-700 border-purple-300';
+        return 'bg-[#fbbf24]/20 text-[#d97706] border border-[#fbbf24] font-semibold shadow-md hover:bg-[#fbbf24]/30 transition-all duration-200';
       case 'negotiation':
-        return 'bg-amber-100 text-amber-700 border-amber-300';
+        return 'bg-orange-100 text-orange-700 border border-orange-300 font-semibold shadow-lg shadow-orange-200/50 hover:bg-orange-200 hover:shadow-orange-300/50 transition-all duration-200';
       default:
-        return 'bg-gray-100 text-gray-600 border-gray-300';
+        return 'bg-gray-100 text-gray-800 border border-gray-400 font-semibold shadow-lg shadow-gray-200/50 hover:bg-gray-200 hover:shadow-gray-300/50 transition-all duration-200';
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'urgent':
-        return 'bg-red-100 text-red-700 border-red-300';
+        return 'bg-[#f87171]/20 text-[#dc2626] border border-[#f87171] font-bold shadow-md hover:bg-[#f87171]/30 transition-all duration-200 animate-pulse';
       case 'high':
-        return 'bg-orange-100 text-orange-700 border-orange-300';
+        return 'bg-[#fb923c]/20 text-[#ea580c] border border-[#fb923c] font-bold shadow-md hover:bg-[#fb923c]/30 transition-all duration-200';
       case 'medium':
-        return 'bg-[#243d8a]/10 text-[#243d8a]/90 border-[#243d8a]/30';
+        return 'bg-[#60a5fa]/20 text-[#2563eb] border border-[#60a5fa] font-semibold shadow-md hover:bg-[#60a5fa]/30 transition-all duration-200';
       case 'low':
-        return 'bg-gray-100 text-gray-600 border-gray-300';
+        return 'bg-[#4ade80]/20 text-[#16a34a] border border-[#4ade80] font-semibold shadow-md hover:bg-[#4ade80]/30 transition-all duration-200';
       default:
-        return 'bg-gray-100 text-gray-600 border-gray-300';
+        return 'bg-gray-100 text-gray-800 border border-gray-400 font-semibold shadow-lg shadow-gray-200/50 hover:bg-gray-200 hover:shadow-gray-300/50 transition-all duration-200';
     }
   };
 
@@ -775,8 +785,8 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-[#243d8a] mx-auto mb-4" />
-          <p className="text-gray-600">Loading procurement data...</p>
+          <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+          <p className="text-gray-600 mt-4">Loading procurement data...</p>
         </div>
       </div>
     );
@@ -859,7 +869,18 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
       </div>
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="requisitions" className="space-y-6">
+      <style>{`
+        .no-focus-border *:focus {
+          outline: none !important;
+          box-shadow: none !important;
+          border-color: inherit !important;
+        }
+        .no-focus-border *:focus-visible {
+          outline: none !important;
+          box-shadow: none !important;
+        }
+      `}</style>
+      <Tabs defaultValue="requisitions" className="space-y-6 no-focus-border">
         <TabsList className="grid grid-cols-4 w-full max-w-2xl bg-white shadow-sm">
           <TabsTrigger value="requisitions" className="data-[state=active]:bg-[#243d8a]/5">
             <FileText className="w-4 h-4 mr-2" />
@@ -880,9 +901,9 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
         </TabsList>
 
         {/* Purchase Requisitions Tab */}
-        <TabsContent value="requisitions">
-          <Card className="shadow-lg border-0">
-            <CardHeader className="bg-gradient-to-r from-red-50 to-red-100 border-b">
+        <TabsContent value="requisitions" className="focus:outline-none">
+          <Card className="shadow-lg border-0 focus:outline-none" tabIndex={-1}>
+            <CardHeader className="bg-gradient-to-r from-red-50 to-red-100 border-b focus:outline-none">
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <ShoppingCart className="w-5 h-5 text-red-600" />
@@ -919,8 +940,8 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto focus:outline-none">
+                <table className="w-full focus:outline-none">
                   <thead className="bg-gray-50 border-b">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1046,7 +1067,7 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
                               const role = userRole?.toLowerCase();
                               // For Procurement role showing approved as submitted, use blue color
                               if (role === 'procurement' && pr.status === 'approved') {
-                                return 'bg-blue-100 text-blue-700 border-blue-300';
+                                return 'bg-[#60a5fa]/20 text-[#2563eb] border border-[#60a5fa] font-semibold shadow-md hover:bg-[#60a5fa]/30 transition-all duration-200';
                               }
                               return getStatusColor(pr.status);
                             })()} border`}>
@@ -1071,13 +1092,13 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
                               if (role === 'site supervisor' || role === 'site_supervisor' || role === 'sitesupervisor') {
                                 if (pr.status === 'approved') {
                                   return (
-                                    <Badge className="bg-green-100 text-green-700 border border-green-200">
+                                    <Badge className="bg-[#4ade80]/20 text-[#16a34a] border border-[#4ade80] font-semibold shadow-md hover:bg-[#4ade80]/30 transition-all duration-200">
                                       Approved by Procurement
                                     </Badge>
                                   );
                                 } else if (pr.status === 'in_progress' && emailedPRs.has(pr.id)) {
                                   return (
-                                    <Badge className="bg-blue-100 text-blue-700 border border-blue-200">
+                                    <Badge className="bg-[#60a5fa]/20 text-[#2563eb] border border-[#60a5fa] font-semibold shadow-md hover:bg-[#60a5fa]/30 transition-all duration-200">
                                       Sent for Approval
                                     </Badge>
                                   );
@@ -1086,9 +1107,18 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
                               
                               // For Procurement
                               if (role === 'procurement') {
+                                // First check if rejected
+                                if (pr.status === 'rejected') {
+                                  return (
+                                    <Badge className="bg-[#f87171]/20 text-[#dc2626] border border-[#f87171] font-semibold shadow-md hover:bg-[#f87171]/30 transition-all duration-200">
+                                      Rejected by PM
+                                    </Badge>
+                                  );
+                                }
+                                // Then check if sent to PM
                                 if (pmEmailedPRs.has(pr.id)) {
                                   return (
-                                    <Badge className="bg-purple-100 text-purple-700 border border-purple-200">
+                                    <Badge className="bg-[#4ade80]/20 text-[#16a34a] border border-[#4ade80] font-semibold shadow-md hover:bg-[#4ade80]/30 transition-all duration-200">
                                       Sent to PM
                                     </Badge>
                                   );
@@ -1213,7 +1243,7 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
                                     className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                   >
                                     {deletingIds.has(pr.id) ? (
-                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                      <ModernLoadingSpinners variant="pulse-wave" size="sm" />
                                     ) : (
                                       <Trash2 className="w-4 h-4" />
                                     )}
@@ -1307,9 +1337,9 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
         </TabsContent>
 
         {/* Vendor Quotations Tab */}
-        <TabsContent value="quotations">
-          <Card className="shadow-lg border-0">
-            <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b">
+        <TabsContent value="quotations" className="focus:outline-none">
+          <Card className="shadow-lg border-0 focus:outline-none" tabIndex={-1}>
+            <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b focus:outline-none">
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-purple-600" />
@@ -1325,8 +1355,8 @@ const ProcurementDashboard: React.FC = (): React.ReactElement => {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto focus:outline-none">
+                <table className="w-full focus:outline-none">
                   <thead className="bg-gray-50 border-b">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
