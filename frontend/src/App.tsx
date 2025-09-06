@@ -41,18 +41,15 @@ import {
 // Project Manager pages
 import { ProjectManagerHub } from '@/roles/project-manager';
 
-// Estimation pages
 import EstimationHub from '@/roles/estimation/pages/EstimationHub';
-
-// Technical Director pages
 import TechnicalDirectorHub from '@/roles/technical-director/pages/TechnicalDirectorHub';
-
 // Workflow pages
 import MaterialDispatchProductionPage from '@/pages/workflows/MaterialDispatchProductionPage';
 import MaterialDispatchSitePage from '@/pages/workflows/MaterialDispatchSitePage';
 
 // Layout
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import RoleBasedRedirect from '@/components/routing/RoleBasedRedirect';
 import RoleRouteWrapper from '@/components/routing/RoleRouteWrapper';
 import RoleDashboard from '@/components/routing/RoleDashboard';
@@ -66,6 +63,7 @@ const RoleSpecificProcurementHub: React.FC = () => {
   const userRoleLower = userRole.toLowerCase();
   
   console.log('User role from backend:', userRole, 'Lowercase:', userRoleLower);
+  // Check if user is Project Manager
   if (userRoleLower === 'project manager' || userRoleLower === 'project_manager' || userRoleLower === 'projectmanager') {
     return <ProjectManagerHub />;
   }
@@ -94,11 +92,21 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
       if (token && !isAuthenticated) {
         try {
           await getCurrentUser();
+        } catch (error) {
           // Token is invalid, getCurrentUser will handle cleanup
         }
+      }
+      setTokenChecked(true);
+    };
+    
+    checkToken();
+  }, [token, isAuthenticated, getCurrentUser]);
+
+  // Show loading only during initial token check
+  if (!tokenChecked && token) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="lg" />
+        <ModernLoadingSpinners variant="pulse-wave" size="lg" />
       </div>
     );
   }
@@ -116,8 +124,8 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, getRoleDashboard } = useAuthStore();
   const token = localStorage.getItem('access_token');
 
-
   // Redirect to dashboard if authenticated
+  if (isAuthenticated && token) {
     const dashboardPath = getRoleDashboard();
     return <Navigate to={dashboardPath} replace />;
   }

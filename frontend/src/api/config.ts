@@ -67,15 +67,27 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    // Handle 401 Unauthorized
+    // Handle 401 Unauthorized - Token expired or invalid
     if (error.response?.status === 401) {
-      console.warn('Unauthorized access detected, redirecting to login');
+      console.warn('Unauthorized access detected, cleaning up and redirecting to login');
+      
+      // Clear all auth-related data
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
+      localStorage.removeItem('auth-storage');
       
-      // Only redirect if not already on login page
+      // Clear auth store state
+      const authStore = (await import('@/store/authStore')).useAuthStore;
+      authStore.setState({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: null
+      });
+      
+      // Force redirect to login page
       if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
+        window.location.replace('/login');
       }
     }
     
