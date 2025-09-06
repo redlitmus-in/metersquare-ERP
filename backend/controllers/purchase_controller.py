@@ -1,7 +1,7 @@
 import json
 import os
 from flask import g, request, jsonify, current_app
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
 from models.purchase_status import PurchaseStatus
@@ -240,19 +240,13 @@ def get_purchase_request_by_id(purchase_id):
         current_user = g.user
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
-
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        if not role or role.role not in ['siteSupervisor', 'mepSupervisor', 'procurement']:
-            return jsonify({
-                'error': 'Invalid role. Only Site Supervisor, MEP Supervisor, or Procurement team can view requisitions'
-            }), 403
-
-        # 🔹 Fetch purchase by ID
+        if not role or role.role != 'accounts':
+            return jsonify({'error': 'Only Accounts department can view purchase details'}), 403
         purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
         if not purchase:
             return jsonify({'error': 'Purchase request not found'}), 404
-
-        # 🔹 Get related materials
+        # Get related materials
         material_ids = purchase.material_ids or []
         materials = []
         if material_ids:
@@ -273,62 +267,105 @@ def get_purchase_request_by_id(purchase_id):
                     'cost': mat.cost,
                     'priority': mat.priority,
                     'design_reference': mat.design_reference,
-                    'created_at': mat.created_at,
+                    'created_at': mat.created_at.isoformat() if mat.created_at else None,
                     'created_by': mat.created_by
                 })
 
-        # 🔹 Get latest status only (most recent entry for this purchase)
-        latest_status = PurchaseStatus.get_latest_status(purchase.purchase_id)
-        latest_status_info = None
-        if latest_status:
-            latest_status_info = {
-                'status_id': latest_status.status_id,
-                'purchase_id': latest_status.purchase_id,
-                'sender': latest_status.sender,
-                'receiver': latest_status.receiver,
-                'role': latest_status.role,
-                'status': latest_status.status,
-                'decision_by_user_id': latest_status.decision_by_user_id,
-                'decision_date': latest_status.decision_date.isoformat() if latest_status.decision_date else None,
-                'rejection_reason': latest_status.rejection_reason,
-                'reject_category': latest_status.reject_category,
-                'comments': latest_status.comments,
-                'is_active': latest_status.is_active,
-                'created_at': latest_status.created_at.isoformat() if latest_status.created_at else None,
-                'created_by': latest_status.created_by,
-                'last_modified_at': latest_status.last_modified_at.isoformat() if latest_status.last_modified_at else None,
-                'last_modified_by': latest_status.last_modified_by
-            }
+        # Get all status history for this purchase
+        status_history = PurchaseStatus.query.filter_by(
+            purchase_id=purchase_id
+        ).order_by(PurchaseStatus.created_at.desc()).all()
+        # Get sender/receiver analysis for this purchase - Using simpler approach
+        sender_analysis = []
+        sender_roles = db.session.query(PurchaseStatus.sender).filter_by(purchase_id=purchase_id).distinct().all()
+        
+        for role_data in sender_roles:
+            sender_role = role_data[0]
+            role_query = PurchaseStatus.query.filter_by(purchase_id=purchase_id, sender=sender_role)
+            total_actions = role_query.count()
+            approved_count = role_query.filter(PurchaseStatus.status == 'approved').count()
+            rejected_count = role_query.filter(PurchaseStatus.status == 'rejected').count()
+            pending_count = role_query.filter(PurchaseStatus.status == 'pending').count()
+            
+            sender_analysis.append({
+                'sender_role': sender_role,
+                'total_actions': total_actions,
+                'approved_count': approved_count,
+                'rejected_count': rejected_count,
+                'pending_count': pending_count,
+                'approval_rate': round((approved_count / total_actions * 100), 2) if total_actions > 0 else 0
+            })
 
-        # 🔹 Final purchase response with nested materials & latest status only
+        receiver_analysis = []
+        receiver_roles = db.session.query(PurchaseStatus.receiver).filter_by(purchase_id=purchase_id).distinct().all()
+        
+        for role_data in receiver_roles:
+            receiver_role = role_data[0]
+            role_query = PurchaseStatus.query.filter_by(purchase_id=purchase_id, receiver=receiver_role)
+            total_received = role_query.count()
+            approved_count = role_query.filter(PurchaseStatus.status == 'approved').count()
+            rejected_count = role_query.filter(PurchaseStatus.status == 'rejected').count()
+            pending_count = role_query.filter(PurchaseStatus.status == 'pending').count()
+            
+            receiver_analysis.append({
+                'receiver_role': receiver_role,
+                'total_received': total_received,
+                'approved_count': approved_count,
+                'rejected_count': rejected_count,
+                'pending_count': pending_count,
+                'approval_rate': round((approved_count / total_received * 100), 2) if total_received > 0 else 0
+            })
+
+        # Format status history
+        formatted_status_history = []
+        for status in status_history:
+            formatted_status_history.append({
+                'status_id': status.status_id,
+                'purchase_id': status.purchase_id,
+                'sender': status.sender,
+                'receiver': status.receiver,
+                'role': status.role,
+                'status': status.status,
+                'decision_by_user_id': status.decision_by_user_id,
+                'decision_date': status.decision_date.isoformat() if status.decision_date else None,
+                'rejection_reason': status.rejection_reason,
+                'reject_category': status.reject_category,
+                'comments': status.comments,
+                'is_active': status.is_active,
+                'created_at': status.created_at.isoformat() if status.created_at else None,
+                'created_by': status.created_by,
+                'last_modified_at': status.last_modified_at.isoformat() if status.last_modified_at else None,
+                'last_modified_by': status.last_modified_by
+            })
+        # Format purchase data
         purchase_data = {
             'purchase_id': purchase.purchase_id,
-            'requested_by': purchase.requested_by,
+            'project_id': purchase.project_id,
             'user_id': purchase.user_id,
-            'user_name': current_user['full_name'],
+            'requested_by': purchase.requested_by,
             'site_location': purchase.site_location,
             'date': purchase.date,
-            'project_id': purchase.project_id,
             'purpose': purchase.purpose,
             'material_ids': purchase.material_ids,
-            'materials': materials,   # ✅ nested materials
+            'materials': materials,
             'file_path': purchase.file_path,
+            'is_deleted': purchase.is_deleted,
             'email_sent': purchase.email_sent,
             'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
             'created_by': purchase.created_by,
             'last_modified_at': purchase.last_modified_at.isoformat() if purchase.last_modified_at else None,
-            'last_modified_by': purchase.last_modified_by,
-            'latest_status': latest_status_info  # ✅ only the latest status entry
+            'last_modified_by': purchase.last_modified_by
         }
-
         return jsonify({
             'success': True,
-            'message': 'Purchase request fetched successfully',
-            'purchase': purchase_data
+            'message': 'Purchase details fetched successfully',
+            'purchase': purchase_data,
+            'status_history': formatted_status_history
         }), 200
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        log.error(f"Error getting purchase details by ID: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 def update_purchase_request(purchase_id):
     try:
