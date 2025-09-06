@@ -41,6 +41,12 @@ import {
 // Project Manager pages
 import { ProjectManagerHub } from '@/roles/project-manager';
 
+// Estimation pages
+import EstimationHub from '@/roles/estimation/pages/EstimationHub';
+
+// Technical Director pages
+import TechnicalDirectorHub from '@/roles/technical-director/pages/TechnicalDirectorHub';
+
 // Workflow pages
 import MaterialDispatchProductionPage from '@/pages/workflows/MaterialDispatchProductionPage';
 import MaterialDispatchSitePage from '@/pages/workflows/MaterialDispatchSitePage';
@@ -56,11 +62,24 @@ import RoleDashboard from '@/components/routing/RoleDashboard';
 const RoleSpecificProcurementHub: React.FC = () => {
   const { user } = useAuthStore();
   
-  // Check if user is Project Manager
-  const userRole = (user as any)?.role?.toLowerCase() || '';
+  // Get user role (backend sends camelCase: technicalDirector)
+  const userRole = (user as any)?.role || '';
+  const userRoleLower = userRole.toLowerCase();
   
-  if (userRole === 'project manager' || userRole === 'project_manager' || userRole === 'projectmanager') {
+  // Debug log to check role
+  console.log('User role from backend:', userRole, 'Lowercase:', userRoleLower);
+  
+  if (userRoleLower === 'project manager' || userRoleLower === 'project_manager' || userRoleLower === 'projectmanager') {
     return <ProjectManagerHub />;
+  }
+  
+  if (userRoleLower === 'estimation') {
+    return <EstimationHub />;
+  }
+  
+  // Check for technicalDirector (backend sends camelCase)
+  if (userRole === 'technicalDirector' || userRoleLower === 'technical director' || userRoleLower === 'technical_director' || userRoleLower === 'technicaldirector') {
+    return <TechnicalDirectorHub />;
   }
   
   // Default to ProcurementHub for all other roles
@@ -222,6 +241,10 @@ function App() {
             } />
             <Route path="procurement/deliveries" element={<DeliveriesPage />} />
             <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
+            
+            {/* Estimation Routes - Support both paths for backward compatibility */}
+            <Route path="estimation" element={<EstimationHub />} />
+            <Route path="estimation-hub" element={<EstimationHub />} />
             <Route path="tasks" element={<TasksPage />} />
             <Route path="projects" element={<ProjectsPage />} />
             <Route path="projects/:id" element={<ProjectsPage />} />

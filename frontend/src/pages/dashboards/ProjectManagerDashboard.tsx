@@ -214,16 +214,16 @@ const ProjectManagerDashboard: React.FC = () => {
   const activeProjects = dashboardData.recentPurchases.slice(0, 4).map(purchase => ({
     id: purchase.purchase_id,
     name: purchase.site_location,
-    progress: purchase.current_status.status === 'approved' ? 100 : 
-              purchase.current_status.status === 'rejected' ? 0 : 50,
-    status: purchase.current_status.status === 'approved' ? 'on-track' :
-            purchase.current_status.status === 'rejected' ? 'delayed' : 'at-risk',
+    progress: purchase.pm_status === 'approved' ? 100 : 
+              purchase.pm_status === 'rejected' ? 0 : 50,
+    status: purchase.pm_status === 'approved' ? 'on-track' :
+            purchase.pm_status === 'rejected' ? 'delayed' : 'at-risk',
     deadline: purchase.date,
     budget: `AED ${purchase.materials_summary.total_cost.toLocaleString()}`,
     purpose: purchase.purpose
   }));
 
-  const pendingPurchases = dashboardData.recentPurchases.filter(p => p.current_status.role !== 'projectManager');
+  const pendingPurchases = dashboardData.recentPurchases.filter(p => p.pm_status === 'pending' || p.pm_status === null);
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">

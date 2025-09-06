@@ -19,26 +19,33 @@ export interface ProcurementPurchase {
   date: string;
   email_sent: boolean;
   created_at: string;
+  current_workflow_status: string;
+  pm_status: 'pending' | 'approved' | 'rejected' | null;
+  pm_status_date: string | null;
+  pm_comments: string | null;
+  pm_rejection_reason: string | null;
+  procurement_status: string;
+  procurement_status_date: string;
+  procurement_comments: string;
   materials_summary: {
     total_materials: number;
     total_quantity: number;
     total_cost: number;
     categories: string[];
   };
-  procurement_approved_status: {
+  status_history: Array<{
+    status_id: number;
     status: string;
-    role: string;
+    sender: string;
+    receiver: string;
     date: string;
+    decision_date: string;
+    decision_by: string;
     decision_by_user_id: number;
+    rejection_reason: string | null;
+    reject_category: string | null;
     comments: string;
-  };
-  current_status: {
-    status: string;
-    role: string;
-    date: string;
-    decision_by_user_id: number;
-    comments: string;
-  };
+  }>;
 }
 
 export interface PurchaseStatusDetails {
@@ -141,7 +148,24 @@ class ProjectManagerService {
   async getProcurementApprovedPurchases(): Promise<{
     success: boolean;
     total_approved_procurement_purchases: number;
+    non_approval_project_manager_purchases: number;
     approved_procurement_purchases: ProcurementPurchase[];
+    summary: {
+      workflow_status_counts: {
+        pending_pm_review: number;
+        pm_approved: number;
+        pm_rejected: number;
+        estimation_review: number;
+        technical_director_review: number;
+        accounts_processing: number;
+      };
+      financial_summary: {
+        total_value: number;
+        pending_pm_value: number;
+        pm_approved_value: number;
+        pm_rejected_value: number;
+      };
+    };
   }> {
     try {
       const response = await apiClient.get('/projectmanger_purchases');
@@ -226,20 +250,18 @@ class ProjectManagerService {
                purchaseDate.getFullYear() === thisYear;
       });
 
-      // Count pending approvals (where current status is not from PM)
+      // Count pending approvals (where pm_status is pending or null)
       const pendingApprovals = purchases.filter(p => 
-        p.current_status.role !== 'projectManager'
+        p.pm_status === 'pending' || p.pm_status === null
       ).length;
 
       // Count approved/rejected this month
       const approvedThisMonth = thisMonthPurchases.filter(p => 
-        p.current_status.status === 'approved' && 
-        p.current_status.role === 'projectManager'
+        p.pm_status === 'approved'
       ).length;
 
       const rejectedThisMonth = thisMonthPurchases.filter(p => 
-        p.current_status.status === 'rejected' && 
-        p.current_status.role === 'projectManager'
+        p.pm_status === 'rejected'
       ).length;
 
       // Calculate category breakdown

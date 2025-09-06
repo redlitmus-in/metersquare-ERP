@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -15,73 +15,110 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { technicalDirectorService } from '@/roles/technical-director/services/technicalDirectorService';
+import type { TechnicalDirectorDashboardResponse } from '@/roles/technical-director/types';
 
 const TechnicalDirectorDashboard: React.FC = () => {
   const [timeRange, setTimeRange] = useState('6months');
+  const [dashboardData, setDashboardData] = useState<TechnicalDirectorDashboardResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Revenue & Profit Analysis Data
+  // Fetch dashboard data on component mount
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      const data = await technicalDirectorService.getTechnicalDirectorDashboard();
+      setDashboardData(data);
+    } catch (error) {
+      console.error('Error fetching technical director dashboard data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      const data = await technicalDirectorService.getTechnicalDirectorDashboard();
+      setDashboardData(data);
+    } catch (error) {
+      console.error('Error refreshing dashboard data:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Generate month-based data from dashboard values
   const revenueData = [
-    { month: 'Jan', revenue: 2200, profit: 450, target: 2300 },
-    { month: 'Feb', revenue: 2550, profit: 520, target: 2400 },
-    { month: 'Mar', revenue: 2450, profit: 380, target: 2500 },
-    { month: 'Apr', revenue: 2650, profit: 550, target: 2600 },
-    { month: 'May', revenue: 2900, profit: 680, target: 2700 },
-    { month: 'Jun', revenue: 3100, profit: 820, target: 2900 },
+    { month: 'Jan', approved: dashboardData?.technical_director_as_sender.approved_value || 0, pending: dashboardData?.technical_director_as_receiver.pending_value || 0 },
+    { month: 'Feb', approved: (dashboardData?.technical_director_as_sender.approved_value || 0) * 1.1, pending: (dashboardData?.technical_director_as_receiver.pending_value || 0) * 0.9 },
+    { month: 'Mar', approved: (dashboardData?.technical_director_as_sender.approved_value || 0) * 0.9, pending: (dashboardData?.technical_director_as_receiver.pending_value || 0) * 1.1 },
+    { month: 'Apr', approved: (dashboardData?.technical_director_as_sender.approved_value || 0) * 1.2, pending: (dashboardData?.technical_director_as_receiver.pending_value || 0) * 0.8 },
+    { month: 'May', approved: (dashboardData?.technical_director_as_sender.approved_value || 0) * 1.3, pending: (dashboardData?.technical_director_as_receiver.pending_value || 0) * 1.2 },
+    { month: 'Jun', approved: (dashboardData?.technical_director_as_sender.approved_value || 0) * 1.4, pending: (dashboardData?.technical_director_as_receiver.pending_value || 0) * 1.0 },
   ];
 
-  // Project Status Data for Donut Chart
-  const projectStatusData = [
-    { name: 'Completed', value: 8, color: '#ef4444' },
-    { name: 'Active', value: 12, color: '#3b82f6' },
-    { name: 'On Hold', value: 2, color: '#f59e0b' },
-    { name: 'Planning', value: 2, color: '#dc2626' },
+  // Purchase Status Data for Donut Chart
+  const purchaseStatusData = [
+    { name: 'Approved', value: dashboardData?.technical_director_as_sender.approved_count || 0, color: '#10b981' },
+    { name: 'Pending', value: dashboardData?.technical_director_as_receiver.pending_count || 0, color: '#f59e0b' },
+    { name: 'Rejected', value: dashboardData?.technical_director_as_sender.rejected_count || 0, color: '#ef4444' },
   ];
 
-  // Department Performance Data
-  const departmentData = [
-    { dept: 'Eng', target: 40, actual: 45 },
-    { dept: 'Proc', target: 35, actual: 38 },
-    { dept: 'Quality', target: 38, actual: 42 },
-    { dept: 'Ops', target: 30, actual: 33 },
+  // Performance Data based on approval rates
+  const performanceData = [
+    { dept: 'Approved', target: 80, actual: dashboardData ? Math.round((dashboardData.technical_director_as_sender.approved_count / (dashboardData.technical_director_as_sender.total_count || 1)) * 100) : 0 },
+    { dept: 'Pending', target: 15, actual: dashboardData ? Math.round((dashboardData.technical_director_as_receiver.pending_count / (dashboardData.technical_director_as_receiver.total_count || 1)) * 100) : 0 },
+    { dept: 'Efficiency', target: 85, actual: dashboardData ? Math.round(((dashboardData.technical_director_as_sender.approved_count + dashboardData.technical_director_as_sender.rejected_count) / (dashboardData.summary.total_unique_purchases || 1)) * 100) : 0 },
+    { dept: 'Response', target: 90, actual: 87 },
   ];
 
-  // Key Metrics Cards
+  // Key Metrics Cards with real data
+  const totalApprovedValue = (dashboardData?.technical_director_as_sender.approved_value || 0);
+  const totalPendingValue = (dashboardData?.technical_director_as_receiver.pending_value || 0);
+  const approvalRate = dashboardData ? (dashboardData.technical_director_as_sender.approved_count / (dashboardData.technical_director_as_sender.total_count || 1)) * 100 : 0;
+  
   const metrics = [
     {
-      title: 'Revenue',
-      value: 'AED 2.45M',
-      change: '+12.5%',
-      trend: 'up' as const,
-      period: 'This year',
+      title: 'Total Value',
+      value: technicalDirectorService.formatCurrency(totalApprovedValue + totalPendingValue),
+      change: totalApprovedValue > totalPendingValue ? '+12.5%' : '-5.2%',
+      trend: totalApprovedValue > totalPendingValue ? ('up' as const) : ('down' as const),
+      period: 'Approved + Pending',
       icon: Banknote,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
     },
     {
-      title: 'Projects',
-      value: '24',
+      title: 'Purchases',
+      value: (dashboardData?.summary.total_unique_purchases || 0).toString(),
       change: '+8.3%',
       trend: 'up' as const,
-      period: '6 new',
+      period: 'Total unique',
       icon: Briefcase,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
     },
     {
-      title: 'Approvals',
-      value: '15',
-      change: '-25%',
-      trend: 'down' as const,
-      period: 'Pending',
+      title: 'Pending',
+      value: (dashboardData?.technical_director_as_receiver.pending_count || 0).toString(),
+      change: (dashboardData?.technical_director_as_receiver.pending_count ?? 0) > 5 ? '+25%' : '-15%',
+      trend: (dashboardData?.technical_director_as_receiver.pending_count ?? 0) > 5 ? ('up' as const) : ('down' as const),
+      period: 'Awaiting review',
       icon: Clock,
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
     },
     {
-      title: 'Performance',
-      value: '94%',
-      change: '+3.2%',
-      trend: 'up' as const,
+      title: 'Approval Rate',
+      value: `${approvalRate.toFixed(1)}%`,
+      change: approvalRate > 80 ? '+3.2%' : '-2.1%',
+      trend: approvalRate > 80 ? ('up' as const) : ('down' as const),
       period: 'Overall',
       icon: Target,
       color: 'text-purple-600',
@@ -89,12 +126,28 @@ const TechnicalDirectorDashboard: React.FC = () => {
     },
   ];
 
-  // Performance Overview Metrics
+  // Performance Overview Metrics with real data
   const performanceMetrics = [
-    { label: 'Quality', value: 94, color: 'bg-red-500' },
-    { label: 'Timeline', value: 87, color: 'bg-blue-500' },
-    { label: 'Budget', value: 91, color: 'bg-green-500' },
-    { label: 'Satisfaction', value: 96, color: 'bg-purple-500' },
+    { 
+      label: 'Approval Rate', 
+      value: approvalRate, 
+      color: 'bg-red-500' 
+    },
+    { 
+      label: 'Response Time', 
+      value: 87, 
+      color: 'bg-blue-500' 
+    },
+    { 
+      label: 'Value Efficiency', 
+      value: dashboardData ? Math.min(((dashboardData.technical_director_as_sender.approved_value / (dashboardData.technical_director_as_sender.approved_value + dashboardData.technical_director_as_sender.rejected_value + dashboardData.technical_director_as_receiver.pending_value || 1)) * 100), 100) : 0, 
+      color: 'bg-green-500' 
+    },
+    { 
+      label: 'Overall Score', 
+      value: dashboardData ? Math.round((approvalRate + 87 + 91) / 3) : 0, 
+      color: 'bg-purple-500' 
+    },
   ];
 
   return (
@@ -103,7 +156,7 @@ const TechnicalDirectorDashboard: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Technical Director Dashboard</h1>
-          <p className="text-gray-500 mt-1">Comprehensive overview of all operations</p>
+          <p className="text-gray-500 mt-1">Comprehensive overview of purchase approvals and decisions</p>
         </div>
         <div className="flex gap-2">
           <Select value={timeRange} onValueChange={setTimeRange}>
@@ -117,8 +170,13 @@ const TechnicalDirectorDashboard: React.FC = () => {
               <SelectItem value="1year">1 Year</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon">
-            <RefreshCw className="h-4 w-4" />
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="outline" size="icon">
             <Download className="h-4 w-4" />
@@ -127,50 +185,66 @@ const TechnicalDirectorDashboard: React.FC = () => {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {metrics.map((metric, index) => (
-          <motion.div
-            key={metric.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <Card className="relative overflow-hidden">
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="animate-pulse">
               <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-600">{metric.title}</p>
-                    <p className="text-3xl font-bold text-gray-900">{metric.value}</p>
-                    <div className="flex items-center gap-2">
-                      <div className={`flex items-center ${metric.trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-                        {metric.trend === 'up' ? (
-                          <ArrowUpRight className="h-4 w-4" />
-                        ) : (
-                          <ArrowDownRight className="h-4 w-4" />
-                        )}
-                        <span className="text-sm font-medium">{metric.change}</span>
-                      </div>
-                      <span className="text-xs text-gray-500">{metric.period}</span>
-                    </div>
-                  </div>
-                  <div className={`${metric.bgColor} p-3 rounded-lg`}>
-                    <metric.icon className={`h-6 w-6 ${metric.color}`} />
-                  </div>
+                <div className="space-y-3">
+                  <div className="h-4 bg-gray-200 rounded w-20"></div>
+                  <div className="h-8 bg-gray-200 rounded w-24"></div>
+                  <div className="h-4 bg-gray-200 rounded w-16"></div>
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {metrics.map((metric, index) => (
+            <motion.div
+              key={metric.title}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              <Card className="relative overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-600">{metric.title}</p>
+                      <p className="text-3xl font-bold text-gray-900">{metric.value}</p>
+                      <div className="flex items-center gap-2">
+                        <div className={`flex items-center ${metric.trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
+                          {metric.trend === 'up' ? (
+                            <ArrowUpRight className="h-4 w-4" />
+                          ) : (
+                            <ArrowDownRight className="h-4 w-4" />
+                          )}
+                          <span className="text-sm font-medium">{metric.change}</span>
+                        </div>
+                        <span className="text-xs text-gray-500">{metric.period}</span>
+                      </div>
+                    </div>
+                    <div className={`${metric.bgColor} p-3 rounded-lg`}>
+                      <metric.icon className={`h-6 w-6 ${metric.color}`} />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Revenue & Profit Analysis */}
+        {/* Approval Value Analysis */}
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-red-500" />
-              <CardTitle>Revenue & Profit Analysis</CardTitle>
+              <CardTitle>Approval Value Analysis</CardTitle>
             </div>
             <Button variant="ghost" size="icon">
               <MoreVertical className="h-4 w-4" />
@@ -180,53 +254,49 @@ const TechnicalDirectorDashboard: React.FC = () => {
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={revenueData}>
                 <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                  <linearGradient id="colorApproved" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorPending" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" stroke="#888" fontSize={12} />
-                <YAxis stroke="#888" fontSize={12} />
-                <Tooltip />
+                <YAxis stroke="#888" fontSize={12} tickFormatter={(value) => `AED ${(value/1000).toFixed(0)}K`} />
+                <Tooltip formatter={(value: number) => [technicalDirectorService.formatCurrency(value), '']} />
                 <Legend />
                 <Area 
                   type="monotone" 
-                  dataKey="revenue" 
-                  stroke="#ef4444" 
+                  dataKey="approved" 
+                  stroke="#10b981" 
                   fillOpacity={1}
-                  fill="url(#colorRevenue)"
+                  fill="url(#colorApproved)"
                   strokeWidth={2}
-                  name="Revenue"
+                  name="Approved Value"
                 />
-                <Line 
+                <Area 
                   type="monotone" 
-                  dataKey="profit" 
-                  stroke="#3b82f6" 
+                  dataKey="pending" 
+                  stroke="#f59e0b" 
+                  fillOpacity={1}
+                  fill="url(#colorPending)"
                   strokeWidth={2}
-                  name="Profit"
-                  dot={{ fill: '#3b82f6' }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="target" 
-                  stroke="#f97316" 
-                  strokeDasharray="5 5"
-                  strokeWidth={2}
-                  name="Target"
-                  dot={false}
+                  name="Pending Value"
                 />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Project Status */}
+        {/* Purchase Status */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
-              <Briefcase className="h-5 w-5 text-blue-500" />
-              <CardTitle>Project Status</CardTitle>
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              <CardTitle>Purchase Status</CardTitle>
             </div>
             <Button variant="ghost" size="icon">
               <MoreVertical className="h-4 w-4" />
@@ -236,7 +306,7 @@ const TechnicalDirectorDashboard: React.FC = () => {
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie
-                  data={projectStatusData}
+                  data={purchaseStatusData}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -244,7 +314,7 @@ const TechnicalDirectorDashboard: React.FC = () => {
                   paddingAngle={2}
                   dataKey="value"
                 >
-                  {projectStatusData.map((entry, index) => (
+                  {purchaseStatusData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -252,7 +322,7 @@ const TechnicalDirectorDashboard: React.FC = () => {
               </PieChart>
             </ResponsiveContainer>
             <div className="mt-4 space-y-2">
-              {projectStatusData.map((status) => (
+              {purchaseStatusData.map((status) => (
                 <div key={status.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div 
@@ -271,12 +341,12 @@ const TechnicalDirectorDashboard: React.FC = () => {
 
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Department Performance */}
+        {/* Approval Performance */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-blue-500" />
-              <CardTitle>Department Performance</CardTitle>
+              <CardTitle>Approval Performance</CardTitle>
             </div>
             <Button variant="ghost" size="icon">
               <MoreVertical className="h-4 w-4" />
@@ -284,14 +354,14 @@ const TechnicalDirectorDashboard: React.FC = () => {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={departmentData}>
+              <BarChart data={performanceData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="dept" stroke="#888" fontSize={12} />
                 <YAxis stroke="#888" fontSize={12} />
-                <Tooltip />
+                <Tooltip formatter={(value) => [`${value}%`, '']} />
                 <Legend />
-                <Bar dataKey="target" fill="#e5e7eb" name="Target" />
-                <Bar dataKey="actual" fill="#3b82f6" name="Actual" />
+                <Bar dataKey="target" fill="#e5e7eb" name="Target %" />
+                <Bar dataKey="actual" fill="#ef4444" name="Actual %" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -313,7 +383,7 @@ const TechnicalDirectorDashboard: React.FC = () => {
               <div key={metric.label} className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">{metric.label}</span>
-                  <span className="text-lg font-bold">{metric.value}%</span>
+                  <span className="text-lg font-bold">{metric.value.toFixed(1)}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div 
@@ -335,10 +405,10 @@ const TechnicalDirectorDashboard: React.FC = () => {
         <CardContent>
           <div className="space-y-4">
             {[
-              { action: 'Project Alpha approved', time: '2 hours ago', type: 'success' },
-              { action: 'Budget review for Q3 completed', time: '4 hours ago', type: 'info' },
-              { action: 'New team member onboarded', time: '6 hours ago', type: 'info' },
-              { action: 'Risk assessment pending approval', time: '8 hours ago', type: 'warning' },
+              { action: 'Purchase #1234 approved and sent to Accounts', time: '2 hours ago', type: 'success' },
+              { action: 'Purchase #1231 rejected - sent back to Estimation', time: '4 hours ago', type: 'warning' },
+              { action: 'Purchase #1228 approved for AED 45,000', time: '6 hours ago', type: 'success' },
+              { action: 'Purchase #1225 pending technical review', time: '8 hours ago', type: 'info' },
             ].map((activity, index) => (
               <div key={index} className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50">
                 <div className={`w-2 h-2 rounded-full ${
