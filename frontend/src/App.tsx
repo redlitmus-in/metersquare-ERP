@@ -4,6 +4,8 @@ import { Toaster } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { validateSupabaseConnection } from '@/utils/environment';
 import { setupCacheValidator } from '@/utils/clearCache';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import CreativeErrorPage from '@/components/ui/CreativeErrorPage';
 
 // Pages
 import { LoginPage } from '@/pages/auth/LoginPage';
@@ -211,67 +213,69 @@ function App() {
   }
 
   return (
-    <div className="App">
-      <Toaster position="top-right" richColors />
-      <Routes>
-        {/* Public Routes */}
-        <Route
-          path="/login"
-          element={
-            <PublicRoute>
-              <LoginPage />
-            </PublicRoute>
-          }
-        />
-        
-        {/* Direct demo page - no auth required */}
+    <ErrorBoundary>
+      <div className="App">
+        <Toaster position="top-right" richColors />
+        <Routes>
+          {/* Public Routes */}
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <LoginPage />
+              </PublicRoute>
+            }
+          />
+          
+          {/* Direct demo page - no auth required */}
 
-        {/* Root redirect to login or dashboard */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <RoleBasedRedirect />
-            </ProtectedRoute>
-          }
-        />
+          {/* Root redirect to login or dashboard */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <RoleBasedRedirect />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Protected Routes with Role Prefix */}
-        <Route
-          path="/:role"
-          element={
-            <ProtectedRoute>
-              <RoleRouteWrapper />
-            </ProtectedRoute>
-          }
-        >
-          <Route element={<DashboardLayout />}>
-            <Route index element={<Navigate to="dashboard" replace />} />
-            
-            {/* Main Routes - Use role-based dashboard for main dashboard, role-specific hub for procurement section */}
-            <Route path="dashboard" element={<RoleDashboard />} />
-            <Route path="procurement" element={
-              <RoleSpecificProcurementHub />
-            } />
-            <Route path="procurement/deliveries" element={<DeliveriesPage />} />
-            <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
-            <Route path="tasks" element={<TasksPage />} />
-            <Route path="projects" element={<ProjectsPage />} />
-            <Route path="projects/:id" element={<ProjectsPage />} />
-            <Route path="projects/:id/edit" element={<ProjectsPage />} />
-            <Route path="process-flow" element={<ProcessFlowPage />} />
-            <Route path="workflow-status" element={<WorkflowStatusPage />} />
-            <Route path="workflows/material-dispatch-production" element={<MaterialDispatchProductionPage />} />
-            <Route path="workflows/material-dispatch-site" element={<MaterialDispatchSitePage />} />
-            <Route path="analytics" element={<AnalyticsPage />} />
-            <Route path="profile" element={<ProfilePage />} />
+          {/* Protected Routes with Role Prefix */}
+          <Route
+            path="/:role"
+            element={
+              <ProtectedRoute>
+                <RoleRouteWrapper />
+              </ProtectedRoute>
+            }
+          >
+            <Route element={<DashboardLayout />}>
+              <Route index element={<Navigate to="dashboard" replace />} />
+              
+              {/* Main Routes - Use role-based dashboard for main dashboard, role-specific hub for procurement section */}
+              <Route path="dashboard" element={<RoleDashboard />} />
+              <Route path="procurement" element={
+                <RoleSpecificProcurementHub />
+              } />
+              <Route path="procurement/deliveries" element={<DeliveriesPage />} />
+              <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
+              <Route path="tasks" element={<TasksPage />} />
+              <Route path="projects" element={<ProjectsPage />} />
+              <Route path="projects/:id" element={<ProjectsPage />} />
+              <Route path="projects/:id/edit" element={<ProjectsPage />} />
+              <Route path="process-flow" element={<ProcessFlowPage />} />
+              <Route path="workflow-status" element={<WorkflowStatusPage />} />
+              <Route path="workflows/material-dispatch-production" element={<MaterialDispatchProductionPage />} />
+              <Route path="workflows/material-dispatch-site" element={<MaterialDispatchSitePage />} />
+              <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+            </Route>
           </Route>
-        </Route>
 
-        {/* Catch all route - redirect to login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </div>
+          {/* Catch all route - Show 404 error page */}
+          <Route path="*" element={<CreativeErrorPage variant="liquid-motion" errorCode="404" />} />
+        </Routes>
+      </div>
+    </ErrorBoundary>
   );
 }
 

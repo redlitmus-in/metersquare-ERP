@@ -12,13 +12,17 @@ import {
   XCircle,
   ServerCrash,
   FileX,
-  Ban
+  Ban,
+  Wrench,
+  Settings,
+  Hammer,
+  PaintBucket
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ModernLoadingSpinners from './ModernLoadingSpinners';
 
 interface ErrorPageProps {
-  variant?: 'minimal-lines' | 'glass-card' | 'gradient-wave' | 'geometric' | 'construction';
+  variant?: 'minimal-lines' | 'glass-card' | 'gradient-wave' | 'geometric' | 'construction' | 'blueprint' | 'under-construction' | 'tools-workshop';
   errorCode?: string;
   errorTitle?: string;
   errorMessage?: string;
@@ -399,6 +403,329 @@ const ModernErrorPage: React.FC<ErrorPageProps> = ({
     </div>
   );
 
+  // Variant 6: Blueprint Theme (404 - Page Under Construction)
+  const BlueprintError = () => (
+    <div className="min-h-screen bg-blue-900 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Blueprint grid background */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute inset-0" style={{
+          backgroundImage: `
+            linear-gradient(white 1px, transparent 1px),
+            linear-gradient(90deg, white 1px, transparent 1px)
+          `,
+          backgroundSize: '50px 50px'
+        }} />
+      </div>
+
+      {/* Technical drawing lines */}
+      <motion.div
+        className="absolute top-20 left-20 w-64 h-64 border border-white/20 rounded"
+        animate={{ rotate: [0, 5, 0] }}
+        transition={{ duration: 10, repeat: Infinity }}
+      />
+      <motion.div
+        className="absolute bottom-20 right-20 w-48 h-48 border-2 border-dashed border-white/10"
+        animate={{ scale: [1, 1.1, 1] }}
+        transition={{ duration: 8, repeat: Infinity }}
+      />
+
+      <div className="relative z-10 max-w-lg w-full">
+        <div className="bg-white/5 backdrop-blur-sm rounded-lg p-8 border border-white/20">
+          {/* Blueprint style header */}
+          <div className="flex items-center justify-center mb-6">
+            <div className="relative">
+              <motion.div
+                className="absolute inset-0 bg-red-500/20 blur-xl"
+                animate={{ scale: [1, 1.3, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+              <Construction className="w-20 h-20 text-white relative z-10" />
+            </div>
+          </div>
+
+          <div className="text-center">
+            <h1 className="text-6xl font-bold text-white mb-2">
+              {errorCode === '404' ? '404' : errorCode}
+            </h1>
+            <h2 className="text-xl font-semibold text-white/90 mb-4">
+              {errorCode === '404' ? 'Blueprint Not Found' : errorTitle}
+            </h2>
+            
+            {/* Technical specs style message */}
+            <div className="bg-white/5 rounded p-4 mb-6 border border-white/10">
+              <p className="text-white/70 text-sm font-mono">
+                {errorCode === '404' 
+                  ? 'PROJECT STATUS: The requested floor plan or blueprint is currently being drafted by our architects.'
+                  : errorMessage}
+              </p>
+            </div>
+
+            {/* Measurement lines decoration */}
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <div className="flex items-center gap-2">
+                <div className="h-px w-8 bg-red-500"></div>
+                <span className="text-red-500 text-xs">ERROR</span>
+                <div className="h-px w-8 bg-red-500"></div>
+              </div>
+            </div>
+
+            <div className="flex justify-center gap-3">
+              {showHomeButton && (
+                <button
+                  onClick={() => navigate('/')}
+                  className="px-6 py-3 bg-white/10 backdrop-blur text-white rounded hover:bg-white/20 transition-colors flex items-center gap-2 border border-white/20"
+                >
+                  <Home className="w-4 h-4" />
+                  Return to Office
+                </button>
+              )}
+              {showRefreshButton && (
+                <button
+                  onClick={handleRefresh}
+                  className="px-6 py-3 bg-red-500/20 backdrop-blur text-white rounded hover:bg-red-500/30 transition-colors flex items-center gap-2 border border-red-500/30"
+                  disabled={isRefreshing}
+                >
+                  {isRefreshing ? (
+                    <ModernLoadingSpinners variant="pulse-wave" size="sm" />
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4" />
+                      Redraft
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Variant 7: Under Construction (500 - Server Error)
+  const UnderConstructionError = () => (
+    <div className="min-h-screen bg-gradient-to-b from-yellow-50 to-orange-50 flex items-center justify-center p-4">
+      <div className="max-w-lg w-full">
+        {/* Warning stripes header */}
+        <div className="h-4 bg-repeating-linear-gradient(45deg, #000, #000 10px, #fbbf24 10px, #fbbf24 20px) rounded-t-lg"
+          style={{
+            background: 'repeating-linear-gradient(45deg, #000, #000 10px, #fbbf24 10px, #fbbf24 20px)'
+          }}
+        />
+        
+        <div className="bg-white rounded-b-lg shadow-xl p-8">
+          {/* Animated construction crane */}
+          <div className="relative h-32 mb-6">
+            <motion.div
+              className="absolute left-1/2 top-0"
+              animate={{ rotate: [-10, 10, -10] }}
+              transition={{ duration: 4, repeat: Infinity }}
+              style={{ transformOrigin: 'bottom center' }}
+            >
+              <div className="w-1 h-24 bg-gray-800 relative">
+                <div className="absolute -top-1 -left-2 w-5 h-5 bg-red-500 rounded-full">
+                  <motion.div
+                    className="absolute inset-0 bg-red-500 rounded-full"
+                    animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  />
+                </div>
+                <div className="absolute top-0 left-0 w-16 h-1 bg-gray-800" />
+                <motion.div
+                  className="absolute top-0 left-16 w-1 h-8 bg-gray-600"
+                  animate={{ y: [0, 5, 0] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  <Construction className="w-6 h-6 text-orange-500 absolute -bottom-6 -left-3" />
+                </motion.div>
+              </div>
+            </motion.div>
+          </div>
+
+          <div className="text-center">
+            <h1 className="text-5xl font-bold text-gray-800 mb-2">
+              {errorCode === '500' ? '500' : errorCode}
+            </h1>
+            <h2 className="text-xl font-semibold text-gray-700 mb-4">
+              {errorCode === '500' ? 'Site Under Construction' : errorTitle}
+            </h2>
+            
+            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
+              <p className="text-gray-600 text-sm">
+                <strong className="text-yellow-600">⚠ NOTICE:</strong><br />
+                {errorCode === '500' 
+                  ? 'Our interior designers are currently renovating this section. We apologize for the inconvenience.'
+                  : errorMessage}
+              </p>
+            </div>
+
+            {/* Progress bar */}
+            <div className="mb-6">
+              <div className="text-xs text-gray-500 mb-1">Renovation Progress</div>
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-gradient-to-r from-red-500 via-blue-500 to-green-500"
+                  animate={{ width: ['0%', '70%', '0%'] }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-center gap-3">
+              {showBackButton && (
+                <button
+                  onClick={() => navigate(-1)}
+                  className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Go Back
+                </button>
+              )}
+              {showHomeButton && (
+                <button
+                  onClick={() => navigate('/')}
+                  className="px-6 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors flex items-center gap-2"
+                >
+                  <Home className="w-4 h-4" />
+                  Main Entrance
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Variant 8: Tools Workshop (Network/503 Error)
+  const ToolsWorkshopError = () => (
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4 relative">
+      {/* Animated tools background */}
+      <div className="absolute inset-0 overflow-hidden opacity-10">
+        <motion.div
+          className="absolute top-10 left-10"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+        >
+          <Wrench className="w-20 h-20 text-white" />
+        </motion.div>
+        <motion.div
+          className="absolute bottom-10 right-10"
+          animate={{ rotate: -360 }}
+          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+        >
+          <Settings className="w-16 h-16 text-white" />
+        </motion.div>
+        <motion.div
+          className="absolute top-1/2 left-1/4"
+          animate={{ y: [-20, 20, -20] }}
+          transition={{ duration: 5, repeat: Infinity }}
+        >
+          <Hammer className="w-12 h-12 text-white" />
+        </motion.div>
+      </div>
+
+      <div className="relative z-10 max-w-lg w-full">
+        <div className="bg-gray-800 rounded-lg shadow-2xl overflow-hidden">
+          {/* Tool rack header */}
+          <div className="bg-gradient-to-r from-red-600 via-blue-600 to-green-600 p-1">
+            <div className="bg-gray-800 p-4">
+              <div className="flex items-center justify-center gap-4">
+                <Wrench className="w-6 h-6 text-red-400" />
+                <Hammer className="w-6 h-6 text-blue-400" />
+                <PaintBucket className="w-6 h-6 text-green-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-8">
+            <div className="text-center">
+              {/* WiFi/Network indicator */}
+              {(errorCode === 'offline' || errorCode === '503') && (
+                <motion.div
+                  className="inline-block mb-4"
+                  animate={{ opacity: [0.3, 1, 0.3] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  <WifiOff className="w-16 h-16 text-red-500 mx-auto" />
+                </motion.div>
+              )}
+
+              <h1 className="text-6xl font-bold text-white mb-2">
+                {errorCode === 'offline' ? 'OFFLINE' : errorCode}
+              </h1>
+              <h2 className="text-xl font-semibold text-gray-300 mb-4">
+                {errorCode === 'offline' 
+                  ? 'Workshop Disconnected' 
+                  : errorCode === '503'
+                  ? 'Tools Under Maintenance'
+                  : errorTitle}
+              </h2>
+
+              {/* Workshop notice board */}
+              <div className="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-gray-400 text-sm text-left">
+                    {errorCode === 'offline'
+                      ? 'The workshop network connection has been interrupted. Please check your cables and connections.'
+                      : errorCode === '503'
+                      ? 'Our tools are being serviced and calibrated. Normal operations will resume shortly.'
+                      : errorMessage}
+                  </p>
+                </div>
+              </div>
+
+              {/* Status indicators */}
+              <div className="grid grid-cols-3 gap-2 mb-6">
+                <div className="bg-gray-700/50 rounded p-2">
+                  <div className={`w-2 h-2 rounded-full mx-auto mb-1 ${errorCode === 'offline' ? 'bg-red-500' : 'bg-green-500'}`} />
+                  <div className="text-xs text-gray-500">Network</div>
+                </div>
+                <div className="bg-gray-700/50 rounded p-2">
+                  <div className={`w-2 h-2 rounded-full mx-auto mb-1 ${errorCode === '503' ? 'bg-yellow-500' : 'bg-green-500'}`} />
+                  <div className="text-xs text-gray-500">Server</div>
+                </div>
+                <div className="bg-gray-700/50 rounded p-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mx-auto mb-1" />
+                  <div className="text-xs text-gray-500">Power</div>
+                </div>
+              </div>
+
+              <div className="flex justify-center gap-3">
+                {showHomeButton && (
+                  <button
+                    onClick={() => navigate('/')}
+                    className="px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-2"
+                  >
+                    <Home className="w-4 h-4" />
+                    Exit Workshop
+                  </button>
+                )}
+                {showRefreshButton && (
+                  <button
+                    onClick={handleRefresh}
+                    className="px-6 py-3 bg-gradient-to-r from-red-600 to-blue-600 text-white rounded-lg hover:opacity-90 transition-opacity flex items-center gap-2"
+                    disabled={isRefreshing}
+                  >
+                    {isRefreshing ? (
+                      <ModernLoadingSpinners variant="pulse-wave" size="sm" />
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4" />
+                        Reconnect
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   // Render based on variant
   switch(variant) {
     case 'glass-card':
@@ -409,6 +736,12 @@ const ModernErrorPage: React.FC<ErrorPageProps> = ({
       return <GeometricError />;
     case 'construction':
       return <ConstructionError />;
+    case 'blueprint':
+      return <BlueprintError />;
+    case 'under-construction':
+      return <UnderConstructionError />;
+    case 'tools-workshop':
+      return <ToolsWorkshopError />;
     default:
       return <MinimalLinesError />;
   }

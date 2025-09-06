@@ -94,16 +94,31 @@ apiClient.interceptors.response.use(
     // Handle 403 Forbidden
     if (error.response?.status === 403) {
       console.error('Access forbidden:', error.response.data);
+      // Store error info for error page
+      sessionStorage.setItem('lastError', JSON.stringify({
+        code: '403',
+        message: 'Access Forbidden'
+      }));
     }
     
     // Handle 500 Server Error
     if (error.response?.status >= 500) {
       console.error('Server error:', error.response.data);
+      // Store error info for error page
+      sessionStorage.setItem('lastError', JSON.stringify({
+        code: '500',
+        message: 'Server Error'
+      }));
     }
     
     // Handle network errors
     if (!error.response) {
       console.error('Network error:', error.message);
+      // Store error info for error page
+      sessionStorage.setItem('lastError', JSON.stringify({
+        code: 'offline',
+        message: 'Network Error'
+      }));
     }
     
     return Promise.reject(error);
