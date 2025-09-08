@@ -31,7 +31,7 @@ export const apiClient = axios.create({
   },
 });
 
-// Enhanced request interceptor with retry logic
+// Request interceptor for authentication
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token');
@@ -42,15 +42,6 @@ apiClient.interceptors.request.use(
     // Add request ID for tracing
     config.headers['X-Request-ID'] = crypto.randomUUID();
     
-    // Debug logging
-    console.log('API Request:', {
-      method: config.method,
-      url: config.url,
-      baseURL: config.baseURL,
-      fullURL: `${config.baseURL}${config.url}`,
-      data: config.data
-    });
-    
     return config;
   },
   (error) => {
@@ -59,24 +50,18 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Enhanced response interceptor with comprehensive error handling
+// Response interceptor with error handling
 apiClient.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   async (error) => {
-    const originalRequest = error.config;
-    
-    // Handle 401 Unauthorized - Token expired or invalid
+    // Handle 401 Unauthorized
     if (error.response?.status === 401) {
-      console.warn('Unauthorized access detected, cleaning up and redirecting to login');
-      
-      // Clear all auth-related data
+      // Clear auth data
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
       localStorage.removeItem('auth-storage');
       
-      // Clear auth store state
+      // Clear auth store
       const authStore = (await import('@/store/authStore')).useAuthStore;
       authStore.setState({
         user: null,
@@ -85,36 +70,24 @@ apiClient.interceptors.response.use(
         error: null
       });
       
-      // Force redirect to login page
+      // Redirect to login
       if (!window.location.pathname.includes('/login')) {
         window.location.replace('/login');
       }
     }
     
-    // Handle 403 Forbidden
+    // Handle other error codes
     if (error.response?.status === 403) {
-      console.error('Access forbidden:', error.response.data);
-      // Store error info for error page
       sessionStorage.setItem('lastError', JSON.stringify({
         code: '403',
         message: 'Access Forbidden'
       }));
-    }
-    
-    // Handle 500 Server Error
-    if (error.response?.status >= 500) {
-      console.error('Server error:', error.response.data);
-      // Store error info for error page
+    } else if (error.response?.status >= 500) {
       sessionStorage.setItem('lastError', JSON.stringify({
         code: '500',
         message: 'Server Error'
       }));
-    }
-    
-    // Handle network errors
-    if (!error.response) {
-      console.error('Network error:', error.message);
-      // Store error info for error page
+    } else if (!error.response) {
       sessionStorage.setItem('lastError', JSON.stringify({
         code: 'offline',
         message: 'Network Error'
@@ -125,23 +98,28 @@ apiClient.interceptors.response.use(
   }
 );
 
-// API endpoints
+// API endpoints - cleaned and optimized
 export const API_ENDPOINTS = {
+  // Authentication endpoints
   AUTH: {
     LOGIN: '/login',
     REGISTER: '/register',
-    LOGOUT: '/logout',
     ME: '/self',
-    VERIFY_OTP: '/verification_otp',
-    SEND_OTP: '/send_otp',
   },
-  USERS: {
-    LIST: '/users',
-    GET: (id: string) => `/users/${id}`,
-    UPDATE: (id: string) => `/users/${id}`,
-    DEACTIVATE: (id: string) => `/users/${id}`,
-    COUNT_BY_ROLE: (roleId: string) => `/users/role/${roleId}/count`,
+  
+  // Common purchase endpoints used across roles
+  PURCHASE: {
+    CREATE: '/purchase',
+    GET: (id: string | number) => `/purchase/${id}`,
+    UPDATE: (id: string | number) => `/purchase/${id}`,
+    DELETE: (id: string | number) => `/purchase/${id}`,
+    HISTORY: (id: string | number) => `/purchase_history/${id}`,
+    EMAIL: (id: string | number) => `/purchase_email/${id}`,
+    UPLOAD_FILE: (id: string | number) => `/upload_file/${id}`,
+    ALL: '/all_purchase',
   },
+  
+  // Project management endpoints
   PROJECTS: {
     LIST: '/projects',
     GET: (id: string) => `/projects/${id}`,
@@ -150,6 +128,8 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/projects/${id}`,
     PROGRESS: (id: string) => `/projects/${id}/progress`,
   },
+  
+  // Task management endpoints
   TASKS: {
     LIST: '/tasks',
     GET: (id: string) => `/tasks/${id}`,
@@ -158,53 +138,36 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/tasks/${id}`,
     MY_TASKS: '/tasks/my-tasks',
   },
-  PROCESSES: {
-    ROLES: '/processes/roles',
-    GET_ROLE: (id: string) => `/processes/roles/${id}`,
-    LIST: '/processes',
-    GET: (id: string) => `/processes/${id}`,
-    CONNECTIONS: '/processes/connections/workflow',
-    MY_PROCESSES: '/processes/my-processes',
-    ROLE_WORKFLOW: (roleId: string) => `/processes/role/${roleId}/workflow`,
-    HIERARCHY: '/processes/hierarchy/organizational',
-  },
+  
+  // Analytics endpoints
   ANALYTICS: {
-    DASHBOARD: '/analytics/dashboard',
     PROJECTS_PROGRESS: '/analytics/projects/progress',
-    FINANCIAL_REPORT: '/analytics/reports/financial',
-    PRODUCTIVITY_REPORT: '/analytics/reports/productivity',
   },
-  PROCUREMENT: {
-    PURCHASE_REQUISITION: '/purchase',
-    VENDOR_QUOTATIONS: '/vendor-quotations',
-    MATERIAL_REQUISITIONS: '/material-requisitions',
-    DELIVERIES: '/deliveries',
-  },
+  
+  // Dashboard endpoints
   DASHBOARDS: {
     SITE_SUPERVISOR: '/site_supervisor_dashboard',
     MEP_SUPERVISOR: '/mep_supervisor_dashboard',
-    PROCUREMENT: '/procurement_dashboard',
   },
+  
+  // Role-specific endpoints
   PROJECT_MANAGER: {
-    DASHBOARD: '/project_manager/dashboard',
     APPROVE_PURCHASE: '/pm_approval',
-    GET_PURCHASES: '/projectmanger_purchases', // Note: backend has typo
-    PURCHASE_STATUS: (id: string | number) => `/purchase_status/${id}`,
+    GET_PURCHASES: '/projectmanager_purchases', // Fixed typo
   },
+  
   ESTIMATION: {
     APPROVAL: '/estimation_approval',
     DASHBOARD: '/estimation_dashboard',
     PURCHASES: '/estimation_purchase',
-    PURCHASE_WITH_STATUS: (id: string | number) => `/purchase_with_status/${id}`,
-    CHECK_APPROVAL: (id: string | number) => `/check_estimation_approval/${id}`,
-    PURCHASE_DETAILS: (id: string | number) => `/purchase/${id}`,
-    PURCHASE_HISTORY: (id: string | number) => `/purchase_history/${id}`,
   },
+  
   TECHNICAL_DIRECTOR: {
     APPROVAL: '/tech_approval',
     DASHBOARD: '/tech_dashboard',
     PURCHASES: '/technical_purchase',
   },
+  
   ACCOUNTS: {
     PROCESS_PAYMENT: '/payments/process',
     APPROVE_PAYMENT: '/payments/approve',
@@ -215,6 +178,17 @@ export const API_ENDPOINTS = {
     PENDING_APPROVALS: '/pending_approvals',
     DASHBOARD: '/account_dashboard',
     GET_PURCHASES: '/account_purchase',
+  },
+  
+  // Procurement endpoints
+  PROCUREMENT: {
+    ALL_PURCHASES: '/all_procurement',
+    APPROVAL: (id: string | number) => `/procurement_approval/${id}`,
+  },
+  
+  // Site Supervisor specific
+  SITE_SUPERVISOR: {
+    ALL_PURCHASES: '/all_purchase',
   },
 };
 

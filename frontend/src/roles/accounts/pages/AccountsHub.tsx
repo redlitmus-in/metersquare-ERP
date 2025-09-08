@@ -34,7 +34,6 @@ const AccountsHub: React.FC = () => {
   const [paymentProcessingModalOpen, setPaymentProcessingModalOpen] = useState(false);
   const [paymentApprovalModalOpen, setPaymentApprovalModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
   const [selectedTransactionId, setSelectedTransactionId] = useState<number | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
@@ -61,18 +60,16 @@ const AccountsHub: React.FC = () => {
       if (response && response.purchase_details) {
         const allPurchases = response.purchase_details.map(purchase => ({
           ...purchase,
-          // Calculate total cost from material details
-          total_cost: purchase.material_details?.reduce((sum: number, material: any) => 
+          // Calculate total cost from materials
+          total_cost: purchase.materials?.reduce((sum: number, material: any) => 
             sum + (material.cost || 0) * (material.quantity || 1), 0
           ) || 0,
-          // Calculate total quantity from material details
-          total_quantity: purchase.material_details?.reduce((sum: number, material: any) => 
+          // Calculate total quantity from materials
+          total_quantity: purchase.materials?.reduce((sum: number, material: any) => 
             sum + (material.quantity || 0), 0
           ) || 0,
           // Set material count
-          material_count: purchase.material_details?.length || 0,
-          // Map material_details to materials for consistency
-          materials: purchase.material_details
+          material_count: purchase.materials?.length || 0
         }));
         setPurchases(allPurchases);
         
@@ -269,15 +266,6 @@ const AccountsHub: React.FC = () => {
     }
   };
 
-  // Handle view history button click
-  const handleViewHistory = (purchaseId: number) => {
-    const purchase = purchases.find(p => p.purchase_id === purchaseId);
-    if (purchase) {
-      setSelectedPurchase(purchase);
-      setSelectedPurchaseId(purchaseId);
-      setHistoryModalOpen(true);
-    }
-  };
 
   // Handle success after any operation
   const handleOperationSuccess = async () => {
@@ -451,7 +439,6 @@ const AccountsHub: React.FC = () => {
                       onApprovePayment={handleApprovePayment}
                       onRejectPayment={handleRejectPayment}
                       onViewDetails={handleViewDetails}
-                      onViewHistory={handleViewHistory}
                       isLoading={isLoading}
                     />
                   ))}
@@ -487,17 +474,6 @@ const AccountsHub: React.FC = () => {
           setSelectedPurchase(null);
         }}
         purchaseId={selectedPurchaseId}
-      />
-      
-      {/* Purchase History Modal */}
-      <PurchaseDetailsModal
-        isOpen={historyModalOpen}
-        onClose={() => {
-          setHistoryModalOpen(false);
-          setSelectedPurchase(null);
-        }}
-        purchaseId={selectedPurchaseId}
-        showHistoryOnly={true}
       />
     </div>
   );

@@ -25,9 +25,6 @@ import {
   DollarSign,
   CreditCard,
   Building,
-  Clock,
-  CheckCircle2,
-  XCircle,
   AlertCircle,
   Loader2
 } from 'lucide-react';
@@ -37,14 +34,12 @@ interface PurchaseDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   purchaseId: number | null;
-  showHistoryOnly?: boolean;
 }
 
 const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   isOpen,
   onClose,
-  purchaseId,
-  showHistoryOnly = false
+  purchaseId
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [purchaseData, setPurchaseData] = useState<any>(null);
@@ -97,8 +92,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-blue-600" />
-            {showHistoryOnly ? 'Payment History' : 'Purchase Details'} 
-            {purchaseId && `- PR #${purchaseId}`}
+            Purchase Details
+            {purchaseId && ` - PR #${purchaseId}`}
           </DialogTitle>
         </DialogHeader>
 
@@ -115,15 +110,14 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               </div>
             </div>
           ) : (
-            <Tabs defaultValue={showHistoryOnly ? "history" : "details"} className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+            <Tabs defaultValue="details" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="details">Purchase Details</TabsTrigger>
                 <TabsTrigger value="payment">Payment Info</TabsTrigger>
-                <TabsTrigger value="history">Status History</TabsTrigger>
               </TabsList>
 
               <TabsContent value="details" className="space-y-4">
-                {purchaseData.purchase && (
+                {purchaseData?.purchase && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -177,38 +171,38 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                     </Card>
 
                     {/* Materials List */}
-                    {purchaseData.materials && purchaseData.materials.length > 0 && (
+                    {purchaseData?.purchase?.materials && purchaseData.purchase.materials.length > 0 && (
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-lg flex items-center gap-2">
                             <Package className="h-5 w-5 text-green-600" />
-                            Materials ({purchaseData.materials.length})
+                            Materials ({purchaseData.purchase.materials.length})
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-3">
-                            {purchaseData.materials.map((material: any, index: number) => (
+                            {purchaseData.purchase.materials.map((material: any, index: number) => (
                               <div key={index} className="border rounded-lg p-3">
                                 <div className="flex justify-between items-start mb-2">
-                                  <h4 className="font-medium text-sm">{material.material_name}</h4>
+                                  <h4 className="font-medium text-sm">{material.description || material.material_name}</h4>
                                   <Badge variant="outline" className="text-xs">
                                     {material.priority || 'Medium'} Priority
                                   </Badge>
                                 </div>
                                 <div className="grid grid-cols-3 gap-4 text-xs text-gray-600">
                                   <div>
-                                    <span className="font-medium">Quantity:</span> {material.quantity}
+                                    <span className="font-medium">Quantity:</span> {material.quantity} {material.unit || ''}
                                   </div>
                                   <div>
-                                    <span className="font-medium">Unit Cost:</span> {formatCurrency(material.unit_cost || 0)}
+                                    <span className="font-medium">Unit Cost:</span> {formatCurrency(material.cost || material.unit_cost || 0)}
                                   </div>
                                   <div>
-                                    <span className="font-medium">Total:</span> {formatCurrency((material.quantity || 0) * (material.unit_cost || 0))}
+                                    <span className="font-medium">Total:</span> {formatCurrency((material.quantity || 0) * (material.cost || material.unit_cost || 0))}
                                   </div>
                                 </div>
-                                {material.specifications && (
+                                {(material.specification || material.specifications) && (
                                   <p className="text-xs text-gray-500 mt-2">
-                                    <span className="font-medium">Specs:</span> {material.specifications}
+                                    <span className="font-medium">Specs:</span> {material.specification || material.specifications}
                                   </p>
                                 )}
                               </div>
@@ -222,6 +216,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               </TabsContent>
 
               <TabsContent value="payment" className="space-y-4">
+                {purchaseData && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -279,70 +274,21 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center gap-2">
-                        <Clock className="h-5 w-5 text-blue-600" />
+                        <DollarSign className="h-5 w-5 text-blue-600" />
                         Payment Status
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">Current Status:</span>
-                        {getStatusBadge(purchaseData.purchase?.accounts_status || 'pending')}
+                        {getStatusBadge(purchaseData.purchase?.accounts_status || purchaseData.latest_status?.status || 'pending')}
                       </div>
                     </CardContent>
                   </Card>
                 </motion.div>
+                )}
               </TabsContent>
 
-              <TabsContent value="history" className="space-y-4">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <Clock className="h-5 w-5 text-blue-600" />
-                        Status History
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {purchaseData.history && purchaseData.history.length > 0 ? (
-                        <div className="space-y-3">
-                          {purchaseData.history.map((entry: any, index: number) => (
-                            <div key={index} className="border-l-2 border-gray-200 pl-4 pb-4">
-                              <div className="flex items-center justify-between mb-1">
-                                <div className="flex items-center gap-2">
-                                  {entry.status === 'approved' ? (
-                                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                  ) : entry.status === 'rejected' ? (
-                                    <XCircle className="h-4 w-4 text-red-600" />
-                                  ) : (
-                                    <Clock className="h-4 w-4 text-yellow-600" />
-                                  )}
-                                  <span className="font-medium text-sm">{entry.sender}</span>
-                                  <span className="text-xs text-gray-500">→</span>
-                                  <span className="font-medium text-sm">{entry.receiver}</span>
-                                </div>
-                                {getStatusBadge(entry.status)}
-                              </div>
-                              <p className="text-xs text-gray-500">
-                                {new Date(entry.created_at).toLocaleString()}
-                              </p>
-                              {entry.comments && (
-                                <p className="text-sm text-gray-700 mt-2 bg-gray-50 p-2 rounded">
-                                  {entry.comments}
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-500 text-sm">No status history available</p>
-                      )}
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </TabsContent>
             </Tabs>
           )}
         </div>

@@ -7,8 +7,6 @@ import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import PurchaseCard from '../components/PurchaseCard';
 import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
 import { procurementService, Purchase } from '../services/procurementService';
-import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
-import VendorQuotationForm from '@/components/forms/VendorQuotationForm';
 
 import {
   Package,
@@ -19,7 +17,6 @@ import {
   CheckCircle,
   AlertCircle,
   FileText,
-  Plus,
   Download,
   Search,
   Building2,
@@ -72,9 +69,6 @@ const ProcurementHub: React.FC = () => {
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
   const [modalMode, setModalMode] = useState<'details' | 'history'>('details');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [showVendorForm, setShowVendorForm] = useState(false);
-  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [pmEmailedPRs, setPmEmailedPRs] = useState<Set<number>>(new Set());
 
   // Confirmation Dialogs (removed 'delete' type)
@@ -282,15 +276,7 @@ const ProcurementHub: React.FC = () => {
     setShowDetailsModal(true);
   };
 
-  const handleEdit = async (purchaseId: number) => {
-    try {
-      const purchase = await procurementService.getPurchaseDetails(purchaseId);
-      setEditingPurchase(purchase);
-      setShowCreateForm(true);
-    } catch (error: any) {
-      toast.error('Failed to load purchase for editing');
-    }
-  };
+  // Edit handler removed - procurement doesn't handle direct editing
 
   // Delete handler removed - procurement role doesn't have delete permission
 
@@ -365,31 +351,6 @@ const ProcurementHub: React.FC = () => {
     toast.success('Data exported successfully');
   };
 
-  // Show forms if active
-  if (showCreateForm || editingPurchase) {
-    return (
-      <PurchaseRequisitionForm 
-        existingData={editingPurchase as any}
-        isEditMode={!!editingPurchase}
-        onClose={() => {
-          setShowCreateForm(false);
-          setEditingPurchase(null);
-          fetchPurchases();
-        }} 
-      />
-    );
-  }
-
-  if (showVendorForm) {
-    return (
-      <VendorQuotationForm 
-        onClose={() => {
-          setShowVendorForm(false);
-          fetchPurchases();
-        }} 
-      />
-    );
-  }
 
   // Loading state
   if (loading) {
@@ -491,28 +452,10 @@ const ProcurementHub: React.FC = () => {
       {/* Main Content */}
       <Card className="shadow-lg border-0">
         <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-red-600" />
-              Purchase Requisitions
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() => setShowCreateForm(true)}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                New Request
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowVendorForm(true)}
-              >
-                <Building2 className="w-4 h-4 mr-2" />
-                New Quotation
-              </Button>
-            </div>
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            <ShoppingCart className="w-5 h-5 text-red-600" />
+            Purchase Requisitions
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {/* Tabs */}
@@ -541,7 +484,6 @@ const ProcurementHub: React.FC = () => {
                       purchase={purchase}
                       onViewDetails={handleViewDetails}
                       onViewHistory={handleViewHistory}
-                      onEdit={handleEdit}
                       onSendEmail={handleSendEmail}
                       onApprove={handleApprove}
                       onReject={handleReject}

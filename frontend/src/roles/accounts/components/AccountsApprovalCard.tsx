@@ -14,7 +14,6 @@ import {
   XCircle, 
   Clock,
   Eye,
-  History,
   DollarSign,
   CreditCard,
   Building
@@ -32,7 +31,6 @@ interface AccountsApprovalCardProps {
   onApprovePayment: (purchaseId: number) => void;
   onRejectPayment: (purchaseId: number) => void;
   onViewDetails: (purchaseId: number) => void;
-  onViewHistory: (purchaseId: number) => void;
   isLoading?: boolean;
 }
 
@@ -42,7 +40,6 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
   onApprovePayment,
   onRejectPayment,
   onViewDetails,
-  onViewHistory,
   isLoading = false
 }) => {
   // Get status from latest_status object or fallback to direct fields
@@ -242,24 +239,15 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
                   <CreditCard className="h-3.5 w-3.5 mr-1" />
                   Process Payment
                 </Button>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    onClick={() => onViewDetails(purchase.purchase_id)}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Eye className="h-3.5 w-3.5 mr-1" />
-                    Details
-                  </Button>
-                  <Button
-                    onClick={() => onViewHistory(purchase.purchase_id)}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <History className="h-3.5 w-3.5 mr-1" />
-                    History
-                  </Button>
-                </div>
+                <Button
+                  onClick={() => onViewDetails(purchase.purchase_id)}
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                >
+                  <Eye className="h-3.5 w-3.5 mr-1" />
+                  View Details
+                </Button>
               </>
             ) : hasPaymentPending ? (
               <>
@@ -284,46 +272,26 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
                     Reject
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    onClick={() => onViewDetails(purchase.purchase_id)}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Eye className="h-3.5 w-3.5 mr-1" />
-                    Details
-                  </Button>
-                  <Button
-                    onClick={() => onViewHistory(purchase.purchase_id)}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <History className="h-3.5 w-3.5 mr-1" />
-                    History
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
                 <Button
                   onClick={() => onViewDetails(purchase.purchase_id)}
                   variant="outline"
-                  className="w-full"
                   size="sm"
+                  className="w-full"
                 >
                   <Eye className="h-3.5 w-3.5 mr-1" />
                   View Details
                 </Button>
-                <Button
-                  onClick={() => onViewHistory(purchase.purchase_id)}
-                  variant="outline"
-                  className="w-full"
-                  size="sm"
-                >
-                  <History className="h-3.5 w-3.5 mr-1" />
-                  View History
-                </Button>
-              </div>
+              </>
+            ) : (
+              <Button
+                onClick={() => onViewDetails(purchase.purchase_id)}
+                variant="outline"
+                className="w-full"
+                size="sm"
+              >
+                <Eye className="h-3.5 w-3.5 mr-1" />
+                View Details
+              </Button>
             )}
           </div>
         </CardContent>
