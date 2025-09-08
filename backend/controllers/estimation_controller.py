@@ -700,47 +700,83 @@ def get_all_estimation_purchase_request():
         if not role or role.role != 'estimation':
             return jsonify({'error': 'Only Estimation team can access purchase requests'}), 403
 
-        # Get all status records where estimation is the RECEIVER
-        estimation_receiver_statuses = PurchaseStatus.query.filter(
+        # Get all status records where estimation is involved (as sender OR receiver)
+        all_statuses = PurchaseStatus.query.filter(
             and_(
-                PurchaseStatus.receiver == 'estimation',
-                PurchaseStatus.is_active == True
+                PurchaseStatus.is_active == True,
+                db.or_(
+                    PurchaseStatus.receiver == 'estimation',
+                    PurchaseStatus.sender == 'estimation'
+                )
             )
         ).order_by(PurchaseStatus.created_at.desc()).all()
-
-        estimation_sender_statuses = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.sender == 'estimation',
-                PurchaseStatus.is_active == True
-            )
-        ).order_by(PurchaseStatus.created_at.desc()).all()
-
-        # Use set to track unique purchase_ids and get latest status for each
-        unique_purchase_ids = set()
-        latest_statuses = {}
-        estimation_decisions = {}  # Track estimation team decisions
         
-        # Process estimation team decisions (sender statuses)
-        for sender_status in estimation_sender_statuses:
-            if sender_status.purchase_id not in unique_purchase_ids:
-                unique_purchase_ids.add(sender_status.purchase_id)
-                latest_statuses[sender_status.purchase_id] = sender_status
-                # Track estimation team's decision
-                estimation_decisions[sender_status.purchase_id] = sender_status.status
-
-        # Process statuses where estimation is receiver (from PM)
-        for status in estimation_receiver_statuses:
-            if status.purchase_id not in unique_purchase_ids:
-                unique_purchase_ids.add(status.purchase_id)
-                latest_statuses[status.purchase_id] = status
-                # If estimation hasn't made a decision yet, mark as pending
-                if status.purchase_id not in estimation_decisions:
-                    estimation_decisions[status.purchase_id] = 'pending'
+        # Track unique purchase_ids and their statuses
+        unique_purchase_ids = set()
+        latest_overall_status = {}  # Latest status record for display
+        estimation_decisions = {}  # Track estimation team's actual decisions
+        pm_decisions = {}  # Track PM's decisions
+        
+        # Group statuses by purchase_id
+        purchase_status_map = {}
+        for status in all_statuses:
+            if status.purchase_id not in purchase_status_map:
+                purchase_status_map[status.purchase_id] = []
+            purchase_status_map[status.purchase_id].append(status)
+        
+        # Process each purchase to find relevant statuses
+        for purchase_id, statuses in purchase_status_map.items():
+            # Sort statuses by created_at (oldest to newest) to process in order
+            statuses.sort(key=lambda x: x.created_at)
+            
+            # Check if estimation is involved in this purchase workflow
+            estimation_involved = False
+            
+            # Track the latest decision from each role
+            latest_pm_status = None
+            latest_estimation_status = None
+            latest_status = None
+            
+            for status in statuses:
+                # Track if estimation is involved
+                if status.sender == 'estimation' or status.receiver == 'estimation':
+                    estimation_involved = True
+                    unique_purchase_ids.add(purchase_id)
+                
+                # Track PM's latest decision
+                if status.sender == 'projectManager' and status.receiver == 'estimation':
+                    latest_pm_status = status.status
+                
+                # Track Estimation's latest decision (ONLY when estimation is the sender)
+                if status.sender == 'estimation':
+                    latest_estimation_status = status.status
+                elif status.sender == 'technicalDirector':
+                    latest_estimation_status = status.status
+                
+                # Track the overall latest status
+                latest_status = status
+            
+            # Only process purchases where estimation is involved
+            if estimation_involved:
+                # Store the latest overall status for display
+                latest_overall_status[purchase_id] = latest_status
+                
+                # Store PM's decision
+                if latest_pm_status:
+                    pm_decisions[purchase_id] = {'status': latest_pm_status}
+                else:
+                    pm_decisions[purchase_id] = {'status': 'pending'}
+                
+                # Store Estimation's decision
+                if latest_estimation_status:
+                    estimation_decisions[purchase_id] = {'status': latest_estimation_status}
+                else:
+                    estimation_decisions[purchase_id] = {'status': 'pending'}
 
         # Get detailed purchase information for each unique purchase
         purchase_details = []
         
-        for purchase_id, status in latest_statuses.items():
+        for purchase_id, status in latest_overall_status.items():
             # Get purchase details
             purchase = Purchase.query.filter_by(
                 purchase_id=purchase_id, 
@@ -782,6 +818,10 @@ def get_all_estimation_purchase_request():
                         'design_reference': mat.design_reference
                     })
 
+            # Get the actual statuses from our tracking dictionaries
+            est_decision = estimation_decisions.get(purchase_id, {}).get('status', 'pending')
+            pm_decision = pm_decisions.get(purchase_id, {}).get('status', 'pending')
+            
             # Create detailed purchase information
             purchase_detail = {
                 'purchase_id': purchase.purchase_id,
@@ -801,8 +841,8 @@ def get_all_estimation_purchase_request():
                 'last_modified_by': purchase.last_modified_by,
                 'status_info': {
                     'status_id': status.status_id,
-                    'pm_status': status.status,
-                    'estimation_status': estimation_decisions.get(purchase_id, 'pending'),
+                    'pm_status': pm_decision,  # PM's actual decision
+                    'estimation_status': est_decision,  # Estimation's actual decision
                     'sender': status.sender,
                     'receiver': status.receiver,
                     'decision_date': status.decision_date.isoformat() if status.decision_date else None,
