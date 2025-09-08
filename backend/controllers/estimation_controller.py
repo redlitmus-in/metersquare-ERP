@@ -694,12 +694,10 @@ def get_all_estimation_purchase_request():
         
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
-
         # Check if user is Estimation team
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
         if not role or role.role != 'estimation':
             return jsonify({'error': 'Only Estimation team can access purchase requests'}), 403
-
         # Get all status records where estimation is involved (as sender OR receiver)
         all_statuses = PurchaseStatus.query.filter(
             and_(
@@ -728,7 +726,6 @@ def get_all_estimation_purchase_request():
         for purchase_id, statuses in purchase_status_map.items():
             # Sort statuses by created_at (oldest to newest) to process in order
             statuses.sort(key=lambda x: x.created_at)
-            
             # Check if estimation is involved in this purchase workflow
             estimation_involved = False
             
@@ -772,25 +769,20 @@ def get_all_estimation_purchase_request():
                     estimation_decisions[purchase_id] = {'status': latest_estimation_status}
                 else:
                     estimation_decisions[purchase_id] = {'status': 'pending'}
-
         # Get detailed purchase information for each unique purchase
         purchase_details = []
-        
         for purchase_id, status in latest_overall_status.items():
             # Get purchase details
             purchase = Purchase.query.filter_by(
                 purchase_id=purchase_id, 
                 is_deleted=False
             ).first()
-            
             if not purchase:
                 continue
-
             # Get materials for this purchase
             materials = []
             total_material_cost = 0
             total_quantity = 0
-            
             if purchase.material_ids:
                 material_objects = Material.query.filter(
                     and_(
@@ -817,11 +809,8 @@ def get_all_estimation_purchase_request():
                         'priority': mat.priority,
                         'design_reference': mat.design_reference
                     })
-
-            # Get the actual statuses from our tracking dictionaries
             est_decision = estimation_decisions.get(purchase_id, {}).get('status', 'pending')
             pm_decision = pm_decisions.get(purchase_id, {}).get('status', 'pending')
-            
             # Create detailed purchase information
             purchase_detail = {
                 'purchase_id': purchase.purchase_id,

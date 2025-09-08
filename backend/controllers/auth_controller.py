@@ -17,6 +17,7 @@ from utils.authentication import send_otp
 import os
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT")
+print("ENVIRONMENT:",ENVIRONMENT)
 
 log = get_logger()
 
@@ -179,8 +180,7 @@ def user_login():
             response_data = {
                 "message": "OTP sent successfully to your email",
                 "email": email,
-                "otp_expiry": "5 minutes",
-                "otp" : otp
+                "otp_expiry": "5 minutes"
             }
             # Only include OTP in non-production environments (for testing/debugging)
             if ENVIRONMENT != 'prod':

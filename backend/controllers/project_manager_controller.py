@@ -219,299 +219,128 @@ def pm_approval_workflow():
         log.error(f"Error in pm_approval_workflow: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-def get_procurement_approved_purchases():
-    """Get purchases where role is procurement and status is approved"""
-    try:
-        current_user = g.user
-        if not current_user:
-            return jsonify({'error': 'Not logged in'}), 401
+def _calculate_material_summary(materials):
+    """Helper: Calculate material summary from materials list"""
+    return {
+        'total_materials': len(materials),
+        'total_quantity': sum(m.quantity or 0 for m in materials),
+        'total_cost': round(sum((m.cost or 0) * (m.quantity or 0) for m in materials), 2),
+        'categories': list({m.category for m in materials if m.category})
+    }
 
-        # Optional: return only latest update for a specific purchase
-        purchase_id_filter = request.args.get('purchase_id', type=int)
-        if purchase_id_filter:
-            purchase = Purchase.query.filter(
-                and_(Purchase.purchase_id == purchase_id_filter, Purchase.is_deleted == False)
-            ).first()
-            if not purchase:
-                return jsonify({'error': 'Purchase not found'}), 404
+def _format_status_dict(status):
+    """Helper: Format status to dictionary"""
+    return {
+        'status_id': status.status_id,
+        'status': status.status,
+        'sender': status.sender,
+        'receiver': status.receiver,
+        'date': status.created_at.isoformat() if status.created_at else None,
+        'decision_by_user_id': status.decision_by_user_id,
+        'decision_by': status.created_by,
+        'comments': status.comments,
+        'rejection_reason': status.rejection_reason,
+        'reject_category': status.reject_category,
+        'decision_date': status.decision_date.isoformat() if status.decision_date else None
+    }
 
-            latest_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id_filter).order_by(
-                PurchaseStatus.created_at.desc()
-            ).first()
+def _get_purchase_materials(purchase):
+    """Helper: Get materials for a purchase"""
+    if not purchase.material_ids:
+        return []
+    return Material.query.filter(
+        and_(Material.is_deleted == False, Material.material_id.in_(purchase.material_ids))
+    ).all()
 
-            # Build minimal materials summary
-            materials = []
-            if purchase.material_ids:
-                materials = Material.query.filter(
-                    and_(Material.is_deleted == False, Material.material_id.in_(purchase.material_ids))
-                ).all()
-            material_summary = {
-                'total_materials': len(materials),
-                'total_quantity': sum(m.quantity or 0 for m in materials),
-                'total_cost': round(sum((m.cost or 0) * (m.quantity or 0) for m in materials), 2),
-                'categories': list({m.category for m in materials if m.category})
-            }
+def _determine_workflow_status(latest_status, pm_status):
+    """Helper: Determine current workflow status"""
+    if latest_status and latest_status.sender == 'estimation' and latest_status.receiver == 'projectManager' and latest_status.status == 'rejected':
+        return None  # Skip this item
+    
+    if pm_status:
+        return 'pm_approved' if pm_status.status == 'approved' else 'pm_rejected'
+    elif latest_status and latest_status.sender == 'estimation':
+        return 'estimation_review'
+    elif latest_status and latest_status.sender == 'technicalDirector':
+        return 'technical_director_review'
+    elif latest_status and latest_status.sender == 'accounts':
+        return 'accounts_processing'
+    return 'pending_pm_review'
 
-            latest_status_info = None
-            if latest_status:
-                latest_status_info = {
-                    'status_id': latest_status.status_id,
-                    'status': latest_status.status,
-                    'sender': latest_status.sender,
-                    'receiver': latest_status.receiver,
-                    'decision_date': latest_status.decision_date.isoformat() if latest_status.decision_date else None,
-                    'created_at': latest_status.created_at.isoformat() if latest_status.created_at else None,
-                    'created_by': latest_status.created_by,
-                    'comments': latest_status.comments,
-                    'rejection_reason': latest_status.rejection_reason,
-                    'reject_category': latest_status.reject_category,
-                }
+def _build_purchase_item(purchase, material_summary, current_workflow_status, procurement_approved_status, pm_status, status_history, latest_status_dt):
+    """Helper: Build purchase item dictionary"""
+    return {
+        'purchase_id': purchase.purchase_id,
+        'site_location': purchase.site_location,
+        'purpose': purchase.purpose,
+        'date': purchase.date,
+        'email_sent': purchase.email_sent,
+        'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
+        'materials_summary': material_summary,
+        'current_workflow_status': current_workflow_status,
+        'procurement_status': procurement_approved_status.status,
+        'procurement_status_date': procurement_approved_status.created_at.isoformat() if procurement_approved_status.created_at else None,
+        'procurement_comments': procurement_approved_status.comments,
+        'pm_status': pm_status.status if pm_status else 'pending',
+        'pm_status_date': pm_status.created_at.isoformat() if pm_status and pm_status.created_at else None,
+        'pm_comments': pm_status.comments if pm_status else None,
+        'pm_rejection_reason': pm_status.rejection_reason if pm_status else None,
+        'status_history': status_history,
+        'latest_status_date': latest_status_dt.isoformat() if latest_status_dt else None
+    }
 
-            # Derive simple current stage from latest status
-            current_stage = latest_status.status if latest_status else 'pending'
+def _ensure_uniqueness_by_purchase_id(items):
+    """Helper: Ensure uniqueness by purchase_id, keep most recent"""
+    if not items:
+        return items
+    
+    def _parse_dt_for_item(item):
+        dt = item.get('latest_status_date') or item.get('procurement_status_date') or item.get('created_at')
+        try:
+            return datetime.fromisoformat(dt) if dt else datetime.min
+        except Exception:
+            return datetime.min
 
-            return jsonify({
-                'success': True,
-                'purchase_id': purchase.purchase_id,
-                'date': purchase.date,
-                'site_location': purchase.site_location,
-                'purpose': purchase.purpose,
-                'materials_summary': material_summary,
-                'current_workflow_status': current_stage,
-                'latest_status': latest_status_info,
-            }), 200
+    unique_by_purchase = {}
+    for item in items:
+        pid = item.get('purchase_id')
+        if pid not in unique_by_purchase or _parse_dt_for_item(item) > _parse_dt_for_item(unique_by_purchase[pid]):
+            unique_by_purchase[pid] = item
+    
+    return [item for item in unique_by_purchase.values() if item.get('current_workflow_status') != 'estimation_rejected_to_pm']
 
-        # First, get all procurement approved statuses
-        total_purchase = Purchase.query.filter_by(is_deleted = False).count()
-        procurement_approved_statuses = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.sender == 'procurement',
-                PurchaseStatus.status == 'approved'
-            )
-        ).all()
+def _process_estimation_rejections(estimation_pm_rejection_statuses):
+    """Helper: Process estimation PM rejections"""
+    estimation_pm_rejected_purchase_ids = list({s.purchase_id for s in estimation_pm_rejection_statuses})
+    estimation_pm_rejections = []
+    
+    for purchase_id in estimation_pm_rejected_purchase_ids:
+        absolute_latest_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id).order_by(PurchaseStatus.created_at.desc()).first()
+        rejected_status = next((s for s in estimation_pm_rejection_statuses if s.purchase_id == purchase_id), None)
         
-        # Get unique purchase IDs from these statuses
-        procurement_approved_purchase_ids = list(set([status.purchase_id for status in procurement_approved_statuses]))
-        from sqlalchemy import or_
-        if procurement_approved_purchase_ids:
-            # Include all procurement approved purchases that have reached or passed PM stage
-            pm_involved_purchase_ids = set(procurement_approved_purchase_ids)
-        else:
-            pm_involved_purchase_ids = set()
-        # Now get the latest status for each purchase to ensure we have the most recent
-        approved_procurement_purchases = []
-        procurement_approved_count = 0
+        if not rejected_status:
+            continue
         
-        for purchase_id in pm_involved_purchase_ids:
-            # Get the procurement approved status for this purchase (not necessarily the latest)
-            procurement_approved_status = PurchaseStatus.query.filter(
-                and_(
-                    PurchaseStatus.purchase_id == purchase_id,
-                    PurchaseStatus.sender == 'procurement',
-                    PurchaseStatus.status == 'approved'
-                )
-            ).order_by(PurchaseStatus.created_at.desc()).first()
-            
-            # Get the latest status for reference
-            latest_status = PurchaseStatus.query.filter_by(
-                purchase_id=purchase_id
-            ).order_by(PurchaseStatus.created_at.desc()).first()
-            
-            # Get project manager status (if any)
-            pm_status = PurchaseStatus.query.filter(
-                and_(
-                    PurchaseStatus.purchase_id == purchase_id,
-                    PurchaseStatus.sender == 'projectManager'
-                )
-            ).order_by(PurchaseStatus.created_at.desc()).first()
-            
-            # Include if it was ever approved by procurement
-            if procurement_approved_status:
-                
-                # Get the purchase details
-                purchase = Purchase.query.filter(
-                    and_(
-                        Purchase.purchase_id == purchase_id,
-                        Purchase.is_deleted == False
-                    )
-                ).first()
-                
-                if purchase:
-                    procurement_approved_count += 1
-                # Get materials for this purchase
-                materials = []
-                if purchase.material_ids:
-                    materials = Material.query.filter(
-                        and_(
-                            Material.is_deleted == False,
-                            Material.material_id.in_(purchase.material_ids)
-                        )
-                    ).all()
-                # Calculate material summary
-                material_summary = {
-                    'total_materials': len(materials),
-                    'total_quantity': sum(m.quantity or 0 for m in materials),
-                    'total_cost': round(sum((m.cost or 0) * (m.quantity or 0) for m in materials), 2),
-                    'categories': list({m.category for m in materials if m.category})
-                }
-                
-                # Determine current workflow status based on latest status
-                current_workflow_status = 'pending_pm_review'
-                if latest_status:
-                    # Check if latest status is a rejection from estimation to PM
-                    if (latest_status.sender == 'estimation' and 
-                        latest_status.receiver == 'projectManager' and 
-                        latest_status.status == 'rejected'):
-                        # This should not be in approved list, skip it
-                        continue
-                    
-                if pm_status:
-                    if pm_status.status == 'approved':
-                        current_workflow_status = 'pm_approved'
-                    elif pm_status.status == 'rejected':
-                        current_workflow_status = 'pm_rejected'
-                elif latest_status and latest_status.sender == 'estimation':
-                    current_workflow_status = 'estimation_review'
-                elif latest_status and latest_status.sender == 'technicalDirector':
-                    current_workflow_status = 'technical_director_review'
-                elif latest_status and latest_status.sender == 'accounts':
-                    current_workflow_status = 'accounts_processing'
-                
-                # Only include the latest status for this purchase
-                latest_for_purchase = PurchaseStatus.query.filter_by(
-                    purchase_id=purchase_id
-                ).order_by(PurchaseStatus.created_at.desc()).first()
-                status_history = []
-                latest_status_dt = None
-                # Include all purchases that have been approved by procurement
-                # No need to filter by PM involvement since we want all approved purchases
-                if latest_for_purchase:
-                    latest_status_dt = latest_for_purchase.created_at
-                    status_history.append({
-                        'status_id': latest_for_purchase.status_id,
-                        'status': latest_for_purchase.status,
-                        'sender': latest_for_purchase.sender,
-                        'receiver': latest_for_purchase.receiver,
-                        'date': latest_for_purchase.created_at.isoformat() if latest_for_purchase.created_at else None,
-                        'decision_by_user_id': latest_for_purchase.decision_by_user_id,
-                        'decision_by': latest_for_purchase.created_by,
-                        'comments': latest_for_purchase.comments,
-                        'rejection_reason': latest_for_purchase.rejection_reason,
-                        'reject_category': latest_for_purchase.reject_category,
-                        'decision_date': latest_for_purchase.decision_date.isoformat() if latest_for_purchase.decision_date else None
-                    })
-                
-                approved_procurement_purchases.append({
-                    'purchase_id': purchase.purchase_id,
-                    'site_location': purchase.site_location,
-                    'purpose': purchase.purpose,
-                    'date': purchase.date,
-                    'email_sent': purchase.email_sent,
-                    'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
-                    'materials_summary': material_summary,
-                    'current_workflow_status': current_workflow_status,
-                    'procurement_status': procurement_approved_status.status,
-                    'procurement_status_date': procurement_approved_status.created_at.isoformat() if procurement_approved_status.created_at else None,
-                    'procurement_comments': procurement_approved_status.comments,
-                    'pm_status': pm_status.status if pm_status else 'pending',
-                    'pm_status_date': pm_status.created_at.isoformat() if pm_status and pm_status.created_at else None,
-                    'pm_comments': pm_status.comments if pm_status else None,
-                    'pm_rejection_reason': pm_status.rejection_reason if pm_status else None,
-                    'status_history': status_history,
-                    'latest_status_date': latest_status_dt.isoformat() if latest_status_dt else None
-                })
-        # Ensure uniqueness of purchases by purchase_id, keeping the most recent entry
-        if approved_procurement_purchases:
-            def _parse_dt_for_item(item):
-                dt = item.get('latest_status_date') or item.get('procurement_status_date') or item.get('created_at')
-                try:
-                    return datetime.fromisoformat(dt) if dt else datetime.min
-                except Exception:
-                    return datetime.min
-
-            unique_by_purchase = {}
-            for item in approved_procurement_purchases:
-                pid = item.get('purchase_id')
-                if pid not in unique_by_purchase:
-                    unique_by_purchase[pid] = item
-                else:
-                    if _parse_dt_for_item(item) > _parse_dt_for_item(unique_by_purchase[pid]):
-                        unique_by_purchase[pid] = item
-            approved_procurement_purchases = list(unique_by_purchase.values())
-            # Exclude items whose latest status is an Estimation -> PM rejection
-            approved_procurement_purchases = [
-                item for item in approved_procurement_purchases
-                if item.get('current_workflow_status') != 'estimation_rejected_to_pm'
-            ]
-        # Collect Estimation -> ProjectManager rejections
-        estimation_pm_rejection_statuses = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.sender == 'estimation',
-                PurchaseStatus.receiver == 'projectManager',
-                PurchaseStatus.status == 'rejected'
-            )
-        ).order_by(PurchaseStatus.created_at.desc()).all()
-
-        estimation_pm_rejected_purchase_ids = list({s.purchase_id for s in estimation_pm_rejection_statuses})
-
-        estimation_pm_rejections = []
-        for purchase_id in estimation_pm_rejected_purchase_ids:
-            # Get the absolute latest status for this purchase to check if rejection is still current
-            absolute_latest_status = PurchaseStatus.query.filter_by(
-                purchase_id=purchase_id
-            ).order_by(PurchaseStatus.created_at.desc()).first()
-            
-            # Latest Estimation->PM rejected status for this purchase
-            rejected_status = next((s for s in estimation_pm_rejection_statuses if s.purchase_id == purchase_id), None)
-            if not rejected_status:
+        # Skip if there's a newer approval from PM after the rejection
+        if absolute_latest_status and absolute_latest_status.status_id != rejected_status.status_id:
+            if absolute_latest_status.sender == 'projectManager' and absolute_latest_status.status == 'approved':
                 continue
-            
-            # Only include in rejections if the rejection is the latest status or if latest status is not an approval
-            # Skip if there's a newer approval from PM after the rejection
-            if absolute_latest_status and absolute_latest_status.status_id != rejected_status.status_id:
-                # Check if there's a PM approval after this rejection
-                if absolute_latest_status.sender == 'projectManager' and absolute_latest_status.status == 'approved':
-                    continue
-                # Check if the latest status shows the purchase moved forward in workflow
-                if absolute_latest_status.created_at > rejected_status.created_at:
-                    if absolute_latest_status.status == 'approved' and (
-                        absolute_latest_status.sender in ['projectManager', 'technicalDirector', 'accounts'] or
-                        absolute_latest_status.receiver in ['technicalDirector', 'accounts', 'design']
-                    ):
-                        continue
-
-            purchase = Purchase.query.filter(
-                and_(
-                    Purchase.purchase_id == purchase_id,
-                    Purchase.is_deleted == False
-                )
-            ).first()
-            if not purchase:
+            if (absolute_latest_status.created_at > rejected_status.created_at and 
+                absolute_latest_status.status == 'approved' and 
+                (absolute_latest_status.sender in ['projectManager', 'technicalDirector', 'accounts'] or
+                 absolute_latest_status.receiver in ['technicalDirector', 'accounts', 'design'])):
                 continue
 
-            # Materials
-            materials = []
-            if purchase.material_ids:
-                materials = Material.query.filter(
-                    and_(
-                        Material.is_deleted == False,
-                        Material.material_id.in_(purchase.material_ids)
-                    )
-                ).all()
-            material_summary = {
-                'total_materials': len(materials),
-                'total_quantity': sum(m.quantity or 0 for m in materials),
-                'total_cost': round(sum((m.cost or 0) * (m.quantity or 0) for m in materials), 2),
-                'categories': list({m.category for m in materials if m.category})
-            }
-
+        purchase = Purchase.query.filter(and_(Purchase.purchase_id == purchase_id, Purchase.is_deleted == False)).first()
+        if purchase:
+            materials = _get_purchase_materials(purchase)
             estimation_pm_rejections.append({
                 'purchase_id': purchase.purchase_id,
                 'site_location': purchase.site_location,
                 'purpose': purchase.purpose,
                 'date': purchase.date,
                 'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
-                'materials_summary': material_summary,
+                'materials_summary': _calculate_material_summary(materials),
                 'rejected_status': {
                     'status_id': rejected_status.status_id,
                     'status': rejected_status.status,
@@ -525,53 +354,124 @@ def get_procurement_approved_purchases():
                     'reject_category': rejected_status.reject_category,
                 }
             })
-        # Ensure uniqueness in Estimation -> PM rejections by purchase_id, keep latest created_at
-        if estimation_pm_rejections:
-            def _parse_rej_dt(item):
-                try:
-                    dt = item.get('rejected_status', {}).get('created_at')
-                    return datetime.fromisoformat(dt) if dt else datetime.min
-                except Exception:
-                    return datetime.min
+    
+    # Ensure uniqueness in rejections
+    if estimation_pm_rejections:
+        def _parse_rej_dt(item):
+            try:
+                dt = item.get('rejected_status', {}).get('created_at')
+                return datetime.fromisoformat(dt) if dt else datetime.min
+            except Exception:
+                return datetime.min
 
-            unique_rejections = {}
-            for item in estimation_pm_rejections:
-                pid = item.get('purchase_id')
-                if pid not in unique_rejections:
-                    unique_rejections[pid] = item
-                else:
-                    if _parse_rej_dt(item) > _parse_rej_dt(unique_rejections[pid]):
-                        unique_rejections[pid] = item
-            estimation_pm_rejections = list(unique_rejections.values())
+        unique_rejections = {}
+        for item in estimation_pm_rejections:
+            pid = item.get('purchase_id')
+            if pid not in unique_rejections or _parse_rej_dt(item) > _parse_rej_dt(unique_rejections[pid]):
+                unique_rejections[pid] = item
+        estimation_pm_rejections = list(unique_rejections.values())
+    
+    return estimation_pm_rejections
+
+def get_procurement_approved_purchases():
+    """Get purchases where role is procurement and status is approved"""
+    try:
+        if not g.user:
+            return jsonify({'error': 'Not logged in'}), 401
+
+        # Handle single purchase request
+        purchase_id_filter = request.args.get('purchase_id', type=int)
+        if purchase_id_filter:
+            purchase = Purchase.query.filter(and_(Purchase.purchase_id == purchase_id_filter, Purchase.is_deleted == False)).first()
+            if not purchase:
+                return jsonify({'error': 'Purchase not found'}), 404
+
+            latest_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id_filter).order_by(PurchaseStatus.created_at.desc()).first()
+            materials = _get_purchase_materials(purchase)
+            
+            return jsonify({
+                'success': True,
+                'purchase_id': purchase.purchase_id,
+                'date': purchase.date,
+                'site_location': purchase.site_location,
+                'purpose': purchase.purpose,
+                'materials_summary': _calculate_material_summary(materials),
+                'current_workflow_status': latest_status.status if latest_status else 'pending',
+                'latest_status': {
+                    'status_id': latest_status.status_id,
+                    'status': latest_status.status,
+                    'sender': latest_status.sender,
+                    'receiver': latest_status.receiver,
+                    'decision_date': latest_status.decision_date.isoformat() if latest_status.decision_date else None,
+                    'created_at': latest_status.created_at.isoformat() if latest_status.created_at else None,
+                    'created_by': latest_status.created_by,
+                    'comments': latest_status.comments,
+                    'rejection_reason': latest_status.rejection_reason,
+                    'reject_category': latest_status.reject_category,
+                } if latest_status else None,
+            }), 200
+
+        # Get procurement approved purchase IDs
+        total_purchase = Purchase.query.filter_by(is_deleted = False).count()
+        procurement_approved_statuses = PurchaseStatus.query.filter(and_(PurchaseStatus.sender == 'procurement', PurchaseStatus.status == 'approved')).all()
+        procurement_approved_purchase_ids = list(set([status.purchase_id for status in procurement_approved_statuses]))
+        
+        if not procurement_approved_purchase_ids:
+            pm_involved_purchase_ids = set()
+        else:
+            pm_involved_purchase_ids = set(procurement_approved_purchase_ids)
+        
+        # Process approved purchases
+        approved_procurement_purchases = []
+        for purchase_id in pm_involved_purchase_ids:
+            # Get statuses for this purchase
+            procurement_approved_status = PurchaseStatus.query.filter(and_(PurchaseStatus.purchase_id == purchase_id, PurchaseStatus.sender == 'procurement', PurchaseStatus.status == 'approved')).order_by(PurchaseStatus.created_at.desc()).first()
+            latest_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id).order_by(PurchaseStatus.created_at.desc()).first()
+            pm_status = PurchaseStatus.query.filter(and_(PurchaseStatus.purchase_id == purchase_id, PurchaseStatus.sender == 'projectManager')).order_by(PurchaseStatus.created_at.desc()).first()
+            
+            if procurement_approved_status:
+                purchase = Purchase.query.filter(and_(Purchase.purchase_id == purchase_id, Purchase.is_deleted == False)).first()
+                if purchase:
+                    materials = _get_purchase_materials(purchase)
+                    current_workflow_status = _determine_workflow_status(latest_status, pm_status)
+                    
+                    if current_workflow_status is None:  # Skip rejected items
+                        continue
+                    
+                    latest_for_purchase = PurchaseStatus.query.filter_by(purchase_id=purchase_id).order_by(PurchaseStatus.created_at.desc()).first()
+                    status_history = [_format_status_dict(latest_for_purchase)] if latest_for_purchase else []
+                    latest_status_dt = latest_for_purchase.created_at if latest_for_purchase else None
+                    
+                    approved_procurement_purchases.append(_build_purchase_item(
+                        purchase, _calculate_material_summary(materials), current_workflow_status,
+                        procurement_approved_status, pm_status, status_history, latest_status_dt
+                    ))
+
+        # Ensure uniqueness
+        approved_procurement_purchases = _ensure_uniqueness_by_purchase_id(approved_procurement_purchases)
+        
+        # Process estimation rejections
+        estimation_pm_rejection_statuses = PurchaseStatus.query.filter(and_(PurchaseStatus.sender == 'estimation', PurchaseStatus.receiver == 'projectManager', PurchaseStatus.status == 'rejected')).order_by(PurchaseStatus.created_at.desc()).all()
+        estimation_pm_rejections = _process_estimation_rejections(estimation_pm_rejection_statuses)
+        
+        # Filter out rejected items
         estimation_rejected_purchase_ids = {item['purchase_id'] for item in estimation_pm_rejections}
-        approved_procurement_purchases = [
-            item for item in approved_procurement_purchases 
-            if item['purchase_id'] not in estimation_rejected_purchase_ids
-        ]
+        approved_procurement_purchases = [item for item in approved_procurement_purchases if item['purchase_id'] not in estimation_rejected_purchase_ids]
 
-        # If client requests only the most recently updated purchase overall
-        latest_only = request.args.get('latest_only', default=0, type=int)
-        if latest_only:
+        # Handle latest_only filter
+        if request.args.get('latest_only', default=0, type=int):
             def parse_dt(item):
                 dt = item.get('latest_status_date') or item.get('procurement_status_date') or item.get('created_at')
                 try:
-                    from datetime import datetime
                     return datetime.fromisoformat(dt) if dt else None
                 except Exception:
                     return None
-            approved_procurement_purchases = sorted(
-                approved_procurement_purchases,
-                key=lambda x: (parse_dt(x) or datetime.min),
-                reverse=True
-            )[:1]
+            approved_procurement_purchases = sorted(approved_procurement_purchases, key=lambda x: (parse_dt(x) or datetime.min), reverse=True)[:1]
 
-        # Calculate summary statistics based on current workflow status
-        total_approved_procurement_purchases = len(approved_procurement_purchases)
-        non_approval_project_manager_purchases = total_purchase - total_approved_procurement_purchases
         return jsonify({
             'success': True,
-            'total_approved_procurement_purchases': total_approved_procurement_purchases,
-            'non_approval_project_manager_purchases': non_approval_project_manager_purchases,
+            'total_approved_procurement_purchases': len(approved_procurement_purchases),
+            'non_approval_project_manager_purchases': total_purchase - len(approved_procurement_purchases),
             'estimation_pm_rejections_count': len(estimation_pm_rejections),
             'approved_procurement_purchases': approved_procurement_purchases,
             'estimation_pm_rejections': estimation_pm_rejections
