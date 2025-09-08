@@ -4,6 +4,7 @@ import ModernSidebar from './ModernSidebar';
 import NotificationSystem from '@/components/NotificationSystem';
 import { useAuthStore } from '@/store/authStore';
 import { getRoleDisplayName } from '@/utils/roleRouting';
+import { MobileMenuButton } from './MobileMenuButton';
 
 const DashboardLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -55,16 +56,19 @@ const DashboardLayout: React.FC = () => {
 
   return (
     <div className="h-screen flex overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-100">
-      {/* Sidebar */}
+      {/* Mobile Menu Button */}
+      <MobileMenuButton onClick={() => setSidebarOpen(true)} />
+      
+      {/* Sidebar - Responsive */}
       <ModernSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
 
       {/* Main content */}
       <div className={`flex-1 overflow-hidden flex flex-col transition-all duration-300 ${
         sidebarCollapsed ? 'md:pl-16' : 'md:pl-56'
       }`}>
-        {/* Page content - no header */}
-        <main className="flex-1 relative overflow-y-auto focus:outline-none bg-gradient-to-br from-gray-50/50 to-white">
-          <div className="min-h-full">
+        {/* Page content */}
+        <main className="flex-1 relative overflow-y-auto overflow-x-hidden focus:outline-none bg-gradient-to-br from-gray-50/50 to-white">
+          <div className="min-h-full w-full">
             <Outlet />
           </div>
         </main>

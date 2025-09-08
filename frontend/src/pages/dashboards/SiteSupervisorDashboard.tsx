@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { SimpleHorizontalCards } from '@/components/ui/SimpleHorizontalCards';
 import {
   HardHat,
   Package,
@@ -413,7 +414,7 @@ const SiteSupervisorDashboard: React.FC = () => {
   }
 
   return (
-    <div className="p-4 space-y-4 bg-gray-50 min-h-screen">
+    <div className="p-2 sm:p-3 md:p-4 space-y-3 md:space-y-4 bg-gray-50 min-h-screen w-full overflow-x-hidden">
       {/* Header Section */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -451,7 +452,24 @@ const SiteSupervisorDashboard: React.FC = () => {
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Metrics Cards - Horizontal scroll on mobile */}
+      <SimpleHorizontalCards 
+        cards={metrics.map((metric, index) => ({
+          id: `metric-${index}`,
+          title: metric.title,
+          value: metric.value,
+          subtitle: metric.subtitle,
+          icon: <metric.icon className={`w-4 h-4 ${metric.color}`} />,
+          bgColor: 'bg-orange-100',
+          trend: metric.change !== 0 ? {
+            value: Math.abs(metric.change),
+            isUp: metric.trend === 'up'
+          } : undefined
+        }))}
+      />
+
+      {/* Old grid - hidden */}
+      <div className="hidden grid grid-cols-2 lg:grid-cols-4 gap-3">
         {metrics.map((metric, index) => (
           <motion.div
             key={metric.title}
@@ -494,7 +512,7 @@ const SiteSupervisorDashboard: React.FC = () => {
       </div>
 
       {/* Charts Row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
         {/* Site Progress Chart */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
@@ -599,7 +617,7 @@ const SiteSupervisorDashboard: React.FC = () => {
       </div>
 
       {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
         {/* Material Flow Chart */}
         <Card>
           <CardHeader className="pb-2">
@@ -658,7 +676,7 @@ const SiteSupervisorDashboard: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
               {safetyData.map((item, index) => (
                 <motion.div 
                   key={item.category} 
@@ -687,7 +705,7 @@ const SiteSupervisorDashboard: React.FC = () => {
       </div>
 
       {/* Sites and Deliveries */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
         {/* Active Sites */}
         <Card>
           <CardHeader className="pb-2">
@@ -757,7 +775,7 @@ const SiteSupervisorDashboard: React.FC = () => {
                   <Progress value={site.progress} className="h-1" />
                 </div>
 
-                <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-xs">
                   <div>
                     <span className="text-gray-500">Phase</span>
                     <p className="font-semibold text-gray-900">{site.phase}</p>

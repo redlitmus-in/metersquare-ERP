@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Download, Eye, Edit2, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Search, Filter, Download, Eye, Edit2, Trash2, CheckCircle, XCircle, FileText, Clock, AlertTriangle, Package, Mail, Send } from 'lucide-react';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/authStore';
 import { UserRole } from '@/types';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/config';
+import { SimpleHorizontalCards } from '@/components/ui/SimpleHorizontalCards';
 
 const PurchaseRequestsPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -139,6 +140,45 @@ const PurchaseRequestsPage: React.FC = () => {
     toast.error('Purchase request rejected');
   };
 
+  const handleSendMail = async (requestId: string) => {
+    try {
+      // Find the request details
+      const request = purchaseRequests.find(r => r.id === requestId);
+      if (!request) {
+        toast.error('Request not found');
+        return;
+      }
+
+      // Call API to send email for approval
+      const response = await apiClient.post('/send_approval_email', {
+        purchase_id: request.purchase_id,
+        requestor: request.requestor,
+        amount: request.amount,
+        project: request.project,
+        current_approver: request.currentApprover,
+        purpose: request.purpose,
+        site_location: request.site_location
+      });
+
+      if (response.data.success) {
+        toast.success('Approval email sent successfully');
+        // Update the status to show email was sent
+        setPurchaseRequests(prev => 
+          prev.map(req => 
+            req.id === requestId 
+              ? { ...req, emailSent: true }
+              : req
+          )
+        );
+      } else {
+        toast.error('Failed to send approval email');
+      }
+    } catch (error: any) {
+      console.error('Error sending approval email:', error);
+      toast.error(error.response?.data?.error || 'Failed to send approval email');
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -219,7 +259,7 @@ const PurchaseRequestsPage: React.FC = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="w-full px-3 py-4 sm:p-4 md:p-6 space-y-4 md:space-y-6 max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -241,119 +281,82 @@ const PurchaseRequestsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Role-specific Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {isSiteSupervisor && (
-          <>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">My Requests</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {filteredRequests.length}
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Pending</p>
-                    <p className="text-2xl font-bold text-yellow-600">
-                      {filteredRequests.filter(r => r.status === 'pending').length}
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-6 h-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
+      {/* Role-specific Stats Cards - Horizontal scroll on mobile */}
+      {isSiteSupervisor && (
+        <SimpleHorizontalCards 
+          cards={[
+            {
+              id: 'my-requests',
+              title: 'My Requests',
+              value: filteredRequests.length,
+              icon: <FileText className="w-4 h-4 text-blue-600" />,
+              bgColor: 'bg-blue-100'
+            },
+            {
+              id: 'pending',
+              title: 'Pending',
+              value: filteredRequests.filter(r => r.status === 'pending').length,
+              icon: <Clock className="w-4 h-4 text-yellow-600" />,
+              bgColor: 'bg-yellow-100'
+            },
+            {
+              id: 'approved',
+              title: 'Approved',
+              value: filteredRequests.filter(r => r.status === 'approved').length,
+              icon: <CheckCircle className="w-4 h-4 text-green-600" />,
+              bgColor: 'bg-green-100'
+            },
+            {
+              id: 'rejected',
+              title: 'Rejected',
+              value: filteredRequests.filter(r => r.status === 'rejected').length,
+              icon: <XCircle className="w-4 h-4 text-red-600" />,
+              bgColor: 'bg-red-100'
+            }
+          ]}
+        />
+      )}
 
-        {user?.role_id === UserRole.PROCUREMENT && (
-          <>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">To Process</p>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {purchaseRequests.filter(r => r.currentApprover === 'procurement').length}
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-6 h-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Requests</p>
-                    <p className="text-2xl font-bold text-gray-900">{purchaseRequests.length}</p>
-                  </div>
-                  <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {filteredRequests.filter(r => r.status === 'approved').length}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Value</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  AED {filteredRequests.reduce((sum, r) => sum + r.amount, 0).toLocaleString()}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {user?.role_id === UserRole.PROCUREMENT && (
+        <SimpleHorizontalCards 
+          cards={[
+            {
+              id: 'to-process',
+              title: 'To Process',
+              value: purchaseRequests.filter(r => r.currentApprover === 'procurement').length,
+              icon: <Package className="w-4 h-4 text-orange-600" />,
+              bgColor: 'bg-orange-100',
+              trend: {
+                value: 12.5,
+                isUp: true
+              }
+            },
+            {
+              id: 'total-requests',
+              title: 'Total Requests',
+              value: purchaseRequests.length,
+              icon: <FileText className="w-4 h-4 text-gray-600" />,
+              bgColor: 'bg-gray-100'
+            },
+            {
+              id: 'approved',
+              title: 'Approved',
+              value: filteredRequests.filter(r => r.status === 'approved').length,
+              icon: <CheckCircle className="w-4 h-4 text-green-600" />,
+              bgColor: 'bg-green-100'
+            },
+            {
+              id: 'total-value',
+              title: 'Total Value',
+              value: `AED ${filteredRequests.reduce((sum, r) => sum + r.amount, 0).toLocaleString()}`,
+              icon: <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>,
+              bgColor: 'bg-purple-100'
+            }
+          ]}
+        />
+      )}
 
       {/* Filters and Search */}
       <Card>
@@ -429,8 +432,9 @@ const PurchaseRequestsPage: React.FC = () => {
               )}
             </div>
           ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <>
+          <div className="overflow-x-auto mobile-scroll-x -mx-3 px-3 sm:mx-0 sm:px-0">
+            <table className="w-full min-w-[600px]">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -523,6 +527,13 @@ const PurchaseRequestsPage: React.FC = () => {
                         {canApproveRequest() && request.status === 'pending' && (
                           <>
                             <button 
+                              onClick={() => handleSendMail(request.id)}
+                              className="text-blue-600 hover:text-blue-800"
+                              title="Send Approval Email"
+                            >
+                              <Mail className="w-4 h-4" />
+                            </button>
+                            <button 
                               onClick={() => handleApprove(request.id)}
                               className="text-green-600 hover:text-green-800"
                               title="Approve"
@@ -545,6 +556,11 @@ const PurchaseRequestsPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+          {/* Mobile scroll hint */}
+          <div className="sm:hidden text-center mt-2">
+            <span className="text-xs text-gray-500">← Swipe to see more →</span>
+          </div>
+          </>
           )}
         </CardContent>
       </Card>

@@ -182,6 +182,7 @@ export const API_ENDPOINTS = {
   },
   DASHBOARDS: {
     SITE_SUPERVISOR: '/site_supervisor_dashboard',
+    MEP_SUPERVISOR: '/mep_supervisor_dashboard',
     PROCUREMENT: '/procurement_dashboard',
   },
   PROJECT_MANAGER: {

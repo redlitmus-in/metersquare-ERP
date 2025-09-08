@@ -8,7 +8,25 @@ export default {
   theme: {
   	extend: {
   		screens: {
-  			'xs': '475px',
+  			'xxs': '320px',  // iPhone SE, small phones
+  			'xs': '375px',   // Standard iPhone
+  			'sm': '640px',   // Default Tailwind small
+  			'md': '768px',   // Tablets
+  			'lg': '1024px',  // Desktop
+  			'xl': '1280px',  // Large desktop
+  			'2xl': '1536px', // Extra large screens
+  			'3xl': '1920px', // Full HD
+  		},
+  		container: {
+  			center: true,
+  			padding: {
+  				DEFAULT: '1rem',
+  				xs: '1rem',
+  				sm: '1.5rem',
+  				md: '2rem',
+  				lg: '2.5rem',
+  				xl: '3rem',
+  			},
   		},
   		colors: {
   			border: 'hsl(var(--border))',

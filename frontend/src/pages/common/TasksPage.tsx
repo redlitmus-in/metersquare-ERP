@@ -154,7 +154,7 @@ const TasksPage: React.FC = () => {
   };
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="w-full px-2 py-3 sm:px-3 sm:py-4 md:p-6 space-y-3 md:space-y-4 max-w-full overflow-x-hidden">
       {/* Header */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
@@ -175,7 +175,7 @@ const TasksPage: React.FC = () => {
       </motion.div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-3">
             <div className="flex items-center gap-3">
@@ -294,21 +294,21 @@ const TasksPage: React.FC = () => {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className={`p-6 hover:bg-gray-50 transition-colors ${
+                    className={`px-3 py-4 sm:px-4 sm:py-5 md:p-6 hover:bg-gray-50 transition-colors ${
                       index !== filteredTasks.length - 1 ? 'border-b border-gray-200' : ''
                     }`}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-start gap-3 mb-3">
-                          <div className="mt-1">
+                          <div className="mt-1 flex-shrink-0">
                             <StatusIcon className="w-5 h-5 text-gray-400" />
                           </div>
-                          <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 break-words">
                               {task.title}
                             </h3>
-                            <p className="text-gray-600 mb-3">{task.description}</p>
+                            <p className="text-sm sm:text-base text-gray-600 mb-3 break-words">{task.description}</p>
                             
                             <div className="flex items-center gap-3 mb-3">
                               <Badge className={`${statusConfig.color} border flex items-center gap-1`}>

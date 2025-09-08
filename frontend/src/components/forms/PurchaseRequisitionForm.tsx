@@ -1079,7 +1079,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    {isEditMode ? 'Update Requisition' : 'Submit for Approval'}
+                    {isEditMode ? 'Update Requisition' : 'Submit & Send for Approval'}
                   </>
                 )}
               </Button>

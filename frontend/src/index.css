@@ -1,5 +1,7 @@
 /* Import Corporate Theme */
 @import './styles/corporate-theme.css';
+/* Import Mobile Responsive Styles */
+@import './styles/mobile-responsive.css';
 
 @tailwind base;
 @tailwind components;
