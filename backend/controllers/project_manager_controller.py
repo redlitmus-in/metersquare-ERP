@@ -9,9 +9,7 @@ from config.logging import get_logger
 
 from config.db import db
 from models.role import Role
-from models.purchase import Purchase
-from models.approval import Approval
-from models.project import Project
+from models.purchase import Purchase 
 
 log = get_logger()
 
@@ -71,8 +69,6 @@ def pm_approval_workflow():
                 log.info(f"Purchase last modified at: {purchase.last_modified_at}")
                 log.info(f"PM status created at: {existing_pm_status.created_at}")
             
-            # Allow resubmission if either:
-            # 1. There's a newer procurement status, OR
             # 2. The purchase was modified after the PM's last decision
             if (latest_procurement_status and latest_procurement_status.created_at > existing_pm_status.created_at) or purchase_modified_after_pm:
                 # Allow PM to make a new decision since procurement has resubmitted or purchase was modified
@@ -230,6 +226,61 @@ def get_procurement_approved_purchases():
         if not current_user:
             return jsonify({'error': 'Not logged in'}), 401
 
+        # Optional: return only latest update for a specific purchase
+        purchase_id_filter = request.args.get('purchase_id', type=int)
+        if purchase_id_filter:
+            purchase = Purchase.query.filter(
+                and_(Purchase.purchase_id == purchase_id_filter, Purchase.is_deleted == False)
+            ).first()
+            if not purchase:
+                return jsonify({'error': 'Purchase not found'}), 404
+
+            latest_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id_filter).order_by(
+                PurchaseStatus.created_at.desc()
+            ).first()
+
+            # Build minimal materials summary
+            materials = []
+            if purchase.material_ids:
+                materials = Material.query.filter(
+                    and_(Material.is_deleted == False, Material.material_id.in_(purchase.material_ids))
+                ).all()
+            material_summary = {
+                'total_materials': len(materials),
+                'total_quantity': sum(m.quantity or 0 for m in materials),
+                'total_cost': round(sum((m.cost or 0) * (m.quantity or 0) for m in materials), 2),
+                'categories': list({m.category for m in materials if m.category})
+            }
+
+            latest_status_info = None
+            if latest_status:
+                latest_status_info = {
+                    'status_id': latest_status.status_id,
+                    'status': latest_status.status,
+                    'sender': latest_status.sender,
+                    'receiver': latest_status.receiver,
+                    'decision_date': latest_status.decision_date.isoformat() if latest_status.decision_date else None,
+                    'created_at': latest_status.created_at.isoformat() if latest_status.created_at else None,
+                    'created_by': latest_status.created_by,
+                    'comments': latest_status.comments,
+                    'rejection_reason': latest_status.rejection_reason,
+                    'reject_category': latest_status.reject_category,
+                }
+
+            # Derive simple current stage from latest status
+            current_stage = latest_status.status if latest_status else 'pending'
+
+            return jsonify({
+                'success': True,
+                'purchase_id': purchase.purchase_id,
+                'date': purchase.date,
+                'site_location': purchase.site_location,
+                'purpose': purchase.purpose,
+                'materials_summary': material_summary,
+                'current_workflow_status': current_stage,
+                'latest_status': latest_status_info,
+            }), 200
+
         # First, get all procurement approved statuses
         total_purchase = Purchase.query.filter_by(is_deleted = False).count()
         procurement_approved_statuses = PurchaseStatus.query.filter(
@@ -241,11 +292,17 @@ def get_procurement_approved_purchases():
         
         # Get unique purchase IDs from these statuses
         procurement_approved_purchase_ids = list(set([status.purchase_id for status in procurement_approved_statuses]))
+        from sqlalchemy import or_
+        if procurement_approved_purchase_ids:
+            # Include all procurement approved purchases that have reached or passed PM stage
+            pm_involved_purchase_ids = set(procurement_approved_purchase_ids)
+        else:
+            pm_involved_purchase_ids = set()
         # Now get the latest status for each purchase to ensure we have the most recent
         approved_procurement_purchases = []
         procurement_approved_count = 0
         
-        for purchase_id in procurement_approved_purchase_ids:
+        for purchase_id in pm_involved_purchase_ids:
             # Get the procurement approved status for this purchase (not necessarily the latest)
             procurement_approved_status = PurchaseStatus.query.filter(
                 and_(
@@ -298,8 +355,16 @@ def get_procurement_approved_purchases():
                     'categories': list({m.category for m in materials if m.category})
                 }
                 
-                # Determine current workflow status
+                # Determine current workflow status based on latest status
                 current_workflow_status = 'pending_pm_review'
+                if latest_status:
+                    # Check if latest status is a rejection from estimation to PM
+                    if (latest_status.sender == 'estimation' and 
+                        latest_status.receiver == 'projectManager' and 
+                        latest_status.status == 'rejected'):
+                        # This should not be in approved list, skip it
+                        continue
+                    
                 if pm_status:
                     if pm_status.status == 'approved':
                         current_workflow_status = 'pm_approved'
@@ -312,26 +377,28 @@ def get_procurement_approved_purchases():
                 elif latest_status and latest_status.sender == 'accounts':
                     current_workflow_status = 'accounts_processing'
                 
-                # Get all statuses for this purchase to show complete history
-                all_statuses = PurchaseStatus.query.filter_by(
+                # Only include the latest status for this purchase
+                latest_for_purchase = PurchaseStatus.query.filter_by(
                     purchase_id=purchase_id
-                ).order_by(PurchaseStatus.created_at.asc()).all()
-                
-                # Build status history
+                ).order_by(PurchaseStatus.created_at.desc()).first()
                 status_history = []
-                for status in all_statuses:
+                latest_status_dt = None
+                # Include all purchases that have been approved by procurement
+                # No need to filter by PM involvement since we want all approved purchases
+                if latest_for_purchase:
+                    latest_status_dt = latest_for_purchase.created_at
                     status_history.append({
-                        'status_id': status.status_id,
-                        'status': status.status,
-                        'sender': status.sender,
-                        'receiver': status.receiver,
-                        'date': status.created_at.isoformat() if status.created_at else None,
-                        'decision_by_user_id': status.decision_by_user_id,
-                        'decision_by': status.created_by,
-                        'comments': status.comments,
-                        'rejection_reason': status.rejection_reason,
-                        'reject_category': status.reject_category,
-                        'decision_date': status.decision_date.isoformat() if status.decision_date else None
+                        'status_id': latest_for_purchase.status_id,
+                        'status': latest_for_purchase.status,
+                        'sender': latest_for_purchase.sender,
+                        'receiver': latest_for_purchase.receiver,
+                        'date': latest_for_purchase.created_at.isoformat() if latest_for_purchase.created_at else None,
+                        'decision_by_user_id': latest_for_purchase.decision_by_user_id,
+                        'decision_by': latest_for_purchase.created_by,
+                        'comments': latest_for_purchase.comments,
+                        'rejection_reason': latest_for_purchase.rejection_reason,
+                        'reject_category': latest_for_purchase.reject_category,
+                        'decision_date': latest_for_purchase.decision_date.isoformat() if latest_for_purchase.decision_date else None
                     })
                 
                 approved_procurement_purchases.append({
@@ -350,47 +417,164 @@ def get_procurement_approved_purchases():
                     'pm_status_date': pm_status.created_at.isoformat() if pm_status and pm_status.created_at else None,
                     'pm_comments': pm_status.comments if pm_status else None,
                     'pm_rejection_reason': pm_status.rejection_reason if pm_status else None,
-                    'status_history': status_history
+                    'status_history': status_history,
+                    'latest_status_date': latest_status_dt.isoformat() if latest_status_dt else None
                 })
+        # Ensure uniqueness of purchases by purchase_id, keeping the most recent entry
+        if approved_procurement_purchases:
+            def _parse_dt_for_item(item):
+                dt = item.get('latest_status_date') or item.get('procurement_status_date') or item.get('created_at')
+                try:
+                    return datetime.fromisoformat(dt) if dt else datetime.min
+                except Exception:
+                    return datetime.min
+
+            unique_by_purchase = {}
+            for item in approved_procurement_purchases:
+                pid = item.get('purchase_id')
+                if pid not in unique_by_purchase:
+                    unique_by_purchase[pid] = item
+                else:
+                    if _parse_dt_for_item(item) > _parse_dt_for_item(unique_by_purchase[pid]):
+                        unique_by_purchase[pid] = item
+            approved_procurement_purchases = list(unique_by_purchase.values())
+            # Exclude items whose latest status is an Estimation -> PM rejection
+            approved_procurement_purchases = [
+                item for item in approved_procurement_purchases
+                if item.get('current_workflow_status') != 'estimation_rejected_to_pm'
+            ]
+        # Collect Estimation -> ProjectManager rejections
+        estimation_pm_rejection_statuses = PurchaseStatus.query.filter(
+            and_(
+                PurchaseStatus.sender == 'estimation',
+                PurchaseStatus.receiver == 'projectManager',
+                PurchaseStatus.status == 'rejected'
+            )
+        ).order_by(PurchaseStatus.created_at.desc()).all()
+
+        estimation_pm_rejected_purchase_ids = list({s.purchase_id for s in estimation_pm_rejection_statuses})
+
+        estimation_pm_rejections = []
+        for purchase_id in estimation_pm_rejected_purchase_ids:
+            # Get the absolute latest status for this purchase to check if rejection is still current
+            absolute_latest_status = PurchaseStatus.query.filter_by(
+                purchase_id=purchase_id
+            ).order_by(PurchaseStatus.created_at.desc()).first()
+            
+            # Latest Estimation->PM rejected status for this purchase
+            rejected_status = next((s for s in estimation_pm_rejection_statuses if s.purchase_id == purchase_id), None)
+            if not rejected_status:
+                continue
+            
+            # Only include in rejections if the rejection is the latest status or if latest status is not an approval
+            # Skip if there's a newer approval from PM after the rejection
+            if absolute_latest_status and absolute_latest_status.status_id != rejected_status.status_id:
+                # Check if there's a PM approval after this rejection
+                if absolute_latest_status.sender == 'projectManager' and absolute_latest_status.status == 'approved':
+                    continue
+                # Check if the latest status shows the purchase moved forward in workflow
+                if absolute_latest_status.created_at > rejected_status.created_at:
+                    if absolute_latest_status.status == 'approved' and (
+                        absolute_latest_status.sender in ['projectManager', 'technicalDirector', 'accounts'] or
+                        absolute_latest_status.receiver in ['technicalDirector', 'accounts', 'design']
+                    ):
+                        continue
+
+            purchase = Purchase.query.filter(
+                and_(
+                    Purchase.purchase_id == purchase_id,
+                    Purchase.is_deleted == False
+                )
+            ).first()
+            if not purchase:
+                continue
+
+            # Materials
+            materials = []
+            if purchase.material_ids:
+                materials = Material.query.filter(
+                    and_(
+                        Material.is_deleted == False,
+                        Material.material_id.in_(purchase.material_ids)
+                    )
+                ).all()
+            material_summary = {
+                'total_materials': len(materials),
+                'total_quantity': sum(m.quantity or 0 for m in materials),
+                'total_cost': round(sum((m.cost or 0) * (m.quantity or 0) for m in materials), 2),
+                'categories': list({m.category for m in materials if m.category})
+            }
+
+            estimation_pm_rejections.append({
+                'purchase_id': purchase.purchase_id,
+                'site_location': purchase.site_location,
+                'purpose': purchase.purpose,
+                'date': purchase.date,
+                'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
+                'materials_summary': material_summary,
+                'rejected_status': {
+                    'status_id': rejected_status.status_id,
+                    'status': rejected_status.status,
+                    'sender': rejected_status.sender,
+                    'receiver': rejected_status.receiver,
+                    'decision_date': rejected_status.decision_date.isoformat() if rejected_status.decision_date else None,
+                    'created_at': rejected_status.created_at.isoformat() if rejected_status.created_at else None,
+                    'created_by': rejected_status.created_by,
+                    'comments': rejected_status.comments,
+                    'rejection_reason': rejected_status.rejection_reason,
+                    'reject_category': rejected_status.reject_category,
+                }
+            })
+        # Ensure uniqueness in Estimation -> PM rejections by purchase_id, keep latest created_at
+        if estimation_pm_rejections:
+            def _parse_rej_dt(item):
+                try:
+                    dt = item.get('rejected_status', {}).get('created_at')
+                    return datetime.fromisoformat(dt) if dt else datetime.min
+                except Exception:
+                    return datetime.min
+
+            unique_rejections = {}
+            for item in estimation_pm_rejections:
+                pid = item.get('purchase_id')
+                if pid not in unique_rejections:
+                    unique_rejections[pid] = item
+                else:
+                    if _parse_rej_dt(item) > _parse_rej_dt(unique_rejections[pid]):
+                        unique_rejections[pid] = item
+            estimation_pm_rejections = list(unique_rejections.values())
+        estimation_rejected_purchase_ids = {item['purchase_id'] for item in estimation_pm_rejections}
+        approved_procurement_purchases = [
+            item for item in approved_procurement_purchases 
+            if item['purchase_id'] not in estimation_rejected_purchase_ids
+        ]
+
+        # If client requests only the most recently updated purchase overall
+        latest_only = request.args.get('latest_only', default=0, type=int)
+        if latest_only:
+            def parse_dt(item):
+                dt = item.get('latest_status_date') or item.get('procurement_status_date') or item.get('created_at')
+                try:
+                    from datetime import datetime
+                    return datetime.fromisoformat(dt) if dt else None
+                except Exception:
+                    return None
+            approved_procurement_purchases = sorted(
+                approved_procurement_purchases,
+                key=lambda x: (parse_dt(x) or datetime.min),
+                reverse=True
+            )[:1]
+
         # Calculate summary statistics based on current workflow status
         total_approved_procurement_purchases = len(approved_procurement_purchases)
         non_approval_project_manager_purchases = total_purchase - total_approved_procurement_purchases
-        
-        # Count by workflow status
-        pending_pm_review_count = len([p for p in approved_procurement_purchases if p['current_workflow_status'] == 'pending_pm_review'])
-        pm_approved_count = len([p for p in approved_procurement_purchases if p['current_workflow_status'] == 'pm_approved'])
-        pm_rejected_count = len([p for p in approved_procurement_purchases if p['current_workflow_status'] == 'pm_rejected'])
-        estimation_review_count = len([p for p in approved_procurement_purchases if p['current_workflow_status'] == 'estimation_review'])
-        technical_director_review_count = len([p for p in approved_procurement_purchases if p['current_workflow_status'] == 'technical_director_review'])
-        accounts_processing_count = len([p for p in approved_procurement_purchases if p['current_workflow_status'] == 'accounts_processing'])
-        
-        # Calculate financial summary
-        total_value = sum(p['materials_summary']['total_cost'] for p in approved_procurement_purchases)
-        pending_pm_value = sum(p['materials_summary']['total_cost'] for p in approved_procurement_purchases if p['current_workflow_status'] == 'pending_pm_review')
-        pm_approved_value = sum(p['materials_summary']['total_cost'] for p in approved_procurement_purchases if p['current_workflow_status'] == 'pm_approved')
-        pm_rejected_value = sum(p['materials_summary']['total_cost'] for p in approved_procurement_purchases if p['current_workflow_status'] == 'pm_rejected')
-        
         return jsonify({
             'success': True,
-            'summary': {
-                'total_approved_procurement_purchases': total_approved_procurement_purchases,
-                'non_approval_project_manager_purchases': non_approval_project_manager_purchases,
-                'workflow_status_counts': {
-                    'pending_pm_review': pending_pm_review_count,
-                    'pm_approved': pm_approved_count,
-                    'pm_rejected': pm_rejected_count,
-                    'estimation_review': estimation_review_count,
-                    'technical_director_review': technical_director_review_count,
-                    'accounts_processing': accounts_processing_count
-                },
-                'financial_summary': {
-                    'total_value': round(total_value, 2),
-                    'pending_pm_value': round(pending_pm_value, 2),
-                    'pm_approved_value': round(pm_approved_value, 2),
-                    'pm_rejected_value': round(pm_rejected_value, 2)
-                }
-            },
-            'approved_procurement_purchases': approved_procurement_purchases
+            'total_approved_procurement_purchases': total_approved_procurement_purchases,
+            'non_approval_project_manager_purchases': non_approval_project_manager_purchases,
+            'estimation_pm_rejections_count': len(estimation_pm_rejections),
+            'approved_procurement_purchases': approved_procurement_purchases,
+            'estimation_pm_rejections': estimation_pm_rejections
         }), 200
 
     except Exception as e:
@@ -1050,421 +1234,3 @@ def get_project_manager_dashboard():
     except Exception as e:
         log.error(f"Error in get_project_manager_dashboard: {str(e)}")
         return jsonify({'error': f'Failed to retrieve dashboard data: {str(e)}'}), 500
-
-def _get_pm_dashboard_metrics(user_id):
-    """Get key metrics for project manager dashboard"""
-    try:
-        # Get current user info for debugging
-        current_user = g.user
-        user_email = current_user.get('email', 'unknown') if current_user else 'unknown'
-        
-        # Total purchases managed by this PM (using email since created_by is string)
-        total_purchases = Purchase.query.filter_by(is_deleted = False).count()
-        # Project Manager approval statistics
-        pm_approved_count = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.sender == 'projectManager',
-                PurchaseStatus.status == 'approved'
-            )
-        ).count()
-        
-        pm_rejected_count = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.sender == 'projectManager',
-                PurchaseStatus.status == 'rejected'
-            )
-        ).count()
-       
-        pm_received_counts = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.sender == 'procurement',
-                PurchaseStatus.status == 'approved'
-            )
-        ).count()
-
-        pm_received_count = set(pm_received_counts)
-        print("pm_received_count:", pm_received_count)
-        # Pending approvals
-        pending_approvals = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.sender == 'projectManager',
-                PurchaseStatus.status == 'pending'
-            )
-        ).count()
-        
-        # Total procurement approved count
-        procurement_approved_count = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.sender == 'procurement',
-                PurchaseStatus.status == 'approved'
-            )
-        ).count()
-        
-        # Approved this month
-        from datetime import datetime, timedelta
-        current_month = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        approved_this_month = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.sender == 'projectManager',
-                PurchaseStatus.status == 'approved',
-                PurchaseStatus.created_at >= current_month
-            )
-        ).count()
-        
-        # Rejected this month
-        rejected_this_month = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.sender == 'projectManager',
-                PurchaseStatus.status == 'rejected',
-                PurchaseStatus.created_at >= current_month
-            )
-        ).count()
-        
-        # Debug logging
-        log.info(f"PM Dashboard Metrics for user {user_email}:")
-        log.info(f"  Total purchases: {total_purchases}")
-        log.info(f"  PM approved: {pm_approved_count}")
-        log.info(f"  PM rejected: {pm_rejected_count}")
-        log.info(f"  Procurement approved: {procurement_approved_count}")
-        
-        return {
-            'total_purchases': total_purchases,
-            'pm_received_count': pm_received_count,
-            'pm_approved_count': pm_approved_count,
-            'pm_rejected_count': pm_rejected_count,
-            'procurement_received_approval_count': procurement_approved_count,
-            'pending_approvals': pending_approvals,
-            'approved_this_month': approved_this_month,
-            'rejected_this_month': rejected_this_month
-        }
-        
-    except Exception as e:
-        log.error(f"Error getting PM dashboard metrics: {str(e)}")
-        return {
-            'total_purchases': 0,
-            'pm_received_count': 0,
-            'pm_approved_count': 0,
-            'pm_rejected_count': 0,
-            'procurement_received_approval_count': 0,
-            'pending_approvals': 0,
-            'approved_this_month': 0,
-            'rejected_this_month': 0
-        }
-
-def _get_pm_recent_purchase_requests(user_id):
-    """Get recent purchase requests for project manager"""
-    try:
-        # Get recent purchases (last 10)
-        recent_purchases = Purchase.query.filter(
-            Purchase.is_deleted == False
-        ).order_by(Purchase.created_at.desc()).limit(10).all()
-        
-        log.info(f"Found {len(recent_purchases)} recent purchases")
-        
-        recent_data = []
-        for purchase in recent_purchases:
-            # Get latest status from project manager
-            pm_status = PurchaseStatus.query.filter(
-                and_(
-                    PurchaseStatus.purchase_id == purchase.purchase_id,
-                    PurchaseStatus.sender == 'projectManager'
-                )
-            ).order_by(PurchaseStatus.created_at.desc()).first()
-            
-            # Get materials for this purchase
-            materials = []
-            if purchase.material_ids:
-                materials = Material.query.filter(
-                    and_(
-                        Material.is_deleted == False,
-                        Material.material_id.in_(purchase.material_ids)
-                    )
-                ).all()
-            
-            # Calculate material summary
-            material_summary = {
-                'total_materials': len(materials),
-                'total_quantity': sum(m.quantity or 0 for m in materials),
-                'total_cost': round(sum((m.cost or 0) * (m.quantity or 0) for m in materials), 2),
-                'categories': list({m.category for m in materials if m.category})
-            }
-            
-            recent_data.append({
-                'purchase_id': purchase.purchase_id,
-                'site_location': purchase.site_location,
-                'purpose': purchase.purpose,
-                'date': purchase.date,
-                'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
-                'email_sent': purchase.email_sent,
-                'materials_summary': material_summary,
-                'pm_status': pm_status.status if pm_status else 'pending',
-                'pm_status_date': pm_status.created_at.isoformat() if pm_status and pm_status.created_at else None,
-                'pm_comments': pm_status.comments if pm_status else None
-            })
-        
-        log.info(f"Returning {len(recent_data)} recent purchase requests")
-        return recent_data
-        
-    except Exception as e:
-        log.error(f"Error getting PM recent purchase requests: {str(e)}")
-        return []
-
-def _get_pm_purchase_analytics(user_id):
-    """Get purchase analytics for project manager"""
-    try:
-        # Get all purchases
-        all_purchases = Purchase.query.filter(Purchase.is_deleted == False).all()
-        
-        log.info(f"Found {len(all_purchases)} total purchases for analytics")
-        
-        # Calculate analytics
-        total_purchases = len(all_purchases)
-        email_sent_true = len([p for p in all_purchases if p.email_sent == True])
-        email_sent_false = len([p for p in all_purchases if p.email_sent == False])
-        
-        log.info(f"Email sent: {email_sent_true} true, {email_sent_false} false")
-        
-        # Get material details
-        material_details = _get_pm_material_details(all_purchases)
-        
-        return {
-            'total_purchases': total_purchases,
-            'email_sent_true': email_sent_true,
-            'email_sent_false': email_sent_false,
-            'material_details': material_details
-        }
-        
-    except Exception as e:
-        log.error(f"Error getting PM purchase analytics: {str(e)}")
-        return {
-            'total_purchases': 0,
-            'email_sent_true': 0,
-            'email_sent_false': 0,
-            'material_details': {
-                'total_materials': 0,
-                'total_quantity': 0,
-                'total_cost': 0,
-                'units': [],
-                'category_breakdown': {}
-            }
-        }
-
-def _get_pm_material_details(purchases):
-    """Get material details for purchases"""
-    try:
-        # Get all materials for these purchases
-        all_materials = []
-        for purchase in purchases:
-            if purchase.material_ids:
-                materials = Material.query.filter(
-                    and_(
-                        Material.is_deleted == False,
-                        Material.material_id.in_(purchase.material_ids)
-                    )
-                ).all()
-                all_materials.extend(materials)
-        
-        # Calculate totals
-        total_materials = len(all_materials)
-        total_quantity = sum(m.quantity or 0 for m in all_materials)
-        total_cost = sum((m.cost or 0) * (m.quantity or 0) for m in all_materials)
-        units = list({m.unit for m in all_materials if m.unit})
-        
-        # Get category breakdown
-        category_breakdown = {}
-        for material in all_materials:
-            category = material.category or 'Uncategorized'
-            if category not in category_breakdown:
-                category_breakdown[category] = {
-                    'count': 0,
-                    'quantity': 0,
-                    'cost': 0
-                }
-            category_breakdown[category]['count'] += 1
-            category_breakdown[category]['quantity'] += material.quantity or 0
-            category_breakdown[category]['cost'] += (material.cost or 0) * (material.quantity or 0)
-        
-        return {
-            'total_materials': total_materials,
-            'total_quantity': total_quantity,
-            'total_cost': round(total_cost, 2),
-            'units': units,
-            'category_breakdown': category_breakdown
-        }
-        
-    except Exception as e:
-        log.error(f"Error getting PM material details: {str(e)}")
-        return {
-            'total_materials': 0,
-            'total_quantity': 0,
-            'total_cost': 0,
-            'units': [],
-            'category_breakdown': {}
-        }
-
-def _get_pm_approval_statistics(user_id):
-    """Get approval statistics for project manager"""
-    try:
-        # Get all PM statuses
-        pm_statuses = PurchaseStatus.query.filter(
-            PurchaseStatus.sender == 'projectManager'
-        ).all()
-        
-        log.info(f"Found {len(pm_statuses)} PM statuses")
-        
-        # Calculate statistics
-        total_decisions = len(pm_statuses)
-        approved_count = len([s for s in pm_statuses if s.status == 'approved'])
-        rejected_count = len([s for s in pm_statuses if s.status == 'rejected'])
-        # pending_count = len([s for s in pm_statuses if s.status == 'pending'])
-        
-        log.info(f"PM Statistics: {approved_count} approved, {rejected_count} rejected,")
-        
-        return {
-            'total_purchases_count': total_decisions,
-            'approved_count': approved_count,
-            'rejected_count': rejected_count,
-            # 'pending_count': pending_count,
-        }
-        
-    except Exception as e:
-        log.error(f"Error getting PM approval statistics: {str(e)}")
-        return {
-            'total_purchases_count': 0,
-            'approved_count': 0,
-            'rejected_count': 0,
-        }
-
-def _get_pm_project_summary(user_id):
-    """Get project summary for project manager"""
-    try:
-        # Get all projects
-        from models.project import Project
-        projects = Project.query.filter(Project.is_deleted == False).all()
-        
-        # Calculate project statistics
-        total_projects = len(projects)
-        active_projects = len([p for p in projects if p.status == 'active'])
-        completed_projects = len([p for p in projects if p.status == 'completed'])
-        on_hold_projects = len([p for p in projects if p.status == 'on_hold'])
-        
-        # Get project locations
-        locations = list({p.location for p in projects if p.location})
-        
-        return {
-            'total_projects': total_projects,
-            'active_projects': active_projects,
-            'completed_projects': completed_projects,
-            'on_hold_projects': on_hold_projects,
-            'locations': locations
-        }
-        
-    except Exception as e:
-        log.error(f"Error getting PM project summary: {str(e)}")
-        return {
-            'total_projects': 0,
-            'active_projects': 0,
-            'completed_projects': 0,
-            'on_hold_projects': 0,
-            'locations': []
-        }
-
-def _get_pm_pending_approvals(user_id):
-    """Get pending approvals for project manager"""
-    try:
-        # Get purchases that need PM approval
-        pending_purchases = Purchase.query.filter(
-            Purchase.is_deleted == False
-        ).all()
-        
-        pending_data = []
-        for purchase in pending_purchases:
-            # Check if PM has already made a decision
-            pm_status = PurchaseStatus.query.filter(
-                and_(
-                    PurchaseStatus.purchase_id == purchase.purchase_id,
-                    PurchaseStatus.sender == 'projectManager'
-                )
-            ).order_by(PurchaseStatus.created_at.desc()).first()
-            
-            # Only include if PM hasn't made a decision or if it's pending
-            if not pm_status or pm_status.status == 'pending':
-                # Get materials for this purchase
-                materials = []
-                if purchase.material_ids:
-                    materials = Material.query.filter(
-                        and_(
-                            Material.is_deleted == False,
-                            Material.material_id.in_(purchase.material_ids)
-                        )
-                    ).all()
-                
-                # Calculate material summary
-                material_summary = {
-                    'total_materials': len(materials),
-                    'total_quantity': sum(m.quantity or 0 for m in materials),
-                    'total_cost': round(sum((m.cost or 0) * (m.quantity or 0) for m in materials), 2),
-                    'categories': list({m.category for m in materials if m.category})
-                }
-                
-                pending_data.append({
-                    'purchase_id': purchase.purchase_id,
-                    'site_location': purchase.site_location,
-                    'purpose': purchase.purpose,
-                    'date': purchase.date,
-                    'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
-                    'materials_summary': material_summary,
-                    'current_status': pm_status.status if pm_status else 'pending',
-                    'status_date': pm_status.created_at.isoformat() if pm_status and pm_status.created_at else None
-                })
-        
-        return pending_data[:10]  # Limit to 10 most recent
-        
-    except Exception as e:
-        log.error(f"Error getting PM pending approvals: {str(e)}")
-        return []
-
-def debug_dashboard_data():
-    """Debug endpoint to check raw data"""
-    try:
-        # Check raw data counts
-        total_purchases = Purchase.query.filter(Purchase.is_deleted == False).count()
-        total_statuses = PurchaseStatus.query.count()
-        total_materials = Material.query.filter(Material.is_deleted == False).count()
-        total_projects = Project.query.filter(Project.is_deleted == False).count()
-        
-        # Check some sample data
-        sample_purchases = Purchase.query.filter(Purchase.is_deleted == False).limit(3).all()
-        sample_statuses = PurchaseStatus.query.limit(3).all()
-        
-        return jsonify({
-            'success': True,
-            'debug_data': {
-                'counts': {
-                    'total_purchases': total_purchases,
-                    'total_statuses': total_statuses,
-                    'total_materials': total_materials,
-                    'total_projects': total_projects
-                },
-                'sample_purchases': [
-                    {
-                        'purchase_id': p.purchase_id,
-                        'created_by': p.created_by,
-                        'is_deleted': p.is_deleted,
-                        'email_sent': p.email_sent
-                    } for p in sample_purchases
-                ],
-                'sample_statuses': [
-                    {
-                        'status_id': s.status_id,
-                        'purchase_id': s.purchase_id,
-                        'sender': s.sender,
-                        'status': s.status
-                    } for s in sample_statuses
-                ]
-            }
-        }), 200
-        
-    except Exception as e:
-        log.error(f"Error in debug dashboard data: {str(e)}")
-        return jsonify({'error': str(e)}), 500
