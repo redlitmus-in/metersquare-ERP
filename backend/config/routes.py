@@ -1,4 +1,5 @@
 import logging
+from routes.upload_file_routes import file_upload_routes
 from routes.auth_route import auth_routes
 from routes.purchase_workflow_routes import purchase_workflow_routes
 from routes.estimation_routes import estimation_routes
@@ -19,3 +20,4 @@ def initialize_routes(app):
     app.register_blueprint(procurement_routes)
     app.register_blueprint(technical_director_routes)
     app.register_blueprint(account_routes)
+    app.register_blueprint(file_upload_routes)

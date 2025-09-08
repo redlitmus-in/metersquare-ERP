@@ -3102,20 +3102,20 @@ This is an automated email from the ERP system.
             log.error(f"Error sending acknowledgement notification: {str(e)}")
             return False
 
-    def get_accounts_team_emails(self) -> List[str]:
-        """Get emails of all accounts team members"""
-        try:
-            accounts_role = Role.query.filter_by(role='accounts', is_deleted=False).first()
-            if not accounts_role:
-                return []
+    # def get_accounts_team_emails(self) -> List[str]:
+    #     """Get emails of all accounts team members"""
+    #     try:
+    #         accounts_role = Role.query.filter_by(role='accounts', is_deleted=False).first()
+    #         if not accounts_role:
+    #             return []
             
-            accounts_users = User.query.filter_by(
-                role_id=accounts_role.role_id, 
-                is_active=True, 
-                is_deleted=False
-            ).all()
+    #         accounts_users = User.query.filter_by(
+    #             role_id=accounts_role.role_id, 
+    #             is_active=True, 
+    #             is_deleted=False
+    #         ).all()
             
-            return [user.email for user in accounts_users if user.email]
-        except Exception as e:
-            log.error(f"Error getting accounts team emails: {str(e)}")
-            return []
+    #         return [user.email for user in accounts_users if user.email]
+    #     except Exception as e:
+    #         log.error(f"Error getting accounts team emails: {str(e)}")
+    #         return []

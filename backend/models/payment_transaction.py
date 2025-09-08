@@ -24,7 +24,7 @@ class PaymentTransaction(db.Model):
     approved_by = db.Column(db.String(255), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
     notes = db.Column(db.Text, nullable=True)
-    supporting_documents = db.Column(ARRAY(db.String(255)), nullable=True)  # Array of file paths
+    supporting_documents = db.Column(db.String(255), nullable=True)  # Array of file paths
     is_deleted = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     created_by = db.Column(db.String(255), nullable=False)
