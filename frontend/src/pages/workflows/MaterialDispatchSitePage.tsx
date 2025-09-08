@@ -86,7 +86,7 @@ const MaterialDispatchSitePage: React.FC = () => {
   };
 
   const workflowSteps = [
-    { stage: 'material_request', label: 'Material Request Raised', actor: 'Site/MEP/Factory Supervisor' },
+    { stage: 'material_request', label: 'Material Request Raised', actor: 'Site/MEP Supervisor' },
     { stage: 'delivery_note', label: 'Material Delivery Note Issued', actor: 'Procurement' },
     { stage: 'note_approval', label: 'Delivery Note Approval', actor: 'Project Manager / Procurement' },
     { stage: 'bulk_qty_request', label: 'Bulk Qty Dispatch Request', actor: 'When Needed' },
@@ -441,7 +441,7 @@ const MaterialDispatchSitePage: React.FC = () => {
                     location: 'Sentosa Resort Site',
                     active: 1, 
                     delivered: 4, 
-                    supervisor: 'Factory Supervisor',
+                    supervisor: 'Site Supervisor',
                     color: 'bg-green-100 text-green-700',
                     icon: Building
                   }
@@ -503,13 +503,6 @@ const MaterialDispatchSitePage: React.FC = () => {
                     color: 'bg-[#243d8a]/10 text-[#243d8a]/90',
                     icon: Zap
                   },
-                  { 
-                    type: 'Factory Supervisor',
-                    count: siteDispatches.filter(d => d.supervisorType === 'factory').length,
-                    pending: siteDispatches.filter(d => d.supervisorType === 'factory' && d.status === 'pending_approval').length,
-                    color: 'bg-purple-100 text-purple-700',
-                    icon: Building
-                  }
                 ].map((supervisor, index) => {
                   const SupervisorIcon = supervisor.icon;
                   return (

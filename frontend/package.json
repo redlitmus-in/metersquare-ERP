@@ -4,6 +4,7 @@
   "type": "module",
   "description": "Corporate Interiors ERP System - React TypeScript Frontend",
   "scripts": {
+    "start": "vite",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

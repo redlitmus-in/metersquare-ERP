@@ -4,6 +4,8 @@
  */
 
 export { siteSupervisorPermissions } from './permissions';
+export { default as SiteSupervisorHub } from './pages/SiteSupervisorHub';
+export { siteSupervisorService } from './services/siteSupervisorService';
 
 // Site Supervisor can create purchase requests
 // Components for creating PRs would go here

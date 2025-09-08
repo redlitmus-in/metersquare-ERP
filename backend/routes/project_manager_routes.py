@@ -20,11 +20,7 @@ def pm_approval_workflow_route():
 @jwt_required
 def get_procurement_approved_purchases_route():
     return get_procurement_approved_purchases()
-# Get Specific Purchase Status Details
-@project_manager_routes.route('/purchase_status/<int:purchase_id>', methods=['GET'])
-@jwt_required
-def get_purchase_status_details_route(purchase_id):
-    return get_purchase_status_details(purchase_id)
+# Removed /purchase_status endpoint - using /purchase/{id} and /purchase_history/{id} instead
 
 # Project Manager Dashboard
 @project_manager_routes.route('/project_manager_dashboard', methods=['GET'])

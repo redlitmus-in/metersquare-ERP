@@ -118,15 +118,27 @@ const ProjectManagerDashboard: React.FC = () => {
     }
   };
 
+  // Add loading state check
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-500">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Use real data for timeline
-  const timelineData = dashboardData.approvalTrends.map((trend, idx) => ({
+  const timelineData = (dashboardData.approvalTrends || []).map((trend, idx) => ({
     week: trend.month.substring(0, 3),
     planned: trend.approved + trend.rejected + trend.pending,
     actual: trend.approved
   })).slice(0, 6);
 
   // Resource Allocation Data from categories
-  const resourceData = dashboardData.categoryBreakdown.slice(0, 4).map((cat, idx) => ({
+  const resourceData = (dashboardData.categoryBreakdown || []).slice(0, 4).map((cat, idx) => ({
     name: cat.category,
     value: Math.round((cat.value / Math.max(1, dashboardData.categoryBreakdown.reduce((sum, c) => sum + c.value, 0))) * 100),
     color: ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'][idx] || '#6b7280'
@@ -212,19 +224,19 @@ const ProjectManagerDashboard: React.FC = () => {
   ];
 
   // Recent purchases as active projects
-  const activeProjects = dashboardData.recentPurchases.slice(0, 4).map(purchase => ({
+  const activeProjects = (dashboardData.recentPurchases || []).slice(0, 4).map(purchase => ({
     id: purchase.purchase_id,
     name: purchase.site_location,
-    progress: purchase.current_status.status === 'approved' ? 100 : 
-              purchase.current_status.status === 'rejected' ? 0 : 50,
-    status: purchase.current_status.status === 'approved' ? 'on-track' :
-            purchase.current_status.status === 'rejected' ? 'delayed' : 'at-risk',
+    progress: purchase.pm_status === 'approved' ? 100 : 
+              purchase.pm_status === 'rejected' ? 0 : 50,
+    status: purchase.pm_status === 'approved' ? 'on-track' :
+            purchase.pm_status === 'rejected' ? 'delayed' : 'at-risk',
     deadline: purchase.date,
-    budget: `AED ${purchase.materials_summary.total_cost.toLocaleString()}`,
+    budget: `AED ${purchase.materials_summary?.total_cost ? purchase.materials_summary.total_cost.toLocaleString() : '0'}`,
     purpose: purchase.purpose
   }));
 
-  const pendingPurchases = dashboardData.recentPurchases.filter(p => p.current_status.role !== 'projectManager');
+  const pendingPurchases = (dashboardData.recentPurchases || []).filter(p => !p.pm_status || p.pm_status === 'pending');
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">

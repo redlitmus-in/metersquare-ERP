@@ -1,9 +1,11 @@
 /**
  * Project Manager Hub Page
  * Main workspace for Project Manager role
+ * Following the standardized hub implementation pattern
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -11,442 +13,427 @@ import { Input } from '@/components/ui/input';
 import { 
   RefreshCw, Download, Search, Filter, LayoutDashboard, 
   Package, CheckSquare, BarChart3, Bell, Settings,
-  Clock, CheckCircle, XCircle, AlertTriangle
+  Clock, CheckCircle, XCircle, AlertTriangle, FileText,
+  TrendingUp, Users, Calendar
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { PMMetricsCards } from '../components/PMMetricsCards';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PurchaseApprovalCard } from '../components/PurchaseApprovalCard';
-import { ApprovalModal } from '../components/ApprovalModal';
-import { PurchaseHistoryModal } from '../components/PurchaseHistoryModal';
-import { projectManagerService, PMDashboardData, ProcurementPurchase } from '../services/projectManagerService';
+import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
+import { projectManagerService, ProcurementPurchase } from '../services/projectManagerService';
 import { toast } from 'sonner';
 
+// Metric card component
+interface MetricCard {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+  trend?: string;
+  trendType?: 'up' | 'down' | 'neutral';
+  bgColor: string;
+  iconColor: string;
+}
+
+const MetricCardComponent: React.FC<{ metric: MetricCard }> = ({ metric }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    className={`${metric.bgColor} rounded-lg p-6 border border-gray-100`}
+  >
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm font-medium text-gray-600">{metric.title}</p>
+        <p className="text-2xl font-bold text-gray-900 mt-2">{metric.value}</p>
+        {metric.trend && (
+          <div className="flex items-center mt-2">
+            <TrendingUp className={`h-4 w-4 ${
+              metric.trendType === 'up' ? 'text-green-600' : 
+              metric.trendType === 'down' ? 'text-red-600' : 
+              'text-gray-600'
+            }`} />
+            <span className={`text-sm ml-1 ${
+              metric.trendType === 'up' ? 'text-green-600' : 
+              metric.trendType === 'down' ? 'text-red-600' : 
+              'text-gray-600'
+            }`}>
+              {metric.trend}
+            </span>
+          </div>
+        )}
+      </div>
+      <div className={`${metric.iconColor} p-3 rounded-lg`}>
+        {metric.icon}
+      </div>
+    </div>
+  </motion.div>
+);
+
 const ProjectManagerHub: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('all-purchases');
-  const [dashboardData, setDashboardData] = useState<PMDashboardData>({
-    totalPurchases: 0,
-    pendingApprovals: 0,
-    approvedThisMonth: 0,
-    rejectedThisMonth: 0,
-    averageApprovalTime: 0,
-    recentPurchases: [],
-    approvalTrends: [],
-    categoryBreakdown: []
-  });
+  const navigate = useNavigate();
+  
+  // State management
+  const [activeTab, setActiveTab] = useState('pending');
   const [purchases, setPurchases] = useState<ProcurementPurchase[]>([]);
   const [filteredPurchases, setFilteredPurchases] = useState<ProcurementPurchase[]>([]);
+  const [metrics, setMetrics] = useState<MetricCard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [refreshKey, setRefreshKey] = useState(0);
   
   // Modal states
-  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [selectedPurchase, setSelectedPurchase] = useState<ProcurementPurchase | null>(null);
-  const [selectedPurchaseId, setSelectedPurchaseId] = useState<string>('');
-  const [modalMode, setModalMode] = useState<'approve' | 'reject'>('approve');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
+  const [modalMode, setModalMode] = useState<'details' | 'history'>('details');
 
-  // Fetch dashboard data
-  const fetchDashboardData = async () => {
-    try {
-      setIsLoading(true);
-      const data = await projectManagerService.getPMDashboardData();
-      setDashboardData(data);
-      setPurchases(data.recentPurchases);
-      setFilteredPurchases(data.recentPurchases);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      toast.error('Failed to fetch dashboard data. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Fetch purchases
-  const fetchPurchases = async () => {
+  // Fetch purchases from API
+  const fetchPurchases = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await projectManagerService.getProcurementApprovedPurchases();
+      
       if (response.success) {
-        setPurchases(response.approved_procurement_purchases);
-        setFilteredPurchases(response.approved_procurement_purchases);
+        setPurchases(response.approved_procurement_purchases || []);
+        
+        // Calculate metrics from the response
+        const metricsData: MetricCard[] = [
+          {
+            title: 'Total Purchases',
+            value: response.total_approved_procurement_purchases || 0,
+            icon: <Package className="h-5 w-5 text-blue-600" />,
+            bgColor: 'bg-blue-50',
+            iconColor: 'bg-blue-100',
+            trend: '+12%',
+            trendType: 'up'
+          },
+          {
+            title: 'Pending Approvals',
+            value: response.summary?.workflow_status_counts?.pending_pm_review || 0,
+            icon: <Clock className="h-5 w-5 text-yellow-600" />,
+            bgColor: 'bg-yellow-50',
+            iconColor: 'bg-yellow-100',
+            trend: '-5%',
+            trendType: 'down'
+          },
+          {
+            title: 'Approved',
+            value: response.summary?.workflow_status_counts?.pm_approved || 0,
+            icon: <CheckCircle className="h-5 w-5 text-green-600" />,
+            bgColor: 'bg-green-50',
+            iconColor: 'bg-green-100',
+            trend: '+8%',
+            trendType: 'up'
+          },
+          {
+            title: 'Rejected',
+            value: response.summary?.workflow_status_counts?.pm_rejected || 0,
+            icon: <XCircle className="h-5 w-5 text-red-600" />,
+            bgColor: 'bg-red-50',
+            iconColor: 'bg-red-100',
+            trend: '-2%',
+            trendType: 'down'
+          },
+          {
+            title: 'Total Value',
+            value: `AED ${(response.summary?.financial_summary?.total_value || 0).toLocaleString()}`,
+            icon: <TrendingUp className="h-5 w-5 text-indigo-600" />,
+            bgColor: 'bg-indigo-50',
+            iconColor: 'bg-indigo-100',
+            trend: '+15%',
+            trendType: 'up'
+          },
+          {
+            title: 'Avg Processing Time',
+            value: '2.5 days',
+            icon: <Calendar className="h-5 w-5 text-purple-600" />,
+            bgColor: 'bg-purple-50',
+            iconColor: 'bg-purple-100',
+            trend: 'Stable',
+            trendType: 'neutral'
+          }
+        ];
+        
+        setMetrics(metricsData);
       }
     } catch (error) {
       console.error('Error fetching purchases:', error);
-      toast.error('Failed to fetch purchase requests.');
+      toast.error('Failed to fetch purchase requests. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
   }, []);
 
-  // Filter purchases based on search and status
+  // Initial data fetch
+  useEffect(() => {
+    fetchPurchases();
+  }, [fetchPurchases, refreshKey]);
+
+  // Filter purchases based on active tab and search
   useEffect(() => {
     let filtered = [...purchases];
 
-    // Search filter
+    // Filter by status based on active tab
+    switch (activeTab) {
+      case 'pending':
+        filtered = filtered.filter(p => !p.pm_status || p.pm_status === 'pending');
+        break;
+      case 'approved':
+        filtered = filtered.filter(p => p.pm_status === 'approved');
+        break;
+      case 'rejected':
+        filtered = filtered.filter(p => p.pm_status === 'rejected');
+        break;
+      default:
+        // Show all
+        break;
+    }
+
+    // Apply search filter
     if (searchTerm) {
-      filtered = filtered.filter(p => 
-        p.purchase_id.toString().includes(searchTerm) ||
-        p.site_location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.purpose.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(p =>
+        p.purchase_id?.toString().includes(searchTerm) ||
+        p.site_location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.purpose?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // Status filter based on PM status
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(p => {
-        if (filterStatus === 'pending') {
-          // Pending PM approval - pm_status is 'pending' or null
-          return p.pm_status === 'pending' || p.pm_status === null;
-        }
-        if (filterStatus === 'approved') {
-          // PM approved - pm_status is 'approved'
-          return p.pm_status === 'approved';
-        }
-        if (filterStatus === 'rejected') {
-          // PM rejected - pm_status is 'rejected'
-          return p.pm_status === 'rejected';
-        }
-        return true;
-      });
-    }
-
     setFilteredPurchases(filtered);
-  }, [searchTerm, filterStatus, purchases]);
+  }, [purchases, activeTab, searchTerm]);
 
-  // Handle approve
-  const handleApprove = (purchaseId: number) => {
-    const purchase = purchases.find(p => p.purchase_id === purchaseId);
-    if (purchase) {
-      setSelectedPurchase(purchase);
-      setModalMode('approve');
-      setApprovalModalOpen(true);
+  // Handle approval action
+  const handleApprove = async (purchaseId: number) => {
+    try {
+      const result = await projectManagerService.approvePurchase(purchaseId, 'Approved by Project Manager');
+      if (result.success) {
+        toast.success('Purchase approved successfully');
+        setRefreshKey(prev => prev + 1);
+      }
+    } catch (error) {
+      toast.error('Failed to approve purchase');
     }
   };
 
-  // Handle reject
-  const handleReject = (purchaseId: number) => {
-    const purchase = purchases.find(p => p.purchase_id === purchaseId);
-    if (purchase) {
-      setSelectedPurchase(purchase);
-      setModalMode('reject');
-      setApprovalModalOpen(true);
+  // Handle rejection action
+  const handleReject = async (purchaseId: number, reason: string) => {
+    try {
+      const result = await projectManagerService.rejectPurchase(purchaseId, reason, 'Rejected by Project Manager');
+      if (result.success) {
+        toast.success('Purchase rejected successfully');
+        setRefreshKey(prev => prev + 1);
+      }
+    } catch (error) {
+      toast.error('Failed to reject purchase');
     }
   };
+
 
   // Handle view details
   const handleViewDetails = (purchaseId: number) => {
-    setSelectedPurchaseId(purchaseId.toString());
+    setSelectedPurchaseId(purchaseId);
+    setModalMode('details');
     setDetailsModalOpen(true);
   };
 
-  // Confirm approval/rejection
-  const handleConfirmApproval = async (data: {
-    purchaseId: number;
-    action: 'approve' | 'reject';
-    rejectionReason?: string;
-    comments?: string;
-  }) => {
+  // Handle view history
+  const handleViewHistory = (purchaseId: number) => {
+    setSelectedPurchaseId(purchaseId);
+    setModalMode('history');
+    setDetailsModalOpen(true);
+  };
+
+  // Handle edit (if applicable)
+  const handleEdit = (purchaseId: number) => {
+    toast.info(`Edit functionality for purchase ${purchaseId}`);
+  };
+
+  // Handle send to estimation
+  const handleSendToEstimation = async (purchaseId: number) => {
     try {
-      setIsProcessing(true);
-      
-      let response;
-      if (data.action === 'approve') {
-        response = await projectManagerService.approvePurchase(data.purchaseId, data.comments);
-      } else {
-        response = await projectManagerService.rejectPurchase(
-          data.purchaseId, 
-          data.rejectionReason || '', 
-          data.comments
-        );
-      }
-
-      if (response.success) {
-        toast.success(response.message || `Purchase ${data.action}d successfully`);
-
-        // Refresh data
-        await fetchDashboardData();
-        setApprovalModalOpen(false);
-        setSelectedPurchase(null);
-      } else {
-        throw new Error(response.error || 'Operation failed');
-      }
-    } catch (error: any) {
-      console.error('Error processing approval:', error);
-      toast.error(error.response?.data?.error || error.message || 'Failed to process request');
-    } finally {
-      setIsProcessing(false);
+      // This would call the appropriate API endpoint
+      toast.success(`Purchase ${purchaseId} sent to Estimation team`);
+      setRefreshKey(prev => prev + 1);
+    } catch (error) {
+      toast.error('Failed to send to Estimation');
     }
   };
 
-  // Get pending purchases - those with pm_status as 'pending' or null
-  const pendingPurchases = filteredPurchases.filter(p => p.pm_status === 'pending' || p.pm_status === null);
+  // Export data
+  const handleExport = () => {
+    const dataToExport = {
+      purchases: filteredPurchases,
+      metrics: metrics.map(m => ({ title: m.title, value: m.value })),
+      exportDate: new Date().toISOString(),
+      role: 'Project Manager'
+    };
+    
+    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pm-purchases-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast.success('Data exported successfully');
+  };
+
+  // Calculate tab counts
+  const tabCounts = useMemo(() => ({
+    pending: purchases.filter(p => !p.pm_status || p.pm_status === 'pending').length,
+    approved: purchases.filter(p => p.pm_status === 'approved').length,
+    rejected: purchases.filter(p => p.pm_status === 'rejected').length
+  }), [purchases]);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-7xl mx-auto space-y-6"
-      >
-        {/* Header */}
-        <div className="flex justify-between items-center">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header Section */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Project Manager Hub</h1>
-            <p className="text-gray-500 mt-1">Manage purchase approvals and project workflows</p>
+            <h1 className="text-2xl font-bold text-gray-900">Project Manager Hub</h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Manage purchase approvals and project workflows
+            </p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={fetchDashboardData} variant="outline" size="icon">
-              <RefreshCw className="h-4 w-4" />
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRefreshKey(prev => prev + 1)}
+              disabled={isLoading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
             </Button>
-            <Button variant="outline" size="icon">
-              <Download className="h-4 w-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export
             </Button>
-            <Button variant="outline" size="icon">
-              <Bell className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon">
-              <Settings className="h-4 w-4" />
-            </Button>
+            <Badge variant="secondary" className="px-3 py-1">
+              <Users className="h-3 w-3 mr-1" />
+              Project Manager
+            </Badge>
           </div>
         </div>
+      </div>
 
-        {/* Metrics Cards */}
-        <PMMetricsCards data={dashboardData} />
+      {/* Metrics Section */}
+      <div className="px-6 py-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          {metrics.map((metric, index) => (
+            <MetricCardComponent key={index} metric={metric} />
+          ))}
+        </div>
+      </div>
 
-        {/* Main Content Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-1 lg:w-auto lg:inline-grid">
-            <TabsTrigger value="all-purchases" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              All Purchases
-              {pendingPurchases.length > 0 && (
-                <span className="ml-2 px-2 py-0.5 text-xs bg-orange-500 text-white rounded-full">
-                  {pendingPurchases.length} pending
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
-
-          {/* All Purchases Tab */}
-          <TabsContent value="all-purchases" className="space-y-4">
-            {/* Search and Filter Bar */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search by ID, location, or purpose..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+      {/* Main Content Section */}
+      <div className="px-6 pb-6">
+        <Card className="shadow-sm">
+          <CardHeader className="border-b bg-gray-50/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Package className="h-5 w-5 text-blue-600" />
+                <CardTitle className="text-lg">Purchase Approvals</CardTitle>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant={filterStatus === 'all' ? 'default' : 'outline'}
-                  onClick={() => setFilterStatus('all')}
-                  size="sm"
-                  className="flex items-center gap-1"
-                >
-                  All
-                  <Badge variant="secondary" className="ml-1">
-                    {purchases.length}
-                  </Badge>
-                </Button>
-                <Button
-                  variant={filterStatus === 'pending' ? 'default' : 'outline'}
-                  onClick={() => setFilterStatus('pending')}
-                  size="sm"
-                  className={`flex items-center gap-1 ${
-                    filterStatus === 'pending' ? '' : 'hover:bg-orange-50'
-                  }`}
-                >
-                  Pending
-                  {purchases.filter(p => p.pm_status === 'pending' || p.pm_status === null).length > 0 && (
-                    <Badge className="ml-1 bg-orange-500 text-white">
-                      {purchases.filter(p => p.pm_status === 'pending' || p.pm_status === null).length}
-                    </Badge>
-                  )}
-                </Button>
-                <Button
-                  variant={filterStatus === 'approved' ? 'default' : 'outline'}
-                  onClick={() => setFilterStatus('approved')}
-                  size="sm"
-                  className={`flex items-center gap-1 ${
-                    filterStatus === 'approved' ? '' : 'hover:bg-green-50'
-                  }`}
-                >
-                  Approved
-                  <Badge variant="secondary" className="ml-1 bg-green-100 text-green-800">
-                    {purchases.filter(p => p.pm_status === 'approved').length}
-                  </Badge>
-                </Button>
-                <Button
-                  variant={filterStatus === 'rejected' ? 'default' : 'outline'}
-                  onClick={() => setFilterStatus('rejected')}
-                  size="sm"
-                  className={`flex items-center gap-1 ${
-                    filterStatus === 'rejected' ? '' : 'hover:bg-red-50'
-                  }`}
-                >
-                  Rejected
-                  <Badge variant="secondary" className="ml-1 bg-red-100 text-red-800">
-                    {purchases.filter(p => p.pm_status === 'rejected').length}
-                  </Badge>
-                </Button>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search purchases..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9 w-64"
+                  />
+                </div>
               </div>
             </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <div className="border-b px-6 pt-4">
+                <TabsList className="grid w-full max-w-md grid-cols-3 bg-gray-100/50">
+                  <TabsTrigger value="pending" className="relative">
+                    <Clock className="h-4 w-4 mr-2" />
+                    Pending
+                    {tabCounts.pending > 0 && (
+                      <Badge variant="secondary" className="ml-2 bg-yellow-100 text-yellow-700">
+                        {tabCounts.pending}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="approved" className="relative">
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Approved
+                    {tabCounts.approved > 0 && (
+                      <Badge variant="secondary" className="ml-2 bg-green-100 text-green-700">
+                        {tabCounts.approved}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="rejected" className="relative">
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Rejected
+                    {tabCounts.rejected > 0 && (
+                      <Badge variant="secondary" className="ml-2 bg-red-100 text-red-700">
+                        {tabCounts.rejected}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
-            {/* Status Summary */}
-            {filterStatus === 'pending' && pendingPurchases.length > 0 && (
-              <Alert className="border-orange-200 bg-orange-50">
-                <AlertTriangle className="h-4 w-4 text-orange-600" />
-                <AlertDescription className="text-orange-800">
-                  You have <strong>{pendingPurchases.length}</strong> purchase{pendingPurchases.length > 1 ? 's' : ''} awaiting your review.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Purchases Grid */}
-            <div className="grid grid-cols-1 gap-3">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-500">Loading purchases...</p>
+              {/* Tab Content */}
+              <TabsContent value={activeTab} className="p-6">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
                   </div>
-                </div>
-              ) : filteredPurchases.length > 0 ? (
-                <>
-                  {/* Group by status for better organization */}
-                  {filterStatus === 'all' && (
-                    <>
-                      {/* Pending Section */}
-                      {filteredPurchases.filter(p => p.pm_status === 'pending' || p.pm_status === null).length > 0 && (
-                        <div className="space-y-3">
-                          <h3 className="text-sm font-semibold text-orange-700 flex items-center gap-2">
-                            <Clock className="h-4 w-4" />
-                            Pending Your Review ({filteredPurchases.filter(p => p.pm_status === 'pending' || p.pm_status === null).length})
-                          </h3>
-                          {filteredPurchases
-                            .filter(p => p.pm_status === 'pending' || p.pm_status === null)
-                            .map(purchase => (
-                              <PurchaseApprovalCard
-                                key={purchase.purchase_id}
-                                purchase={purchase}
-                                onApprove={handleApprove}
-                                onReject={handleReject}
-                                onViewDetails={handleViewDetails}
-                                isLoading={isProcessing}
-                              />
-                            ))}
-                        </div>
-                      )}
-
-                      {/* Approved Section */}
-                      {filteredPurchases.filter(p => p.pm_status === 'approved').length > 0 && (
-                        <div className="space-y-3 mt-6">
-                          <h3 className="text-sm font-semibold text-green-700 flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4" />
-                            Approved by You ({filteredPurchases.filter(p => p.pm_status === 'approved').length})
-                          </h3>
-                          {filteredPurchases
-                            .filter(p => p.pm_status === 'approved')
-                            .map(purchase => (
-                              <PurchaseApprovalCard
-                                key={purchase.purchase_id}
-                                purchase={purchase}
-                                onApprove={handleApprove}
-                                onReject={handleReject}
-                                onViewDetails={handleViewDetails}
-                                isLoading={isProcessing}
-                              />
-                            ))}
-                        </div>
-                      )}
-
-                      {/* Rejected Section */}
-                      {filteredPurchases.filter(p => p.pm_status === 'rejected').length > 0 && (
-                        <div className="space-y-3 mt-6">
-                          <h3 className="text-sm font-semibold text-red-700 flex items-center gap-2">
-                            <XCircle className="h-4 w-4" />
-                            Rejected by You ({filteredPurchases.filter(p => p.pm_status === 'rejected').length})
-                          </h3>
-                          {filteredPurchases
-                            .filter(p => p.pm_status === 'rejected')
-                            .map(purchase => (
-                              <PurchaseApprovalCard
-                                key={purchase.purchase_id}
-                                purchase={purchase}
-                                onApprove={handleApprove}
-                                onReject={handleReject}
-                                onViewDetails={handleViewDetails}
-                                isLoading={isProcessing}
-                              />
-                            ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* Filtered View */}
-                  {filterStatus !== 'all' && 
-                    filteredPurchases.map(purchase => (
+                ) : filteredPurchases.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Package className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No purchases found</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {filteredPurchases.map((purchase) => (
                       <PurchaseApprovalCard
                         key={purchase.purchase_id}
                         purchase={purchase}
-                        onApprove={handleApprove}
-                        onReject={handleReject}
                         onViewDetails={handleViewDetails}
-                        isLoading={isProcessing}
+                        onViewHistory={handleViewHistory}
+                        onEdit={() => handleEdit(purchase.purchase_id)}
+                        onApprove={() => handleApprove(purchase.purchase_id)}
+                        onReject={(reason) => handleReject(purchase.purchase_id, reason)}
+                        onSendToEstimation={() => handleSendToEstimation(purchase.purchase_id)}
+                        isLoading={false}
                       />
-                    ))
-                  }
-                </>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-                    <Package className="h-8 w-8 text-gray-400" />
+                    ))}
                   </div>
-                  <p className="text-lg font-medium text-gray-900">No purchases found</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {searchTerm ? 'Try adjusting your search terms' : 'No purchases match the selected filter'}
-                  </p>
-                </div>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
+                )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* Approval Modal */}
-        <ApprovalModal
-          isOpen={approvalModalOpen}
-          onClose={() => {
-            setApprovalModalOpen(false);
-            setSelectedPurchase(null);
-          }}
-          purchase={selectedPurchase}
-          mode={modalMode}
-          onConfirm={handleConfirmApproval}
-          isLoading={isProcessing}
-        />
-        
-        {/* Purchase History Modal */}
-        <PurchaseHistoryModal
-          isOpen={detailsModalOpen}
-          onClose={() => {
-            setDetailsModalOpen(false);
-            setSelectedPurchaseId('');
-          }}
-          purchaseId={selectedPurchaseId}
-        />
-      </motion.div>
+      {/* Purchase Details Modal */}
+      <PurchaseDetailsModal
+        isOpen={detailsModalOpen}
+        onClose={() => {
+          setDetailsModalOpen(false);
+          setSelectedPurchaseId(null);
+        }}
+        purchaseId={selectedPurchaseId}
+        mode={modalMode}
+      />
     </div>
   );
 };

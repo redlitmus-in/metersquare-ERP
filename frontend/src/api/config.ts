@@ -197,11 +197,24 @@ export const API_ENDPOINTS = {
     PURCHASES: '/estimation_purchase',
     PURCHASE_WITH_STATUS: (id: string | number) => `/purchase_with_status/${id}`,
     CHECK_APPROVAL: (id: string | number) => `/check_estimation_approval/${id}`,
+    PURCHASE_DETAILS: (id: string | number) => `/purchase/${id}`,
+    PURCHASE_HISTORY: (id: string | number) => `/purchase_history/${id}`,
   },
   TECHNICAL_DIRECTOR: {
     APPROVAL: '/tech_approval',
     DASHBOARD: '/tech_dashboard',
     PURCHASES: '/technical_purchase',
+  },
+  ACCOUNTS: {
+    PROCESS_PAYMENT: '/payments/process',
+    APPROVE_PAYMENT: '/payments/approve',
+    GET_PAYMENTS: '/payments',
+    CREATE_ACKNOWLEDGEMENT: '/acknowledgements',
+    GET_ACKNOWLEDGEMENTS: '/acknowledgements',
+    FINANCIAL_SUMMARY: '/financial_summary',
+    PENDING_APPROVALS: '/pending_approvals',
+    DASHBOARD: '/account_dashboard',
+    GET_PURCHASES: '/account_purchase',
   },
 };
 

@@ -236,7 +236,7 @@ class EstimationService {
     if (purchase.status_info && 
         (purchase.status_info.sender === 'estimation' || purchase.status_info.sender === 'Estimation')) {
       console.log(`Purchase ${purchase.purchase_id} estimation status from status_info:`, purchase.status_info.status);
-      return purchase.status_info.status;
+      return purchase.status_info.status || 'pending';
     }
     
     // Check if current_status shows estimation has acted
@@ -263,7 +263,7 @@ class EstimationService {
   getPMStatus(purchase: Purchase): string {
     // Check status_info if sender is projectManager
     if (purchase.status_info && purchase.status_info.sender === 'projectManager') {
-      return purchase.status_info.status;
+      return purchase.status_info.status || 'pending';
     }
     
     // Check current_status
@@ -330,7 +330,7 @@ class EstimationService {
   getProcurementStatus(purchase: Purchase): string {
     // Check if status_info shows procurement as sender
     if (purchase.status_info && purchase.status_info.sender === 'procurement') {
-      return purchase.status_info.status;
+      return purchase.status_info.status || 'pending';
     }
     
     // Check procurement_approved_status
@@ -371,13 +371,41 @@ class EstimationService {
   }
 
   /**
-   * Get detailed purchase status information
+   * Get purchase details
    * Used for the Purchase Details Modal
+   */
+  async getPurchaseDetails(purchaseId: number): Promise<any> {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.ESTIMATION.PURCHASE_DETAILS(purchaseId));
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching purchase details:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get purchase history
+   * Used for the Purchase History Modal
+   */
+  async getPurchaseHistory(purchaseId: number): Promise<any> {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.ESTIMATION.PURCHASE_HISTORY(purchaseId));
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching purchase history:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get detailed purchase status information
+   * @deprecated Use getPurchaseDetails or getPurchaseHistory instead
    */
   async getPurchaseStatusDetails(purchaseId: number): Promise<PurchaseStatusDetails> {
     try {
-      // Use the PROJECT_MANAGER.PURCHASE_STATUS endpoint which provides detailed status info
-      const response = await apiClient.get(API_ENDPOINTS.PROJECT_MANAGER.PURCHASE_STATUS(purchaseId));
+      // Now using the purchase details endpoint
+      const response = await apiClient.get(API_ENDPOINTS.ESTIMATION.PURCHASE_DETAILS(purchaseId));
       return response.data;
     } catch (error: any) {
       console.error('Error fetching purchase status details:', error);
@@ -388,11 +416,16 @@ class EstimationService {
 
 // Export types for PurchaseDetailsModal
 export interface PurchaseStatusDetails {
+  purchase_id?: number;
   purchase_details: {
-    purchase_id: number;
+    purchase_id?: number;
     site_location: string;
     purpose: string;
     created_at: string;
+    date?: string;
+    requested_by?: string;
+    project_id?: number;
+    email_sent?: boolean;
     materials_summary: {
       total_materials: number;
       total_quantity: number;
@@ -401,11 +434,13 @@ export interface PurchaseStatusDetails {
       materials?: Array<{
         material_id?: number;
         description: string;
+        specification?: string;
         category: string;
-        priority: string;
+        priority?: string;
         quantity: number;
         unit: string;
         cost: number;
+        design_reference?: string;
       }>;
     };
   };
@@ -444,6 +479,11 @@ export interface PurchaseStatusDetails {
   }>;
   latest_pm_proc_status: {
     status: string;
+    sender?: string;
+    receiver?: string;
+    role?: string;
+    comments?: string;
+    rejection_reason?: string;
   };
   summary: {
     total_procurement_statuses: number;

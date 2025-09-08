@@ -286,7 +286,7 @@ const MaterialRequisitionForm: React.FC<MaterialRequisitionFormProps> = ({ onClo
                     </Label>
                     <Input
                       {...register('requestedBy', { required: 'Requester name is required' })}
-                      placeholder="John Tan - Factory Supervisor"
+                      placeholder="John Tan - Site Supervisor"
                       className="focus:border-[#243d8a] focus:ring-[#243d8a]"
                     />
                   </div>

@@ -142,7 +142,7 @@ def get_all_purchase_request():
             return jsonify({"error": "Not logged in"}), 401
 
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        allowed_roles = 'siteSupervisor'
+        allowed_roles = 'siteSupervisor,mepSupervisor,procurement,projectManager,estimation,technicalDirector'
         if not role or role.role not in allowed_roles:
             return jsonify({
                 'error': 'Invalid role. Access denied for viewing purchase requisitions'

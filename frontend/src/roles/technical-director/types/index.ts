@@ -14,13 +14,13 @@ export interface Material {
   unit_cost: number;
   total_cost: number;
   priority: string;
-  design_reference: string;
+  design_reference?: string;
 }
 
-// Purchase detail interface
-export interface PurchaseDetail {
+// Purchase interface - Main purchase data structure
+export interface Purchase {
   purchase_id: number;
-  project_id: number; // Changed from string to number to match API
+  project_id: number;
   requested_by: string;
   site_location: string;
   date: string;
@@ -35,7 +35,7 @@ export interface PurchaseDetail {
   last_modified_at?: string;
   last_modified_by?: string;
   
-  // Additional fields from actual API response
+  // Workflow status fields
   current_workflow_status?: string;
   estimation_status?: string;
   estimation_comments?: string;
@@ -46,15 +46,8 @@ export interface PurchaseDetail {
   technical_director_decision_by?: string;
   technical_director_status_date?: string;
   technical_director_rejection_reason?: string;
-  latest_status?: {
-    status: string;
-    sender: string;
-    receiver: string;
-    date: string;
-    decision_by: string;
-    comments: string;
-  };
   
+  // Status info for workflow tracking
   status_info?: {
     status_id?: number;
     status: string;
@@ -66,9 +59,6 @@ export interface PurchaseDetail {
     rejection_reason?: string;
     reject_category?: string;
     comments?: string;
-    created_at?: string;
-    last_modified_at?: string;
-    last_modified_by?: string;
   };
 }
 
@@ -93,32 +83,6 @@ export interface TechnicalDirectorApprovalResponse {
   email_warning?: string;
 }
 
-// Dashboard summary interface
-export interface DashboardSummary {
-  total_count: number;
-  approved_count: number;
-  rejected_count: number;
-  pending_count: number;
-  approved_value: number;
-  rejected_value: number;
-  pending_value: number;
-  approved_quantity: number;
-  rejected_quantity: number;
-  pending_quantity: number;
-}
-
-// Technical Director dashboard response
-export interface TechnicalDirectorDashboardResponse {
-  success: boolean;
-  technical_director_as_sender: DashboardSummary;
-  technical_director_as_receiver: DashboardSummary;
-  summary: {
-    total_sender_records: number;
-    total_receiver_records: number;
-    total_unique_purchases: number;
-  };
-}
-
 // Technical Director purchases response
 export interface TechnicalDirectorPurchasesResponse {
   success: boolean;
@@ -136,7 +100,7 @@ export interface TechnicalDirectorPurchasesResponse {
     rejected_quantity: number;
     pending_quantity: number;
   };
-  purchases: PurchaseDetail[];
+  purchases: Purchase[];
   user_info: {
     user_name: string;
     user_id: number;
@@ -145,94 +109,5 @@ export interface TechnicalDirectorPurchasesResponse {
   last_updated: string;
 }
 
-// Extended Purchase type for UI display
-export interface Purchase extends PurchaseDetail {
-  role_statuses?: Array<{
-    role: string;
-    status: string;
-    decision_date?: string;
-    decision_by?: string;
-    rejection_reason?: string;
-    comments?: string;
-  }>;
-  material_ids?: number[];
-  materials_summary?: {
-    total_materials: number;
-    total_quantity: number;
-    total_cost: number;
-    categories: string[];
-  };
-  current_status?: {
-    status: string;
-    sender: string;
-    date: string;
-    decision_by_user_id: number;
-    comments: string;
-  };
-}
-
-// Purchase status details for modal
-export interface PurchaseStatusDetails {
-  purchase_details: {
-    purchase_id: number;
-    site_location: string;
-    purpose: string;
-    created_at: string;
-    materials_summary: {
-      total_materials: number;
-      total_quantity: number;
-      total_cost: number;
-      categories: string[];
-      materials?: Array<{
-        material_id?: number;
-        description: string;
-        category: string;
-        priority: string;
-        quantity: number;
-        unit: string;
-        cost: number;
-      }>;
-    };
-  };
-  estimation_statuses?: Array<{
-    role: string;
-    status: string;
-    date: string;
-    decision_by?: {
-      full_name: string;
-    };
-    comments?: string;
-    rejection_reason?: string;
-    reject_category?: string;
-  }>;
-  technical_director_statuses?: Array<{
-    role: string;
-    status: string;
-    date: string;
-    decision_by?: {
-      full_name: string;
-    };
-    comments?: string;
-    rejection_reason?: string;
-    reject_category?: string;
-  }>;
-  accounts_statuses?: Array<{
-    role: string;
-    status: string;
-    date: string;
-    decision_by?: {
-      full_name: string;
-    };
-    comments?: string;
-    rejection_reason?: string;
-    reject_category?: string;
-  }>;
-  latest_status: {
-    status: string;
-  };
-  summary: {
-    total_estimation_statuses?: number;
-    total_technical_director_statuses?: number;
-    total_accounts_statuses?: number;
-  };
-}
+// Re-export Purchase as PurchaseDetail for backward compatibility
+export type PurchaseDetail = Purchase;

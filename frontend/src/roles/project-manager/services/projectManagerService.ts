@@ -56,6 +56,8 @@ export interface PurchaseStatusDetails {
     date: string;
     email_sent: boolean;
     created_at: string;
+    requested_by?: string;
+    project_id?: number;
     materials_summary: {
       total_materials: number;
       total_quantity: number;
@@ -64,11 +66,13 @@ export interface PurchaseStatusDetails {
       materials: Array<{
         material_id: number;
         description: string;
+        specification?: string;
         quantity: number;
         unit: string;
         cost: number;
         category: string;
-        priority: string;
+        priority?: string;
+        design_reference?: string;
       }>;
     };
   };
@@ -102,12 +106,15 @@ export interface PurchaseStatusDetails {
     status: string;
     role: string | null;
     date: string | null;
+    sender?: string;
+    receiver?: string;
     decision_by: {
       user_id: number;
       full_name: string;
       email: string;
     } | null;
     comments: string | null;
+    rejection_reason?: string | null;
   };
   summary: {
     total_pm_statuses: number;
@@ -215,15 +222,48 @@ class ProjectManagerService {
     }
   }
 
+
   /**
-   * Get detailed status information for a specific purchase
+   * Get purchase details by ID using /purchase/{id}
    */
-  async getPurchaseStatusDetails(purchaseId: number): Promise<PurchaseStatusDetails> {
+  async getPurchaseDetails(purchaseId: number): Promise<any> {
     try {
-      const response = await apiClient.get(`/purchase_status/${purchaseId}`);
-      return response.data;
+      const response = await apiClient.get(`/purchase/${purchaseId}`);
+      // Handle different response structures
+      if (response.data) {
+        // If response has success flag
+        if (response.data.success !== undefined) {
+          if (response.data.success) {
+            return response.data.purchase || response.data.data || response.data;
+          } else {
+            throw new Error(response.data.message || 'Failed to fetch purchase details');
+          }
+        }
+        // If response is the purchase object directly
+        return response.data;
+      }
+      throw new Error('Failed to fetch purchase details');
     } catch (error) {
-      console.error('Error fetching purchase status details:', error);
+      console.error('Error fetching purchase details:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get purchase history with status tracking
+   */
+  async getPurchaseHistory(purchaseId: number): Promise<{purchase: any, statuses: any[]}> {
+    try {
+      const response = await apiClient.get(`/purchase_history/${purchaseId}`);
+      if (response.data.success) {
+        return {
+          purchase: response.data.purchase,
+          statuses: response.data.purchase.approvals || []
+        };
+      }
+      throw new Error(response.data.message || 'Failed to fetch purchase history');
+    } catch (error) {
+      console.error('Error fetching purchase history:', error);
       throw error;
     }
   }

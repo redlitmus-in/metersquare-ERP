@@ -54,7 +54,7 @@ export const WORKFLOW_CONFIGS: { [key: string]: WorkflowConfig } = {
     documentType: 'material_requisition',
     requiredFlags: ['QTY/SPEC FLAG', 'PM FLAG'],
     approvalSequence: [
-      'FACTORY_SUPERVISOR',
+      'SITE_SUPERVISOR',
       'PROCUREMENT',
       'PROJECT_MANAGER', 
       'ESTIMATION',
@@ -62,7 +62,7 @@ export const WORKFLOW_CONFIGS: { [key: string]: WorkflowConfig } = {
       'DESIGN'
     ],
     rejectionLoops: {
-      'QTY_SPEC_REJECTION': ['FACTORY_SUPERVISOR', 'PROCUREMENT']
+      'QTY_SPEC_REJECTION': ['SITE_SUPERVISOR', 'PROCUREMENT']
     }
   },
 

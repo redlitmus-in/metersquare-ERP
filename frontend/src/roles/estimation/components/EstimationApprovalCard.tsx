@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Clock, MapPin, Package, AlertCircle, Calendar,
   CheckCircle, XCircle, DollarSign, Calculator,
-  TrendingUp, FileText
+  TrendingUp, FileText, History
 } from 'lucide-react';
 import { Purchase, estimationService } from '../services/estimationService';
 import type { Material } from '../types';
@@ -21,6 +21,7 @@ interface EstimationApprovalCardProps {
   onApprove: (purchaseId: number) => void;
   onReject: (purchaseId: number) => void;
   onViewDetails?: (purchaseId: number) => void;
+  onViewHistory?: (purchaseId: number) => void;
   isLoading?: boolean;
   isReadOnly?: boolean; // For approved/rejected items
 }
@@ -30,6 +31,7 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
   onApprove,
   onReject,
   onViewDetails,
+  onViewHistory,
   isLoading = false,
   isReadOnly = false
 }) => {
@@ -171,26 +173,28 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
           {/* Spacer to push buttons to bottom */}
           <div className="flex-1"></div>
           
-          {/* Action Buttons - Compact */}
+          {/* Action Buttons - Properly Aligned */}
           {needsReview && !isReadOnly && (
-            <div className="flex gap-2 pt-3 mt-auto border-t border-gray-100">
-              <Button
-                onClick={() => onApprove(purchase.purchase_id)}
-                disabled={isLoading}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white h-9 text-xs"
-              >
-                <CheckCircle className="h-3 w-3 mr-1" />
-                Approve & Send to TD
-              </Button>
-              <Button
-                onClick={() => onReject(purchase.purchase_id)}
-                disabled={isLoading}
-                variant="outline"
-                className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 h-9 text-xs"
-              >
-                <XCircle className="h-3 w-3 mr-1" />
-                Reject with Reason
-              </Button>
+            <div className="space-y-2 pt-3 mt-auto border-t border-gray-100">
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => onApprove(purchase.purchase_id)}
+                  disabled={isLoading}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white h-9 text-xs font-medium"
+                >
+                  <CheckCircle className="h-3 w-3 mr-1.5" />
+                  Approve & Send to TD
+                </Button>
+                <Button
+                  onClick={() => onReject(purchase.purchase_id)}
+                  disabled={isLoading}
+                  variant="outline"
+                  className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 h-9 text-xs font-medium"
+                >
+                  <XCircle className="h-3 w-3 mr-1.5" />
+                  Reject with Reason
+                </Button>
+              </div>
             </div>
           )}
 
@@ -219,16 +223,27 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
             </div>
           )}
 
-          {/* View Details Button - Always visible */}
-          <Button
-            onClick={() => onViewDetails ? onViewDetails(purchase.purchase_id) : null}
-            variant="outline"
-            className="w-full mt-2 h-8 text-xs"
-            disabled={isLoading}
-          >
-            <Package className="h-3 w-3 mr-1" />
-            View Full Details
-          </Button>
+          {/* View Details and History Buttons - Always visible */}
+          <div className="flex gap-2 mt-2">
+            <Button
+              onClick={() => onViewDetails ? onViewDetails(purchase.purchase_id) : null}
+              variant="outline"
+              className="flex-1 h-8 text-xs font-medium border-gray-200 hover:bg-gray-50"
+              disabled={isLoading}
+            >
+              <Package className="h-3 w-3 mr-1.5" />
+              View Full Details
+            </Button>
+            <Button
+              onClick={() => onViewHistory ? onViewHistory(purchase.purchase_id) : null}
+              variant="outline"
+              className="flex-1 h-8 text-xs font-medium border-gray-200 hover:bg-gray-50"
+              disabled={isLoading}
+            >
+              <History className="h-3 w-3 mr-1.5" />
+              View History
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </motion.div>

@@ -92,8 +92,8 @@ const PurchaseRequestsPage: React.FC = () => {
 
   // Role-based permissions
   const canCreateRequest = () => {
-    const supervisorRoles = [UserRole.SITE_SUPERVISOR, UserRole.MEP_SUPERVISOR, UserRole.FACTORY_SUPERVISOR];
-    const roleStrings = ['siteSupervisor', 'mepSupervisor', 'factorySupervisor'];
+    const supervisorRoles = [UserRole.SITE_SUPERVISOR, UserRole.MEP_SUPERVISOR];
+    const roleStrings = ['siteSupervisor', 'mepSupervisor'];
     return supervisorRoles.includes(user?.role_id as UserRole) || roleStrings.includes(user?.role_id as string);
   };
 
@@ -103,7 +103,7 @@ const PurchaseRequestsPage: React.FC = () => {
 
   const canEditRequest = (request: any) => {
     // Can edit if you created it and it's still pending
-    if (request.requestorId === user?.user_id && request.status === 'pending') {
+    if (request.requestorId === user?.id && request.status === 'pending') {
       return true;
     }
     // Procurement can edit any pending request
@@ -115,7 +115,7 @@ const PurchaseRequestsPage: React.FC = () => {
 
   const canDeleteRequest = (request: any) => {
     // Only creator can delete, and only if pending
-    return request.requestorId === user?.user_id && request.status === 'pending';
+    return request.requestorId === user?.id && request.status === 'pending';
   };
 
   const handleApprove = (requestId: string) => {
@@ -204,7 +204,7 @@ const PurchaseRequestsPage: React.FC = () => {
 
     // Site Supervisors only see their own requests
     if (isSiteSupervisor) {
-      filtered = filtered.filter(req => req.requestorId === user.user_id || req.requestorId === 'siteSupervisor');
+      filtered = filtered.filter(req => req.requestorId === user?.id || req.requestorId === 'siteSupervisor');
     }
 
     // Filter by search term

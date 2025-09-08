@@ -18,9 +18,8 @@ export {
 // Export components
 export { PurchaseApprovalCard } from './components/PurchaseApprovalCard';
 export { ApprovalModal } from './components/ApprovalModal';
-export { PurchaseStatusTimeline } from './components/PurchaseStatusTimeline';
 export { PMMetricsCards } from './components/PMMetricsCards';
-export { PurchaseDetailsView } from './components/PurchaseDetailsView';
+export { default as PurchaseDetailsModal } from './components/PurchaseDetailsModal';
 
 // Export pages
 export { default as ProjectManagerHub } from './pages/ProjectManagerHub';

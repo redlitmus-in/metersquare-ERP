@@ -182,7 +182,7 @@ def multi_role_required(role_groups):
     Decorator to check if user has any role from multiple groups
     Usage: @multi_role_required({
         'management': ['business_owner', 'project_manager'],
-        'operations': ['factory_supervisor', 'site_engineer']
+        'operations': ['site_supervisor', 'site_engineer']
     })
     """
     def decorator(func):

@@ -1,515 +1,423 @@
 /**
- * Purchase Details Modal for Technical Director
- * Displays comprehensive purchase information with status history
+ * Purchase Details Modal Component for Technical Director Hub
+ * Shows comprehensive purchase information with proper formatting
+ * Reuses the service layer for consistent data fetching
  */
 
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  X, 
-  Package, 
-  Calendar, 
-  MapPin, 
-  User, 
-  Target,
-  FileText,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  MessageSquare,
-  Download,
-  Eye
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { 
+  Loader2, Package, Calendar, MapPin, User, CheckCircle, 
+  XCircle, Clock, AlertTriangle, MessageSquare, DollarSign,
+  FileText, Building2, Shield, Download, Hash, Info, RefreshCw
+} from 'lucide-react';
 import { technicalDirectorService } from '../services/technicalDirectorService';
-import type { Purchase, PurchaseStatusDetails } from '../types';
+import { toast } from 'sonner';
 
 interface PurchaseDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  purchase: Purchase | null;
+  purchaseId: number | null;
+  showHistoryOnly?: boolean;
 }
 
 const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   isOpen,
   onClose,
-  purchase
+  purchaseId,
+  showHistoryOnly = false
 }) => {
-  const [statusDetails, setStatusDetails] = useState<PurchaseStatusDetails | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [purchaseDetails, setPurchaseDetails] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    if (isOpen && purchase) {
-      fetchStatusDetails();
+    if (isOpen && purchaseId) {
+      fetchPurchaseDetails();
+      setActiveTab(showHistoryOnly ? 'history' : 'overview');
     }
-  }, [isOpen, purchase]);
+  }, [isOpen, purchaseId, showHistoryOnly]);
 
-  const fetchStatusDetails = async () => {
-    if (!purchase) return;
+  const fetchPurchaseDetails = async () => {
+    if (!purchaseId) return;
     
-    setIsLoading(true);
     try {
-      const details = await technicalDirectorService.getPurchaseStatusDetails(purchase.purchase_id);
-      setStatusDetails(details);
-    } catch (error) {
-      console.error('Error fetching status details:', error);
+      setLoading(true);
+      setError(null);
+      
+      // Use different endpoints based on mode
+      const response = showHistoryOnly 
+        ? await technicalDirectorService.getPurchaseHistory(purchaseId)
+        : await technicalDirectorService.getPurchaseDetails(purchaseId);
+      
+      // Check if response indicates an error
+      if (response && response.success === false) {
+        setError(response.message || 'Failed to load purchase details');
+        setPurchaseDetails(null);
+      } else {
+        // Normalize the response structure
+        if (showHistoryOnly && response.purchase) {
+          // For history endpoint, extract approvals as history
+          setPurchaseDetails({
+            purchase: response.purchase,
+            materials: response.purchase.materials || [],
+            history: response.purchase.approvals || [],
+            latest_status: response.latest_status
+          });
+        } else if (!showHistoryOnly && response.purchase) {
+          // For details endpoint, use the purchase data
+          setPurchaseDetails({
+            purchase: response.purchase,
+            materials: response.purchase.materials || [],
+            history: response.purchase.approvals || [],
+            latest_status: response.latest_status
+          });
+        } else {
+          setPurchaseDetails(response);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error fetching purchase details:', error);
+      
+      // Set appropriate error message
+      if (error.response?.status === 404) {
+        setError('Purchase details not found. The purchase may have been deleted.');
+      } else if (error.response?.status === 403) {
+        setError('You do not have permission to view this purchase.');
+      } else if (error.response?.status === 401) {
+        setError('Your session has expired. Please login again.');
+      } else if (!navigator.onLine) {
+        setError('No internet connection. Please check your network.');
+      } else {
+        setError('Failed to load purchase details. Please try again.');
+      }
+      
+      setPurchaseDetails(null);
+      toast.error(error.response?.data?.message || 'Failed to load purchase details');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  if (!purchase) return null;
+  const formatCurrency = (amount: number | undefined | null) => {
+    if (amount === undefined || amount === null || isNaN(amount)) {
+      return 'AED 0';
+    }
+    return `AED ${amount.toLocaleString()}`;
+  };
 
-  const priority = purchase.materials?.[0]?.priority || 'medium';
-  const priorityBadgeColor = technicalDirectorService.getPriorityBadgeColor(priority);
-
-  const getStatusIcon = (status: string) => {
-    switch (status?.toLowerCase()) {
+  const getStatusBadge = (status: string) => {
+    const statusLower = status?.toLowerCase();
+    switch (statusLower) {
       case 'approved':
-        return <CheckCircle2 className="h-4 w-4 text-green-600" />;
+        return <Badge className="bg-green-100 text-green-800">Approved</Badge>;
       case 'rejected':
-        return <XCircle className="h-4 w-4 text-red-600" />;
+        return <Badge className="bg-red-100 text-red-800">Rejected</Badge>;
       case 'pending':
-        return <Clock className="h-4 w-4 text-yellow-600" />;
+        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
       default:
-        return <AlertTriangle className="h-4 w-4 text-gray-600" />;
+        return <Badge className="bg-gray-100 text-gray-800">{status}</Badge>;
     }
   };
 
-  const getStatusBadgeColor = (status: string) => {
-    return technicalDirectorService.getStatusBadgeColor(status);
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+    fetchPurchaseDetails();
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  // Don't render if modal is not open
+  if (!isOpen) return null;
+
+  const purchase = purchaseDetails?.purchase || purchaseDetails || {};
+  const materials = purchaseDetails?.materials || purchase?.materials || [];
+  const history = purchaseDetails?.history || purchaseDetails?.purchase?.approvals || [];
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Package className="h-6 w-6 text-red-500" />
-              <span>Purchase Request #{purchase.purchase_id}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge className={priorityBadgeColor}>
-                {priority} Priority
-              </Badge>
-              {purchase.file_path && (
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </Button>
-              )}
-            </div>
+            <span className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-indigo-600" />
+              {showHistoryOnly ? 'Purchase History' : 'Purchase Details'} - #{purchaseId}
+            </span>
+            {purchase?.technical_director_status && (
+              getStatusBadge(purchase.technical_director_status)
+            )}
           </DialogTitle>
-          <DialogDescription>
-            Project: {purchase.project_id} | Requested by: {purchase.requested_by}
-          </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="materials">Materials</TabsTrigger>
-            <TabsTrigger value="status">Status History</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-          </TabsList>
-
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Basic Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Purchase Information</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">Requested by:</span>
-                    <span className="font-medium">{purchase.requested_by}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">Site Location:</span>
-                    <span className="font-medium">{purchase.site_location}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">Request Date:</span>
-                    <span className="font-medium">{purchase.date}</span>
-                  </div>
-
-                  {purchase.created_at && (
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm text-gray-600">Created:</span>
-                      <span className="font-medium">{formatDate(purchase.created_at)}</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Financial Summary */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Financial Summary</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="text-center bg-red-50 p-4 rounded-lg">
-                      <div className="text-3xl font-bold text-red-600">
-                        {technicalDirectorService.formatCurrency(purchase.total_cost)}
-                      </div>
-                      <div className="text-sm text-red-600">Total Purchase Value</div>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-3 text-center">
-                      <div className="bg-blue-50 p-3 rounded-lg">
-                        <div className="text-xl font-bold text-blue-600">
-                          {purchase.material_count}
-                        </div>
-                        <div className="text-xs text-blue-600">Items</div>
-                      </div>
-                      <div className="bg-green-50 p-3 rounded-lg">
-                        <div className="text-xl font-bold text-green-600">
-                          {purchase.total_quantity}
-                        </div>
-                        <div className="text-xs text-green-600">Total Qty</div>
-                      </div>
-                      <div className="bg-purple-50 p-3 rounded-lg">
-                        <div className="text-xl font-bold text-purple-600">
-                          {purchase.materials?.length > 0 
-                            ? (purchase.total_cost / purchase.total_quantity).toFixed(2)
-                            : '0'
-                          }
-                        </div>
-                        <div className="text-xs text-purple-600">Avg Cost</div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Purpose */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Target className="h-5 w-5 text-red-500" />
-                  Purpose & Description
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-lg">
-                  {purchase.purpose}
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Current Status */}
-            {purchase.status_info && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Current Workflow Status</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <span className="text-sm text-gray-600">Current Stage:</span>
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(purchase.status_info.status)}
-                        <Badge className={getStatusBadgeColor(purchase.status_info.status)}>
-                          {purchase.status_info.status}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <span className="text-sm text-gray-600">Flow:</span>
-                      <div className="text-sm">
-                        <span className="font-medium capitalize">{purchase.status_info.sender}</span>
-                        <span className="mx-2 text-gray-400">→</span>
-                        <span className="font-medium capitalize">{purchase.status_info.receiver}</span>
-                      </div>
-                    </div>
-                    {purchase.status_info.comments && (
-                      <div className="col-span-2 space-y-2">
-                        <span className="text-sm text-gray-600">Comments:</span>
-                        <p className="text-sm bg-gray-50 p-3 rounded-md">
-                          {purchase.status_info.comments}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          {/* Materials Tab */}
-          <TabsContent value="materials" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Materials Breakdown</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {purchase.materials?.map((material, index) => (
-                    <motion.div
-                      key={material.material_id || index}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="p-4 bg-white border rounded-lg hover:shadow-sm transition-shadow"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900 mb-2">
-                            {material.description}
-                          </h4>
-                          
-                          {material.specification && (
-                            <p className="text-sm text-gray-600 mb-2">
-                              <strong>Specification:</strong> {material.specification}
-                            </p>
-                          )}
-                          
-                          <div className="flex flex-wrap gap-2">
-                            <Badge variant="outline" className="text-xs">
-                              {material.category}
-                            </Badge>
-                            <Badge className={technicalDirectorService.getPriorityBadgeColor(material.priority)}>
-                              {material.priority}
-                            </Badge>
-                          </div>
-                          
-                          {material.design_reference && (
-                            <p className="text-xs text-gray-500 mt-2">
-                              Design Ref: {material.design_reference}
-                            </p>
-                          )}
-                        </div>
-                        
-                        <div className="text-right space-y-2 ml-4">
-                          <div className="text-lg font-bold text-red-600">
-                            {technicalDirectorService.formatCurrency(material.total_cost)}
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            {material.quantity} {material.unit}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            @ {technicalDirectorService.formatCurrency(material.unit_cost)} per {material.unit}
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-                
-                <Separator className="my-4" />
-                
-                <div className="flex justify-between items-center text-xl font-bold bg-red-50 p-4 rounded-lg">
-                  <span className="text-gray-800">Total Materials Cost:</span>
-                  <span className="text-red-600">
-                    {technicalDirectorService.formatCurrency(purchase.total_cost)}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Status History Tab */}
-          <TabsContent value="status" className="space-y-4">
-            {isLoading ? (
-              <div className="flex justify-center items-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
-              </div>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+            <p className="mt-2 text-sm text-gray-600">Loading purchase details...</p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-8">
+            <AlertTriangle className="h-12 w-12 text-red-500 mb-4" />
+            <p className="text-lg font-medium text-gray-900">Unable to Load Details</p>
+            <p className="text-sm text-gray-600 mt-2 text-center max-w-md">{error}</p>
+            <Button 
+              onClick={handleRetry} 
+              className="mt-4 bg-indigo-600 hover:bg-indigo-700"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </div>
+        ) : !purchaseDetails ? (
+          <div className="flex flex-col items-center justify-center py-8">
+            <Info className="h-12 w-12 text-gray-400 mb-4" />
+            <p className="text-lg font-medium text-gray-900">No Data Available</p>
+            <p className="text-sm text-gray-600 mt-2">Purchase details could not be loaded</p>
+          </div>
+        ) : (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
+            {showHistoryOnly ? (
+              // History-only mode: Just show history without tabs
+              <TabsList className="grid w-full grid-cols-1">
+                <TabsTrigger value="history">Approval History</TabsTrigger>
+              </TabsList>
             ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Approval Workflow History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {/* Current status from purchase */}
-                    {purchase.status_info && (
-                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="flex items-center justify-between mb-2">
+              // Details mode: Show overview and materials tabs only
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="materials">Materials</TabsTrigger>
+              </TabsList>
+            )}
+
+            <div className="flex-1 overflow-y-auto">
+              {/* Overview Tab - Only show in details mode */}
+              {!showHistoryOnly && (
+                <TabsContent value="overview" className="space-y-4 p-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm text-gray-600">Location:</span>
+                      <span className="font-medium">{purchase.site_location || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm text-gray-600">Requested by:</span>
+                      <span className="font-medium">{purchase.requested_by || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm text-gray-600">Date:</span>
+                      <span className="font-medium">
+                        {purchase.date || purchase.created_at 
+                          ? new Date(purchase.date || purchase.created_at).toLocaleDateString() 
+                          : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm text-gray-600">Project ID:</span>
+                      <span className="font-medium">{purchase.project_id || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm text-gray-600">Purpose:</span>
+                      <span className="font-medium">{purchase.purpose || 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Cost Summary */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-medium mb-3 flex items-center gap-2">
+                    <DollarSign className="h-4 w-4" />
+                    Cost Summary
+                  </h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Total Items</p>
+                      <p className="text-lg font-semibold">{materials.length}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Quantity</p>
+                      <p className="text-lg font-semibold">{purchase.total_quantity || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Cost</p>
+                      <p className="text-lg font-semibold text-indigo-600">
+                        {formatCurrency(purchase.total_cost || 0)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Current Status - Show latest status or technical director status */}
+                {(purchaseDetails?.latest_status || purchase?.technical_director_status) && (
+                  <div className="bg-indigo-50 rounded-lg p-4">
+                    <h3 className="font-medium mb-2">Current Status</h3>
+                    <div className="space-y-2">
+                      {purchaseDetails?.latest_status ? (
+                        <>
                           <div className="flex items-center gap-2">
-                            {getStatusIcon(purchase.status_info.status)}
-                            <span className="font-medium capitalize">
-                              {purchase.status_info.sender} → {purchase.status_info.receiver}
+                            {getStatusBadge(purchaseDetails.latest_status.status)}
+                            <span className="text-sm text-gray-600">
+                              Role: {purchaseDetails.latest_status.role}
                             </span>
                           </div>
-                          <Badge className={getStatusBadgeColor(purchase.status_info.status)}>
-                            {purchase.status_info.status}
-                          </Badge>
-                        </div>
-                        
-                        {purchase.status_info.decision_date && (
-                          <p className="text-sm text-gray-600">
-                            <Clock className="h-4 w-4 inline mr-1" />
-                            {formatDate(purchase.status_info.decision_date)}
-                          </p>
-                        )}
-                        
-                        {purchase.status_info.decision_by && (
-                          <p className="text-sm text-gray-600">
-                            <User className="h-4 w-4 inline mr-1" />
-                            Decision by: {purchase.status_info.decision_by}
-                          </p>
-                        )}
-                        
-                        {purchase.status_info.comments && (
-                          <div className="mt-2">
-                            <p className="text-sm text-gray-600 mb-1">
-                              <MessageSquare className="h-4 w-4 inline mr-1" />
-                              Comments:
+                          {purchaseDetails.latest_status.created_by && (
+                            <p className="text-sm text-gray-700">
+                              <span className="font-medium">By:</span> {purchaseDetails.latest_status.created_by}
                             </p>
-                            <p className="text-sm bg-white p-2 rounded border">
-                              {purchase.status_info.comments}
+                          )}
+                          {purchaseDetails.latest_status.comments && (
+                            <p className="text-sm text-gray-700">
+                              <span className="font-medium">Comments:</span> {purchaseDetails.latest_status.comments}
                             </p>
-                          </div>
-                        )}
-                        
-                        {purchase.status_info.rejection_reason && (
-                          <div className="mt-2">
-                            <p className="text-sm text-red-600 mb-1">
-                              <AlertTriangle className="h-4 w-4 inline mr-1" />
-                              Rejection Reason:
+                          )}
+                          {purchaseDetails.latest_status.rejection_reason && (
+                            <p className="text-sm text-red-700">
+                              <span className="font-medium">Rejection Reason:</span> {purchaseDetails.latest_status.rejection_reason}
                             </p>
-                            <p className="text-sm bg-red-50 p-2 rounded border border-red-200">
-                              {purchase.status_info.rejection_reason}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Additional status details if available */}
-                    {statusDetails && (
-                      <div className="space-y-4">
-                        {/* Technical Director Statuses */}
-                        {statusDetails.technical_director_statuses?.map((status, index) => (
-                          <div key={index} className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                {getStatusIcon(status.status)}
-                                <span className="font-medium">Technical Director</span>
-                              </div>
-                              <Badge className={getStatusBadgeColor(status.status)}>
-                                {status.status}
-                              </Badge>
-                            </div>
-                            
-                            <p className="text-sm text-gray-600">
-                              <Clock className="h-4 w-4 inline mr-1" />
-                              {formatDate(status.date)}
-                            </p>
-                            
-                            {status.decision_by?.full_name && (
-                              <p className="text-sm text-gray-600">
-                                <User className="h-4 w-4 inline mr-1" />
-                                Decision by: {status.decision_by.full_name}
-                              </p>
-                            )}
-                            
-                            {status.comments && (
-                              <div className="mt-2">
-                                <p className="text-sm text-gray-600 mb-1">Comments:</p>
-                                <p className="text-sm bg-white p-2 rounded border">
-                                  {status.comments}
-                                </p>
-                              </div>
-                            )}
-                            
-                            {status.rejection_reason && (
-                              <div className="mt-2">
-                                <p className="text-sm text-red-600 mb-1">Rejection Reason:</p>
-                                <p className="text-sm bg-red-100 p-2 rounded border border-red-200">
-                                  {status.rejection_reason}
-                                </p>
-                              </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            {getStatusBadge(purchase.technical_director_status)}
+                            {purchase?.technical_director_decision_by && (
+                              <span className="text-sm text-gray-600">
+                                by {purchase.technical_director_decision_by}
+                              </span>
                             )}
                           </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {!statusDetails && !purchase.status_info && (
-                      <div className="text-center py-8 text-gray-500">
-                        <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        <p>No status history available</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          {/* Documents Tab */}
-          <TabsContent value="documents" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Attached Documents</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {purchase.file_path ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-6 w-6 text-gray-500" />
-                        <div>
-                          <p className="font-medium">Purchase Request Document</p>
-                          <p className="text-sm text-gray-600">{purchase.file_path}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4 mr-2" />
-                          View
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Download className="h-4 w-4 mr-2" />
-                          Download
-                        </Button>
-                      </div>
+                          {purchase?.technical_director_comments && (
+                            <p className="text-sm text-gray-700">
+                              <span className="font-medium">Comments:</span> {purchase.technical_director_comments}
+                            </p>
+                          )}
+                          {purchase?.technical_director_rejection_reason && (
+                            <p className="text-sm text-red-700">
+                              <span className="font-medium">Rejection Reason:</span> {purchase.technical_director_rejection_reason}
+                            </p>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No documents attached</p>
-                  </div>
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                </TabsContent>
+              )}
+
+              {/* Materials Tab - Only show in details mode */}
+              {!showHistoryOnly && (
+                <TabsContent value="materials" className="p-4">
+                <div className="space-y-3">
+                  {materials.map((material: any, index: number) => (
+                    <div key={index} className="border rounded-lg p-3">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h4 className="font-medium">{material.description || 'No description'}</h4>
+                          <p className="text-sm text-gray-600 mt-1">{material.specification || 'No specification'}</p>
+                          <div className="flex gap-4 mt-2">
+                            <span className="text-sm">
+                              <span className="text-gray-600">Category:</span> {material.category || 'N/A'}
+                            </span>
+                            <span className="text-sm">
+                              <span className="text-gray-600">Quantity:</span> {material.quantity || 0} {material.unit || ''}
+                            </span>
+                            <span className="text-sm">
+                              <span className="text-gray-600">Unit Cost:</span> {formatCurrency(material.unit_cost || material.cost)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600">Total</p>
+                          <p className="font-semibold text-indigo-600">
+                            {formatCurrency(material.total_cost || (material.quantity * (material.unit_cost || material.cost)) || 0)}
+                          </p>
+                          <Badge className="mt-1" variant="outline">
+                            {material.priority || 'Normal'} Priority
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                </TabsContent>
+              )}
+
+              {/* History Tab - Always show in history mode, never in details mode */}
+              {showHistoryOnly && (
+                <TabsContent value="history" className="p-4">
+                <div className="space-y-3">
+                  {history.length > 0 ? (
+                    history.map((entry: any, index: number) => {
+                      // Handle different date field names
+                      const entryDate = entry.decision_date || entry.created_at || entry.date;
+                      const decisionBy = entry.created_by || entry.decision_by || entry.decision_by_user_id;
+                      
+                      return (
+                        <div key={index} className="border-l-2 border-gray-200 pl-4 pb-4">
+                          <div className="flex items-center gap-2">
+                            {entry.status === 'approved' ? (
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                            ) : entry.status === 'rejected' ? (
+                              <XCircle className="h-4 w-4 text-red-500" />
+                            ) : (
+                              <Clock className="h-4 w-4 text-yellow-500" />
+                            )}
+                            <span className="font-medium capitalize">
+                              {entry.role || entry.sender || 'Unknown Role'}
+                            </span>
+                            {getStatusBadge(entry.status)}
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {entryDate ? new Date(entryDate).toLocaleString() : 'Date not available'}
+                          </p>
+                          {decisionBy && (
+                            <p className="text-sm mt-1">
+                              <span className="text-gray-600">By:</span> {decisionBy}
+                            </p>
+                          )}
+                          {entry.comments && (
+                            <p className="text-sm mt-1">
+                              <span className="text-gray-600">Comments:</span> {entry.comments}
+                            </p>
+                          )}
+                          {entry.rejection_reason && (
+                            <p className="text-sm text-red-600 mt-1">
+                              <span className="font-medium">Rejection:</span> {entry.rejection_reason}
+                            </p>
+                          )}
+                          {entry.receiver && entry.receiver !== entry.role && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              <span className="font-medium">Sent to:</span> {entry.receiver}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-center text-gray-500 py-4">No history available</p>
+                  )}
+                </div>
+                </TabsContent>
+              )}
+            </div>
+          </Tabs>
+        )}
       </DialogContent>
     </Dialog>
   );

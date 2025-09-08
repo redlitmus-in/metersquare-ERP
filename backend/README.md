@@ -261,7 +261,6 @@ The system supports the following roles with specific permissions:
 - **design** - Design specifications
 - **site_supervisor** - Site operations
 - **mep_supervisor** - MEP operations
-- **factory_supervisor** - Factory operations
 - **store_incharge** - Inventory management
 - **user** - Basic user access
 

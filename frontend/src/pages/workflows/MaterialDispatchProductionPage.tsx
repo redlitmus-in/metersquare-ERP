@@ -75,11 +75,11 @@ const MaterialDispatchProductionPage: React.FC = () => {
   };
 
   const workflowSteps = [
-    { stage: 'requested', label: 'Material Requested', actor: 'Factory Supervisor' },
+    { stage: 'requested', label: 'Material Requested', actor: 'Site Supervisor' },
     { stage: 'qty_spec_approval', label: 'Qty & Spec Approval', actor: 'Project Manager / Estimation' },
     { stage: 'bulk_qty_approval', label: 'Bulk Qty Approval', actor: 'Technical Director / Accounts' },
     { stage: 'dispatch', label: 'Material Dispatch', actor: 'Procurement / Store In Charge' },
-    { stage: 'production', label: 'Joinery & Furniture Production', actor: 'Factory Supervisor' },
+    { stage: 'production', label: 'Joinery & Furniture Production', actor: 'Site Supervisor' },
     { stage: 'acknowledgement', label: 'Dispatch Acknowledgement', actor: 'Multiple Parties' },
     { stage: 'design_reference', label: 'Design Reference Inputs', actor: 'Design' },
     { stage: 'completed', label: 'Task Completion', actor: 'System' }
@@ -490,7 +490,7 @@ const MaterialDispatchProductionPage: React.FC = () => {
               <ApprovalWorkflow 
                 documentType="purchase_requisition" 
                 documentId={selectedDispatch.id}
-                currentUserRole="Factory Supervisor"
+                currentUserRole="Site Supervisor"
               />
             </div>
           </div>

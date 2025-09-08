@@ -114,7 +114,7 @@ const ApprovalsPage: React.FC = () => {
           documentId: 'MR-001',
           documentNumber: 'MR-2024-001',
           title: 'Factory Production Materials',
-          requester: 'Factory Supervisor',
+          requester: 'Site Supervisor',
           department: 'Production',
           amount: 15000,
           priority: 'urgent',

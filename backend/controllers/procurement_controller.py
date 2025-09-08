@@ -274,9 +274,9 @@ def get_purchase_id_history(purchase_id):
             return jsonify({"error": "Not logged in"}), 401
 
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        if not role or role.role not in ['siteSupervisor', 'mepSupervisor', 'procurement']:
+        if not role or role.role not in ['siteSupervisor', 'mepSupervisor', 'procurement', 'projectManager','estimation','technicalDirector']:
             return jsonify({
-                'error': 'Invalid role. Only Site Supervisor, MEP Supervisor, or Procurement team can view requisitions'
+                'error': 'Invalid role. Only Site Supervisor, MEP Supervisor, Procurement team, or Project Manager can view purchase history'
             }), 403
 
         # 🔹 Fetch purchase by ID

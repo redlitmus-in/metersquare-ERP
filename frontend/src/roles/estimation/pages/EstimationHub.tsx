@@ -30,7 +30,9 @@ const EstimationHub: React.FC = () => {
   // Modal states
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
+  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [modalMode, setModalMode] = useState<'approve' | 'reject'>('approve');
 
   // Metrics
@@ -59,9 +61,9 @@ const EstimationHub: React.FC = () => {
         setPurchases(allPurchases);
         
         // Calculate metrics based on actual estimation status in each purchase
-        let pendingPurchases = [];
-        let approvedPurchases = [];
-        let rejectedPurchases = [];
+        let pendingPurchases: Purchase[] = [];
+        let approvedPurchases: Purchase[] = [];
+        let rejectedPurchases: Purchase[] = [];
         
         allPurchases.forEach(p => {
           // Check estimation_status field directly from status_info
@@ -99,8 +101,8 @@ const EstimationHub: React.FC = () => {
           totalValue: pendingValue,
           avgProcessingTime: 0,
           totalQuantity: totalQuantity,
-          costRejections: rejectedPurchases.filter(p => p.rejection_reason?.includes('cost')).length,
-          pmFlagRejections: rejectedPurchases.filter(p => p.rejection_reason?.includes('PM')).length
+          costRejections: rejectedPurchases.filter(p => p.status_info?.rejection_reason?.includes('cost')).length,
+          pmFlagRejections: rejectedPurchases.filter(p => p.status_info?.rejection_reason?.includes('PM')).length
         });
       } else {
         setPurchases([]);
@@ -198,8 +200,22 @@ const EstimationHub: React.FC = () => {
 
   // Handle view details button click
   const handleViewDetails = (purchaseId: number) => {
-    setSelectedPurchaseId(purchaseId);
-    setDetailsModalOpen(true);
+    const purchase = purchases.find(p => p.purchase_id === purchaseId);
+    if (purchase) {
+      setSelectedPurchase(purchase);
+      setSelectedPurchaseId(purchaseId);
+      setDetailsModalOpen(true);
+    }
+  };
+
+  // Handle view history button click
+  const handleViewHistory = (purchaseId: number) => {
+    const purchase = purchases.find(p => p.purchase_id === purchaseId);
+    if (purchase) {
+      setSelectedPurchase(purchase);
+      setSelectedPurchaseId(purchaseId);
+      setHistoryModalOpen(true);
+    }
   };
 
   // Handle success after approval/rejection
@@ -399,6 +415,7 @@ const EstimationHub: React.FC = () => {
                   onApprove={handleApprove}
                   onReject={handleReject}
                   onViewDetails={handleViewDetails}
+                  onViewHistory={handleViewHistory}
                   isLoading={isLoading}
                 />
                 ))}
@@ -433,6 +450,7 @@ const EstimationHub: React.FC = () => {
                   onApprove={handleApprove}
                   onReject={handleReject}
                   onViewDetails={handleViewDetails}
+                  onViewHistory={handleViewHistory}
                   isLoading={isLoading}
                 />
                 ))}
@@ -467,6 +485,7 @@ const EstimationHub: React.FC = () => {
                   onApprove={handleApprove}
                   onReject={handleReject}
                   onViewDetails={handleViewDetails}
+                  onViewHistory={handleViewHistory}
                   isLoading={isLoading}
                 />
                 ))}
@@ -488,8 +507,22 @@ const EstimationHub: React.FC = () => {
       {/* Purchase Details Modal */}
       <PurchaseDetailsModal
         isOpen={detailsModalOpen}
-        onClose={() => setDetailsModalOpen(false)}
+        onClose={() => {
+          setDetailsModalOpen(false);
+          setSelectedPurchase(null);
+        }}
         purchaseId={selectedPurchaseId}
+      />
+      
+      {/* Purchase History Modal */}
+      <PurchaseDetailsModal
+        isOpen={historyModalOpen}
+        onClose={() => {
+          setHistoryModalOpen(false);
+          setSelectedPurchase(null);
+        }}
+        purchaseId={selectedPurchaseId}
+        showHistoryOnly={true}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 /**
- * Technical Director Approval Card Component
- * Individual card for purchase approval with materials summary and actions
+ * Accounts Approval Card Component
+ * Individual card for payment processing with purchase summary and actions
  */
 
 import React from 'react';
@@ -15,46 +15,78 @@ import {
   Clock,
   Eye,
   History,
-  DollarSign
+  DollarSign,
+  CreditCard,
+  Building
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { technicalDirectorService } from '../services/technicalDirectorService';
+import { accountsService } from '../services/accountsService';
 import type { Purchase } from '../types';
 
-interface TechnicalDirectorApprovalCardProps {
+interface AccountsApprovalCardProps {
   purchase: Purchase;
-  onApprove: (purchaseId: number) => void;
-  onReject: (purchaseId: number) => void;
+  onProcessPayment: (purchaseId: number) => void;
+  onApprovePayment: (purchaseId: number) => void;
+  onRejectPayment: (purchaseId: number) => void;
   onViewDetails: (purchaseId: number) => void;
   onViewHistory: (purchaseId: number) => void;
   isLoading?: boolean;
 }
 
-const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps> = ({
+const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
   purchase,
-  onApprove,
-  onReject,
+  onProcessPayment,
+  onApprovePayment,
+  onRejectPayment,
   onViewDetails,
   onViewHistory,
   isLoading = false
 }) => {
-  // Get TD status directly from purchase
-  const tdStatus = purchase.technical_director_status?.toLowerCase() || 'pending';
-  const estimationStatus = purchase.estimation_status?.toLowerCase() || 'pending';
+  // Get status from latest_status object or fallback to direct fields
+  const latestStatus = purchase.latest_status;
+  let accountsStatus = 'pending';
+  let technicalDirectorStatus = 'pending';
+  let needsPaymentProcessing = false;
+  let hasPaymentPending = false;
   
-  // Check if needs TD review (estimation approved and TD pending)
-  const needsReview = estimationStatus === 'approved' && (!tdStatus || tdStatus === 'pending');
+  if (latestStatus) {
+    const sender = latestStatus.sender;
+    const receiver = latestStatus.receiver;
+    const status = latestStatus.status?.toLowerCase();
+    
+    // Determine current state based on latest status
+    if (sender === 'technicalDirector' && receiver === 'accounts' && status === 'approved') {
+      technicalDirectorStatus = 'approved';
+      accountsStatus = 'pending';
+      needsPaymentProcessing = true;
+    } else if (sender === 'accounts' && status === 'pending') {
+      accountsStatus = 'payment_processing';
+      hasPaymentPending = true;
+    } else if (sender === 'accounts' && status === 'approved') {
+      accountsStatus = 'payment_processed';
+    } else if (sender === 'accounts' && status === 'rejected') {
+      accountsStatus = 'payment_rejected';
+    }
+  } else {
+    // Fallback to direct status fields
+    accountsStatus = purchase.accounts_status?.toLowerCase() || 'pending';
+    technicalDirectorStatus = purchase.technical_director_status?.toLowerCase() || 'pending';
+    needsPaymentProcessing = technicalDirectorStatus === 'approved' && (!accountsStatus || accountsStatus === 'pending');
+    hasPaymentPending = accountsStatus === 'payment_processing';
+  }
   
   // Get status badge color
   const getStatusColor = () => {
-    switch (tdStatus) {
-      case 'approved':
+    switch (accountsStatus) {
+      case 'payment_processed':
         return 'bg-green-100 text-green-800 border-green-200';
-      case 'rejected':
+      case 'payment_rejected':
         return 'bg-red-100 text-red-800 border-red-200';
+      case 'payment_processing':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
       default:
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
     }
@@ -96,8 +128,10 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
             </div>
             <div className="flex flex-col gap-1 items-end">
               <Badge className={getStatusColor()} variant="outline">
-                {tdStatus === 'pending' ? 'Pending' : 
-                 tdStatus === 'approved' ? 'Approved' : 'Rejected'}
+                {accountsStatus === 'pending' ? 'Pending Payment' : 
+                 accountsStatus === 'payment_processing' ? 'Processing' : 
+                 accountsStatus === 'payment_processed' ? 'Paid' : 
+                 accountsStatus === 'payment_rejected' ? 'Rejected' : 'Pending'}
               </Badge>
               <Badge className={getPriorityColor()} variant="outline" size="sm">
                 {priority} priority
@@ -125,7 +159,7 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
 
           <Separator />
 
-          {/* Materials & Cost Summary */}
+          {/* Payment & Cost Summary */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -136,41 +170,59 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
                 Qty: {purchase.total_quantity || 0}
               </span>
             </div>
-            <div className="flex items-center justify-between bg-indigo-50 rounded-lg p-2">
+            <div className="flex items-center justify-between bg-green-50 rounded-lg p-2">
               <div className="flex items-center gap-1.5">
-                <DollarSign className="h-4 w-4 text-indigo-600" />
-                <span className="text-sm font-medium text-indigo-900">Total Cost</span>
+                <DollarSign className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium text-green-900">Payment Amount</span>
               </div>
-              <span className="text-sm font-bold text-indigo-600">
-                {technicalDirectorService.formatCurrency(purchase.total_cost || 0)}
+              <span className="text-sm font-bold text-green-600">
+                {accountsService.formatCurrency(purchase.total_cost || 0)}
               </span>
             </div>
           </div>
 
           {/* Previous Approvals */}
-          {estimationStatus && (
+          {technicalDirectorStatus && (
             <div className="bg-gray-50 rounded-lg p-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-gray-600">Estimation Status:</span>
+                <span className="text-gray-600">Technical Director:</span>
                 <Badge 
-                  className={estimationStatus === 'approved' ? 
+                  className={technicalDirectorStatus === 'approved' ? 
                     'bg-green-100 text-green-700' : 
                     'bg-yellow-100 text-yellow-700'
                   }
                   variant="outline"
                   size="sm"
                 >
-                  {estimationStatus}
+                  {technicalDirectorStatus}
                 </Badge>
               </div>
             </div>
           )}
 
+          {/* Payment Details if processing */}
+          {hasPaymentPending && purchase.payment_details && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+              <div className="flex items-center gap-1 mb-1">
+                <CreditCard className="h-3 w-3 text-blue-600" />
+                <span className="text-xs font-medium text-blue-700">Payment Details</span>
+              </div>
+              <p className="text-xs text-blue-600">
+                Method: {purchase.payment_details.payment_method || 'Bank Transfer'}
+              </p>
+              {purchase.payment_details.vendor_name && (
+                <p className="text-xs text-blue-600">
+                  Vendor: {purchase.payment_details.vendor_name}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Comments if rejected */}
-          {tdStatus === 'rejected' && purchase.technical_director_rejection_reason && (
+          {accountsStatus === 'payment_rejected' && purchase.accounts_rejection_reason && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-2">
               <p className="text-xs text-red-700">
-                <span className="font-medium">Rejection Reason:</span> {purchase.technical_director_rejection_reason}
+                <span className="font-medium">Rejection Reason:</span> {purchase.accounts_rejection_reason}
               </p>
             </div>
           )}
@@ -179,11 +231,41 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
 
           {/* Action Buttons */}
           <div className="space-y-2">
-            {needsReview ? (
+            {needsPaymentProcessing ? (
+              <>
+                <Button
+                  onClick={() => onProcessPayment(purchase.purchase_id)}
+                  disabled={isLoading}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  size="sm"
+                >
+                  <CreditCard className="h-3.5 w-3.5 mr-1" />
+                  Process Payment
+                </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    onClick={() => onViewDetails(purchase.purchase_id)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-1" />
+                    Details
+                  </Button>
+                  <Button
+                    onClick={() => onViewHistory(purchase.purchase_id)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <History className="h-3.5 w-3.5 mr-1" />
+                    History
+                  </Button>
+                </div>
+              </>
+            ) : hasPaymentPending ? (
               <>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
-                    onClick={() => onApprove(purchase.purchase_id)}
+                    onClick={() => onApprovePayment(purchase.purchase_id)}
                     disabled={isLoading}
                     className="bg-green-600 hover:bg-green-700 text-white"
                     size="sm"
@@ -192,7 +274,7 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
                     Approve
                   </Button>
                   <Button
-                    onClick={() => onReject(purchase.purchase_id)}
+                    onClick={() => onRejectPayment(purchase.purchase_id)}
                     disabled={isLoading}
                     variant="outline"
                     className="border-red-200 text-red-600 hover:bg-red-50"
@@ -250,4 +332,4 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
   );
 };
 
-export default TechnicalDirectorApprovalCard;
+export default AccountsApprovalCard;

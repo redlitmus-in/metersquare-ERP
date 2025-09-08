@@ -330,7 +330,7 @@ def organization_overview():
                 "roles_distribution": {
                     "business_owner": 1,
                     "project_manager": 5,
-                    "factory_supervisor": 8,
+                    "site_supervisor": 8,
                     "site_engineer": 12,
                     "technician": 50,
                     "purchaser": 10,

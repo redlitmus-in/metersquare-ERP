@@ -265,7 +265,6 @@ export const workflowHierarchy = {
     'accounts'
   ],
   'material_dispatch_production': [
-    'factory_supervisor',
     'procurement',
     'project_manager',
     'estimation',
@@ -275,7 +274,6 @@ export const workflowHierarchy = {
   'material_dispatch_site': [
     'site_supervisor',
     'mep_supervisor',
-    'factory_supervisor',
     'procurement',
     'project_manager',
     'technical_director',

@@ -129,7 +129,7 @@ const ProcessFlowPage: React.FC = () => {
   // Material Dispatch Production Workflow
   const productionNodes: WorkflowNode[] = [
     { id: 'design-prod', title: 'Design', role: 'DESIGN', type: 'start', color: 'bg-rose-500', icon: Settings, x: 100, y: 100 },
-    { id: 'factory-supervisor', title: 'Factory Supervisor', role: 'FACTORY_SUPERVISOR', type: 'process', color: 'bg-gray-500', icon: Factory, x: 100, y: 250 },
+    { id: 'site-supervisor-prod', title: 'Site Supervisor', role: 'SITE_SUPERVISOR', type: 'process', color: 'bg-gray-500', icon: Factory, x: 100, y: 250 },
     { id: 'procurement-prod', title: 'Procurement', role: 'PROCUREMENT', type: 'process', color: 'bg-emerald-500', icon: Package, x: 350, y: 250 },
     { id: 'qty-spec-flag-prod', title: 'QTY/SPEC Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 500, y: 150 },
     { id: 'pm-prod', title: 'Project Manager', role: 'PROJECT_MANAGER', type: 'process', color: 'bg-purple-500', icon: Users, x: 650, y: 250 },
@@ -142,8 +142,8 @@ const ProcessFlowPage: React.FC = () => {
   ];
 
   const productionConnections: WorkflowConnection[] = [
-    { from: 'design-prod', to: 'factory-supervisor', label: 'reference inputs', type: 'reference' },
-    { from: 'factory-supervisor', to: 'procurement-prod', label: 'Material requisition form', type: 'normal' },
+    { from: 'design-prod', to: 'site-supervisor-prod', label: 'reference inputs', type: 'reference' },
+    { from: 'site-supervisor-prod', to: 'procurement-prod', label: 'Material requisition form', type: 'normal' },
     { from: 'procurement-prod', to: 'qty-spec-flag-prod', type: 'normal' },
     { from: 'qty-spec-flag-prod', to: 'procurement-prod', label: 'Qty & spec revisions', type: 'revision' },
     { from: 'qty-spec-flag-prod', to: 'pm-prod', label: 'Qty & spec approvals', type: 'approval' },
@@ -151,18 +151,18 @@ const ProcessFlowPage: React.FC = () => {
     { from: 'pm-prod', to: 'pm-flag-prod', type: 'normal' },
     { from: 'pm-prod', to: 'estimation-prod', label: 'Qty & spec approvals', type: 'approval' },
     { from: 'procurement-prod', to: 'store-in-charge', label: 'Material dispatch for production', type: 'normal' },
-    { from: 'store-in-charge', to: 'factory-supervisor', label: 'Joinery & furniture production', type: 'normal' },
+    { from: 'store-in-charge', to: 'site-supervisor-prod', label: 'Joinery & furniture production', type: 'normal' },
     { from: 'store-in-charge', to: 'estimation-prod', label: 'Material requisition approvals', type: 'approval' },
     { from: 'estimation-prod', to: 'flag-prod', label: 'Bulk qty approvals', type: 'approval' },
     { from: 'flag-prod', to: 'tech-dir-prod', label: 'Bulk qty request', type: 'approval' },
-    { from: 'factory-supervisor', to: 'completion-prod', label: 'Acknowledgement of dispatch', type: 'normal' },
+    { from: 'site-supervisor-prod', to: 'completion-prod', label: 'Acknowledgement of dispatch', type: 'normal' },
     { from: 'store-in-charge', to: 'completion-prod', label: 'Acknowledgement of dispatch', type: 'normal' },
     { from: 'tech-dir-prod', to: 'store-in-charge', label: 'Acknowledgement of dispatch', type: 'normal' }
   ];
 
   // Material Dispatch Site Works Workflow
   const siteWorksNodes: WorkflowNode[] = [
-    { id: 'site-factory', title: 'Site/MEP/Factory Supervisor', role: 'SITE_SUPERVISOR', type: 'start', color: 'bg-gray-500', icon: HardHat, x: 100, y: 250 },
+    { id: 'site-mep', title: 'Site/MEP Supervisor', role: 'SITE_SUPERVISOR', type: 'start', color: 'bg-gray-500', icon: HardHat, x: 100, y: 250 },
     { id: 'design-site', title: 'Design', role: 'DESIGN', type: 'process', color: 'bg-rose-500', icon: Settings, x: 100, y: 400 },
     { id: 'procurement-site', title: 'Procurement', role: 'PROCUREMENT', type: 'process', color: 'bg-emerald-500', icon: Package, x: 350, y: 250 },
     { id: 'qty-spec-req-flag', title: 'QTY/SPEC/REQ Flag', role: 'FLAG', type: 'flag', color: 'bg-pink-400', icon: AlertCircle, x: 500, y: 150 },
@@ -174,8 +174,8 @@ const ProcessFlowPage: React.FC = () => {
   ];
 
   const siteWorksConnections: WorkflowConnection[] = [
-    { from: 'site-factory', to: 'procurement-site', label: 'Material request', type: 'normal' },
-    { from: 'site-factory', to: 'design-site', label: 'reference inputs', type: 'reference' },
+    { from: 'site-mep', to: 'procurement-site', label: 'Material request', type: 'normal' },
+    { from: 'site-mep', to: 'design-site', label: 'reference inputs', type: 'reference' },
     { from: 'design-site', to: 'site-factory', label: 'reference inputs', type: 'reference' },
     { from: 'procurement-site', to: 'qty-spec-req-flag', type: 'normal' },
     { from: 'qty-spec-req-flag', to: 'procurement-site', label: 'Qty & spec revisions', type: 'revision' },
@@ -223,7 +223,6 @@ const ProcessFlowPage: React.FC = () => {
     { value: 'PROCUREMENT', label: 'Procurement' },
     { value: 'ESTIMATION', label: 'Estimation' },
     { value: 'SITE_SUPERVISOR', label: 'Site Supervisor' },
-    { value: 'FACTORY_SUPERVISOR', label: 'Factory Supervisor' },
     { value: 'DESIGN', label: 'Design' },
     { value: 'ACCOUNTS', label: 'Accounts' },
     { value: 'STORE', label: 'Store In Charge' }
