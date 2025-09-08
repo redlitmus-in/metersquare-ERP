@@ -13,7 +13,6 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  XCircle,
   History
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -44,6 +43,10 @@ interface Purchase {
   latest_status?: string;
   approvals?: any[];
   created_at: string;
+  status_role?: string;
+  status_sender?: string;
+  sender_latest_status?: string;
+  status_receiver?: string;
 }
 
 interface PurchaseCardProps {
@@ -53,7 +56,6 @@ interface PurchaseCardProps {
   onEdit?: (purchaseId: number) => void;
   onSendEmail?: (purchaseId: number) => void;
   onApprove?: (purchaseId: number) => void;
-  onReject?: (purchaseId: number) => void;
   isLoading?: boolean;
   emailSent?: boolean;
 }
@@ -65,7 +67,6 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
   onEdit,
   onSendEmail,
   onApprove,
-  onReject,
   isLoading = false,
   emailSent = false
 }, ref) => {
@@ -82,6 +83,24 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
   };
 
   const status = getStatus();
+
+  // Check if rejected by Project Manager
+  const isRejectedByPM = () => {
+    // Check approvals array
+    const pmRejection = purchase.approvals?.some((a: any) => 
+      a.reviewer_role === 'projectManager' && a.status === 'rejected'
+    );
+    
+    // Check status fields
+    const statusRejectedByPM = (
+      (purchase.status_role === 'projectManager' && purchase.sender_latest_status === 'rejected') ||
+      (purchase.status_sender === 'projectManager' && purchase.sender_latest_status === 'rejected')
+    );
+    
+    return pmRejection || statusRejectedByPM;
+  };
+
+  const rejectedByPM = status === 'rejected' && isRejectedByPM();
 
   // Get status color
   const getStatusColor = (status: string) => {
@@ -145,9 +164,16 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
               </div>
             </div>
             <div className="flex flex-col gap-2 items-end">
-              <Badge className={`${getStatusColor(status)} border`}>
-                {status.toUpperCase()}
-              </Badge>
+              <div className="flex flex-col gap-1 items-end">
+                <Badge className={`${getStatusColor(status)} border`}>
+                  {status.toUpperCase()}
+                </Badge>
+                {rejectedByPM && (
+                  <Badge className="bg-orange-100 text-orange-800 border-orange-200 border text-xs">
+                    Rejected by PM
+                  </Badge>
+                )}
+              </div>
               {priority && (
                 <Badge className={`${getPriorityColor(priority)} border text-xs`}>
                   {priority.toUpperCase()}
@@ -258,9 +284,9 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
               )}
             </div>
 
-            {/* Secondary Actions Row - Approve/Reject/Send */}
+            {/* Secondary Actions Row - Approve/Send */}
             {!emailSent && status !== 'approved' && status !== 'rejected' && (
-              <div className="flex items-center gap-2 justify-end">
+              <div className="flex items-center gap-2 justify-center">
                 {onApprove && (
                   <Button
                     variant="outline"
@@ -272,20 +298,6 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   >
                     <CheckCircle className="w-4 h-4 mr-1" />
                     Approve
-                  </Button>
-                )}
-                
-                {onReject && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onReject(purchase.purchase_id)}
-                    disabled={isLoading}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300"
-                    title="Reject Request"
-                  >
-                    <XCircle className="w-4 h-4 mr-1" />
-                    Reject
                   </Button>
                 )}
                 

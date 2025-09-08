@@ -40,6 +40,7 @@ const EstimationHub: React.FC = () => {
     pendingCount: 0,
     approvedCount: 0,
     rejectedCount: 0,
+    tdRejectedCount: 0,
     totalValue: 0,
     avgProcessingTime: 0,
     totalQuantity: 0,
@@ -64,16 +65,28 @@ const EstimationHub: React.FC = () => {
         let pendingPurchases: Purchase[] = [];
         let approvedPurchases: Purchase[] = [];
         let rejectedPurchases: Purchase[] = [];
+        let tdRejectedPurchases: Purchase[] = [];
         
         allPurchases.forEach(p => {
           // Check estimation_status field directly from status_info
           const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
           
-          if (estimationStatus === 'pending') {
+          // Check for TD rejection - when receiver is estimation and sender is technicalDirector
+          // This happens when TD rejects and sends back to estimation
+          const isTDRejected = p.status_info?.receiver === 'estimation' && 
+                              p.status_info?.sender === 'technicalDirector';
+          
+          // Check if estimation itself rejected (not TD rejection)
+          const isEstimationRejected = estimationStatus === 'rejected' && 
+                                       p.status_info?.sender === 'estimation';
+          
+          if (isTDRejected) {
+            tdRejectedPurchases.push(p);
+          } else if (estimationStatus === 'pending') {
             pendingPurchases.push(p);
           } else if (estimationStatus === 'approved') {
             approvedPurchases.push(p);
-          } else if (estimationStatus === 'rejected') {
+          } else if (isEstimationRejected) {
             rejectedPurchases.push(p);
           }
         });
@@ -98,6 +111,7 @@ const EstimationHub: React.FC = () => {
           pendingCount: pendingPurchases.length,
           approvedCount: approvedPurchases.length,
           rejectedCount: rejectedPurchases.length,
+          tdRejectedCount: tdRejectedPurchases.length,
           totalValue: pendingValue,
           avgProcessingTime: 0,
           totalQuantity: totalQuantity,
@@ -110,6 +124,7 @@ const EstimationHub: React.FC = () => {
           pendingCount: 0,
           approvedCount: 0,
           rejectedCount: 0,
+          tdRejectedCount: 0,
           totalValue: 0,
           avgProcessingTime: 0,
           totalQuantity: 0,
@@ -124,6 +139,7 @@ const EstimationHub: React.FC = () => {
         pendingCount: 0,
         approvedCount: 0,
         rejectedCount: 0,
+        tdRejectedCount: 0,
         totalValue: 0,
         avgProcessingTime: 0,
         totalQuantity: 0,
@@ -163,10 +179,21 @@ const EstimationHub: React.FC = () => {
         break;
         
       case 'rejected':
-        // Show purchases where estimation_status is rejected
+        // Show purchases where estimation_status is rejected BY ESTIMATION (not TD rejections)
         filtered = purchases.filter(p => {
           const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
-          return estimationStatus === 'rejected';
+          // Check that it's rejected AND sender is estimation (meaning estimation rejected it)
+          const isEstimationRejected = estimationStatus === 'rejected' && 
+                                       p.status_info?.sender === 'estimation';
+          return isEstimationRejected;
+        });
+        break;
+        
+      case 'td-rejected':
+        // Show purchases rejected by Technical Director - sent back to estimation
+        filtered = purchases.filter(p => {
+          return p.status_info?.receiver === 'estimation' && 
+                 p.status_info?.sender === 'technicalDirector';
         });
         break;
     }
@@ -268,7 +295,7 @@ const EstimationHub: React.FC = () => {
       </div>
 
       {/* Metrics Cards - Responsive Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 mb-6">
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
             <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
@@ -308,6 +335,19 @@ const EstimationHub: React.FC = () => {
               <p className="truncate">Cost: {metrics.costRejections}</p>
               <p className="truncate">PM Flag: {metrics.pmFlagRejections}</p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
+              <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-500 flex-shrink-0" />
+              <span className="truncate">TD Rejected</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 sm:px-6">
+            <p className="text-xl sm:text-2xl font-bold text-orange-600">{metrics.tdRejectedCount}</p>
+            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Sent back by TD</p>
           </CardContent>
         </Card>
 
@@ -356,7 +396,7 @@ const EstimationHub: React.FC = () => {
       {/* Tabs - Responsive */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <TabsList className="grid w-full min-w-[280px] max-w-none lg:max-w-2xl grid-cols-3 bg-gray-100 h-auto">
+          <TabsList className="grid w-full min-w-[320px] max-w-none lg:max-w-3xl grid-cols-4 bg-gray-100 h-auto">
             <TabsTrigger 
               value="pending" 
               className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-amber-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
@@ -380,6 +420,14 @@ const EstimationHub: React.FC = () => {
               <XSquare className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
               <span className="hidden xs:inline">Rejected</span>
               <span className="text-[10px] xs:text-xs sm:text-sm">({metrics.rejectedCount})</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="td-rejected" 
+              className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-orange-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
+            >
+              <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="hidden xs:inline">TD Rejected</span>
+              <span className="text-[10px] xs:text-xs sm:text-sm">({metrics.tdRejectedCount})</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -472,6 +520,41 @@ const EstimationHub: React.FC = () => {
                 <p className="text-base sm:text-lg font-medium text-gray-900">No rejected purchases</p>
                 <p className="text-xs sm:text-sm text-gray-500 mt-1 text-center px-4">
                   Rejected purchases will appear here
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <AnimatePresence mode="popLayout">
+                {filteredPurchases.map((purchase) => (
+                  <EstimationApprovalCard
+                  key={purchase.purchase_id}
+                  purchase={purchase}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                  onViewDetails={handleViewDetails}
+                  onViewHistory={handleViewHistory}
+                  isLoading={isLoading}
+                />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* TD Rejected Tab */}
+        <TabsContent value="td-rejected" className="space-y-4">
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
+            </div>
+          ) : filteredPurchases.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
+                <AlertCircle className="h-10 w-10 sm:h-12 sm:w-12 text-orange-500 mb-3 sm:mb-4" />
+                <p className="text-base sm:text-lg font-medium text-gray-900">No TD rejected purchases</p>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1 text-center px-4">
+                  Purchases rejected by Technical Director will appear here
                 </p>
               </CardContent>
             </Card>

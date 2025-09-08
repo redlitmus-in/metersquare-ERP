@@ -7,7 +7,7 @@ import { apiClient } from '@/api/config';
 
 export interface PurchaseApproval {
   purchase_id: number;
-  purchase_status: 'approved' | 'reject';
+  purchase_status: 'approved' | 'rejected';
   rejection_reason?: string;
   comments?: string;
 }
@@ -46,6 +46,31 @@ export interface ProcurementPurchase {
     reject_category: string | null;
     comments: string;
   }>;
+  // Additional fields for workflow tracking
+  approvals?: Array<{
+    reviewer_role: string;
+    status: string;
+    comments?: string;
+    rejection_reason?: string;
+  }>;
+  status_role?: string;
+  status_sender?: string;
+  sender_latest_status?: string;
+  status_receiver?: string;
+  estimation_rejection_reason?: string;
+  // For estimation rejected purchases
+  rejected_status?: {
+    status: string;
+    sender: string;
+    receiver: string;
+    created_at: string;
+    created_by: string;
+    decision_date: string;
+    reject_category: string;
+    rejection_reason: string | null;
+    comments: string;
+    status_id: number;
+  };
 }
 
 export interface PurchaseStatusDetails {
@@ -157,6 +182,8 @@ class ProjectManagerService {
     total_approved_procurement_purchases: number;
     non_approval_project_manager_purchases: number;
     approved_procurement_purchases: ProcurementPurchase[];
+    estimation_pm_rejections: ProcurementPurchase[];
+    estimation_pm_rejections_count: number;
     summary: {
       workflow_status_counts: {
         pending_pm_review: number;
@@ -211,7 +238,7 @@ class ProjectManagerService {
     try {
       const response = await apiClient.post('/pm_approval', {
         purchase_id: purchaseId,
-        purchase_status: 'reject',
+        purchase_status: 'rejected',
         rejection_reason: rejectionReason,
         comments: comments || ''
       });

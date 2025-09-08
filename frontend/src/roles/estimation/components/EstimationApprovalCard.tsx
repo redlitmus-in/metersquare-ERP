@@ -77,8 +77,12 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
                    purchase.materials_summary?.total_cost || 
                    estimationService.calculateTotalCost(purchase.materials);
   
-  // A purchase needs review if estimation_status is pending
-  const needsReview = estimationStatus === 'pending';
+  // Check if this is a TD rejection sent back to estimation
+  const isTDRejected = purchase.status_info?.receiver === 'estimation' && 
+                       purchase.status_info?.sender === 'technicalDirector';
+  
+  // A purchase needs review if estimation_status is pending OR if it's rejected by TD
+  const needsReview = estimationStatus === 'pending' || isTDRejected;
   
   const isResubmission = estimationService.hasResubmission(purchase);
   
@@ -126,7 +130,13 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
                   PM Approved
                 </Badge>
               )}
-              {needsReview && (
+              {isTDRejected && (
+                <Badge className="bg-orange-100 text-orange-800 text-xs px-2 py-0.5">
+                  <AlertCircle className="h-3 w-3 mr-1" />
+                  TD Rejected - Review Required
+                </Badge>
+              )}
+              {needsReview && !isTDRejected && (
                 <Badge className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5">
                   Awaiting Cost Analysis
                 </Badge>
@@ -169,6 +179,19 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
               )}
             </div>
           )}
+          
+          {/* TD Rejection Reason if available */}
+          {isTDRejected && purchase.status_info?.rejection_reason && (
+            <div className="p-2 bg-orange-50 rounded border border-orange-200">
+              <div className="flex items-start gap-1.5">
+                <AlertCircle className="h-3 w-3 text-orange-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-orange-800">TD Rejection Reason:</p>
+                  <p className="text-xs text-orange-700 mt-0.5">{purchase.status_info.rejection_reason}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Spacer to push buttons to bottom */}
           <div className="flex-1"></div>
@@ -183,7 +206,7 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white h-9 text-xs font-medium"
                 >
                   <CheckCircle className="h-3 w-3 mr-1.5" />
-                  Approve & Send to TD
+                  {isTDRejected ? 'Re-approve & Send to TD' : 'Approve & Send to TD'}
                 </Button>
                 <Button
                   onClick={() => onReject(purchase.purchase_id)}
@@ -192,7 +215,7 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
                   className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 h-9 text-xs font-medium"
                 >
                   <XCircle className="h-3 w-3 mr-1.5" />
-                  Reject with Reason
+                  {isTDRejected ? 'Reject & Send Back' : 'Reject with Reason'}
                 </Button>
               </div>
             </div>

@@ -75,11 +75,14 @@ const ProjectManagerHub: React.FC = () => {
   // State management
   const [activeTab, setActiveTab] = useState('pending');
   const [purchases, setPurchases] = useState<ProcurementPurchase[]>([]);
+  const [estimationRejectedPurchases, setEstimationRejectedPurchases] = useState<ProcurementPurchase[]>([]);
   const [filteredPurchases, setFilteredPurchases] = useState<ProcurementPurchase[]>([]);
   const [metrics, setMetrics] = useState<MetricCard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   
   // Modal states
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -90,10 +93,13 @@ const ProjectManagerHub: React.FC = () => {
   const fetchPurchases = useCallback(async () => {
     try {
       setIsLoading(true);
+      setHasError(false);
+      setErrorMessage('');
       const response = await projectManagerService.getProcurementApprovedPurchases();
       
       if (response.success) {
         setPurchases(response.approved_procurement_purchases || []);
+        setEstimationRejectedPurchases(response.estimation_pm_rejections || []);
         
         // Calculate metrics from the response
         const metricsData: MetricCard[] = [
@@ -157,10 +163,76 @@ const ProjectManagerHub: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching purchases:', error);
-      toast.error('Failed to fetch purchase requests. Please try again.');
+      
+      // Set error state
+      setHasError(true);
+      
+      // Provide fallback data when API fails
+      setPurchases([]);
+      setEstimationRejectedPurchases([]);
+      
+      // Set default metrics when API fails
+      const fallbackMetrics: MetricCard[] = [
+        {
+          title: 'Total Purchases',
+          value: 0,
+          icon: <Package className="h-5 w-5 text-blue-600" />,
+          bgColor: 'bg-blue-50',
+          iconColor: 'bg-blue-100',
+          trend: 'N/A',
+          trendType: 'neutral'
+        },
+        {
+          title: 'Pending Approvals',
+          value: 0,
+          icon: <Clock className="h-5 w-5 text-yellow-600" />,
+          bgColor: 'bg-yellow-50',
+          iconColor: 'bg-yellow-100',
+          trend: 'N/A',
+          trendType: 'neutral'
+        },
+        {
+          title: 'Approved',
+          value: 0,
+          icon: <CheckCircle className="h-5 w-5 text-green-600" />,
+          bgColor: 'bg-green-50',
+          iconColor: 'bg-green-100',
+          trend: 'N/A',
+          trendType: 'neutral'
+        },
+        {
+          title: 'Rejected',
+          value: 0,
+          icon: <XCircle className="h-5 w-5 text-red-600" />,
+          bgColor: 'bg-red-50',
+          iconColor: 'bg-red-100',
+          trend: 'N/A',
+          trendType: 'neutral'
+        }
+      ];
+      
+      setMetrics(fallbackMetrics);
+      
+      // Set error message based on error type
+      let message = 'An unknown error occurred';
+      if (error instanceof Error && error.message.includes('500')) {
+        message = 'Server is temporarily unavailable. Please try again later.';
+      } else if (error instanceof Error && error.message.includes('Network Error')) {
+        message = 'Network connection error. Please check your internet connection.';
+      } else {
+        message = 'Failed to fetch purchase requests. Please try again.';
+      }
+      
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  // Retry function
+  const handleRetry = useCallback(() => {
+    setRefreshKey(prev => prev + 1);
   }, []);
 
   // Initial data fetch
@@ -170,21 +242,25 @@ const ProjectManagerHub: React.FC = () => {
 
   // Filter purchases based on active tab and search
   useEffect(() => {
-    let filtered = [...purchases];
+    let filtered: ProcurementPurchase[] = [];
 
     // Filter by status based on active tab
     switch (activeTab) {
       case 'pending':
-        filtered = filtered.filter(p => !p.pm_status || p.pm_status === 'pending');
+        filtered = [...purchases].filter(p => !p.pm_status || p.pm_status === 'pending');
         break;
       case 'approved':
-        filtered = filtered.filter(p => p.pm_status === 'approved');
+        filtered = [...purchases].filter(p => p.pm_status === 'approved');
         break;
       case 'rejected':
-        filtered = filtered.filter(p => p.pm_status === 'rejected');
+        filtered = [...purchases].filter(p => p.pm_status === 'rejected');
+        break;
+      case 'estimation_rejected':
+        // Use the estimation_pm_rejections data from API
+        filtered = [...estimationRejectedPurchases];
         break;
       default:
-        // Show all
+        filtered = [...purchases];
         break;
     }
 
@@ -198,7 +274,7 @@ const ProjectManagerHub: React.FC = () => {
     }
 
     setFilteredPurchases(filtered);
-  }, [purchases, activeTab, searchTerm]);
+  }, [purchases, estimationRejectedPurchases, activeTab, searchTerm]);
 
   // Handle approval action
   const handleApprove = async (purchaseId: number) => {
@@ -283,8 +359,9 @@ const ProjectManagerHub: React.FC = () => {
   const tabCounts = useMemo(() => ({
     pending: purchases.filter(p => !p.pm_status || p.pm_status === 'pending').length,
     approved: purchases.filter(p => p.pm_status === 'approved').length,
-    rejected: purchases.filter(p => p.pm_status === 'rejected').length
-  }), [purchases]);
+    rejected: purchases.filter(p => p.pm_status === 'rejected').length,
+    estimation_rejected: estimationRejectedPurchases.length
+  }), [purchases, estimationRejectedPurchases]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -359,7 +436,7 @@ const ProjectManagerHub: React.FC = () => {
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <div className="border-b px-6 pt-4">
-                <TabsList className="grid w-full max-w-md grid-cols-3 bg-gray-100/50">
+                <TabsList className="grid w-full max-w-lg grid-cols-4 bg-gray-100/50">
                   <TabsTrigger value="pending" className="relative">
                     <Clock className="h-4 w-4 mr-2" />
                     Pending
@@ -387,11 +464,28 @@ const ProjectManagerHub: React.FC = () => {
                       </Badge>
                     )}
                   </TabsTrigger>
+                  <TabsTrigger value="estimation_rejected" className="relative">
+                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    Est. Rejected
+                    {tabCounts.estimation_rejected > 0 && (
+                      <Badge variant="secondary" className="ml-2 bg-orange-100 text-orange-700">
+                        {tabCounts.estimation_rejected}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
                 </TabsList>
               </div>
 
               {/* Tab Content */}
               <TabsContent value={activeTab} className="p-6">
+                {activeTab === 'estimation_rejected' && filteredPurchases.length > 0 && (
+                  <Alert className="mb-4 border-orange-200 bg-orange-50">
+                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                    <AlertDescription className="text-orange-800">
+                      These purchases were rejected by the Estimation team. Review their feedback and take appropriate action.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 {isLoading ? (
                   <div className="flex items-center justify-center py-12">
                     <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />

@@ -103,6 +103,11 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
     // Always set requested_by to current user
     setValue('requested_by', currentUserName);
     
+    // Initialize date to today if not in edit mode and no existing data
+    if (!isEditMode && !existingData) {
+      setValue('date', getTodayFormatted());
+    }
+    
     if (isEditMode && existingData) {
       // Set project ID - handle both direct data and originalData from dashboard
       const purchaseData = existingData.originalData || existingData;
@@ -254,7 +259,14 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
 
   const validateDetailsTab = () => {
     const values = getValues();
-    return selectedProjectId && values.site_location && values.requested_by && values.date && values.purpose;
+    const currentDate = watch('date');
+    console.log('Validation - selectedProjectId:', selectedProjectId);
+    console.log('Validation - site_location:', values.site_location);
+    console.log('Validation - requested_by:', values.requested_by);
+    console.log('Validation - date (values):', values.date);
+    console.log('Validation - date (watch):', currentDate);
+    console.log('Validation - purpose:', values.purpose);
+    return selectedProjectId && values.site_location && values.requested_by && (values.date || currentDate) && values.purpose;
   };
 
   const validateMaterialsTab = () => {
@@ -503,67 +515,106 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl shadow-xl p-6 text-gray-800 border border-red-200"
-      >
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-white/20 rounded-lg backdrop-blur">
-              <Package className="w-8 h-8" />
+    <div className="h-full flex flex-col bg-gray-50">
+      {/* Modern Header */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
+              <Package className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">{isEditMode ? 'Edit Purchase Requisition' : 'Purchase Requisition Form'}</h1>
-              <p className="text-gray-600 mt-1">{isEditMode ? 'Update purchase request details' : 'Create and submit material purchase requests'}</p>
+              <h1 className="text-xl font-semibold text-gray-900">
+                {isEditMode ? 'Edit Purchase Request' : 'New Purchase Request'}
+              </h1>
+              <p className="text-sm text-gray-500">{isEditMode ? 'Update request details' : 'Create and submit material purchase requests'}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 mt-4 md:mt-0">
-            <Badge className="bg-red-100 text-red-700 border-red-300 px-3 py-1">
+          <div className="flex items-center gap-3">
+            <Badge variant="secondary" className="bg-orange-50 text-orange-700 border-orange-200">
               <Hash className="w-3 h-3 mr-1" />
               PR-2024-001
             </Badge>
-            <Badge className="bg-green-100 text-green-700 border-green-300 px-3 py-1">
+            <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">
               <Clock className="w-3 h-3 mr-1" />
               Draft
             </Badge>
+            {onClose && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         </div>
-      </motion.div>
+      </div>
 
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid grid-cols-3 w-full max-w-2xl bg-white shadow-sm border">
-            <TabsTrigger value="details" className="data-[state=active]:bg-red-50">
-              <FileText className="w-4 h-4 mr-2" />
+      {/* Modern Tabs */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="px-6">
+          <div className="flex space-x-8">
+            <button
+              type="button"
+              onClick={() => handleTabChange('details')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'details'
+                  ? 'border-orange-500 text-orange-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <FileText className="w-4 h-4 mr-2 inline" />
               Details
-            </TabsTrigger>
-            <TabsTrigger value="materials" className="data-[state=active]:bg-red-50">
-              <Package className="w-4 h-4 mr-2" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('materials')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'materials'
+                  ? 'border-orange-500 text-orange-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Package className="w-4 h-4 mr-2 inline" />
               Materials
-            </TabsTrigger>
-            <TabsTrigger value="attachments" className="data-[state=active]:bg-red-50">
-              <Paperclip className="w-4 h-4 mr-2" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('attachments')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'attachments'
+                  ? 'border-orange-500 text-orange-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Paperclip className="w-4 h-4 mr-2 inline" />
               Attachments
-            </TabsTrigger>
-          </TabsList>
+            </button>
+          </div>
+        </div>
+      </div>
 
-          {/* Details Tab */}
-          <TabsContent value="details">
-            <Card className="shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
-                <CardTitle className="flex items-center gap-2">
-                  <Building className="w-5 h-5 text-red-600" />
-                  Project & Requester Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col">
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-6 space-y-8">
+
+            {/* Details Tab */}
+            {activeTab === 'details' && (
+              <div className="bg-white rounded-lg border border-gray-200">
+                <div className="p-6 border-b border-gray-100">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <Building className="w-5 h-5 text-orange-600" />
+                    Project & Requester Information
+                  </h3>
+                </div>
+                <div className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="flex items-center gap-2 text-sm font-semibold">
-                      <Building className="w-4 h-4 text-gray-500" />
+                    <Label className="text-sm font-medium text-gray-700">
                       Project Name
                     </Label>
                     <Select 
@@ -574,7 +625,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                         setValue('project_id', projectId);
                       }}
                     >
-                      <SelectTrigger className="h-11 border-gray-200 focus:border-red-500">
+                      <SelectTrigger className="h-11 border-gray-300 focus:border-orange-500 focus:ring-orange-500">
                         <SelectValue placeholder="Select project" />
                       </SelectTrigger>
                       <SelectContent>
@@ -586,14 +637,13 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="flex items-center gap-2 text-sm font-semibold">
-                      <MapPin className="w-4 h-4 text-gray-500" />
+                    <Label className="text-sm font-medium text-gray-700">
                       Site Location
                     </Label>
                     <Input 
                       {...register('site_location', { required: true })}
                       placeholder="Enter site location (e.g., Erode)"
-                      className="h-11 border-gray-200 focus:border-red-500"
+                      className="h-11 border-gray-300 focus:border-orange-500 focus:ring-orange-500"
                     />
                   </div>
 
@@ -625,75 +675,47 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                       onChange={(value) => setValue('date', value)}
                       className="h-11 border-gray-200 focus:border-red-500"
                       placeholder="dd/mm/yyyy"
+                      min={new Date().toISOString().split('T')[0]}
                     />
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-sm font-semibold">
-                    <FileText className="w-4 h-4 text-gray-500" />
-                    Justification / Purpose
-                  </Label>
-                  <textarea 
-                    {...register('purpose', { required: true })}
-                    className="w-full min-h-[100px] p-3 border border-gray-200 rounded-lg focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                    placeholder="Explain the purpose and urgency of this requisition (e.g., Foundation materials)..."
-                  />
-                </div>
-
-                {/* Navigation Buttons for Details Tab */}
-                <div className="flex flex-col sm:flex-row justify-between mt-6 gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={onClose}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2"
-                  >
-                    <X className="w-4 h-4" />
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      if (validateDetailsTab()) {
-                        setDetailsCompleted(true);
-                        setActiveTab('materials');
-                      } else {
-                        toast.error('Please fill all required fields');
-                      }
-                    }}
-                    className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto flex items-center justify-center gap-2"
-                  >
-                    Next: Materials
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Materials Tab */}
-          <TabsContent value="materials">
-            <Card className="shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Package className="w-5 h-5 text-red-600" />
-                    Material Requirements
-                  </CardTitle>
-                  <div className="flex items-center gap-3">
-                    <Badge className="bg-red-100 text-red-700 border border-red-300">
-                      {materials.length} Items
-                    </Badge>
-                    <Badge className="bg-green-100 text-green-700 border border-green-300">
-                      <Banknote className="w-3 h-3 mr-1" />
-                      Total: AED {calculateTotal().toLocaleString()}
-                    </Badge>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-700">
+                      Justification / Purpose
+                    </Label>
+                    <textarea 
+                      {...register('purpose', { required: true })}
+                      className="w-full min-h-[100px] p-3 border border-gray-300 rounded-lg focus:border-orange-500 focus:ring-orange-500"
+                      placeholder="Explain the purpose and urgency of this requisition (e.g., Foundation materials)..."
+                    />
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="space-y-4">
+              </div>
+            )}
+
+            {/* Materials Tab */}
+            {activeTab === 'materials' && (
+              <div className="bg-white rounded-lg border border-gray-200">
+                <div className="p-6 border-b border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                      <Package className="w-5 h-5 text-orange-600" />
+                      Material Requirements
+                    </h3>
+                    <div className="flex items-center gap-3">
+                      <Badge variant="secondary" className="bg-orange-50 text-orange-700 border-orange-200">
+                        {materials.length} Items
+                      </Badge>
+                      <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">
+                        <Banknote className="w-3 h-3 mr-1" />
+                        Total: AED {calculateTotal().toLocaleString()}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-6">
+                  <div className="space-y-4">
                   <AnimatePresence>
                     {materials.map((material, index) => (
                       <motion.div
@@ -899,22 +921,22 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                     Next: Attachments
                     <ChevronRight className="w-4 h-4" />
                   </Button>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+              </div>
+            )}
 
-          {/* Attachments Tab */}
-          <TabsContent value="attachments">
-            <Card className="shadow-lg border-0">
-              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
-                <CardTitle className="flex items-center gap-2">
-                  <Paperclip className="w-5 h-5 text-red-600" />
-                  Documents & References
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="space-y-6">
+            {/* Attachments Tab */}
+            {activeTab === 'attachments' && (
+              <div className="bg-white rounded-lg border border-gray-200">
+                <div className="p-6 border-b border-gray-100">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <Paperclip className="w-5 h-5 text-orange-600" />
+                    Documents & References
+                  </h3>
+                </div>
+                <div className="p-6">
+                  <div className="space-y-6">
                   {/* Upload Area */}
                   <div 
                     className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-red-400 transition-colors cursor-pointer"
@@ -1032,60 +1054,78 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                     <ChevronRight className="w-4 h-4 rotate-180" />
                     Back to Materials
                   </Button>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+              </div>
+            )}
+          </div>
+        </div>
 
-        {/* Action Buttons - Only show on Attachments tab */}
-        {activeTab === 'attachments' && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col sm:flex-row gap-4 justify-between mt-6"
-          >
-            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowPreviewModal(true)}
-                className="flex items-center justify-center gap-2 w-full sm:w-auto"
-              >
-                <FileText className="w-4 h-4" />
-                Preview
-              </Button>
+        {/* Modern Footer */}
+        <div className="bg-white border-t border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="text-gray-600 border-gray-300 hover:bg-gray-50"
+            >
+              Cancel
+            </Button>
+            <div className="flex items-center gap-3">
+              {activeTab !== 'details' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    if (activeTab === 'materials') handleTabChange('details');
+                    if (activeTab === 'attachments') handleTabChange('materials');
+                  }}
+                  className="text-gray-600 border-gray-300 hover:bg-gray-50"
+                >
+                  Previous
+                </Button>
+              )}
+              {activeTab === 'details' && (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const values = getValues();
+                    if (values.project_id && values.site_location && values.requested_by && values.date && values.purpose) {
+                      setDetailsCompleted(true);
+                      handleTabChange('materials');
+                    } else {
+                      toast.error('Please fill all required fields');
+                    }
+                  }}
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  Next: Materials
+                  <ChevronRight className="w-4 h-4 ml-2" />
+                </Button>
+              )}
+              {activeTab === 'materials' && (
+                <Button
+                  type="button"
+                  onClick={() => handleTabChange('attachments')}
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  Next: Attachments
+                  <ChevronRight className="w-4 h-4 ml-2" />
+                </Button>
+              )}
+              {activeTab === 'attachments' && (
+                <Button
+                  type="submit"
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  Submit Request
+                  <Send className="w-4 h-4 ml-2" />
+                </Button>
+              )}
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex items-center justify-center gap-2 w-full sm:w-auto"
-                onClick={onClose}
-              >
-                <X className="w-4 h-4" />
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={isUploading || !validateDetailsTab() || !validateMaterialsTab()}
-                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white flex items-center justify-center gap-2 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isUploading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    {isEditMode ? 'Updating...' : 'Submitting...'}
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    {isEditMode ? 'Update Requisition' : 'Submit & Send for Approval'}
-                  </>
-                )}
-              </Button>
-            </div>
-          </motion.div>
-        )}
+          </div>
+        </div>
       </form>
 
       {/* Preview Modal */}

@@ -23,9 +23,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import PurchaseCard from '../components/PurchaseCard';
 import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
+import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
 import { siteSupervisorService, Purchase } from '../services/siteSupervisorService';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 
@@ -39,6 +41,7 @@ const SiteSupervisorHub: React.FC = () => {
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
   const [modalMode, setModalMode] = useState<'details' | 'history'>('details');
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [newPurchaseModalOpen, setNewPurchaseModalOpen] = useState(false);
 
   // Metrics state
   const [metrics, setMetrics] = useState({
@@ -223,7 +226,7 @@ const SiteSupervisorHub: React.FC = () => {
             </Button>
           </div>
           <Button
-            onClick={() => navigate('/procurement')}
+            onClick={() => setNewPurchaseModalOpen(true)}
             className="bg-orange-600 hover:bg-orange-700 text-white"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -385,6 +388,19 @@ const SiteSupervisorHub: React.FC = () => {
       </Tabs>
 
       {/* Purchase Details Modal */}
+      {/* New Purchase Request Form Modal */}
+      <Dialog open={newPurchaseModalOpen} onOpenChange={setNewPurchaseModalOpen}>
+        <DialogContent className="max-w-7xl max-h-[95vh] overflow-y-auto p-0">
+          <PurchaseRequisitionForm
+            onClose={() => {
+              setNewPurchaseModalOpen(false);
+              fetchPurchases(); // Refresh the list after creating a new purchase
+            }}
+            showAsPage={false}
+          />
+        </DialogContent>
+      </Dialog>
+
       <PurchaseDetailsModal
         isOpen={detailsModalOpen}
         onClose={() => {

@@ -81,6 +81,28 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
   const statusInfo = getStatusInfo();
   const isPending = !purchase.pm_status || purchase.pm_status === 'pending';
 
+  // Check if rejected by estimation
+  const isRejectedByEstimation = () => {
+    // Check if there's a rejected_status from estimation
+    if (purchase.rejected_status && purchase.rejected_status.sender === 'estimation' && purchase.rejected_status.status === 'rejected') {
+      return true;
+    }
+    
+    const estimationRejection = purchase.approvals?.some((a: any) => 
+      a.reviewer_role === 'estimation' && a.status === 'rejected'
+    );
+    
+    const statusRejectedByEstimation = (
+      purchase.current_workflow_status?.includes('estimation_rejected') ||
+      (purchase.status_role === 'estimation' && purchase.sender_latest_status === 'rejected') ||
+      (purchase.status_sender === 'estimation' && purchase.sender_latest_status === 'rejected')
+    );
+    
+    return estimationRejection || statusRejectedByEstimation;
+  };
+
+  const rejectedByEstimation = isRejectedByEstimation();
+
   // Format date
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-AE', {
@@ -123,10 +145,18 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                   <h3 className="font-semibold text-lg text-gray-900">
                     Purchase #{purchase.purchase_id}
                   </h3>
-                  <Badge className={statusInfo.color}>
-                    {statusInfo.icon}
-                    <span className="ml-1">{statusInfo.text}</span>
-                  </Badge>
+                  <div className="flex flex-col gap-1 items-end">
+                    <Badge className={statusInfo.color}>
+                      {statusInfo.icon}
+                      <span className="ml-1">{statusInfo.text}</span>
+                    </Badge>
+                    {rejectedByEstimation && (
+                      <Badge className="bg-orange-100 text-orange-700 border border-orange-200">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Rejected by Estimation
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-gray-600">
                   <div className="flex items-center gap-1">
@@ -218,6 +248,46 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                   <div className="flex-1">
                     <p className="text-sm font-medium text-red-800">Previous Rejection</p>
                     <p className="text-sm text-red-700 mt-1">{purchase.pm_rejection_reason}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Estimation Rejection Reason */}
+            {rejectedByEstimation && (
+              <div className="mb-4 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-orange-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-orange-800">Rejected by Estimation</p>
+                    {purchase.rejected_status && (
+                      <>
+                        <p className="text-sm text-orange-700 mt-1">
+                          <span className="font-medium">Rejected by:</span> {purchase.rejected_status.created_by}
+                        </p>
+                        <p className="text-sm text-orange-700">
+                          <span className="font-medium">Date:</span> {new Date(purchase.rejected_status.decision_date).toLocaleDateString()}
+                        </p>
+                        {purchase.rejected_status.reject_category && (
+                          <p className="text-sm text-orange-700">
+                            <span className="font-medium">Category:</span> {purchase.rejected_status.reject_category.replace(/_/g, ' ').toUpperCase()}
+                          </p>
+                        )}
+                        {purchase.rejected_status.comments && (
+                          <p className="text-sm text-orange-700 mt-2">
+                            <span className="font-medium">Comments:</span> {purchase.rejected_status.comments}
+                          </p>
+                        )}
+                        {purchase.rejected_status.rejection_reason && (
+                          <p className="text-sm text-orange-700">
+                            <span className="font-medium">Reason:</span> {purchase.rejected_status.rejection_reason}
+                          </p>
+                        )}
+                      </>
+                    )}
+                    {purchase.estimation_rejection_reason && (
+                      <p className="text-sm text-orange-700 mt-1">{purchase.estimation_rejection_reason}</p>
+                    )}
                   </div>
                 </div>
               </div>

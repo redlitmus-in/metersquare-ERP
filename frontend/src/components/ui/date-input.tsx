@@ -7,10 +7,12 @@ interface DateInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement
   value?: string;
   onChange?: (value: string) => void;
   onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  min?: string; // Allow setting minimum date in YYYY-MM-DD format
+  max?: string; // Allow setting maximum date in YYYY-MM-DD format
 }
 
 const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
-  ({ className, value, onChange, onBlur, placeholder = 'dd/mm/yyyy', ...props }, ref) => {
+  ({ className, value, onChange, onBlur, placeholder = 'dd/mm/yyyy', min, max, ...props }, ref) => {
     const [displayValue, setDisplayValue] = useState('');
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [internalValue, setInternalValue] = useState('');
@@ -49,6 +51,25 @@ const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
         const date = parseDateFromDDMMYYYY(inputValue);
         if (date) {
           const formattedForInput = formatDateForInput(date);
+          
+          // Check if date meets min/max constraints
+          if (min) {
+            const inputDate = new Date(formattedForInput);
+            const minDate = new Date(min);
+            if (inputDate < minDate) {
+              // Date is before minimum allowed date
+              return;
+            }
+          }
+          if (max) {
+            const inputDate = new Date(formattedForInput);
+            const maxDate = new Date(max);
+            if (inputDate > maxDate) {
+              // Date is after maximum allowed date
+              return;
+            }
+          }
+          
           setInternalValue(formattedForInput);
           onChange?.(inputValue);
         }
@@ -122,6 +143,8 @@ const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
           tabIndex={-1}
           aria-label="Date picker"
           title="Date picker"
+          min={min}
+          max={max}
         />
       </div>
     );

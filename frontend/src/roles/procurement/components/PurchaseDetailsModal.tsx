@@ -9,8 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Card, CardContent } from '@/components/ui/card';
 import { procurementService, Purchase, Material } from '../services/procurementService';
 import { toast } from 'sonner';
+import { motion } from 'framer-motion';
+import { exportPurchaseDetailsPDF } from '@/utils/exportUtils';
 import {
   FileText,
   Building2,
@@ -26,7 +29,18 @@ import {
   History,
   Download,
   Mail,
-  Loader2
+  Loader2,
+  Hash,
+  UserCheck,
+  CalendarCheck,
+  FileCheck,
+  ArrowRight,
+  Info,
+  TrendingUp,
+  Layers,
+  Shield,
+  Activity,
+  Target
 } from 'lucide-react';
 
 interface PurchaseDetailsModalProps {
@@ -43,6 +57,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   mode = 'details'
 }) => {
   const [purchase, setPurchase] = useState<Purchase | null>(null);
+  const [latestStatus, setLatestStatus] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(mode === 'history' ? 'history' : 'details');
 
@@ -69,12 +84,18 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
       
       if (mode === 'history') {
         // Use getPurchaseHistory for history view
-        const { purchase: purchaseData } = await procurementService.getPurchaseHistory(purchaseId);
+        const { purchase: purchaseData, latest_status } = await procurementService.getPurchaseHistory(purchaseId);
         setPurchase(purchaseData);
+        setLatestStatus(latest_status);
       } else {
-        // Use getPurchaseDetails for details view
-        const purchaseData = await procurementService.getPurchaseDetails(purchaseId);
-        setPurchase(purchaseData);
+        // Use getPurchaseDetails for details view with full response
+        const response = await procurementService.getPurchaseDetails(purchaseId);
+        if (response.purchase) {
+          setPurchase(response.purchase);
+          setLatestStatus(response.latest_status);
+        } else {
+          setPurchase(response);
+        }
       }
     } catch (error: any) {
       console.error('Error fetching purchase data:', error);
@@ -116,23 +137,17 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     }
   };
 
-  const handleExport = () => {
+  const handleExportPDF = () => {
     if (!purchase) return;
     
-    const data = JSON.stringify(purchase, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `PR_${purchase.purchase_id}_details.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    toast.success('Purchase details exported successfully');
+    try {
+      exportPurchaseDetailsPDF(purchase, latestStatus);
+      toast.success('PDF exported successfully');
+    } catch (error) {
+      toast.error('Failed to export PDF');
+    }
   };
-
+  
   const handleSendEmail = async () => {
     if (!purchaseId) return;
     
@@ -152,253 +167,684 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] h-[90vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
+      <DialogContent className="max-w-5xl max-h-[95vh] h-[95vh] overflow-hidden flex flex-col p-0 bg-gray-50">
+        <DialogHeader className="px-6 py-5 bg-gradient-to-r from-red-600 to-red-700 flex-shrink-0 shadow-lg">
           <DialogTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-red-600" />
-              Purchase Request Details
-              {purchase && (
-                <Badge className="ml-2">
-                  PR-{purchase.purchase_id}
-                </Badge>
-              )}
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/10 rounded-lg backdrop-blur">
+                <FileText className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-white text-lg font-semibold">Purchase Request Details</h2>
+                {purchase && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge className="bg-white/20 text-white border-white/30 hover:bg-white/30">
+                      <Hash className="w-3 h-3 mr-1" />
+                      PR-{purchase.purchase_id}
+                    </Badge>
+                    <Badge className={`${getStatusColor(purchase.status || purchase.latest_status)} border`}>
+                      {getStatusIcon(purchase.status || purchase.latest_status)}
+                      <span className="ml-1">{(purchase.status || purchase.latest_status || 'pending').toUpperCase()}</span>
+                    </Badge>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {purchase && (
-                <>
-                  <Badge className={`${getStatusColor(purchase.status || purchase.latest_status)} border`}>
-                    {(purchase.status || purchase.latest_status || 'pending').toUpperCase()}
-                  </Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleExport}
-                    title="Export"
-                  >
-                    <Download className="w-4 h-4" />
-                  </Button>
-                </>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleExportPDF}
+                  className="bg-white/10 hover:bg-white/20 text-white border-white/30"
+                >
+                  <FileText className="w-4 h-4 mr-1" />
+                  Export PDF
+                </Button>
               )}
             </div>
           </DialogTitle>
         </DialogHeader>
 
         {loading ? (
-          <div className="flex items-center justify-center flex-1">
-            <Loader2 className="w-8 h-8 animate-spin text-red-600" />
+          <div className="flex items-center justify-center flex-1 bg-white">
+            <div className="text-center">
+              <Loader2 className="w-12 h-12 animate-spin text-red-600 mx-auto mb-4" />
+              <p className="text-gray-600">Loading purchase details...</p>
+            </div>
           </div>
         ) : purchase ? (
-          <div className="flex-1 overflow-hidden flex flex-col px-6 pb-4">
+          <div className="flex-1 overflow-hidden flex flex-col">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className={`grid w-full ${mode === 'history' ? 'grid-cols-1' : 'grid-cols-2'} mt-4 mb-4`}>
-                {mode === 'history' ? (
-                  <TabsTrigger value="history">History</TabsTrigger>
-                ) : (
-                  <>
-                    <TabsTrigger value="details">Details</TabsTrigger>
-                    <TabsTrigger value="materials">Materials</TabsTrigger>
-                  </>
-                )}
-              </TabsList>
+              <div className="bg-white border-b px-6 pt-4">
+                <TabsList className={`grid w-full ${mode === 'history' ? 'grid-cols-1' : 'grid-cols-3'} max-w-2xl mx-auto bg-gray-100`}>
+                  {mode === 'history' ? (
+                    <TabsTrigger value="history" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                      <History className="w-4 h-4 mr-2" />
+                      History
+                    </TabsTrigger>
+                  ) : (
+                    <>
+                      <TabsTrigger value="details" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <Info className="w-4 h-4 mr-2" />
+                        Details
+                      </TabsTrigger>
+                      <TabsTrigger value="materials" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <Package className="w-4 h-4 mr-2" />
+                        Materials
+                      </TabsTrigger>
+                      <TabsTrigger value="status" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <Activity className="w-4 h-4 mr-2" />
+                        Latest Status
+                      </TabsTrigger>
+                    </>
+                  )}
+                </TabsList>
+              </div>
 
               {/* Details Tab */}
               {mode !== 'history' && (
-                <TabsContent value="details" className="flex-1 overflow-hidden mt-0">
-                  <div className="h-full overflow-y-auto pr-2 space-y-6">
-                  {/* Basic Information */}
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-3">Basic Information</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Building2 className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-600">Project ID:</span>
-                          <span className="font-medium">{purchase.project_id}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <User className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-600">Requested By:</span>
-                          <span className="font-medium">{purchase.requested_by}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <MapPin className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-600">Site Location:</span>
-                          <span className="font-medium">{purchase.site_location}</span>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-600">Date:</span>
-                          <span className="font-medium">
-                            {new Date(purchase.date || purchase.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <DollarSign className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-600">Total Amount:</span>
-                          <span className="font-semibold text-green-600">
-                            AED {totalAmount.toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Mail className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-600">Email Status:</span>
-                          <Badge variant={purchase.email_sent ? 'default' : 'outline'}>
-                            {purchase.email_sent ? 'Sent' : 'Not Sent'}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  {/* Purpose */}
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-3">Purpose</h3>
-                    <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">
-                      {purchase.purpose || 'No purpose specified'}
-                    </p>
-                  </div>
-
-                  {/* Approval Status */}
-                  {purchase.approvals && purchase.approvals.length > 0 && (
-                    <>
-                      <Separator />
-                      <div>
-                        <h3 className="font-semibold text-gray-900 mb-3">Current Approval Status</h3>
-                        <div className="space-y-2">
-                          {purchase.approvals.slice(-1).map((approval: any, idx: number) => (
-                            <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                              {getStatusIcon(approval.status)}
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-sm">{approval.reviewer_role}</span>
-                                  <Badge className={`${getStatusColor(approval.status)} border text-xs`}>
-                                    {approval.status.toUpperCase()}
-                                  </Badge>
-                                </div>
-                                {approval.comments && (
-                                  <p className="text-sm text-gray-600 mt-1">{approval.comments}</p>
-                                )}
-                                <p className="text-xs text-gray-500 mt-1">
-                                  {new Date(approval.created_at).toLocaleString()}
+                <TabsContent value="details" className="flex-1 overflow-hidden mt-0 bg-white">
+                  <div className="h-full overflow-y-auto p-6">
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="space-y-6"
+                    >
+                      {/* Summary Cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-blue-600 font-medium">Total Amount</p>
+                                <p className="text-2xl font-bold text-blue-900 mt-1">
+                                  AED {totalAmount.toLocaleString()}
                                 </p>
                               </div>
+                              <div className="p-3 bg-blue-200/30 rounded-lg">
+                                <DollarSign className="w-6 h-6 text-blue-700" />
+                              </div>
                             </div>
-                          ))}
-                        </div>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card className="border-0 shadow-sm bg-gradient-to-br from-purple-50 to-purple-100">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-purple-600 font-medium">Materials</p>
+                                <p className="text-2xl font-bold text-purple-900 mt-1">
+                                  {purchase.materials?.length || 0} Items
+                                </p>
+                              </div>
+                              <div className="p-3 bg-purple-200/30 rounded-lg">
+                                <Package className="w-6 h-6 text-purple-700" />
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card className="border-0 shadow-sm bg-gradient-to-br from-green-50 to-green-100">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-green-600 font-medium">Email Status</p>
+                                <p className="text-lg font-bold text-green-900 mt-1">
+                                  {purchase.email_sent ? 'Sent ✓' : 'Pending'}
+                                </p>
+                              </div>
+                              <div className="p-3 bg-green-200/30 rounded-lg">
+                                <Mail className="w-6 h-6 text-green-700" />
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
                       </div>
-                    </>
-                  )}
 
-                  {/* Actions */}
-                  {!purchase.email_sent && purchase.status !== 'approved' && (
-                    <>
-                      <Separator />
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => procurementService.rejectPurchase(purchase.purchase_id, 'Cost exceeds budget')}
-                        >
-                          <XCircle className="w-4 h-4 mr-2" />
-                          Reject
-                        </Button>
-                        <Button
-                          variant="default"
-                          onClick={() => procurementService.approvePurchase(purchase.purchase_id)}
-                          className="bg-green-600 hover:bg-green-700"
-                        >
-                          <CheckCircle className="w-4 h-4 mr-2" />
-                          Approve
-                        </Button>
-                        <Button
-                          onClick={handleSendEmail}
-                          className="bg-blue-600 hover:bg-blue-700"
-                        >
-                          <Mail className="w-4 h-4 mr-2" />
-                          Send to PM
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </TabsContent>
-            )}
+                      {/* Basic Information */}
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="p-2 bg-red-100 rounded-lg">
+                              <Info className="w-5 h-5 text-red-600" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                <Building2 className="w-5 h-5 text-gray-500 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Project ID</p>
+                                  <p className="text-sm font-semibold text-gray-900 mt-0.5">{purchase.project_id}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                <UserCheck className="w-5 h-5 text-gray-500 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Requested By</p>
+                                  <p className="text-sm font-semibold text-gray-900 mt-0.5">{purchase.requested_by}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                <MapPin className="w-5 h-5 text-gray-500 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Site Location</p>
+                                  <p className="text-sm font-semibold text-gray-900 mt-0.5">{purchase.site_location}</p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-4">
+                              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                <CalendarCheck className="w-5 h-5 text-gray-500 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Request Date</p>
+                                  <p className="text-sm font-semibold text-gray-900 mt-0.5">
+                                    {new Date(purchase.date || purchase.created_at).toLocaleDateString('en-US', {
+                                      year: 'numeric',
+                                      month: 'long',
+                                      day: 'numeric'
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                <User className="w-5 h-5 text-gray-500 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Created By</p>
+                                  <p className="text-sm font-semibold text-gray-900 mt-0.5">{purchase.created_by}</p>
+                                </div>
+                              </div>
+                              
+                              {purchase.last_modified_by && (
+                                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                  <Clock className="w-5 h-5 text-gray-500 mt-0.5" />
+                                  <div className="flex-1">
+                                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Last Modified By</p>
+                                    <p className="text-sm font-semibold text-gray-900 mt-0.5">{purchase.last_modified_by}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Purpose */}
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="p-2 bg-amber-100 rounded-lg">
+                              <Target className="w-5 h-5 text-amber-600" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900">Purpose</h3>
+                          </div>
+                          <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border border-amber-200">
+                            <p className="text-sm text-gray-800 leading-relaxed">
+                              {purchase.purpose || 'No purpose specified'}
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Approval Status */}
+                      {purchase.approvals && purchase.approvals.length > 0 && (
+                        <Card className="border-0 shadow-sm">
+                          <CardContent className="p-6">
+                            <div className="flex items-center gap-2 mb-4">
+                              <div className="p-2 bg-green-100 rounded-lg">
+                                <Shield className="w-5 h-5 text-green-600" />
+                              </div>
+                              <h3 className="text-lg font-semibold text-gray-900">Current Approval Status</h3>
+                            </div>
+                            <div className="space-y-3">
+                              {purchase.approvals.slice(-1).map((approval: any, idx: number) => (
+                                <motion.div 
+                                  key={idx} 
+                                  initial={{ opacity: 0, x: -20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  className="relative"
+                                >
+                                  <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200 hover:shadow-md transition-all">
+                                    <div className={`p-2 rounded-lg ${approval.status === 'approved' ? 'bg-green-100' : approval.status === 'rejected' ? 'bg-red-100' : 'bg-yellow-100'}`}>
+                                      {getStatusIcon(approval.status)}
+                                    </div>
+                                    <div className="flex-1">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-3">
+                                          <span className="font-semibold text-gray-900">
+                                            {approval.reviewer_role?.replace(/([A-Z])/g, ' $1').trim()}
+                                          </span>
+                                          <Badge className={`${getStatusColor(approval.status)} border`}>
+                                            {approval.status.toUpperCase()}
+                                          </Badge>
+                                        </div>
+                                        <span className="text-xs text-gray-500">
+                                          {new Date(approval.created_at).toLocaleString()}
+                                        </span>
+                                      </div>
+                                      {approval.comments && (
+                                        <div className="bg-white p-3 rounded-lg mt-2">
+                                          <p className="text-sm text-gray-700 italic">"{approval.comments}"</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Actions */}
+                      {!purchase.email_sent && purchase.status !== 'approved' && (
+                        <Card className="border-0 shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50">
+                          <CardContent className="p-6">
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                              <div className="flex items-center gap-2">
+                                <Activity className="w-5 h-5 text-blue-600" />
+                                <p className="text-sm font-medium text-gray-700">Available Actions</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  onClick={() => procurementService.rejectPurchase(purchase.purchase_id, 'Cost exceeds budget')}
+                                  className="hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+                                >
+                                  <XCircle className="w-4 h-4 mr-2" />
+                                  Reject
+                                </Button>
+                                <Button
+                                  onClick={() => procurementService.approvePurchase(purchase.purchase_id)}
+                                  className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
+                                >
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  onClick={handleSendEmail}
+                                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                                >
+                                  <Mail className="w-4 h-4 mr-2" />
+                                  Send to PM
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </motion.div>
+                  </div>
+                </TabsContent>
+              )}
 
               {/* Materials Tab */}
               {mode !== 'history' && (
-                <TabsContent value="materials" className="flex-1 overflow-hidden mt-0">
-                  <div className="h-full overflow-y-auto pr-2">
-                  {purchase.materials && purchase.materials.length > 0 ? (
-                    <div className="space-y-3">
-                      {purchase.materials.map((material: Material, idx: number) => (
-                        <div key={material.material_id} className="border rounded-lg p-4">
-                          <div className="flex items-start justify-between mb-2">
-                            <h4 className="font-medium text-gray-900">
-                              {idx + 1}. {material.description}
-                            </h4>
-                            <Badge variant="outline">{material.category}</Badge>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div>
-                              <span className="text-gray-600">Specification:</span>
-                              <p className="font-medium">{material.specification}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Quantity:</span>
-                              <p className="font-medium">{material.quantity} {material.unit}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Unit Cost:</span>
-                              <p className="font-medium">AED {material.cost.toLocaleString()}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Total Cost:</span>
-                              <p className="font-semibold text-green-600">
-                                AED {(material.quantity * material.cost).toLocaleString()}
-                              </p>
-                            </div>
-                            {material.priority && (
-                              <div>
-                                <span className="text-gray-600">Priority:</span>
-                                <Badge className="ml-2" variant={
-                                  material.priority === 'urgent' ? 'destructive' :
-                                  material.priority === 'high' ? 'default' : 'outline'
-                                }>
-                                  {material.priority.toUpperCase()}
-                                </Badge>
+                <TabsContent value="materials" className="flex-1 overflow-hidden mt-0 bg-white">
+                  <div className="h-full overflow-y-auto p-6">
+                    {purchase.materials && purchase.materials.length > 0 ? (
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="space-y-4"
+                      >
+                        {purchase.materials.map((material: Material, idx: number) => (
+                          <motion.div
+                            key={material.material_id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.1 }}
+                          >
+                            <Card className="border-0 shadow-sm hover:shadow-md transition-all">
+                              <CardContent className="p-5">
+                                <div className="flex items-start justify-between mb-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-purple-100 rounded-lg">
+                                      <Layers className="w-5 h-5 text-purple-600" />
+                                    </div>
+                                    <div>
+                                      <h4 className="font-semibold text-gray-900 text-lg">
+                                        {material.description}
+                                      </h4>
+                                      <p className="text-sm text-gray-500">Item #{idx + 1}</p>
+                                    </div>
+                                  </div>
+                                  <Badge className="bg-purple-100 text-purple-700 border-purple-200">
+                                    {material.category}
+                                  </Badge>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                  <div className="bg-gray-50 p-3 rounded-lg">
+                                    <p className="text-xs text-gray-500 font-medium uppercase">Specification</p>
+                                    <p className="text-sm font-semibold text-gray-900 mt-1">{material.specification}</p>
+                                  </div>
+                                  
+                                  <div className="bg-blue-50 p-3 rounded-lg">
+                                    <p className="text-xs text-blue-600 font-medium uppercase">Quantity</p>
+                                    <p className="text-sm font-semibold text-blue-900 mt-1">
+                                      {material.quantity} {material.unit}
+                                    </p>
+                                  </div>
+                                  
+                                  <div className="bg-green-50 p-3 rounded-lg">
+                                    <p className="text-xs text-green-600 font-medium uppercase">Unit Cost</p>
+                                    <p className="text-sm font-semibold text-green-900 mt-1">
+                                      AED {material.cost.toLocaleString()}
+                                    </p>
+                                  </div>
+                                  
+                                  <div className="bg-amber-50 p-3 rounded-lg">
+                                    <p className="text-xs text-amber-600 font-medium uppercase">Total Cost</p>
+                                    <p className="text-sm font-bold text-amber-900 mt-1">
+                                      AED {(material.quantity * material.cost).toLocaleString()}
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                {(material.priority || material.design_reference) && (
+                                  <div className="flex gap-4 mt-4 pt-4 border-t">
+                                    {material.priority && (
+                                      <div className="flex items-center gap-2">
+                                        <TrendingUp className="w-4 h-4 text-gray-500" />
+                                        <span className="text-sm text-gray-600">Priority:</span>
+                                        <Badge variant={
+                                          material.priority.toLowerCase() === 'high' ? 'destructive' :
+                                          material.priority.toLowerCase() === 'medium' ? 'default' : 'secondary'
+                                        }>
+                                          {material.priority.toUpperCase()}
+                                        </Badge>
+                                      </div>
+                                    )}
+                                    {material.design_reference && (
+                                      <div className="flex items-center gap-2">
+                                        <FileCheck className="w-4 h-4 text-gray-500" />
+                                        <span className="text-sm text-gray-600">Design Ref:</span>
+                                        <span className="text-sm font-medium text-gray-900">{material.design_reference}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        ))}
+                        
+                        {/* Total Summary */}
+                        <Card className="border-0 shadow-lg bg-gradient-to-r from-green-600 to-green-700">
+                          <CardContent className="p-6">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="p-3 bg-white/20 rounded-lg">
+                                  <DollarSign className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                  <p className="text-white/80 text-sm">Grand Total</p>
+                                  <p className="text-3xl font-bold text-white">
+                                    AED {totalAmount.toLocaleString()}
+                                  </p>
+                                </div>
                               </div>
-                            )}
-                            {material.design_reference && (
-                              <div>
-                                <span className="text-gray-600">Design Reference:</span>
-                                <p className="font-medium">{material.design_reference}</p>
+                              <div className="text-right">
+                                <p className="text-white/80 text-sm">{purchase.materials.length} Items</p>
+                                <p className="text-white/90 text-xs mt-1">All prices inclusive</p>
                               </div>
-                            )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <div className="p-4 bg-gray-100 rounded-full inline-block mb-4">
+                            <Package className="w-16 h-16 text-gray-400" />
                           </div>
-                        </div>
-                      ))}
-                      <div className="border-t pt-4">
-                        <div className="flex justify-between items-center">
-                          <span className="text-lg font-semibold">Total Amount:</span>
-                          <span className="text-xl font-bold text-green-600">
-                            AED {totalAmount.toLocaleString()}
-                          </span>
+                          <p className="text-lg font-medium text-gray-600">No materials found</p>
+                          <p className="text-sm text-gray-500 mt-1">No materials have been added to this purchase request</p>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                      <p>No materials found</p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-            )}
+                    )}
+                  </div>
+                </TabsContent>
+              )}
+
+              {/* Latest Status Tab */}
+              {mode !== 'history' && (
+                <TabsContent value="status" className="flex-1 overflow-hidden mt-0 bg-white">
+                  <div className="h-full overflow-y-auto p-6">
+                    {latestStatus ? (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="space-y-6"
+                      >
+                        {/* Status Overview Card */}
+                        <Card className="border-0 shadow-sm">
+                          <CardContent className="p-6">
+                            <div className="flex items-center gap-2 mb-4">
+                              <div className="p-2 bg-blue-100 rounded-lg">
+                                <Activity className="w-5 h-5 text-blue-600" />
+                              </div>
+                              <h3 className="text-lg font-semibold text-gray-900">Current Status Information</h3>
+                            </div>
+                            <div className="space-y-4">
+                              {/* Status Header */}
+                              <div className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Current Status</p>
+                                    <div className="flex items-center gap-2 mt-2">
+                                      <Badge className={`${getStatusColor(latestStatus.status)} border text-sm py-1 px-3`}>
+                                        {getStatusIcon(latestStatus.status)}
+                                        <span className="ml-1">{latestStatus.status?.toUpperCase() || 'PENDING'}</span>
+                                      </Badge>
+                                      {latestStatus.is_active && (
+                                        <Badge className="bg-green-100 text-green-700 border-green-200">
+                                          <Activity className="w-3 h-3 mr-1" />
+                                          Active
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xs text-gray-500">Status ID</p>
+                                    <p className="font-mono text-sm font-semibold text-gray-700">#{latestStatus.status_id || 'N/A'}</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Role and Decision Info */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <UserCheck className="w-4 h-4 text-blue-600" />
+                                    <p className="text-sm font-medium text-blue-900">Decision Information</p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <div>
+                                      <p className="text-xs text-blue-600">Current Role</p>
+                                      <p className="text-sm font-semibold text-blue-900">
+                                        {latestStatus.role?.replace(/([A-Z])/g, ' $1').trim() || 'N/A'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-blue-600">Decision By</p>
+                                      <p className="text-sm font-semibold text-blue-900">
+                                        {latestStatus.created_by || 'N/A'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-blue-600">Decision Date</p>
+                                      <p className="text-sm font-semibold text-blue-900">
+                                        {latestStatus.decision_date ? 
+                                          new Date(latestStatus.decision_date).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          }) : 'N/A'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <ArrowRight className="w-4 h-4 text-purple-600" />
+                                    <p className="text-sm font-medium text-purple-900">Workflow Path</p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <div>
+                                      <p className="text-xs text-purple-600">From (Sender)</p>
+                                      <p className="text-sm font-semibold text-purple-900">
+                                        {latestStatus.sender?.replace(/([A-Z])/g, ' $1').trim() || 'N/A'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-purple-600">To (Receiver)</p>
+                                      <p className="text-sm font-semibold text-purple-900">
+                                        {latestStatus.receiver?.replace(/([A-Z])/g, ' $1').trim() || 'N/A'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-purple-600">Purchase ID</p>
+                                      <p className="text-sm font-semibold text-purple-900">
+                                        PR-{latestStatus.purchase_id || 'N/A'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            
+                              {/* Comments Section */}
+                              {latestStatus.comments && (
+                                <Card className="border-0 shadow-sm bg-gradient-to-r from-amber-50 to-yellow-50">
+                                  <CardContent className="p-4">
+                                    <div className="flex items-start gap-3">
+                                      <div className="p-2 bg-amber-100 rounded-lg">
+                                        <Info className="w-4 h-4 text-amber-600" />
+                                      </div>
+                                      <div className="flex-1">
+                                        <p className="text-sm font-medium text-amber-900 mb-2">Comments</p>
+                                        <p className="text-sm text-amber-800 italic">
+                                          "{latestStatus.comments}"
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              )}
+                              
+                              {/* Rejection Info */}
+                              {(latestStatus.rejection_reason || latestStatus.reject_category) && (
+                                <Card className="border-0 shadow-sm bg-gradient-to-r from-red-50 to-pink-50">
+                                  <CardContent className="p-4">
+                                    <div className="flex items-start gap-3">
+                                      <div className="p-2 bg-red-100 rounded-lg">
+                                        <XCircle className="w-4 h-4 text-red-600" />
+                                      </div>
+                                      <div className="flex-1">
+                                        <p className="text-sm font-medium text-red-900 mb-2">Rejection Details</p>
+                                        {latestStatus.rejection_reason && (
+                                          <p className="text-sm text-red-800 mb-2">
+                                            {latestStatus.rejection_reason}
+                                          </p>
+                                        )}
+                                        {latestStatus.reject_category && (
+                                          <Badge variant="destructive">
+                                            {latestStatus.reject_category}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
+                        {/* Timestamps Card */}
+                        <Card className="border-0 shadow-sm">
+                          <CardContent className="p-6">
+                            <div className="flex items-center gap-2 mb-4">
+                              <div className="p-2 bg-gray-100 rounded-lg">
+                                <Clock className="w-5 h-5 text-gray-600" />
+                              </div>
+                              <h3 className="text-lg font-semibold text-gray-900">Timeline</h3>
+                            </div>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                  <CalendarCheck className="w-4 h-4 text-gray-500" />
+                                  <span className="text-sm text-gray-600">Created At</span>
+                                </div>
+                                <span className="text-sm font-semibold text-gray-900">
+                                  {latestStatus.created_at ? 
+                                    new Date(latestStatus.created_at).toLocaleString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    }) : 'N/A'}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="w-4 h-4 text-gray-500" />
+                                  <span className="text-sm text-gray-600">Last Modified</span>
+                                </div>
+                                <span className="text-sm font-semibold text-gray-900">
+                                  {latestStatus.last_modified_at ? 
+                                    new Date(latestStatus.last_modified_at).toLocaleString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    }) : 'N/A'}
+                                </span>
+                              </div>
+                              
+                              {latestStatus.last_modified_by && (
+                                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                  <div className="flex items-center gap-2">
+                                    <User className="w-4 h-4 text-gray-500" />
+                                    <span className="text-sm text-gray-600">Modified By</span>
+                                  </div>
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {latestStatus.last_modified_by}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <div className="p-4 bg-gray-100 rounded-full inline-block mb-4">
+                            <AlertCircle className="w-16 h-16 text-gray-400" />
+                          </div>
+                          <p className="text-lg font-medium text-gray-600">No status information available</p>
+                          <p className="text-sm text-gray-500 mt-1">Status details will appear here once available</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              )}
 
               {/* History Tab */}
               <TabsContent value="history" className="flex-1 overflow-y-auto mt-0" style={{ maxHeight: 'calc(90vh - 200px)' }}>

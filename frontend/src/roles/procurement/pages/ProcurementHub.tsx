@@ -26,7 +26,9 @@ import {
   Target,
   BarChart3,
   Filter,
-  RefreshCw
+  RefreshCw,
+  FileSpreadsheet,
+  FileDown
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,6 +45,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { exportToPDF, exportToExcel } from '@/utils/exportUtils';
 
 interface MetricCard {
   title: string;
@@ -251,6 +254,26 @@ const ProcurementHub: React.FC = () => {
           p.status === 'rejected'
         );
         break;
+      case 'pm_rejected':
+        // Filter for purchases rejected by PM that need revision
+        filtered = filtered.filter(p => {
+          // Check if it was rejected by project manager specifically
+          const hasRejection = p.approvals?.some((a: any) => 
+            a.reviewer_role === 'projectManager' && 
+            a.status === 'rejected'
+          );
+          
+          // Check the latest status fields - looking for PM rejections
+          const rejectedByPM = (
+            // PM rejected and sent back to procurement
+            (p.status_role === 'projectManager' && p.sender_latest_status === 'rejected' && p.status_receiver === 'procurement') ||
+            // PM rejection (alternative pattern)
+            (p.status_sender === 'projectManager' && p.sender_latest_status === 'rejected')
+          );
+          
+          return hasRejection || rejectedByPM;
+        });
+        break;
       default:
         // Default to pending
         filtered = filtered.filter(p => 
@@ -337,18 +360,25 @@ const ProcurementHub: React.FC = () => {
     }
   };
 
-  const handleExport = () => {
-    const data = JSON.stringify(filteredPurchases, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `procurement_purchases_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success('Data exported successfully');
+  const handleExport = (format: 'pdf' | 'excel') => {
+    try {
+      const dataToExport = filteredPurchases.length > 0 ? filteredPurchases : purchases;
+      const exportTitle = `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Purchase Requests`;
+      
+      switch (format) {
+        case 'pdf':
+          exportToPDF(dataToExport, exportTitle);
+          toast.success('PDF exported successfully');
+          break;
+        case 'excel':
+          exportToExcel(dataToExport, exportTitle);
+          toast.success('Excel file exported successfully');
+          break;
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export data');
+    }
   };
 
 
@@ -400,13 +430,30 @@ const ProcurementHub: React.FC = () => {
             >
               <RefreshCw className="w-4 h-4" />
             </Button>
-            <Button
-              variant="outline"
-              onClick={handleExport}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
+            
+            {/* Export Buttons */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleExport('pdf')}
+                className="gap-1"
+                title="Export as PDF"
+              >
+                <FileText className="w-4 h-4 text-red-600" />
+                PDF
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleExport('excel')}
+                className="gap-1"
+                title="Export as Excel"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                Excel
+              </Button>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -461,7 +508,7 @@ const ProcurementHub: React.FC = () => {
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <div className="border-b px-6 pt-4">
-              <TabsList className="grid grid-cols-3 w-full max-w-xl">
+              <TabsList className="grid grid-cols-4 w-full max-w-2xl">
                 <TabsTrigger value="pending">
                   Pending ({purchases.filter(p => (!p.latest_status || p.latest_status === 'pending') && !pmEmailedPRs.has(p.purchase_id)).length})
                 </TabsTrigger>
@@ -471,11 +518,39 @@ const ProcurementHub: React.FC = () => {
                 <TabsTrigger value="rejected">
                   Rejected ({purchases.filter(p => p.latest_status === 'rejected').length})
                 </TabsTrigger>
+                <TabsTrigger value="pm_rejected" className="text-orange-600">
+                  PM Rejected ({purchases.filter(p => {
+                    const hasRejection = p.approvals?.some((a: any) => 
+                      a.reviewer_role === 'projectManager' && a.status === 'rejected'
+                    );
+                    const rejectedByPM = (
+                      (p.status_role === 'projectManager' && p.sender_latest_status === 'rejected' && p.status_receiver === 'procurement') ||
+                      (p.status_sender === 'projectManager' && p.sender_latest_status === 'rejected')
+                    );
+                    return hasRejection || rejectedByPM;
+                  }).length})
+                </TabsTrigger>
               </TabsList>
             </div>
 
             {/* Purchase Cards Grid - 2 columns */}
             <TabsContent value={activeTab} className="p-6">
+              {activeTab === 'pm_rejected' && filteredPurchases.length > 0 && (
+                <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-orange-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-orange-900">
+                        These purchase requests were rejected by the Project Manager
+                      </p>
+                      <p className="text-xs text-orange-700 mt-1">
+                        Review the rejection reasons and make necessary revisions before resubmitting for approval.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {filteredPurchases.length > 0 ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {filteredPurchases.map((purchase) => (
@@ -494,10 +569,16 @@ const ProcurementHub: React.FC = () => {
               ) : (
                 <div className="text-center py-12 text-gray-500">
                   <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p className="text-lg font-medium">No purchase requisitions found</p>
+                  <p className="text-lg font-medium">
+                    {activeTab === 'pm_rejected' 
+                      ? 'No PM rejected requisitions found' 
+                      : 'No purchase requisitions found'}
+                  </p>
                   <p className="text-sm mt-1">
                     {searchTerm 
                       ? 'Try adjusting your search terms' 
+                      : activeTab === 'pm_rejected'
+                      ? 'Purchase requests rejected by PM will appear here for revision'
                       : 'Waiting for new purchase requisitions to process'}
                   </p>
                 </div>

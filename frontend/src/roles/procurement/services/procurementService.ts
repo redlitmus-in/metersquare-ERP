@@ -33,6 +33,18 @@ export interface Purchase {
   approvals?: any[];
   status?: string;
   latest_status?: any;
+  // Additional fields from API response
+  last_modified_at?: string;
+  last_modified_by?: string;
+  is_deleted?: boolean;
+  decision_date?: string;
+  receiver_latest_status?: string;
+  sender_latest_status?: string;
+  status_comments?: string;
+  status_date?: string;
+  status_receiver?: string;
+  status_role?: string;
+  status_sender?: string;
 }
 
 class ProcurementService {
@@ -66,7 +78,7 @@ class ProcurementService {
   }
 
   // Get purchase details by ID using /purchase/{id}
-  async getPurchaseDetails(purchaseId: number): Promise<Purchase> {
+  async getPurchaseDetails(purchaseId: number): Promise<any> {
     try {
       const response = await apiClient.get(`/purchase/${purchaseId}`);
       // Handle different response structures
@@ -74,7 +86,8 @@ class ProcurementService {
         // If response has success flag
         if (response.data.success !== undefined) {
           if (response.data.success) {
-            return response.data.purchase || response.data.data || response.data;
+            // Return the full response including purchase and latest_status
+            return response.data;
           } else {
             throw new Error(response.data.message || 'Failed to fetch purchase details');
           }
@@ -100,13 +113,14 @@ class ProcurementService {
   }
 
   // Get purchase history with status tracking
-  async getPurchaseHistory(purchaseId: number): Promise<{purchase: Purchase, statuses: any[]}> {
+  async getPurchaseHistory(purchaseId: number): Promise<{purchase: Purchase, statuses: any[], latest_status?: any}> {
     try {
       const response = await apiClient.get(`/purchase_history/${purchaseId}`);
       if (response.data.success) {
         return {
           purchase: response.data.purchase,
-          statuses: response.data.purchase.approvals || []
+          statuses: response.data.purchase.approvals || [],
+          latest_status: response.data.latest_status
         };
       }
       throw new Error(response.data.message || 'Failed to fetch purchase history');
@@ -172,13 +186,10 @@ class ProcurementService {
     }
   }
 
-  // Approve purchase request
+  // Approve purchase request - sends email to Project Manager
   async approvePurchase(purchaseId: number, approvalData?: any): Promise<any> {
     try {
-      const response = await apiClient.post(`/procurement_approval/${purchaseId}`, approvalData || {
-        status: 'approved',
-        comments: ''
-      });
+      const response = await apiClient.get(`/purchase_email/${purchaseId}`);
       if (response.data.success) {
         return response.data;
       }
@@ -189,22 +200,6 @@ class ProcurementService {
     }
   }
 
-  // Reject purchase request
-  async rejectPurchase(purchaseId: number, reason: string): Promise<any> {
-    try {
-      const response = await apiClient.post(`/procurement_approval/${purchaseId}`, {
-        status: 'rejected',
-        comments: reason
-      });
-      if (response.data.success) {
-        return response.data;
-      }
-      throw new Error(response.data.message || 'Failed to reject purchase');
-    } catch (error: any) {
-      console.error('Error rejecting purchase:', error);
-      throw error;
-    }
-  }
 
   // Get procurement dashboard metrics
   async getDashboardMetrics(): Promise<any> {

@@ -153,7 +153,7 @@ export const API_ENDPOINTS = {
   // Role-specific endpoints
   PROJECT_MANAGER: {
     APPROVE_PURCHASE: '/pm_approval',
-    GET_PURCHASES: '/projectmanager_purchases', // Fixed typo
+    GET_PURCHASES: '/projectmanger_purchases', // Match backend typo
   },
   
   ESTIMATION: {
