@@ -2950,3 +2950,172 @@ This is an automated email from the ERP system.
         except Exception as e:
             log.error(f"Error sending purchase request notification: {str(e)}")
             return False
+
+    def send_payment_processing_notification(self, purchase_id: int, amount: float, 
+                                           payment_method: str, processed_by: str) -> bool:
+        """Send notification when payment processing starts"""
+        try:
+            # Get technical director emails
+            recipients = self.get_technical_director_emails()
+            subject = f"Payment Processing Started - Purchase Request #{purchase_id}"
+            
+            html_content = f"""
+            <html>
+            <body>
+                <h2>Payment Processing Notification</h2>
+                <p>Payment processing has been initiated for the following purchase request:</p>
+                
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                    <p><strong>Purchase Request ID:</strong> {purchase_id}</p>
+                    <p><strong>Amount:</strong> AED {amount:,.2f}</p>
+                    <p><strong>Payment Method:</strong> {payment_method}</p>
+                    <p><strong>Processed By:</strong> {processed_by}</p>
+                    <p><strong>Date:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                </div>
+                
+                <p>Please monitor the payment status and ensure all approvals are in place.</p>
+                
+                <p>Best regards,<br>Accounts Department</p>
+            </body>
+            </html>
+            """
+            
+            text_content = f"""
+            Payment Processing Notification
+            
+            Payment processing has been initiated for Purchase Request #{purchase_id}:
+            
+            Amount: AED {amount:,.2f}
+            Payment Method: {payment_method}
+            Processed By: {processed_by}
+            Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+            
+            Please monitor the payment status and ensure all approvals are in place.
+            
+            Best regards,
+            Accounts Department
+            """
+
+            return self._send_email(recipients, subject, html_content, text_content)
+        except Exception as e:
+            log.error(f"Error sending payment processing notification: {str(e)}")
+            return False
+
+    def send_payment_approved_notification(self, purchase_id: int, transaction_id: int, 
+                                         amount: float, approved_by: str) -> bool:
+        """Send notification when payment is approved and processed"""
+        try:
+            # Get all relevant stakeholders
+            recipients = self.get_technical_director_emails() + self.get_procurement_team_emails()
+            subject = f"Payment Approved and Processed - Purchase Request #{purchase_id}"
+            
+            html_content = f"""
+            <html>
+            <body>
+                <h2>Payment Approved and Processed</h2>
+                <p>The following payment has been approved and processed:</p>
+                
+                <div style="background-color: #d4edda; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #28a745;">
+                    <p><strong>Purchase Request ID:</strong> {purchase_id}</p>
+                    <p><strong>Transaction ID:</strong> {transaction_id}</p>
+                    <p><strong>Amount:</strong> AED {amount:,.2f}</p>
+                    <p><strong>Approved By:</strong> {approved_by}</p>
+                    <p><strong>Date:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                </div>
+                
+                <p>The payment transaction is now complete and ready for acknowledgement.</p>
+                
+                <p>Best regards,<br>Accounts Department</p>
+            </body>
+            </html>
+            """
+            
+            text_content = f"""
+            Payment Approved and Processed
+            
+            The following payment has been approved and processed:
+            
+            Purchase Request ID: {purchase_id}
+            Transaction ID: {transaction_id}
+            Amount: AED {amount:,.2f}
+            Approved By: {approved_by}
+            Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+            
+            The payment transaction is now complete and ready for acknowledgement.
+            
+            Best regards,
+            Accounts Department
+            """
+
+            return self._send_email(recipients, subject, html_content, text_content)
+        except Exception as e:
+            log.error(f"Error sending payment approved notification: {str(e)}")
+            return False
+
+    def send_acknowledgement_notification(self, purchase_id: int, acknowledgement_type: str,
+                                        acknowledged_by: str, message: str) -> bool:
+        """Send notification when acknowledgement is received"""
+        try:
+            # Get accounts team emails
+            recipients = self.get_accounts_team_emails()
+            subject = f"Acknowledgement Received - Purchase Request #{purchase_id}"
+            
+            html_content = f"""
+            <html>
+            <body>
+                <h2>Acknowledgement Received</h2>
+                <p>An acknowledgement has been received for the following purchase request:</p>
+                
+                <div style="background-color: #cce5ff; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #007bff;">
+                    <p><strong>Purchase Request ID:</strong> {purchase_id}</p>
+                    <p><strong>Acknowledgement Type:</strong> {acknowledgement_type}</p>
+                    <p><strong>Acknowledged By:</strong> {acknowledged_by}</p>
+                    <p><strong>Date:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                    <p><strong>Message:</strong> {message}</p>
+                </div>
+                
+                <p>This completes the payment workflow for this purchase request.</p>
+                
+                <p>Best regards,<br>System Notification</p>
+            </body>
+            </html>
+            """
+            
+            text_content = f"""
+            Acknowledgement Received
+            
+            An acknowledgement has been received for Purchase Request #{purchase_id}:
+            
+            Acknowledgement Type: {acknowledgement_type}
+            Acknowledged By: {acknowledged_by}
+            Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+            Message: {message}
+            
+            This completes the payment workflow for this purchase request.
+            
+            Best regards,
+            System Notification
+            """
+
+            return self._send_email(recipients, subject, html_content, text_content)
+        except Exception as e:
+            log.error(f"Error sending acknowledgement notification: {str(e)}")
+            return False
+
+    def get_accounts_team_emails(self) -> List[str]:
+        """Get emails of all accounts team members"""
+        try:
+            accounts_role = Role.query.filter_by(role='accounts', is_deleted=False).first()
+            if not accounts_role:
+                return []
+            
+            accounts_users = User.query.filter_by(
+                role_id=accounts_role.role_id, 
+                is_active=True, 
+                is_deleted=False
+            ).all()
+            
+            return [user.email for user in accounts_users if user.email]
+        except Exception as e:
+            log.error(f"Error getting accounts team emails: {str(e)}")
+            return []
