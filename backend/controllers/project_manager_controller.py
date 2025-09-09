@@ -325,14 +325,24 @@ def _process_estimation_rejections(estimation_pm_rejection_statuses):
         if not rejected_status:
             continue
         
-        # Skip if there's a newer approval from PM after the rejection
+        # Skip this rejection if there exists ANY PM approval after the rejection timestamp
+        pm_approval_after_rejection = PurchaseStatus.query.filter(
+            and_(
+                PurchaseStatus.purchase_id == purchase_id,
+                PurchaseStatus.sender == 'projectManager',
+                PurchaseStatus.status == 'approved',
+                PurchaseStatus.created_at > rejected_status.created_at
+            )
+        ).first()
+        if pm_approval_after_rejection:
+            continue
+
+        # Also skip if the absolute latest status is an approval that clearly supersedes the rejection
         if absolute_latest_status and absolute_latest_status.status_id != rejected_status.status_id:
-            if absolute_latest_status.sender == 'projectManager' and absolute_latest_status.status == 'approved':
-                continue
-            if (absolute_latest_status.created_at > rejected_status.created_at and 
-                absolute_latest_status.status == 'approved' and 
-                (absolute_latest_status.sender in ['projectManager', 'technicalDirector', 'accounts'] or
-                 absolute_latest_status.receiver in ['technicalDirector', 'accounts', 'design'])):
+            if absolute_latest_status.status == 'approved' and (
+                absolute_latest_status.sender in ['projectManager', 'technicalDirector', 'accounts'] or
+                absolute_latest_status.receiver in ['technicalDirector', 'accounts', 'design']
+            ) and absolute_latest_status.created_at > rejected_status.created_at:
                 continue
         if absolute_latest_status.sender == 'estimation' and absolute_latest_status.receiver == 'projectManager' and absolute_latest_status.status == 'rejected':
             pm_status = 'pending'
