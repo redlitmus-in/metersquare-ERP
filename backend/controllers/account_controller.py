@@ -78,7 +78,7 @@ def process_payment_transaction():
             payment_reference=payment_reference,
             vendor_name=vendor_name,
             vendor_account_details=vendor_account_details,
-            status='pending',
+            status='paid',
             approval_required=True,
             notes=notes,
             supporting_documents=supporting_documents,
@@ -367,6 +367,80 @@ def get_payment_transactions():
     except Exception as e:
         log.error(f"Error getting payment transactions: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+
+def get_payment_purchase(purchase_id):
+    try:
+        current_user = g.user  
+
+        if not current_user:
+            return jsonify({"error": "Not logged in"}), 401
+
+        # ✅ Check if user has Accounts role
+        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
+        if not role or role.role.lower() != 'accounts':
+            return jsonify({'error': 'Only Accounts department can view payment transactions'}), 403
+
+        # ✅ Fetch all transactions for the given purchase_id
+        transactions = (
+            PaymentTransaction.query
+            .filter_by(purchase_id=purchase_id, is_deleted=False)
+            .order_by(desc(PaymentTransaction.created_at))
+            .all()
+        )
+
+        if not transactions:
+            return jsonify({'message': 'No transactions found for this purchase_id'}), 404
+
+        # ✅ Fetch purchase details
+        purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
+        if not purchase:
+            return jsonify({'error': 'Purchase not found'}), 404
+
+        # ✅ Convert transactions into a list of dicts
+        transaction_list = []
+        for t in transactions:
+            transaction_list.append({
+                "transaction_id": t.transaction_id,
+                "purchase_id": t.purchase_id,
+                "project_id": t.project_id,
+                "transaction_type": t.transaction_type,
+                "amount": float(t.amount),   # convert Decimal → float
+                "currency": t.currency,
+                "payment_method": t.payment_method,
+                "payment_reference": t.payment_reference,
+                "vendor_name": t.vendor_name,
+                "vendor_account_details": t.vendor_account_details,
+                "status": t.status,
+                "processed_by": t.processed_by,
+                "processed_at": t.processed_at.isoformat() if t.processed_at else None,
+                "failure_reason": t.failure_reason,
+                "approval_required": t.approval_required,
+                "approved_by": t.approved_by,
+                "approved_at": t.approved_at.isoformat() if t.approved_at else None,
+                "notes": t.notes,
+                "supporting_documents": t.supporting_documents,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "created_by": t.created_by,
+                "last_modified_at": t.last_modified_at.isoformat() if t.last_modified_at else None,
+                "last_modified_by": t.last_modified_by,
+            })
+
+        # ✅ Return response with purchase + all transactions
+        return jsonify({
+            "purchase_id": purchase_id,
+            "purchase_reference": getattr(purchase, "reference_no", None),  # optional field
+            "vendor": {
+                "name": purchase.vendor_name if hasattr(purchase, "vendor_name") else transaction_list[0]["vendor_name"],
+                "id": getattr(purchase, "vendor_id", None)
+            },
+            "transactions": transaction_list
+        }), 200
+
+    except Exception as e:
+        log.error(f"Error getting payment purchase details: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
 
 def get_acknowledgements():
     """

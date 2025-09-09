@@ -22,6 +22,11 @@ def approve_payment_route():
 def get_payments_route():
     return get_payment_transactions()
 
+@account_routes.route('/purchase_payment/<int:purchase_id>', methods=['GET'])
+@jwt_required
+def get_payment_purchase_route(purchase_id):
+    return get_payment_purchase(purchase_id)
+
 # Acknowledgement Routes
 @account_routes.route('/acknowledgements', methods=['POST'])
 @jwt_required
