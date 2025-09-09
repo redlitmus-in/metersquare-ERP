@@ -1,3 +1,4 @@
+import os
 from flask import g, request, jsonify
 from datetime import datetime
 from sqlalchemy import and_, or_, desc, func
@@ -92,7 +93,7 @@ def process_payment_transaction():
             purchase_id=purchase_id,
             sender_role='accounts',
             receiver_role='technicalDirector',
-            status='payment_processing',
+            status='completed',
             decision_by_user_id=user_id,
             comments=f'Payment transaction created by {user_name}',
             created_by=user_name
