@@ -137,8 +137,8 @@ export const EstimationApprovalModal: React.FC<EstimationApprovalModalProps> = (
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[550px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[550px] max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {mode === 'approve' ? (
               <>
@@ -157,7 +157,7 @@ export const EstimationApprovalModal: React.FC<EstimationApprovalModalProps> = (
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-y-auto flex-1 px-1">
           {/* Purchase ID Display */}
           <div className="bg-gray-50 p-2.5 sm:p-3 rounded-lg">
             <p className="text-xs sm:text-sm font-medium text-gray-700">
@@ -280,7 +280,7 @@ export const EstimationApprovalModal: React.FC<EstimationApprovalModalProps> = (
           </Alert>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0 border-t pt-4">
           <Button
             variant="outline"
             onClick={handleClose}

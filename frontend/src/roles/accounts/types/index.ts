@@ -33,6 +33,7 @@ export interface Purchase {
   
   // Related data
   materials?: Material[];
+  material_details?: Material[]; // Alternative property name from backend
   payment_details?: PaymentDetails;
   payment_transaction?: PaymentTransaction;
   latest_status?: PurchaseStatus;

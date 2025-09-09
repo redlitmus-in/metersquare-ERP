@@ -291,8 +291,8 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                 )}
               </div>
 
-              {/* Edit Action */}
-              {!emailSent && status !== 'approved' && status !== 'rejected' && onEdit && (
+              {/* Edit Action - Show only for pending items */}
+              {onEdit && status === 'pending' && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -338,7 +338,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
               </div>
             )}
             
-            {/* Resend to Estimation Button for Est-rejected PRs */}
+            {/* Resend to PM Button for Est-rejected PRs */}
             {rejectedByEst && onResendToEst && (
               <div className="flex items-center justify-center">
                 <Button
@@ -346,10 +346,10 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   onClick={() => onResendToEst(purchase.purchase_id)}
                   disabled={isLoading}
                   className="bg-purple-600 hover:bg-purple-700 text-white w-full"
-                  title="Resend to Estimation after revision"
+                  title="Resend to Project Manager after revision"
                 >
                   <Mail className="w-4 h-4 mr-1" />
-                  Resend to Est
+                  Resend to PM
                 </Button>
               </div>
             )}

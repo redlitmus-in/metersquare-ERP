@@ -19,6 +19,7 @@ import AccountsApprovalCard from '../components/AccountsApprovalCard';
 import PaymentProcessingModal from '../components/PaymentProcessingModal';
 import PaymentApprovalModal from '../components/PaymentApprovalModal';
 import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
+import PaymentTransactionModal from '../components/PaymentTransactionModal';
 import { accountsService } from '../services/accountsService';
 import type { Purchase } from '../types';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ const AccountsHub: React.FC = () => {
   const [paymentProcessingModalOpen, setPaymentProcessingModalOpen] = useState(false);
   const [paymentApprovalModalOpen, setPaymentApprovalModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [transactionDetailsModalOpen, setTransactionDetailsModalOpen] = useState(false);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
   const [selectedTransactionId, setSelectedTransactionId] = useState<number | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
@@ -58,19 +60,25 @@ const AccountsHub: React.FC = () => {
       const response = await accountsService.getAccountsPurchases();
       
       if (response && response.purchase_details) {
-        const allPurchases = response.purchase_details.map(purchase => ({
-          ...purchase,
-          // Calculate total cost from materials
-          total_cost: purchase.materials?.reduce((sum: number, material: any) => 
-            sum + (material.cost || 0) * (material.quantity || 1), 0
-          ) || 0,
-          // Calculate total quantity from materials
-          total_quantity: purchase.materials?.reduce((sum: number, material: any) => 
-            sum + (material.quantity || 0), 0
-          ) || 0,
-          // Set material count
-          material_count: purchase.materials?.length || 0
-        }));
+        const allPurchases = response.purchase_details.map(purchase => {
+          // Use material_details if available, fallback to materials
+          const materials = purchase.material_details || purchase.materials || [];
+          
+          return {
+            ...purchase,
+            materials: materials, // Normalize to 'materials' for consistency
+            // Calculate total cost from materials
+            total_cost: materials.reduce((sum: number, material: any) => 
+              sum + (material.cost || 0) * (material.quantity || 1), 0
+            ) || 0,
+            // Calculate total quantity from materials
+            total_quantity: materials.reduce((sum: number, material: any) => 
+              sum + (material.quantity || 0), 0
+            ) || 0,
+            // Set material count
+            material_count: materials.length || 0
+          };
+        });
         setPurchases(allPurchases);
         
         // Calculate metrics based on accounts_status - only processing and processed
@@ -92,8 +100,14 @@ const AccountsHub: React.FC = () => {
                 (sender === 'accounts' && status === 'pending')) {
               processingPurchases.push(p);
             }
-            // Check if accounts has approved/processed
-            else if (sender === 'accounts' && status === 'approved') {
+            // Check if accounts has approved/processed/completed/transferred
+            else if (sender === 'accounts' && (
+              status === 'approved' || 
+              status === 'payment_processed' || 
+              status === 'completed' ||
+              status === 'transferred' ||
+              status === 'payment_processing'
+            )) {
               processedPurchases.push(p);
             }
           }
@@ -106,7 +120,10 @@ const AccountsHub: React.FC = () => {
             if ((tdStatus === 'approved' && (!accountsStatus || accountsStatus === 'pending')) ||
                 accountsStatus === 'payment_processing') {
               processingPurchases.push(p);
-            } else if (accountsStatus === 'payment_processed') {
+            } else if (accountsStatus === 'payment_processed' || 
+                       accountsStatus === 'approved' || 
+                       accountsStatus === 'transferred' ||
+                       accountsStatus === 'completed') {
               processedPurchases.push(p);
             }
           }
@@ -190,19 +207,29 @@ const AccountsHub: React.FC = () => {
         break;
         
       case 'processed':
-        // Show purchases where payment processed (accounts approved)
+        // Show purchases where payment processed (accounts approved/completed/transferred)
         filtered = purchases.filter(p => {
           const latestStatus = p.latest_status;
           
           if (latestStatus) {
             const sender = latestStatus.sender;
             const status = latestStatus.status?.toLowerCase();
-            return sender === 'accounts' && status === 'approved';
+            // Check for all possible processed statuses
+            return sender === 'accounts' && (
+              status === 'approved' || 
+              status === 'payment_processed' || 
+              status === 'completed' ||
+              status === 'transferred' ||
+              status === 'payment_processing' // Include payment_processing as it means payment was initiated
+            );
           }
           
           // Fallback to direct status fields
           const accountsStatus = p.accounts_status?.toLowerCase();
-          return accountsStatus === 'payment_processed';
+          return accountsStatus === 'payment_processed' || 
+                 accountsStatus === 'approved' || 
+                 accountsStatus === 'transferred' ||
+                 accountsStatus === 'completed';
         });
         break;
     }
@@ -264,6 +291,18 @@ const AccountsHub: React.FC = () => {
       setSelectedPurchaseId(purchaseId);
       setDetailsModalOpen(true);
     }
+  };
+
+  // Handle view payment button click - now redirects to transaction details
+  const handleViewPayment = (purchaseId: number) => {
+    setSelectedPurchaseId(purchaseId);
+    setTransactionDetailsModalOpen(true);
+  };
+
+  // Handle view transaction details button click
+  const handleViewTransactionDetails = (purchaseId: number) => {
+    setSelectedPurchaseId(purchaseId);
+    setTransactionDetailsModalOpen(true);
   };
 
 
@@ -439,6 +478,8 @@ const AccountsHub: React.FC = () => {
                       onApprovePayment={handleApprovePayment}
                       onRejectPayment={handleRejectPayment}
                       onViewDetails={handleViewDetails}
+                      onViewPayment={handleViewPayment}
+                      onViewTransactionDetails={handleViewTransactionDetails}
                       isLoading={isLoading}
                     />
                   ))}
@@ -472,6 +513,15 @@ const AccountsHub: React.FC = () => {
         onClose={() => {
           setDetailsModalOpen(false);
           setSelectedPurchase(null);
+        }}
+        purchaseId={selectedPurchaseId}
+      />
+      
+      {/* Payment Transaction Details Modal */}
+      <PaymentTransactionModal
+        isOpen={transactionDetailsModalOpen}
+        onClose={() => {
+          setTransactionDetailsModalOpen(false);
         }}
         purchaseId={selectedPurchaseId}
       />

@@ -202,11 +202,45 @@ class AccountsService {
    */
   async getPurchaseDetails(purchaseId: number): Promise<any> {
     try {
-      // Use the purchase/{id} endpoint as specified
+      // Try the specific purchase endpoint first
       const response = await apiClient.get(`/purchase/${purchaseId}`);
       return response.data;
     } catch (error: any) {
-      console.error('Error fetching purchase details:', error);
+      console.error('Error fetching from purchase endpoint, trying accounts endpoint:', error);
+      
+      // Try to get from the accounts purchases endpoint as fallback
+      try {
+        const accountsResponse = await this.getAccountsPurchases();
+        const purchase = accountsResponse.purchase_details?.find(
+          (p: Purchase) => p.purchase_id === purchaseId
+        );
+        
+        if (purchase) {
+          // Transform to expected format
+          const materials = purchase.material_details || purchase.materials || [];
+          const totalCost = materials.reduce((sum: number, material: any) => {
+            const unitCost = material.cost || material.unit_cost || 0;
+            const quantity = material.quantity || 1;
+            return sum + (unitCost * quantity);
+          }, 0);
+          
+          return {
+            success: true,
+            purchase: {
+              ...purchase,
+              materials: materials,
+              total_cost: totalCost,
+              payment_transaction: purchase.payment_transaction
+            },
+            materials: materials,
+            latest_status: purchase.latest_status,
+            payment_transaction: purchase.payment_transaction,
+            history: []
+          };
+        }
+      } catch (fallbackError) {
+        console.error('Failed to fetch from accounts endpoint:', fallbackError);
+      }
       
       // Return fallback data structure if API fails
       if (error.response?.status === 404) {
@@ -226,6 +260,28 @@ class AccountsService {
           purchase: null,
           materials: [],
           history: []
+        };
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Get payment details for a specific purchase
+   */
+  async getPaymentDetails(purchaseId: number): Promise<any> {
+    try {
+      const response = await apiClient.get(`/purchase_payment/${purchaseId}`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching payment details:', error);
+      
+      if (error.response?.status === 404) {
+        return {
+          success: false,
+          message: 'Payment details not found',
+          payment: null
         };
       }
       
@@ -350,6 +406,30 @@ class AccountsService {
       case 'pending':
       default:
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    }
+  }
+
+  /**
+   * Get payment transaction details for a specific purchase
+   * Includes transfer information, approval history, and banking details
+   */
+  async getPaymentTransactionDetails(purchaseId: number): Promise<any> {
+    try {
+      const response = await apiClient.get(`/purchase_payment/${purchaseId}`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching payment transaction details:', error);
+      
+      // Return fallback data structure if API fails
+      if (error.response?.status === 404) {
+        return {
+          success: false,
+          message: 'Transaction details not found',
+          transaction: null
+        };
+      }
+      
+      throw error;
     }
   }
 }

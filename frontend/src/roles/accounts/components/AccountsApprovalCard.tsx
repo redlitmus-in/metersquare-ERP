@@ -16,7 +16,8 @@ import {
   Eye,
   DollarSign,
   CreditCard,
-  Building
+  Building,
+  ArrowRightLeft
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,8 @@ interface AccountsApprovalCardProps {
   onApprovePayment: (purchaseId: number) => void;
   onRejectPayment: (purchaseId: number) => void;
   onViewDetails: (purchaseId: number) => void;
+  onViewPayment?: (purchaseId: number) => void;
+  onViewTransactionDetails?: (purchaseId: number) => void;
   isLoading?: boolean;
 }
 
@@ -40,6 +43,8 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
   onApprovePayment,
   onRejectPayment,
   onViewDetails,
+  onViewPayment,
+  onViewTransactionDetails,
   isLoading = false
 }) => {
   // Get status from latest_status object or fallback to direct fields
@@ -48,6 +53,7 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
   let technicalDirectorStatus = 'pending';
   let needsPaymentProcessing = false;
   let hasPaymentPending = false;
+  let isProcessed = false;
   
   if (latestStatus) {
     const sender = latestStatus.sender;
@@ -59,13 +65,25 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
       technicalDirectorStatus = 'approved';
       accountsStatus = 'pending';
       needsPaymentProcessing = true;
-    } else if (sender === 'accounts' && status === 'pending') {
-      accountsStatus = 'payment_processing';
-      hasPaymentPending = true;
-    } else if (sender === 'accounts' && status === 'approved') {
-      accountsStatus = 'payment_processed';
-    } else if (sender === 'accounts' && status === 'rejected') {
-      accountsStatus = 'payment_rejected';
+    } else if (sender === 'accounts') {
+      // Handle all accounts sender statuses
+      if (status === 'pending') {
+        accountsStatus = 'payment_processing';
+        hasPaymentPending = true;
+      } else if (status === 'approved' || status === 'payment_processed' || 
+                 status === 'completed' || status === 'transferred' || 
+                 status === 'payment_processing') {
+        accountsStatus = 'payment_processed';
+        technicalDirectorStatus = 'approved'; // If accounts processed, TD must have approved
+        isProcessed = true;
+      } else if (status === 'rejected') {
+        accountsStatus = 'payment_rejected';
+      }
+    }
+    
+    // If accounts has processed, technical director must have approved
+    if (sender === 'accounts' && (status === 'completed' || status === 'payment_processing')) {
+      technicalDirectorStatus = 'approved';
     }
   } else {
     // Fallback to direct status fields
@@ -73,6 +91,8 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
     technicalDirectorStatus = purchase.technical_director_status?.toLowerCase() || 'pending';
     needsPaymentProcessing = technicalDirectorStatus === 'approved' && (!accountsStatus || accountsStatus === 'pending');
     hasPaymentPending = accountsStatus === 'payment_processing';
+    isProcessed = accountsStatus === 'payment_processed' || accountsStatus === 'approved' || 
+                  accountsStatus === 'transferred' || accountsStatus === 'completed';
   }
   
   // Get status badge color
@@ -125,9 +145,10 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
             </div>
             <div className="flex flex-col gap-1 items-end">
               <Badge className={getStatusColor()} variant="outline">
-                {accountsStatus === 'pending' ? 'Pending Payment' : 
+                {isProcessed ? 'Payment Completed' :
+                 accountsStatus === 'pending' ? 'Pending Payment' : 
                  accountsStatus === 'payment_processing' ? 'Processing' : 
-                 accountsStatus === 'payment_processed' ? 'Paid' : 
+                 accountsStatus === 'payment_processed' ? 'Payment Completed' : 
                  accountsStatus === 'payment_rejected' ? 'Rejected' : 'Pending'}
               </Badge>
               <Badge className={getPriorityColor()} variant="outline" size="sm">
@@ -179,23 +200,21 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
           </div>
 
           {/* Previous Approvals */}
-          {technicalDirectorStatus && (
-            <div className="bg-gray-50 rounded-lg p-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Technical Director:</span>
-                <Badge 
-                  className={technicalDirectorStatus === 'approved' ? 
-                    'bg-green-100 text-green-700' : 
-                    'bg-yellow-100 text-yellow-700'
-                  }
-                  variant="outline"
-                  size="sm"
-                >
-                  {technicalDirectorStatus}
-                </Badge>
-              </div>
+          <div className="bg-gray-50 rounded-lg p-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Technical Director:</span>
+              <Badge 
+                className={technicalDirectorStatus === 'approved' || isProcessed ? 
+                  'bg-green-100 text-green-700' : 
+                  'bg-yellow-100 text-yellow-700'
+                }
+                variant="outline"
+                size="sm"
+              >
+                {isProcessed ? 'approved' : technicalDirectorStatus}
+              </Badge>
             </div>
-          )}
+          </div>
 
           {/* Payment Details if processing */}
           {hasPaymentPending && purchase.payment_details && (
@@ -228,7 +247,43 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
 
           {/* Action Buttons */}
           <div className="space-y-2">
-            {needsPaymentProcessing ? (
+            {isProcessed ? (
+              // For processed items, show View Details, View Payment and View Transaction Details buttons
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    onClick={() => onViewDetails(purchase.purchase_id)}
+                    variant="outline"
+                    className="w-full"
+                    size="sm"
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-1" />
+                    View Details
+                  </Button>
+                  {onViewTransactionDetails && (
+                    <Button
+                      onClick={() => onViewTransactionDetails(purchase.purchase_id)}
+                      variant="outline"
+                      className="w-full border-blue-200 text-blue-600 hover:bg-blue-50"
+                      size="sm"
+                    >
+                      <ArrowRightLeft className="h-3.5 w-3.5 mr-1" />
+                      Transaction Info
+                    </Button>
+                  )}
+                </div>
+                {onViewPayment && (
+                  <Button
+                    onClick={() => onViewPayment(purchase.purchase_id)}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    size="sm"
+                  >
+                    <CreditCard className="h-3.5 w-3.5 mr-1" />
+                    View Payment
+                  </Button>
+                )}
+              </div>
+            ) : needsPaymentProcessing ? (
               <>
                 <Button
                   onClick={() => onProcessPayment(purchase.purchase_id)}

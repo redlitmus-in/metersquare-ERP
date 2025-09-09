@@ -325,9 +325,10 @@ const ProcurementHub: React.FC = () => {
     setShowDetailsModal(true);
   };
 
-  // Edit handler removed - procurement doesn't handle direct editing
-
-  // Delete handler removed - procurement role doesn't have delete permission
+  const handleEdit = (purchaseId: number) => {
+    // Navigate to purchase form in edit mode
+    navigate(`/purchase-form?edit=${purchaseId}`);
+  };
 
   const handleSendEmail = (purchaseId: number) => {
     setConfirmDialog({
@@ -339,27 +340,14 @@ const ProcurementHub: React.FC = () => {
 
   const handleResendToPM = async (purchaseId: number) => {
     try {
+      // Send back to Project Manager after estimation rejection
       await procurementService.sendApprovalEmail(purchaseId);
       toast.success('Purchase request resent to Project Manager for approval');
       
       // Refresh data
       await fetchPurchases();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to resend email to PM');
-    }
-  };
-
-  const handleResendToEst = async (purchaseId: number) => {
-    try {
-      // This would need a new API endpoint to send to estimation
-      // For now, using same endpoint with a flag or different endpoint
-      await procurementService.sendApprovalEmail(purchaseId);
-      toast.success('Purchase request resent to Estimation for approval');
-      
-      // Refresh data
-      await fetchPurchases();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to resend email to Estimation');
+      toast.error(error.message || 'Failed to resend email to Project Manager');
     }
   };
 
@@ -617,9 +605,10 @@ const ProcurementHub: React.FC = () => {
                       purchase={purchase}
                       onViewDetails={handleViewDetails}
                       onViewHistory={handleViewHistory}
+                      onEdit={handleEdit}
                       onSendEmail={handleSendEmail}
                       onResendToPM={handleResendToPM}
-                      onResendToEst={handleResendToEst}
+                      onResendToEst={handleResendToPM}
                       emailSent={pmEmailedPRs.has(purchase.purchase_id)}
                     />
                   ))}

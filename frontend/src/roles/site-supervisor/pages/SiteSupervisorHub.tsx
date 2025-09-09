@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package,
   Plus,
-  Search,
-  Filter,
+  CalendarDays,
+  ArrowUpDown,
   RefreshCw,
   FileText,
   DollarSign,
@@ -24,6 +24,13 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { toast } from 'sonner';
 import PurchaseCard from '../components/PurchaseCard';
 import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
@@ -36,7 +43,7 @@ const SiteSupervisorHub: React.FC = () => {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [activeTab, setActiveTab] = useState('pending');
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
   const [modalMode, setModalMode] = useState<'details' | 'history'>('details');
@@ -60,10 +67,10 @@ const SiteSupervisorHub: React.FC = () => {
     fetchPurchases();
   }, []);
 
-  // Filter purchases based on search and tab
+  // Filter and sort purchases based on tab and sort order
   useEffect(() => {
     filterPurchases();
-  }, [purchases, searchTerm, activeTab]);
+  }, [purchases, sortOrder, activeTab]);
 
   // Calculate metrics whenever purchases change
   useEffect(() => {
@@ -87,16 +94,6 @@ const SiteSupervisorHub: React.FC = () => {
   const filterPurchases = () => {
     let filtered = [...purchases];
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(purchase =>
-        purchase.purchase_id.toString().includes(searchTerm) ||
-        purchase.purpose.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        purchase.site_location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        purchase.project_id.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
     // Apply tab filter
     switch (activeTab) {
       case 'pending':
@@ -108,6 +105,18 @@ const SiteSupervisorHub: React.FC = () => {
         filtered = filtered.filter(p => p.email_sent);
         break;
     }
+
+    // Apply date sorting
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.date || a.created_at).getTime();
+      const dateB = new Date(b.date || b.created_at).getTime();
+      
+      if (sortOrder === 'newest') {
+        return dateB - dateA; // Newest first
+      } else {
+        return dateA - dateB; // Oldest first
+      }
+    });
 
     setFilteredPurchases(filtered);
   };
@@ -351,17 +360,34 @@ const SiteSupervisorHub: React.FC = () => {
         </Card>
       </div>
 
-      {/* Search and Actions Bar */}
+      {/* Sort and Actions Bar */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Search by ID, purpose, location, or project..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <CalendarDays className="h-4 w-4" />
+            Sort by Date:
+          </span>
+          <Select value={sortOrder} onValueChange={(value: 'newest' | 'oldest') => setSortOrder(value)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Sort by date" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">
+                <span className="flex items-center gap-2">
+                  <ArrowUpDown className="h-3.5 w-3.5" />
+                  Newest First
+                </span>
+              </SelectItem>
+              <SelectItem value="oldest">
+                <span className="flex items-center gap-2">
+                  <ArrowUpDown className="h-3.5 w-3.5 rotate-180" />
+                  Oldest First
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+        <div className="flex-1" />
         <Button
           onClick={fetchPurchases}
           disabled={isLoading}
@@ -408,17 +434,15 @@ const SiteSupervisorHub: React.FC = () => {
                 <Package className="h-12 w-12 mx-auto text-gray-300 mb-3" />
                 <h3 className="text-lg font-medium text-gray-900 mb-1">No purchases found</h3>
                 <p className="text-sm text-gray-500">
-                  {searchTerm ? 'Try adjusting your search criteria' : 'Create your first purchase request to get started'}
+                  {activeTab === 'pending' ? 'No pending purchase requests' : 'No email sent purchases'}
                 </p>
-                {!searchTerm && (
-                  <Button
-                    onClick={() => navigate('/procurement')}
-                    className="mt-4 bg-orange-600 hover:bg-orange-700"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Purchase Request
-                  </Button>
-                )}
+                <Button
+                  onClick={() => setNewPurchaseModalOpen(true)}
+                  className="mt-4 bg-orange-600 hover:bg-orange-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Purchase Request
+                </Button>
               </div>
             </Card>
           )}

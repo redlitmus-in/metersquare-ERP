@@ -54,6 +54,23 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     try {
       setIsLoading(true);
       const response = await accountsService.getPurchaseDetails(purchaseId!);
+      
+      // Calculate total cost from materials if not provided
+      if (response && response.purchase) {
+        const materials = response.purchase.material_details || response.purchase.materials || [];
+        const calculatedTotalCost = materials.reduce((sum: number, material: any) => {
+          const unitCost = material.cost || material.unit_cost || 0;
+          const quantity = material.quantity || 1;
+          return sum + (unitCost * quantity);
+        }, 0);
+        
+        // Set the total cost on the purchase object
+        response.purchase.total_cost = response.purchase.total_cost || calculatedTotalCost;
+        
+        // Ensure materials are normalized to 'materials' key
+        response.purchase.materials = materials;
+      }
+      
       setPurchaseData(response);
     } catch (error) {
       console.error('Error fetching purchase details:', error);
@@ -72,6 +89,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     switch (statusLower) {
       case 'approved':
       case 'payment_processed':
+      case 'completed':
+      case 'transferred':
         return <Badge className="bg-green-100 text-green-800 border-green-200">{status}</Badge>;
       case 'rejected':
       case 'payment_rejected':
@@ -110,14 +129,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               </div>
             </div>
           ) : (
-            <Tabs defaultValue="details" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="details">Purchase Details</TabsTrigger>
-                <TabsTrigger value="payment">Payment Info</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="details" className="space-y-4">
-                {purchaseData?.purchase && (
+            <div className="w-full space-y-4">
+              {purchaseData?.purchase && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -206,90 +219,14 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   </p>
                                 )}
                               </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
                     )}
                   </motion.div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="payment" className="space-y-4">
-                {purchaseData && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-4"
-                >
-                  {/* Payment Summary */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <CreditCard className="h-5 w-5 text-green-600" />
-                        Payment Summary
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                        <div className="flex justify-between items-center">
-                          <span className="text-lg font-medium text-green-900">Total Payment Amount</span>
-                          <span className="text-2xl font-bold text-green-600">
-                            {formatCurrency(purchaseData.purchase?.total_cost || 0)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Payment Details */}
-                      {purchaseData.purchase?.payment_details && (
-                        <div className="space-y-3">
-                          <h4 className="font-medium flex items-center gap-2">
-                            <Building className="h-4 w-4 text-blue-600" />
-                            Payment Details
-                          </h4>
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                            <div className="grid grid-cols-2 gap-3 text-sm">
-                              <div>
-                                <span className="font-medium">Method:</span> 
-                                {purchaseData.purchase.payment_details.payment_method || 'Bank Transfer'}
-                              </div>
-                              <div>
-                                <span className="font-medium">Reference:</span> 
-                                {purchaseData.purchase.payment_details.payment_reference || 'N/A'}
-                              </div>
-                              {purchaseData.purchase.payment_details.vendor_name && (
-                                <div className="col-span-2">
-                                  <span className="font-medium">Vendor:</span> 
-                                  {purchaseData.purchase.payment_details.vendor_name}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Current Status */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <DollarSign className="h-5 w-5 text-blue-600" />
-                        Payment Status
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Current Status:</span>
-                        {getStatusBadge(purchaseData.purchase?.accounts_status || purchaseData.latest_status?.status || 'pending')}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-                )}
-              </TabsContent>
-
-            </Tabs>
+              )}
+            </div>
           )}
         </div>
 

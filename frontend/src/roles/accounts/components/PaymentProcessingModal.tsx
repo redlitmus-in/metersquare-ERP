@@ -3,8 +3,8 @@
  * Modal for processing payment transactions with vendor details
  */
 
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Dialog,
   DialogContent,
@@ -31,10 +31,18 @@ import {
   FileText,
   AlertCircle,
   CheckCircle2,
-  Loader2
+  Loader2,
+  Upload,
+  File,
+  X,
+  Paperclip,
+  Image as ImageIcon,
+  FileCheck
 } from 'lucide-react';
 import { accountsService } from '../services/accountsService';
+import { apiClient } from '@/api/config';
 import { toast } from 'sonner';
+import { Progress } from '@/components/ui/progress';
 
 interface PaymentProcessingModalProps {
   isOpen: boolean;
@@ -50,6 +58,11 @@ const PaymentProcessingModal: React.FC<PaymentProcessingModalProps> = ({
   onSuccess
 }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [formData, setFormData] = useState({
     amount: '',
     payment_method: 'bank_transfer',
@@ -72,8 +85,145 @@ const PaymentProcessingModal: React.FC<PaymentProcessingModalProps> = ({
         notes: '',
         supporting_documents: []
       });
+      setUploadedFiles([]);
+      setUploadProgress({});
     }
   }, [isOpen, purchaseId]);
+
+  // File upload handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    handleFiles(droppedFiles);
+  }, []);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selectedFiles = Array.from(e.target.files);
+      handleFiles(selectedFiles);
+    }
+  };
+
+  const handleFiles = (files: File[]) => {
+    // Validate file types and sizes
+    const validFiles = files.filter(file => {
+      const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      
+      if (!validTypes.includes(file.type)) {
+        toast.error(`Invalid file type: ${file.name}. Only images, PDFs, and documents are allowed.`);
+        return false;
+      }
+      
+      if (file.size > maxSize) {
+        toast.error(`File too large: ${file.name}. Maximum size is 10MB.`);
+        return false;
+      }
+      
+      return true;
+    });
+
+    if (validFiles.length > 0) {
+      // Just store files locally, don't upload yet
+      setUploadedFiles(prev => [...prev, ...validFiles]);
+      toast.info(`${validFiles.length} file(s) selected. They will be uploaded when you create the payment transaction.`);
+    }
+  };
+
+  const uploadFiles = async (transactionId: number) => {
+    if (uploadedFiles.length === 0) return true;
+    
+    let allSuccess = true;
+    
+    for (const file of uploadedFiles) {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        // Set initial progress
+        setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
+        
+        // Simulate progress updates
+        const progressInterval = setInterval(() => {
+          setUploadProgress(prev => {
+            const currentProgress = prev[file.name] || 0;
+            if (currentProgress < 90) {
+              return { ...prev, [file.name]: currentProgress + 10 };
+            }
+            return prev;
+          });
+        }, 200);
+        
+        const response = await apiClient.post(
+          `/upload_file?key=accounts&id=${transactionId}`,
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            }
+          }
+        );
+        
+        clearInterval(progressInterval);
+        
+        if (response.data.message) {
+          setUploadProgress(prev => ({ ...prev, [file.name]: 100 }));
+          toast.success(`File uploaded successfully: ${file.name}`);
+        } else {
+          throw new Error('Upload failed');
+        }
+      } catch (error: any) {
+        console.error('Error uploading file:', error);
+        toast.error(`Failed to upload ${file.name}: ${error.response?.data?.error || error.message}`);
+        allSuccess = false;
+        
+        setUploadProgress(prev => {
+          const newProgress = { ...prev };
+          delete newProgress[file.name];
+          return newProgress;
+        });
+      }
+    }
+    
+    return allSuccess;
+  };
+
+  const removeFile = (index: number) => {
+    const fileName = uploadedFiles[index]?.name;
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    // Clear progress if exists
+    if (fileName) {
+      setUploadProgress(prev => {
+        const newProgress = { ...prev };
+        delete newProgress[fileName];
+        return newProgress;
+      });
+    }
+  };
+
+  const getFileIcon = (fileType: string) => {
+    if (fileType.startsWith('image/')) return <ImageIcon className="h-4 w-4" />;
+    if (fileType === 'application/pdf') return <FileText className="h-4 w-4" />;
+    return <File className="h-4 w-4" />;
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +236,8 @@ const PaymentProcessingModal: React.FC<PaymentProcessingModalProps> = ({
     try {
       setIsLoading(true);
       
-      await accountsService.processPaymentTransaction({
+      // First, create the payment transaction
+      const response = await accountsService.processPaymentTransaction({
         purchase_id: purchaseId,
         amount: parseFloat(formData.amount),
         payment_method: formData.payment_method,
@@ -94,10 +245,23 @@ const PaymentProcessingModal: React.FC<PaymentProcessingModalProps> = ({
         vendor_name: formData.vendor_name,
         vendor_account_details: formData.vendor_account_details,
         notes: formData.notes,
-        supporting_documents: formData.supporting_documents
+        supporting_documents: [] // Will be updated after file upload
       });
 
       toast.success('Payment transaction created successfully');
+      
+      // Now upload files if any (using the purchase_id as the transaction reference)
+      if (uploadedFiles.length > 0) {
+        toast.info('Uploading supporting documents...');
+        const uploadSuccess = await uploadFiles(purchaseId);
+        
+        if (uploadSuccess) {
+          toast.success('All files uploaded successfully');
+        } else {
+          toast.warning('Some files failed to upload, but payment transaction was created');
+        }
+      }
+      
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -212,6 +376,110 @@ const PaymentProcessingModal: React.FC<PaymentProcessingModalProps> = ({
                 />
               </div>
             </div>
+          </div>
+
+          <Separator />
+
+          {/* File Upload Section */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <Paperclip className="h-4 w-4 text-purple-600" />
+              Supporting Documents
+            </div>
+
+            {/* Drag and Drop Zone */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`
+                relative border-2 border-dashed rounded-lg p-6 transition-all duration-200 cursor-pointer
+                ${isDragging 
+                  ? 'border-purple-500 bg-purple-50' 
+                  : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50/50 bg-gray-50/50'
+                }
+              `}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,.pdf,.doc,.docx"
+                onChange={handleFileSelect}
+                className="hidden"
+                aria-label="Upload payment proof documents"
+              />
+              
+              <div className="text-center pointer-events-none">
+                <Upload className={`mx-auto h-12 w-12 ${isDragging ? 'text-purple-500' : 'text-gray-400'}`} />
+                <p className="mt-2 text-sm text-gray-600">
+                  <span className="text-purple-600 font-medium">
+                    Click to upload
+                  </span>
+                  {' '}or drag and drop
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  PDF, DOC, DOCX, JPG, PNG up to 10MB
+                </p>
+              </div>
+            </div>
+
+            {/* Uploaded Files List */}
+            {uploadedFiles.length > 0 && (
+              <div className="space-y-2">
+                <AnimatePresence>
+                  {uploadedFiles.map((file, index) => {
+                    const progress = uploadProgress[file.name];
+                    const isUploading = progress !== undefined && progress < 100;
+                    
+                    return (
+                      <motion.div
+                        key={`${file.name}-${index}`}
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg"
+                      >
+                        <div className="flex-shrink-0">
+                          {isUploading ? (
+                            <Loader2 className="h-4 w-4 text-purple-600 animate-spin" />
+                          ) : progress === 100 ? (
+                            <FileCheck className="h-4 w-4 text-green-600" />
+                          ) : (
+                            getFileIcon(file.type)
+                          )}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {file.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {formatFileSize(file.size)}
+                            {progress === undefined && ' • Ready to upload'}
+                          </p>
+                          {isUploading && (
+                            <Progress value={progress} className="h-1 mt-1" />
+                          )}
+                        </div>
+                        
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeFile(index)}
+                          disabled={isUploading}
+                          className="flex-shrink-0 p-1 h-auto"
+                        >
+                          <X className="h-4 w-4 text-gray-500 hover:text-red-500" />
+                        </Button>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
 
           <Separator />
