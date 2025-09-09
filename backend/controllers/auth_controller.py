@@ -183,7 +183,7 @@ def user_login():
                 "otp_expiry": "5 minutes"
             }
             # Only include OTP in non-production environments (for testing/debugging)
-            if ENVIRONMENT != 'prod':
+            if ENVIRONMENT != 'production':
                 response_data["otp"] = otp
             
             return jsonify(response_data), 200
