@@ -577,6 +577,26 @@ def get_all_technical_director_purchase_request():
                     PurchaseStatus.receiver == 'technicalDirector'
                 )
             ).order_by(PurchaseStatus.created_at.desc()).first()
+            
+            # Check if estimation has approved and sent to technical director
+            # If yes and TD hasn't responded yet (or responded before estimation), show status as pending
+            if (latest_td_receiver_status and 
+                latest_td_receiver_status.sender == 'estimation' and 
+                latest_td_receiver_status.receiver == 'technicalDirector' and 
+                latest_td_receiver_status.status == 'approved'):
+                
+                # Check if technical director has responded AFTER estimation's approval
+                if (technical_director_status and 
+                    technical_director_status.created_at and 
+                    latest_td_receiver_status.created_at and
+                    technical_director_status.created_at > latest_td_receiver_status.created_at):
+                    # TD responded after estimation's approval, use TD's status
+                    technical_director_status_value = technical_director_status.status
+                else:
+                    # TD hasn't responded or responded before estimation's approval, show as pending
+                    technical_director_status_value = 'pending'
+            else:
+                technical_director_status_value = technical_director_status.status if technical_director_status else 'pending'
 
             # Determine current workflow status
             current_workflow_status = 'pending_estimation'
@@ -617,7 +637,7 @@ def get_all_technical_director_purchase_request():
                 "estimation_status_date": estimation_status.created_at.isoformat() if estimation_status and estimation_status.created_at else None,
                 "estimation_comments": estimation_status.comments if estimation_status else None,
                 "estimation_decision_by": estimation_status.created_by if estimation_status else None,
-                "technical_director_status": technical_director_status.status if technical_director_status else 'pending',
+                "technical_director_status": technical_director_status_value,
                 "technical_director_status_date": technical_director_status.created_at.isoformat() if technical_director_status and technical_director_status.created_at else None,
                 "technical_director_comments": technical_director_status.comments if technical_director_status else None,
                 "technical_director_rejection_reason": technical_director_status.rejection_reason if technical_director_status else None,

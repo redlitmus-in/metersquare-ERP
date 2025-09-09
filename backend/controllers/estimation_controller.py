@@ -740,13 +740,17 @@ def get_all_estimation_purchase_request():
                     estimation_involved = True
                     unique_purchase_ids.add(purchase_id)
                 
-                # Track PM's latest decision
+                # Track PM's latest decision                  
                 if status.sender == 'projectManager' and status.receiver == 'estimation':
                     latest_pm_status = status.status
-                
+
+                if status.sender == 'projectManager' and status.receiver == 'estimation' and status.status == "approved":
+                    latest_estimation_status = 'pending'
                 # Track Estimation's latest decision (ONLY when estimation is the sender)
-                if status.sender == 'estimation':
+                elif status.sender == 'estimation':
                     latest_estimation_status = status.status
+                elif status.sender == 'technicalDirector' and status.receiver == 'estimation' and status.status == 'rejected':
+                    latest_estimation_status = 'pending'
                 elif status.sender == 'technicalDirector':
                     latest_estimation_status = status.status
                 

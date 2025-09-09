@@ -257,6 +257,10 @@ def _determine_workflow_status(latest_status, pm_status):
     if latest_status and latest_status.sender == 'estimation' and latest_status.receiver == 'projectManager' and latest_status.status == 'rejected':
         return None  # Skip this item
     
+    # If the latest status is procurement sending to PM, it's pending PM review
+    if latest_status and latest_status.sender == 'procurement' and latest_status.receiver == 'projectManager':
+        return 'pending_pm_review'
+    
     if pm_status:
         return 'pm_approved' if pm_status.status == 'approved' else 'pm_rejected'
     elif latest_status and latest_status.sender == 'estimation':
@@ -313,7 +317,7 @@ def _process_estimation_rejections(estimation_pm_rejection_statuses):
     """Helper: Process estimation PM rejections"""
     estimation_pm_rejected_purchase_ids = list({s.purchase_id for s in estimation_pm_rejection_statuses})
     estimation_pm_rejections = []
-    
+    pm_status = 'pending'
     for purchase_id in estimation_pm_rejected_purchase_ids:
         absolute_latest_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id).order_by(PurchaseStatus.created_at.desc()).first()
         rejected_status = next((s for s in estimation_pm_rejection_statuses if s.purchase_id == purchase_id), None)
@@ -330,7 +334,8 @@ def _process_estimation_rejections(estimation_pm_rejection_statuses):
                 (absolute_latest_status.sender in ['projectManager', 'technicalDirector', 'accounts'] or
                  absolute_latest_status.receiver in ['technicalDirector', 'accounts', 'design'])):
                 continue
-
+        if absolute_latest_status.sender == 'estimation' and absolute_latest_status.receiver == 'projectManager' and absolute_latest_status.status == 'rejected':
+            pm_status = 'pending'
         purchase = Purchase.query.filter(and_(Purchase.purchase_id == purchase_id, Purchase.is_deleted == False)).first()
         if purchase:
             materials = _get_purchase_materials(purchase)
@@ -342,6 +347,7 @@ def _process_estimation_rejections(estimation_pm_rejection_statuses):
                 'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
                 'materials_summary': _calculate_material_summary(materials),
                 'rejected_status': {
+                    'pm_status' : pm_status,
                     'status_id': rejected_status.status_id,
                     'status': rejected_status.status,
                     'sender': rejected_status.sender,
@@ -427,7 +433,21 @@ def get_procurement_approved_purchases():
             # Get statuses for this purchase
             procurement_approved_status = PurchaseStatus.query.filter(and_(PurchaseStatus.purchase_id == purchase_id, PurchaseStatus.sender == 'procurement', PurchaseStatus.status == 'approved')).order_by(PurchaseStatus.created_at.desc()).first()
             latest_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id).order_by(PurchaseStatus.created_at.desc()).first()
-            pm_status = PurchaseStatus.query.filter(and_(PurchaseStatus.purchase_id == purchase_id, PurchaseStatus.sender == 'projectManager')).order_by(PurchaseStatus.created_at.desc()).first()
+            
+            # Get the latest PM decision
+            pm_status = PurchaseStatus.query.filter(
+                and_(
+                    PurchaseStatus.purchase_id == purchase_id, 
+                    PurchaseStatus.sender == 'projectManager'
+                )
+            ).order_by(PurchaseStatus.created_at.desc()).first()
+            
+            # Check if procurement has re-sent to PM after PM's decision
+            # If procurement's approval is newer than PM's last action, PM status should be pending
+            if pm_status and procurement_approved_status:
+                if procurement_approved_status.created_at > pm_status.created_at:
+                    # Procurement re-sent after PM's decision, so PM status is now pending
+                    pm_status = None  # This will make it show as pending
             
             if procurement_approved_status:
                 purchase = Purchase.query.filter(and_(Purchase.purchase_id == purchase_id, Purchase.is_deleted == False)).first()
@@ -438,6 +458,7 @@ def get_procurement_approved_purchases():
                     if current_workflow_status is None:  # Skip rejected items
                         continue
                     
+                    # Get the latest status for the purchase
                     latest_for_purchase = PurchaseStatus.query.filter_by(purchase_id=purchase_id).order_by(PurchaseStatus.created_at.desc()).first()
                     status_history = [_format_status_dict(latest_for_purchase)] if latest_for_purchase else []
                     latest_status_dt = latest_for_purchase.created_at if latest_for_purchase else None

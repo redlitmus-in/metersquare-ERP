@@ -250,8 +250,15 @@ def get_all_procurement():
             purchase_dict['decision_date'] = latest_status.decision_date.isoformat() if latest_status and latest_status.decision_date else None
             purchase_dict['status_comments'] = latest_status.comments if latest_status else None
             # Set receiver_latest_status based on sender and receiver
-            purchase_dict['receiver_latest_status'] = "pending"
-            if latest_status and latest_status.sender == 'accounts' and latest_status.receiver == 'accounts':
+            purchase_dict['receiver_latest_status'] = latest_status.status if latest_status else "pending"
+            
+            # Special cases: If estimation or project manager sends "rejected" to procurement, show as "pending" for procurement
+            if (latest_status and 
+                latest_status.receiver == 'procurement' and 
+                latest_status.status == 'rejected' and
+                latest_status.sender in ['estimation', 'projectManager']):
+                purchase_dict['receiver_latest_status'] = "pending"
+            elif latest_status and latest_status.sender == 'accounts' and latest_status.receiver == 'accounts':
                 purchase_dict['receiver_latest_status'] = "task completed"  # task completed - waiting for accounts action
             elif latest_status and latest_status.sender == 'accounts':
                 purchase_dict['receiver_latest_status'] = latest_status.status
