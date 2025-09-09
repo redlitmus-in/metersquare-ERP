@@ -250,12 +250,10 @@ def create_acknowledgement():
         # Validate required fields
         if not purchase_id:
             return jsonify({'error': 'purchase_id is required'}), 400
-
         # Get user role
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
         if not role:
             return jsonify({'error': 'User role not found'}), 400
-
         # Create acknowledgement
         acknowledgement = Acknowledgement(
             transaction_id=transaction_id,
@@ -267,10 +265,8 @@ def create_acknowledgement():
             supporting_documents=supporting_documents,
             created_by=user_name
         )
-
         # Create acknowledgement
         db.session.add(acknowledgement)
-        
         # Update purchase status to indicate acknowledgement received
         new_status = PurchaseStatus.create_new_status(
             purchase_id=purchase_id,
@@ -281,14 +277,12 @@ def create_acknowledgement():
             comments=f'Acknowledgement created by {user_name}',
             created_by=user_name
         )
-        
         # Commit both acknowledgement and status creation together
         db.session.commit()
-
-        # Send notification to accounts
+        # Send acknowledgement notification to stakeholders (TD, Procurement, PM)
         try:
             email_service = EmailService()
-            email_service.send_acknowledgement_notification(
+            email_service.send_acknowledgement_to_stakeholders(
                 purchase_id=purchase_id,
                 acknowledgement_type=acknowledgement_type,
                 acknowledged_by=user_name,
@@ -296,8 +290,6 @@ def create_acknowledgement():
             )
         except Exception as e:
             log.warning(f"Failed to send acknowledgement email: {str(e)}")
-
-        log.info(f"Acknowledgement created for purchase {purchase_id} by {user_name}")
 
         return jsonify({
             'message': 'Acknowledgement created successfully',

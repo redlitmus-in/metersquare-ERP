@@ -75,8 +75,6 @@ class EmailService:
             server = self._create_connection()
             server.send_message(msg)
             server.quit()
-
-            log.info(f"Email sent successfully to {to_emails} with subject: {subject}")
             return True
         except Exception as e:
             log.error(f"Failed to send email to {to_emails}: {str(e)}")
@@ -3102,20 +3100,51 @@ This is an automated email from the ERP system.
             log.error(f"Error sending acknowledgement notification: {str(e)}")
             return False
 
-    # def get_accounts_team_emails(self) -> List[str]:
-    #     """Get emails of all accounts team members"""
-    #     try:
-    #         accounts_role = Role.query.filter_by(role='accounts', is_deleted=False).first()
-    #         if not accounts_role:
-    #             return []
-            
-    #         accounts_users = User.query.filter_by(
-    #             role_id=accounts_role.role_id, 
-    #             is_active=True, 
-    #             is_deleted=False
-    #         ).all()
-            
-    #         return [user.email for user in accounts_users if user.email]
-    #     except Exception as e:
-    #         log.error(f"Error getting accounts team emails: {str(e)}")
-    #         return []
+    def send_acknowledgement_to_stakeholders(self, purchase_id: int, acknowledgement_type: str,
+                                            acknowledged_by: str, message: str) -> bool:
+        """Send acknowledgement notification to Technical Director, Procurement, and Project Manager"""
+        try:
+            td_emails = self.get_technical_director_emails() or []
+            pm_emails = self.get_project_manager_emails() or []
+            pr_emails = self.get_procurement_team_emails() or []
+
+            recipients = list({*(td_emails + pm_emails + pr_emails)})
+            if not recipients:
+                log.error("No stakeholder emails found for acknowledgement notification")
+                return False
+
+            subject = f"Acknowledgement Received - Purchase Request #{purchase_id}"
+
+            html_content = f"""
+            <html>
+            <body>
+                <h2>Acknowledgement Received</h2>
+                <p>An acknowledgement has been recorded for the following purchase request:</p>
+                <div style="background-color: #eef2ff; padding: 12px; border-radius: 6px; border-left: 4px solid #243d8a;">
+                    <p><strong>Purchase Request ID:</strong> {purchase_id}</p>
+                    <p><strong>Acknowledgement Type:</strong> {acknowledgement_type}</p>
+                    <p><strong>Acknowledged By:</strong> {acknowledged_by}</p>
+                    <p><strong>Date:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                    <p><strong>Message:</strong> {message}</p>
+                </div>
+                <p>Best regards,<br/>ERP System</p>
+            </body>
+            </html>
+            """
+
+            text_content = f"""
+            Acknowledgement Received
+
+            Purchase Request ID: {purchase_id}
+            Acknowledgement Type: {acknowledgement_type}
+            Acknowledged By: {acknowledged_by}
+            Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+            Message: {message}
+
+            ERP System
+            """
+
+            return self._send_email(recipients, subject, html_content, text_content)
+        except Exception as e:
+            log.error(f"Error sending acknowledgement notification to stakeholders: {str(e)}")
+            return False
