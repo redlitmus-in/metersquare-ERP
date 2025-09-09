@@ -42,6 +42,8 @@ const SiteSupervisorHub: React.FC = () => {
   const [modalMode, setModalMode] = useState<'details' | 'history'>('details');
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [newPurchaseModalOpen, setNewPurchaseModalOpen] = useState(false);
+  const [editPurchaseModalOpen, setEditPurchaseModalOpen] = useState(false);
+  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
 
   // Metrics state
   const [metrics, setMetrics] = useState({
@@ -147,13 +149,49 @@ const SiteSupervisorHub: React.FC = () => {
     setDetailsModalOpen(true);
   };
 
-  const handleEdit = (purchaseId: number) => {
-    // Navigate to procurement page with edit mode
-    // The procurement form will handle the edit
-    navigate(`/procurement?edit=${purchaseId}`);
+  const handleEdit = async (purchaseId: number) => {
+    // Find the purchase to edit
+    const purchaseToEdit = purchases.find(p => p.purchase_id === purchaseId);
+    if (!purchaseToEdit) {
+      toast.error('Purchase not found');
+      return;
+    }
+    
+    // Check if purchase can be edited (not approved or email sent)
+    if (purchaseToEdit.status === 'approved') {
+      toast.error('Cannot edit approved purchase requests');
+      return;
+    }
+    
+    if (purchaseToEdit.email_sent) {
+      toast.error('Cannot edit purchase requests that have been sent via email');
+      return;
+    }
+    
+    // Open edit modal with the purchase data
+    setEditingPurchase(purchaseToEdit);
+    setEditPurchaseModalOpen(true);
   };
 
   const handleDelete = async (purchaseId: number) => {
+    // Find the purchase to check if it can be deleted
+    const purchaseToDelete = purchases.find(p => p.purchase_id === purchaseId);
+    if (!purchaseToDelete) {
+      toast.error('Purchase not found');
+      return;
+    }
+    
+    // Check if purchase can be deleted (not approved or email sent)
+    if (purchaseToDelete.status === 'approved') {
+      toast.error('Cannot delete approved purchase requests');
+      return;
+    }
+    
+    if (purchaseToDelete.email_sent) {
+      toast.error('Cannot delete purchase requests that have been sent via email');
+      return;
+    }
+    
     if (!window.confirm('Are you sure you want to delete this purchase request? This action cannot be undone.')) {
       return;
     }
@@ -390,13 +428,29 @@ const SiteSupervisorHub: React.FC = () => {
       {/* Purchase Details Modal */}
       {/* New Purchase Request Form Modal */}
       <Dialog open={newPurchaseModalOpen} onOpenChange={setNewPurchaseModalOpen}>
-        <DialogContent className="max-w-7xl max-h-[95vh] overflow-y-auto p-0">
+        <DialogContent className="max-w-7xl max-h-[95vh] overflow-y-auto p-0" hideCloseButton>
           <PurchaseRequisitionForm
             onClose={() => {
               setNewPurchaseModalOpen(false);
               fetchPurchases(); // Refresh the list after creating a new purchase
             }}
             showAsPage={false}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Purchase Request Form Modal */}
+      <Dialog open={editPurchaseModalOpen} onOpenChange={setEditPurchaseModalOpen}>
+        <DialogContent className="max-w-7xl max-h-[95vh] overflow-y-auto p-0" hideCloseButton>
+          <PurchaseRequisitionForm
+            onClose={() => {
+              setEditPurchaseModalOpen(false);
+              setEditingPurchase(null);
+              fetchPurchases(); // Refresh the list after editing
+            }}
+            showAsPage={false}
+            editMode={true}
+            purchaseData={editingPurchase}
           />
         </DialogContent>
       </Dialog>

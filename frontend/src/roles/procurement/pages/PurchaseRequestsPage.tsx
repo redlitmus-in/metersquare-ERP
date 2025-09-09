@@ -714,10 +714,7 @@ const PurchaseRequestsPage: React.FC = () => {
       {/* Purchase Request Form Dialog (for non-Site Supervisors) */}
       {!isSiteSupervisor && (
         <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>New Purchase Request</DialogTitle>
-            </DialogHeader>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" hideCloseButton>
             <PurchaseRequisitionForm onClose={() => {
               setIsFormOpen(false);
               fetchPurchaseRequests(); // Refresh data after form submission

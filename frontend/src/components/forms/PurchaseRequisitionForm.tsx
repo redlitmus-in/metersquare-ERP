@@ -76,9 +76,11 @@ interface PurchaseRequisitionFormProps {
   showAsPage?: boolean;
   existingData?: any;
   isEditMode?: boolean;
+  editMode?: boolean;
+  purchaseData?: any;
 }
 
-const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClose, showAsPage, existingData, isEditMode }) => {
+const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClose, showAsPage, existingData, isEditMode, editMode, purchaseData }) => {
   // Initialize useForm first to get setValue
   const { register, handleSubmit, watch, formState: { errors }, setValue, getValues } = useForm<PurchaseRequisitionFormData>();
   
@@ -103,17 +105,21 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
     // Always set requested_by to current user
     setValue('requested_by', currentUserName);
     
+    // Check for both isEditMode and editMode props
+    const isEditing = isEditMode || editMode;
+    const dataToEdit = purchaseData || existingData;
+    
     // Initialize date to today if not in edit mode and no existing data
-    if (!isEditMode && !existingData) {
+    if (!isEditing && !dataToEdit) {
       setValue('date', getTodayFormatted());
     }
     
-    if (isEditMode && existingData) {
+    if (isEditing && dataToEdit) {
       // Set project ID - handle both direct data and originalData from dashboard
-      const purchaseData = existingData.originalData || existingData;
+      const purchaseDataToUse = dataToEdit.originalData || dataToEdit;
       
       // Set project ID
-      const projectId = purchaseData.project_id || existingData.project_id;
+      const projectId = purchaseDataToUse.project_id || dataToEdit.project_id;
       if (projectId) {
         setSelectedProjectId(projectId);
         setValue('project_id', projectId);
@@ -121,13 +127,13 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       
       // Set all form values based on the actual register names
       // Site location
-      setValue('site_location', purchaseData.site_location || '');
+      setValue('site_location', purchaseDataToUse.site_location || '');
       
       // Requested by - always use current user in edit mode too
       setValue('requested_by', currentUserName);
       
       // Date
-      const dateValue = purchaseData.date || existingData.date;
+      const dateValue = purchaseDataToUse.date || dataToEdit.date;
       if (dateValue) {
         setValue('date', formatDateForInput(dateValue));
       } else {
@@ -135,22 +141,22 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       }
       
       // Purpose/Justification
-      setValue('purpose', purchaseData.purpose || '');
+      setValue('purpose', purchaseDataToUse.purpose || '');
       
       // Additional fields if they exist in your form
-      setValue('justification', purchaseData.justification || purchaseData.purpose || '');
+      setValue('justification', purchaseDataToUse.justification || purchaseDataToUse.purpose || '');
       
       // Load materials if available
-      const materialsData = purchaseData.materials || existingData.materials || [];
+      const materialsData = purchaseDataToUse.materials || dataToEdit.materials || [];
       
       // Set design references if available
       // Check for design_reference at purchase level or from first material
-      if (purchaseData.design_reference) {
-        setDesignReference(purchaseData.design_reference);
-        setValue('designReferences', [purchaseData.design_reference]);
-      } else if (purchaseData.design_references) {
-        setDesignReference(purchaseData.design_references.join(', '));
-        setValue('designReferences', purchaseData.design_references);
+      if (purchaseDataToUse.design_reference) {
+        setDesignReference(purchaseDataToUse.design_reference);
+        setValue('designReferences', [purchaseDataToUse.design_reference]);
+      } else if (purchaseDataToUse.design_references) {
+        setDesignReference(purchaseDataToUse.design_references.join(', '));
+        setValue('designReferences', purchaseDataToUse.design_references);
       } else if (materialsData && materialsData.length > 0 && materialsData[0].design_reference) {
         // If no purchase-level design reference, get from first material
         setDesignReference(materialsData[0].design_reference);
