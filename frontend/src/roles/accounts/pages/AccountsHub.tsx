@@ -13,13 +13,14 @@ import {
   RefreshCw, Search, CreditCard, 
   CheckSquare, XSquare, Clock, TrendingUp,
   DollarSign, FileText, BarChart3, AlertCircle,
-  Building, Receipt, Banknote
+  Building, Receipt, Banknote, ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-react';
 import AccountsApprovalCard from '../components/AccountsApprovalCard';
 import PaymentProcessingModal from '../components/PaymentProcessingModal';
 import PaymentApprovalModal from '../components/PaymentApprovalModal';
 import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
 import PaymentTransactionModal from '../components/PaymentTransactionModal';
+import AcknowledgementModal from '../components/AcknowledgementModal';
 import { accountsService } from '../services/accountsService';
 import type { Purchase } from '../types';
 import { toast } from 'sonner';
@@ -30,12 +31,14 @@ const AccountsHub: React.FC = () => {
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   
   // Modal states
   const [paymentProcessingModalOpen, setPaymentProcessingModalOpen] = useState(false);
   const [paymentApprovalModalOpen, setPaymentApprovalModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [transactionDetailsModalOpen, setTransactionDetailsModalOpen] = useState(false);
+  const [acknowledgementModalOpen, setAcknowledgementModalOpen] = useState(false);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
   const [selectedTransactionId, setSelectedTransactionId] = useState<number | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
@@ -244,8 +247,15 @@ const AccountsHub: React.FC = () => {
       );
     }
 
+    // Sort by date
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.created_at || a.date).getTime();
+      const dateB = new Date(b.created_at || b.date).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+
     setFilteredPurchases(filtered);
-  }, [purchases, activeTab, searchTerm]);
+  }, [purchases, activeTab, searchTerm, sortOrder]);
 
   // Handle process payment button click
   const handleProcessPayment = (purchaseId: number) => {
@@ -297,6 +307,17 @@ const AccountsHub: React.FC = () => {
   const handleViewPayment = (purchaseId: number) => {
     setSelectedPurchaseId(purchaseId);
     setTransactionDetailsModalOpen(true);
+  };
+
+  // Handle send acknowledgement button click - opens modal
+  const handleSendAcknowledgement = (purchaseId: number) => {
+    const purchase = purchases.find(p => p.purchase_id === purchaseId);
+    if (purchase) {
+      setSelectedPurchase(purchase);
+      setAcknowledgementModalOpen(true);
+    } else {
+      toast.error('Purchase not found');
+    }
   };
 
   // Handle view transaction details button click
@@ -411,9 +432,9 @@ const AccountsHub: React.FC = () => {
         </Card>
       </div>
 
-      {/* Search Bar */}
-      <div className="mb-4 sm:mb-6">
-        <div className="relative w-full lg:max-w-2xl">
+      {/* Search Bar and Sort */}
+      <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 lg:max-w-2xl">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5 sm:h-4 sm:w-4" />
           <Input
             placeholder="Search purchases..."
@@ -422,6 +443,23 @@ const AccountsHub: React.FC = () => {
             className="pl-8 sm:pl-10 h-9 sm:h-10 text-sm sm:text-base bg-white border-gray-200 focus:border-green-500 focus:ring-green-500"
           />
         </div>
+        <Button
+          variant="outline"
+          onClick={() => setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest')}
+          className="flex items-center gap-2 min-w-[120px]"
+        >
+          {sortOrder === 'newest' ? (
+            <>
+              <ArrowDown className="h-4 w-4" />
+              Newest First
+            </>
+          ) : (
+            <>
+              <ArrowUp className="h-4 w-4" />
+              Oldest First
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -478,8 +516,8 @@ const AccountsHub: React.FC = () => {
                       onApprovePayment={handleApprovePayment}
                       onRejectPayment={handleRejectPayment}
                       onViewDetails={handleViewDetails}
-                      onViewPayment={handleViewPayment}
                       onViewTransactionDetails={handleViewTransactionDetails}
+                      onSendAcknowledgement={handleSendAcknowledgement}
                       isLoading={isLoading}
                     />
                   ))}
@@ -524,6 +562,21 @@ const AccountsHub: React.FC = () => {
           setTransactionDetailsModalOpen(false);
         }}
         purchaseId={selectedPurchaseId}
+      />
+      
+      {/* Acknowledgement Modal */}
+      <AcknowledgementModal
+        isOpen={acknowledgementModalOpen}
+        onClose={() => {
+          setAcknowledgementModalOpen(false);
+          setSelectedPurchase(null);
+        }}
+        purchase={selectedPurchase}
+        onSuccess={() => {
+          setAcknowledgementModalOpen(false);
+          setSelectedPurchase(null);
+          fetchPurchases();
+        }}
       />
     </div>
   );

@@ -17,7 +17,8 @@ import {
   DollarSign,
   CreditCard,
   Building,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Send
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,7 @@ interface AccountsApprovalCardProps {
   onViewDetails: (purchaseId: number) => void;
   onViewPayment?: (purchaseId: number) => void;
   onViewTransactionDetails?: (purchaseId: number) => void;
+  onSendAcknowledgement?: (purchaseId: number) => void;
   isLoading?: boolean;
 }
 
@@ -45,6 +47,7 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
   onViewDetails,
   onViewPayment,
   onViewTransactionDetails,
+  onSendAcknowledgement,
   isLoading = false
 }) => {
   // Get status from latest_status object or fallback to direct fields
@@ -54,6 +57,9 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
   let needsPaymentProcessing = false;
   let hasPaymentPending = false;
   let isProcessed = false;
+  
+  // Check if acknowledgement has been sent
+  const hasAcknowledgement = purchase.acknowledgement || purchase.acknowledgement_sent;
   
   if (latestStatus) {
     const sender = latestStatus.sender;
@@ -151,6 +157,12 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
                  accountsStatus === 'payment_processed' ? 'Payment Completed' : 
                  accountsStatus === 'payment_rejected' ? 'Rejected' : 'Pending'}
               </Badge>
+              {hasAcknowledgement && isProcessed && (
+                <Badge className="bg-blue-100 text-blue-800 border-blue-200" variant="outline" size="sm">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Acknowledged
+                </Badge>
+              )}
               <Badge className={getPriorityColor()} variant="outline" size="sm">
                 {priority} priority
               </Badge>
@@ -272,14 +284,28 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
                     </Button>
                   )}
                 </div>
-                {onViewPayment && (
+                {onSendAcknowledgement && (
                   <Button
-                    onClick={() => onViewPayment(purchase.purchase_id)}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => onSendAcknowledgement(purchase.purchase_id)}
+                    className={`w-full ${
+                      hasAcknowledgement 
+                        ? 'bg-gray-300 cursor-not-allowed text-gray-500' 
+                        : 'bg-green-600 hover:bg-green-700 text-white'
+                    }`}
                     size="sm"
+                    disabled={hasAcknowledgement}
                   >
-                    <CreditCard className="h-3.5 w-3.5 mr-1" />
-                    View Payment
+                    {hasAcknowledgement ? (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                        Acknowledgement Sent
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-3.5 w-3.5 mr-1" />
+                        Send Acknowledgement
+                      </>
+                    )}
                   </Button>
                 )}
               </div>

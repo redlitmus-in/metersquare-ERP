@@ -177,10 +177,12 @@ class AccountsService {
 
   /**
    * Get all purchases where accounts is the receiver
+   * @param sort - Sort order: 'newest' or 'oldest'
    */
-  async getAccountsPurchases(): Promise<AccountsPurchasesResponse> {
+  async getAccountsPurchases(sort?: 'newest' | 'oldest'): Promise<AccountsPurchasesResponse> {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.ACCOUNTS.GET_PURCHASES);
+      const params = sort ? { sort } : undefined;
+      const response = await apiClient.get(API_ENDPOINTS.ACCOUNTS.GET_PURCHASES, { params });
       return response.data;
     } catch (error: any) {
       console.error('Error fetching accounts purchases:', error);
@@ -429,6 +431,60 @@ class AccountsService {
         };
       }
       
+      throw error;
+    }
+  }
+
+  /**
+   * Upload file for supporting documents
+   * Uses the backend's upload_file endpoint with accounts key
+   */
+  async uploadFile(purchaseId: number, files: File[]): Promise<any> {
+    try {
+      const formData = new FormData();
+      
+      // Add all files to the form data
+      files.forEach(file => {
+        formData.append('file', file);
+      });
+      
+      // Use the correct endpoint with key=accounts and id=purchaseId
+      const response = await apiClient.post(`/upload_file?key=accounts&id=${purchaseId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error uploading file:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get uploaded files for a purchase
+   */
+  async getUploadedFiles(purchaseId: number): Promise<any> {
+    try {
+      const response = await apiClient.get(`/download_files?key=accounts&id=${purchaseId}`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching uploaded files:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Delete uploaded file
+   */
+  async deleteUploadedFile(purchaseId: number, filename: string): Promise<any> {
+    try {
+      const response = await apiClient.delete(`/delete_file?key=accounts&id=${purchaseId}`, {
+        data: { filename }
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error deleting file:', error);
       throw error;
     }
   }

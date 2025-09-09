@@ -693,6 +693,7 @@ def account_dashboard():
 def account_purchase():
     """
     Get all purchases where accounts is the receiver with their latest status and material details
+    Supports sorting by date (newest/oldest)
     """
     try:
         current_user = g.user
@@ -702,6 +703,11 @@ def account_purchase():
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
         if not role or role.role != 'accounts':
             return jsonify({'error': 'Only Accounts department can view account purchases'}), 403
+        
+        # Get sort order from query params (default to newest first)
+        sort_order = request.args.get('sort', 'newest').lower()
+        if sort_order not in ['newest', 'oldest']:
+            sort_order = 'newest'
         
         purchase_ids_query = db.session.query(PurchaseStatus.purchase_id).filter(
             PurchaseStatus.receiver == 'accounts',
@@ -769,9 +775,59 @@ def account_purchase():
                 'last_modified_at': purchase.last_modified_at.isoformat() if purchase.last_modified_at else None,
                 'last_modified_by': purchase.last_modified_by
             }
+            # Calculate total cost from materials
+            total_cost = 0
+            total_quantity = 0
+            for material in material_details:
+                qty = material.get('quantity', 0) or 0
+                cost = material.get('cost', 0) or 0
+                total_cost += qty * cost
+                total_quantity += qty
+            
+            purchase_data['total_cost'] = total_cost
+            purchase_data['total_quantity'] = total_quantity
+            purchase_data['material_count'] = len(material_details)
+            
             # Add latest status and material details to purchase data
             purchase_data['latest_status'] = latest_status_info
             purchase_data['material_details'] = material_details
+
+            # Get payment transaction details
+            payment_transaction = PaymentTransaction.query.filter_by(
+                purchase_id=purchase_id,
+                is_deleted=False
+            ).order_by(PaymentTransaction.transaction_id.desc()).first()
+            
+            if payment_transaction:
+                purchase_data['payment_transaction'] = {
+                    'transaction_id': payment_transaction.transaction_id,
+                    'amount': float(payment_transaction.amount),
+                    'payment_method': payment_transaction.payment_method,
+                    'status': payment_transaction.status,
+                    'processed_at': payment_transaction.processed_at.isoformat() if payment_transaction.processed_at else None
+                }
+            else:
+                purchase_data['payment_transaction'] = None
+            
+            # Check if acknowledgement has been sent for this purchase
+            acknowledgement = Acknowledgement.query.filter_by(
+                purchase_id=purchase_id
+            ).order_by(Acknowledgement.acknowledgement_id.desc()).first()
+            
+            if acknowledgement:
+                purchase_data['acknowledgement_sent'] = True
+                purchase_data['acknowledgement'] = {
+                    'acknowledgement_id': acknowledgement.acknowledgement_id,
+                    'transaction_id': acknowledgement.transaction_id,
+                    'acknowledgement_type': acknowledgement.acknowledgement_type,
+                    'acknowledged_by': acknowledgement.acknowledged_by,
+                    'acknowledged_by_role': acknowledgement.acknowledged_by_role,
+                    'acknowledgement_message': acknowledgement.acknowledgement_message,
+                    'acknowledged_at': acknowledgement.acknowledged_at.isoformat() if acknowledgement.acknowledged_at else None
+                }
+            else:
+                purchase_data['acknowledgement_sent'] = False
+                purchase_data['acknowledgement'] = None
 
             # Add receiver_latest_status for accounts department
             purchase_data['receiver_latest_status'] = "pending"
@@ -781,10 +837,18 @@ def account_purchase():
                 purchase_data['receiver_latest_status'] = latest_status_info.get('status', 'pending')
 
             purchase_details.append(purchase_data)
+        
+        # Sort purchase details by created_at date
+        purchase_details.sort(
+            key=lambda x: x.get('created_at', ''),
+            reverse=(sort_order == 'newest')
+        )
+        
         return jsonify({
             'success': True,
             'message': 'Account purchase details fetched successfully',
-            'purchase_details': purchase_details
+            'purchase_details': purchase_details,
+            'sort_order': sort_order
         }), 200
 
     except Exception as e:

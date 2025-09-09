@@ -41,6 +41,10 @@ export interface Purchase {
   // Rejection reasons
   accounts_rejection_reason?: string;
   technical_director_rejection_reason?: string;
+  
+  // Acknowledgement tracking
+  acknowledgement?: Acknowledgement;
+  acknowledgement_sent?: boolean;
 }
 
 export interface Material {
