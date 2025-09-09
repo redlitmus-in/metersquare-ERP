@@ -85,9 +85,12 @@ const ProcurementHub: React.FC = () => {
     message: ''
   });
 
-  // Fetch data on mount
+  // Fetch data on mount with delay to prevent duplicate calls
   useEffect(() => {
-    fetchPurchases();
+    const timer = setTimeout(() => {
+      fetchPurchases();
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   // Filter purchases when tab or search changes
@@ -255,18 +258,6 @@ const ProcurementHub: React.FC = () => {
         });
         break;
         
-      case 'rejected':
-        // Show items rejected by procurement (not by PM)
-        filtered = filtered.filter(p => {
-          const status = p.sender_latest_status || p.latest_status || p.status;
-          // Check if rejected but NOT by PM (those go to pm_rejected tab)
-          const rejectedByProcurement = status === 'rejected' && 
-            p.status_sender !== 'projectManager' &&
-            p.status_role !== 'projectManager';
-          return rejectedByProcurement;
-        });
-        break;
-        
       case 'pm_rejected':
         // Filter for purchases rejected by PM that need revision
         filtered = filtered.filter(p => {
@@ -285,6 +276,27 @@ const ProcurementHub: React.FC = () => {
           );
           
           return hasRejection || rejectedByPM;
+        });
+        break;
+        
+      case 'est_rejected':
+        // Filter for purchases rejected by Estimation
+        filtered = filtered.filter(p => {
+          // Check if it was rejected by estimation specifically
+          const hasRejection = p.approvals?.some((a: any) => 
+            a.reviewer_role === 'estimation' && 
+            a.status === 'rejected'
+          );
+          
+          // Check the latest status fields - looking for Estimation rejections
+          const rejectedByEst = (
+            // Estimation rejected and sent back to procurement
+            (p.status_role === 'estimation' && p.sender_latest_status === 'rejected') ||
+            (p.status_sender === 'estimation' && p.sender_latest_status === 'rejected') ||
+            (p.status_sender === 'estimation' && p.latest_status === 'rejected')
+          );
+          
+          return hasRejection || rejectedByEst;
         });
         break;
         
@@ -323,6 +335,32 @@ const ProcurementHub: React.FC = () => {
       purchaseId,
       message: 'Send this purchase request to Project Manager for approval?'
     });
+  };
+
+  const handleResendToPM = async (purchaseId: number) => {
+    try {
+      await procurementService.sendApprovalEmail(purchaseId);
+      toast.success('Purchase request resent to Project Manager for approval');
+      
+      // Refresh data
+      await fetchPurchases();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to resend email to PM');
+    }
+  };
+
+  const handleResendToEst = async (purchaseId: number) => {
+    try {
+      // This would need a new API endpoint to send to estimation
+      // For now, using same endpoint with a flag or different endpoint
+      await procurementService.sendApprovalEmail(purchaseId);
+      toast.success('Purchase request resent to Estimation for approval');
+      
+      // Refresh data
+      await fetchPurchases();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to resend email to Estimation');
+    }
   };
 
   const confirmAction = async () => {
@@ -508,16 +546,8 @@ const ProcurementHub: React.FC = () => {
                            (p.status_receiver === 'technicalDirector' && status === 'approved');
                   }).length})
                 </TabsTrigger>
-                <TabsTrigger value="rejected">
-                  Rejected ({purchases.filter(p => {
-                    const status = p.sender_latest_status || p.latest_status || p.status;
-                    return status === 'rejected' && 
-                           p.status_sender !== 'projectManager' &&
-                           p.status_role !== 'projectManager';
-                  }).length})
-                </TabsTrigger>
                 <TabsTrigger value="pm_rejected" className="text-orange-600">
-                  PM Rejected ({purchases.filter(p => {
+                  PM Reject ({purchases.filter(p => {
                     const hasRejection = p.approvals?.some((a: any) => 
                       a.reviewer_role === 'projectManager' && a.status === 'rejected'
                     );
@@ -527,6 +557,19 @@ const ProcurementHub: React.FC = () => {
                       (p.status_sender === 'projectManager' && p.latest_status === 'rejected')
                     );
                     return hasRejection || rejectedByPM;
+                  }).length})
+                </TabsTrigger>
+                <TabsTrigger value="est_rejected" className="text-purple-600">
+                  Est Reject ({purchases.filter(p => {
+                    const hasRejection = p.approvals?.some((a: any) => 
+                      a.reviewer_role === 'estimation' && a.status === 'rejected'
+                    );
+                    const rejectedByEst = (
+                      (p.status_role === 'estimation' && p.sender_latest_status === 'rejected') ||
+                      (p.status_sender === 'estimation' && p.sender_latest_status === 'rejected') ||
+                      (p.status_sender === 'estimation' && p.latest_status === 'rejected')
+                    );
+                    return hasRejection || rejectedByEst;
                   }).length})
                 </TabsTrigger>
               </TabsList>
@@ -543,7 +586,23 @@ const ProcurementHub: React.FC = () => {
                         These purchase requests were rejected by the Project Manager
                       </p>
                       <p className="text-xs text-orange-700 mt-1">
-                        Review the rejection reasons and make necessary revisions before resubmitting for approval.
+                        Review the rejection reasons and make necessary revisions. You can resend these to PM after addressing the issues.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === 'est_rejected' && filteredPurchases.length > 0 && (
+                <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-purple-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-purple-900">
+                        These purchase requests were rejected by the Estimation team
+                      </p>
+                      <p className="text-xs text-purple-700 mt-1">
+                        Review the technical specifications and cost estimates. You can resend these to Estimation after corrections.
                       </p>
                     </div>
                   </div>
@@ -559,6 +618,8 @@ const ProcurementHub: React.FC = () => {
                       onViewDetails={handleViewDetails}
                       onViewHistory={handleViewHistory}
                       onSendEmail={handleSendEmail}
+                      onResendToPM={handleResendToPM}
+                      onResendToEst={handleResendToEst}
                       emailSent={pmEmailedPRs.has(purchase.purchase_id)}
                     />
                   ))}
@@ -569,6 +630,8 @@ const ProcurementHub: React.FC = () => {
                   <p className="text-lg font-medium">
                     {activeTab === 'pm_rejected' 
                       ? 'No PM rejected requisitions found' 
+                      : activeTab === 'est_rejected'
+                      ? 'No Estimation rejected requisitions found'
                       : 'No purchase requisitions found'}
                   </p>
                   <p className="text-sm mt-1">
@@ -576,6 +639,8 @@ const ProcurementHub: React.FC = () => {
                       ? 'Try adjusting your search terms' 
                       : activeTab === 'pm_rejected'
                       ? 'Purchase requests rejected by PM will appear here for revision'
+                      : activeTab === 'est_rejected'
+                      ? 'Purchase requests rejected by Estimation will appear here for revision'
                       : 'Waiting for new purchase requisitions to process'}
                   </p>
                 </div>

@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Download, Eye, Edit2, Trash2, CheckCircle, XCircle, FileText, Clock, AlertTriangle, Package, Mail, Send } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Search, Filter, Download, Eye, Edit2, Trash2, CheckCircle, XCircle, FileText, Clock, AlertTriangle, Package, Mail, AlertCircle as AlertCircleIcon } from 'lucide-react';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuthStore } from '@/store/authStore';
 import { UserRole } from '@/types';
 import { toast } from 'sonner';
-import { apiClient } from '@/api/config';
+import { apiClient, API_ENDPOINTS } from '@/api/config';
 import { SimpleHorizontalCards } from '@/components/ui/SimpleHorizontalCards';
 
 const PurchaseRequestsPage: React.FC = () => {
@@ -25,6 +27,7 @@ const PurchaseRequestsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState('pending');
 
   // Initialize empty purchase requests - will be fetched from API
   const [purchaseRequests, setPurchaseRequests] = useState<any[]>([]);
@@ -40,40 +43,61 @@ const PurchaseRequestsPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiClient.get('/all_purchase');
       
-      if (response.data.success) {
+      // Use the correct endpoint for procurement role
+      const response = await apiClient.get(API_ENDPOINTS.PROCUREMENT.ALL_PURCHASES);
+      
+      if (response.data.success && response.data.procurement) {
         // Transform the API data to match our frontend structure
-        const transformedRequests = response.data.purchase_requests.map((pr: any) => {
-          // Find materials for this purchase request
-          const materials = response.data.materials.filter((m: any) => 
-            pr.material_ids?.includes(m.material_id)
-          );
-          
+        const transformedRequests = response.data.procurement.map((pr: any) => {
           // Calculate total amount from materials
-          const totalAmount = materials.reduce((sum: number, m: any) => 
+          const totalAmount = pr.materials?.reduce((sum: number, m: any) => 
             sum + (m.quantity * m.cost), 0
-          );
+          ) || 0;
           
           // Get priority from first material (or default to 'Medium')
-          const priority = materials[0]?.priority || 'Medium';
+          const priority = pr.materials?.[0]?.priority || 'Medium';
+          
+          // Determine rejection type and status
+          let rejectionType = null;
+          let status = 'pending';
+          
+          if (pr.sender_latest_status === 'rejected') {
+            status = 'rejected';
+            // Check who rejected based on status_role
+            if (pr.status_role === 'projectManager') {
+              rejectionType = 'pm';
+            } else if (pr.status_role === 'estimation') {
+              rejectionType = 'estimation';
+            } else if (pr.status_role === 'technicalDirector') {
+              rejectionType = 'technical';
+            }
+          } else if (pr.sender_latest_status === 'approved') {
+            status = 'approved';
+          }
           
           return {
             id: `PR-${pr.purchase_id}`,
             purchase_id: pr.purchase_id,
             project: pr.project_id ? `Project ${pr.project_id}` : 'N/A',
             requestor: pr.requested_by || pr.created_by,
-            requestorId: pr.created_by,
+            requestorId: pr.user_id,
             department: 'Site Operations',
-            date: pr.date || pr.created_at,
-            status: 'pending', // Default status, will be updated from workflow
+            date: pr.date ? new Date(pr.date).toLocaleDateString() : new Date(pr.created_at).toLocaleDateString(),
+            status: status,
+            rejectionType: rejectionType,
             amount: totalAmount,
-            items: materials.length,
+            items: pr.materials?.length || 0,
             priority: priority.toLowerCase(),
             site_location: pr.site_location,
             purpose: pr.purpose,
-            materials: materials,
-            currentApprover: 'procurement'
+            materials: pr.materials || [],
+            currentApprover: pr.status_receiver,
+            statusComments: pr.status_comments,
+            statusRole: pr.status_role,
+            statusSender: pr.status_sender,
+            senderStatus: pr.sender_latest_status,
+            receiverStatus: pr.receiver_latest_status
           };
         });
         
@@ -149,27 +173,13 @@ const PurchaseRequestsPage: React.FC = () => {
         return;
       }
 
-      // Call API to send email for approval
-      const response = await apiClient.post('/send_approval_email', {
-        purchase_id: request.purchase_id,
-        requestor: request.requestor,
-        amount: request.amount,
-        project: request.project,
-        current_approver: request.currentApprover,
-        purpose: request.purpose,
-        site_location: request.site_location
-      });
+      // Call API to send email for approval using proper endpoint
+      const response = await apiClient.post(API_ENDPOINTS.PURCHASE.EMAIL(request.purchase_id));
 
       if (response.data.success) {
         toast.success('Approval email sent successfully');
-        // Update the status to show email was sent
-        setPurchaseRequests(prev => 
-          prev.map(req => 
-            req.id === requestId 
-              ? { ...req, emailSent: true }
-              : req
-          )
-        );
+        // Refresh the data to get updated status
+        await fetchPurchaseRequests();
       } else {
         toast.error('Failed to send approval email');
       }
@@ -198,13 +208,54 @@ const PurchaseRequestsPage: React.FC = () => {
     }
   };
 
-  // Filter requests based on user role
-  const getFilteredRequests = () => {
+  // Get counts for tabs - memoized to avoid recalculation
+  const tabCounts = useMemo(() => {
+    const counts = {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      pmRejected: 0,
+      estimationRejected: 0
+    };
+
+    purchaseRequests.forEach(request => {
+      if (request.status === 'pending') {
+        counts.pending++;
+      } else if (request.status === 'approved') {
+        counts.approved++;
+      } else if (request.status === 'rejected') {
+        counts.rejected++;
+        if (request.rejectionType === 'pm') {
+          counts.pmRejected++;
+        } else if (request.rejectionType === 'estimation') {
+          counts.estimationRejected++;
+        }
+      }
+    });
+
+    return counts;
+  }, [purchaseRequests]);
+
+  // Filter requests based on user role and tab
+  const filteredRequests = useMemo(() => {
     let filtered = purchaseRequests;
 
     // Site Supervisors only see their own requests
     if (isSiteSupervisor) {
       filtered = filtered.filter(req => req.requestorId === user?.id || req.requestorId === 'siteSupervisor');
+    }
+
+    // Filter by tab
+    if (activeTab === 'pending') {
+      filtered = filtered.filter(request => request.status === 'pending');
+    } else if (activeTab === 'approved') {
+      filtered = filtered.filter(request => request.status === 'approved');
+    } else if (activeTab === 'rejected') {
+      filtered = filtered.filter(request => request.status === 'rejected');
+    } else if (activeTab === 'pm-rejected') {
+      filtered = filtered.filter(request => request.status === 'rejected' && request.rejectionType === 'pm');
+    } else if (activeTab === 'estimation-rejected') {
+      filtered = filtered.filter(request => request.status === 'rejected' && request.rejectionType === 'estimation');
     }
 
     // Filter by search term
@@ -216,15 +267,13 @@ const PurchaseRequestsPage: React.FC = () => {
       );
     }
 
-    // Filter by status
+    // Filter by status (from dropdown)
     if (filterStatus !== 'all') {
       filtered = filtered.filter(request => request.status === filterStatus);
     }
 
     return filtered;
-  };
-
-  const filteredRequests = getFilteredRequests();
+  }, [purchaseRequests, activeTab, searchTerm, filterStatus, isSiteSupervisor, user?.id]);
 
   // Get role-specific title
   const getPageTitle = () => {
@@ -295,21 +344,21 @@ const PurchaseRequestsPage: React.FC = () => {
             {
               id: 'pending',
               title: 'Pending',
-              value: filteredRequests.filter(r => r.status === 'pending').length,
+              value: tabCounts.pending,
               icon: <Clock className="w-4 h-4 text-yellow-600" />,
               bgColor: 'bg-yellow-100'
             },
             {
               id: 'approved',
               title: 'Approved',
-              value: filteredRequests.filter(r => r.status === 'approved').length,
+              value: tabCounts.approved,
               icon: <CheckCircle className="w-4 h-4 text-green-600" />,
               bgColor: 'bg-green-100'
             },
             {
               id: 'rejected',
               title: 'Rejected',
-              value: filteredRequests.filter(r => r.status === 'rejected').length,
+              value: tabCounts.rejected,
               icon: <XCircle className="w-4 h-4 text-red-600" />,
               bgColor: 'bg-red-100'
             }
@@ -341,7 +390,7 @@ const PurchaseRequestsPage: React.FC = () => {
             {
               id: 'approved',
               title: 'Approved',
-              value: filteredRequests.filter(r => r.status === 'approved').length,
+              value: tabCounts.approved,
               icon: <CheckCircle className="w-4 h-4 text-green-600" />,
               bgColor: 'bg-green-100'
             },
@@ -399,7 +448,7 @@ const PurchaseRequestsPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Purchase Requests Table */}
+      {/* Purchase Requests Table with Tabs */}
       <Card>
         <CardHeader>
           <CardTitle>
@@ -409,159 +458,256 @@ const PurchaseRequestsPage: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
-              <span className="ml-4 text-gray-600">Loading purchase requests...</span>
-            </div>
-          ) : error ? (
-            <div className="text-center py-12">
-              <p className="text-red-500 mb-4">{error}</p>
-              <Button onClick={fetchPurchaseRequests} variant="outline">
-                Try Again
-              </Button>
-            </div>
-          ) : filteredRequests.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500 mb-4">No purchase requests found</p>
-              {canCreateRequest() && (
-                <Button onClick={() => setIsFormOpen(true)} className="bg-red-500 hover:bg-red-600">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create First Request
-                </Button>
+          {/* Tabs for different statuses */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+            <TabsList className="grid grid-cols-5 w-full max-w-4xl bg-gray-100/50">
+              <TabsTrigger value="pending" className="relative data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <span className="flex items-center gap-2">
+                  Pending
+                  <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-medium">
+                    {tabCounts.pending}
+                  </span>
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="approved" className="relative data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <span className="flex items-center gap-2">
+                  Approved
+                  <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-medium">
+                    {tabCounts.approved}
+                  </span>
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="rejected" className="relative data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <span className="flex items-center gap-2">
+                  Rejected
+                  <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full font-medium">
+                    {tabCounts.rejected}
+                  </span>
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="pm-rejected" className="relative data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <span className="flex items-center gap-2">
+                  PM Rejected
+                  <span className="text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-medium">
+                    {tabCounts.pmRejected}
+                  </span>
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="estimation-rejected" className="relative data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <span className="flex items-center gap-2">
+                  Estimation Rejected
+                  <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full font-medium">
+                    {tabCounts.estimationRejected}
+                  </span>
+                </span>
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Alert Messages for Rejection Tabs */}
+            {activeTab === 'pm-rejected' && tabCounts.pmRejected > 0 && (
+              <Alert className="mt-4 border-orange-200 bg-orange-50">
+                <AlertCircleIcon className="h-4 w-4 text-orange-600" />
+                <AlertDescription className="text-orange-800">
+                  These purchase requests were rejected by the Project Manager.
+                  Review the rejection reasons and make necessary revisions before resubmitting for approval.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {activeTab === 'estimation-rejected' && tabCounts.estimationRejected > 0 && (
+              <Alert className="mt-4 border-purple-200 bg-purple-50">
+                <AlertCircleIcon className="h-4 w-4 text-purple-600" />
+                <AlertDescription className="text-purple-800">
+                  These purchase requests were rejected by the Estimation team.
+                  Review the technical specifications and cost estimates before resubmitting.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {activeTab === 'rejected' && tabCounts.rejected > 0 && (
+              <Alert className="mt-4 border-red-200 bg-red-50">
+                <AlertCircleIcon className="h-4 w-4 text-red-600" />
+                <AlertDescription className="text-red-800">
+                  These purchase requests have been rejected.
+                  Check the rejection reason and revise accordingly before resubmitting.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Tab Content for each status */}
+            <TabsContent value={activeTab} className="mt-6">
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+                  <span className="ml-4 text-gray-600">Loading purchase requests...</span>
+                </div>
+              ) : error ? (
+                <div className="text-center py-12">
+                  <p className="text-red-500 mb-4">{error}</p>
+                  <Button onClick={fetchPurchaseRequests} variant="outline">
+                    Try Again
+                  </Button>
+                </div>
+              ) : filteredRequests.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-500 mb-4">No purchase requests found</p>
+                  {canCreateRequest() && (
+                    <Button onClick={() => setIsFormOpen(true)} className="bg-red-500 hover:bg-red-600">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create First Request
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto mobile-scroll-x -mx-3 px-3 sm:mx-0 sm:px-0">
+                    <table className="w-full min-w-[600px]">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            PR Number
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Project
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Requestor
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Department
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Amount
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Priority
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredRequests.map((request) => (
+                          <tr key={request.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-gray-900">{request.id}</span>
+                                {request.date && (
+                                  <span className="text-xs text-gray-500">{request.date}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {request.project}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex flex-col">
+                                <span className="text-sm text-gray-900">{request.requestor}</span>
+                                {request.site_location && (
+                                  <span className="text-xs text-gray-500">{request.site_location}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {request.department}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {request.date}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              AED {request.amount.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <Badge className={getPriorityColor(request.priority)}>
+                                {request.priority}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex flex-col gap-1">
+                                <Badge className={getStatusColor(request.status)}>
+                                  {request.status.replace('_', ' ')}
+                                </Badge>
+                                {request.status === 'rejected' && request.statusRole && (
+                                  <span className="text-xs text-gray-500">
+                                    Rejected by {request.statusRole}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <div className="flex gap-2">
+                                <button 
+                                  className="text-blue-600 hover:text-blue-800"
+                                  title="View Details"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                
+                                {canEditRequest(request) && (
+                                  <button 
+                                    className="text-yellow-600 hover:text-yellow-800"
+                                    title="Edit"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                                
+                                {canDeleteRequest(request) && (
+                                  <button 
+                                    className="text-red-600 hover:text-red-800"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                                
+                                {canApproveRequest() && request.status === 'pending' && (
+                                  <>
+                                    <button 
+                                      onClick={() => handleSendMail(request.id)}
+                                      className="text-blue-600 hover:text-blue-800"
+                                      title="Send Approval Email"
+                                    >
+                                      <Mail className="w-4 h-4" />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleApprove(request.id)}
+                                      className="text-green-600 hover:text-green-800"
+                                      title="Approve"
+                                    >
+                                      <CheckCircle className="w-4 h-4" />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleReject(request.id)}
+                                      className="text-red-600 hover:text-red-800"
+                                      title="Reject"
+                                    >
+                                      <XCircle className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Mobile scroll hint */}
+                  <div className="sm:hidden text-center mt-2">
+                    <span className="text-xs text-gray-500">← Swipe to see more →</span>
+                  </div>
+                </>
               )}
-            </div>
-          ) : (
-          <>
-          <div className="overflow-x-auto mobile-scroll-x -mx-3 px-3 sm:mx-0 sm:px-0">
-            <table className="w-full min-w-[600px]">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    PR Number
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Project
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Requestor
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Department
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Priority
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredRequests.map((request) => (
-                  <tr key={request.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {request.id}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {request.project}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {request.requestor}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {request.department}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {request.date}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      AED {request.amount.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge className={getPriorityColor(request.priority)}>
-                        {request.priority}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge className={getStatusColor(request.status)}>
-                        {request.status.replace('_', ' ')}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div className="flex gap-2">
-                        <button 
-                          className="text-blue-600 hover:text-blue-800"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        
-                        {canEditRequest(request) && (
-                          <button 
-                            className="text-yellow-600 hover:text-yellow-800"
-                            title="Edit"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                        )}
-                        
-                        {canDeleteRequest(request) && (
-                          <button 
-                            className="text-red-600 hover:text-red-800"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                        
-                        {canApproveRequest() && request.status === 'pending' && (
-                          <>
-                            <button 
-                              onClick={() => handleSendMail(request.id)}
-                              className="text-blue-600 hover:text-blue-800"
-                              title="Send Approval Email"
-                            >
-                              <Mail className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleApprove(request.id)}
-                              className="text-green-600 hover:text-green-800"
-                              title="Approve"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleReject(request.id)}
-                              className="text-red-600 hover:text-red-800"
-                              title="Reject"
-                            >
-                              <XCircle className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {/* Mobile scroll hint */}
-          <div className="sm:hidden text-center mt-2">
-            <span className="text-xs text-gray-500">← Swipe to see more →</span>
-          </div>
-          </>
-          )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 

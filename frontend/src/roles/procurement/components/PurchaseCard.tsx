@@ -47,6 +47,7 @@ interface Purchase {
   status_sender?: string;
   sender_latest_status?: string;
   status_receiver?: string;
+  receiver_latest_status?: string;
 }
 
 interface PurchaseCardProps {
@@ -55,6 +56,8 @@ interface PurchaseCardProps {
   onViewHistory?: (purchaseId: number) => void;
   onEdit?: (purchaseId: number) => void;
   onSendEmail?: (purchaseId: number) => void;
+  onResendToPM?: (purchaseId: number) => void;
+  onResendToEst?: (purchaseId: number) => void;
   isLoading?: boolean;
   emailSent?: boolean;
 }
@@ -65,6 +68,8 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
   onViewHistory,
   onEdit,
   onSendEmail,
+  onResendToPM,
+  onResendToEst,
   isLoading = false,
   emailSent = false
 }, ref) => {
@@ -100,7 +105,24 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
     return pmRejection || statusRejectedByPM;
   };
 
+  // Check if rejected by Estimation
+  const isRejectedByEstimation = () => {
+    // Check approvals array
+    const estRejection = purchase.approvals?.some((a: any) => 
+      a.reviewer_role === 'estimation' && a.status === 'rejected'
+    );
+    
+    // Check status fields
+    const statusRejectedByEst = (
+      (purchase.status_role === 'estimation' && purchase.sender_latest_status === 'rejected') ||
+      (purchase.status_sender === 'estimation' && purchase.sender_latest_status === 'rejected')
+    );
+    
+    return estRejection || statusRejectedByEst;
+  };
+
   const rejectedByPM = status === 'rejected' && isRejectedByPM();
+  const rejectedByEst = status === 'rejected' && isRejectedByEstimation();
 
   // Get status color
   const getStatusColor = (status: string) => {
@@ -296,6 +318,38 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                 >
                   <Mail className="w-4 h-4 mr-1" />
                   Send to PM
+                </Button>
+              </div>
+            )}
+            
+            {/* Resend to PM Button for PM-rejected PRs */}
+            {rejectedByPM && onResendToPM && (
+              <div className="flex items-center justify-center">
+                <Button
+                  size="sm"
+                  onClick={() => onResendToPM(purchase.purchase_id)}
+                  disabled={isLoading}
+                  className="bg-orange-600 hover:bg-orange-700 text-white w-full"
+                  title="Resend to Project Manager after revision"
+                >
+                  <Mail className="w-4 h-4 mr-1" />
+                  Resend to PM
+                </Button>
+              </div>
+            )}
+            
+            {/* Resend to Estimation Button for Est-rejected PRs */}
+            {rejectedByEst && onResendToEst && (
+              <div className="flex items-center justify-center">
+                <Button
+                  size="sm"
+                  onClick={() => onResendToEst(purchase.purchase_id)}
+                  disabled={isLoading}
+                  className="bg-purple-600 hover:bg-purple-700 text-white w-full"
+                  title="Resend to Estimation after revision"
+                >
+                  <Mail className="w-4 h-4 mr-1" />
+                  Resend to Est
                 </Button>
               </div>
             )}
