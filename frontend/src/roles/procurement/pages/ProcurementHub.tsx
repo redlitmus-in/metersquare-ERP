@@ -74,15 +74,13 @@ const ProcurementHub: React.FC = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [pmEmailedPRs, setPmEmailedPRs] = useState<Set<number>>(new Set());
 
-  // Confirmation Dialogs (removed 'delete' type)
+  // Confirmation Dialog for email
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
-    type: 'approve' | 'reject' | 'email';
     purchaseId: number | null;
     message: string;
   }>({
     isOpen: false,
-    type: 'email',
     purchaseId: null,
     message: ''
   });
@@ -234,26 +232,41 @@ const ProcurementHub: React.FC = () => {
       );
     }
 
-    // Apply tab filter (removed 'all' and 'under_review')
+    // Apply tab filter based on actual status from backend
     switch (activeTab) {
       case 'pending':
-        filtered = filtered.filter(p => 
-          (!p.latest_status || p.latest_status === 'pending') && 
-          !pmEmailedPRs.has(p.purchase_id)
-        );
+        // Show only pending items that haven't been sent to PM
+        filtered = filtered.filter(p => {
+          const status = p.sender_latest_status || p.latest_status || p.status || 'pending';
+          return status === 'pending' && !pmEmailedPRs.has(p.purchase_id);
+        });
         break;
+        
       case 'approved':
-        filtered = filtered.filter(p => 
-          p.latest_status === 'approved' || 
-          pmEmailedPRs.has(p.purchase_id)
-        );
+        // Show items that are approved or have been sent to PM
+        filtered = filtered.filter(p => {
+          const status = p.sender_latest_status || p.latest_status || p.status;
+          // Check if approved by procurement and sent to PM, or approved by other roles
+          return status === 'approved' || 
+                 pmEmailedPRs.has(p.purchase_id) ||
+                 (p.status_receiver === 'projectManager' && p.status_sender === 'procurement') ||
+                 (p.status_receiver === 'accounts') ||
+                 (p.status_receiver === 'technicalDirector' && status === 'approved');
+        });
         break;
+        
       case 'rejected':
-        filtered = filtered.filter(p => 
-          p.latest_status === 'rejected' || 
-          p.status === 'rejected'
-        );
+        // Show items rejected by procurement (not by PM)
+        filtered = filtered.filter(p => {
+          const status = p.sender_latest_status || p.latest_status || p.status;
+          // Check if rejected but NOT by PM (those go to pm_rejected tab)
+          const rejectedByProcurement = status === 'rejected' && 
+            p.status_sender !== 'projectManager' &&
+            p.status_role !== 'projectManager';
+          return rejectedByProcurement;
+        });
         break;
+        
       case 'pm_rejected':
         // Filter for purchases rejected by PM that need revision
         filtered = filtered.filter(p => {
@@ -266,20 +279,21 @@ const ProcurementHub: React.FC = () => {
           // Check the latest status fields - looking for PM rejections
           const rejectedByPM = (
             // PM rejected and sent back to procurement
-            (p.status_role === 'projectManager' && p.sender_latest_status === 'rejected' && p.status_receiver === 'procurement') ||
-            // PM rejection (alternative pattern)
-            (p.status_sender === 'projectManager' && p.sender_latest_status === 'rejected')
+            (p.status_role === 'projectManager' && p.sender_latest_status === 'rejected') ||
+            (p.status_sender === 'projectManager' && p.sender_latest_status === 'rejected') ||
+            (p.status_sender === 'projectManager' && p.latest_status === 'rejected')
           );
           
           return hasRejection || rejectedByPM;
         });
         break;
+        
       default:
         // Default to pending
-        filtered = filtered.filter(p => 
-          (!p.latest_status || p.latest_status === 'pending') && 
-          !pmEmailedPRs.has(p.purchase_id)
-        );
+        filtered = filtered.filter(p => {
+          const status = p.sender_latest_status || p.latest_status || p.status || 'pending';
+          return status === 'pending' && !pmEmailedPRs.has(p.purchase_id);
+        });
         break;
     }
 
@@ -306,57 +320,26 @@ const ProcurementHub: React.FC = () => {
   const handleSendEmail = (purchaseId: number) => {
     setConfirmDialog({
       isOpen: true,
-      type: 'email',
       purchaseId,
       message: 'Send this purchase request to Project Manager for approval?'
     });
   };
 
-  const handleApprove = (purchaseId: number) => {
-    setConfirmDialog({
-      isOpen: true,
-      type: 'approve',
-      purchaseId,
-      message: 'Are you sure you want to approve this purchase request?'
-    });
-  };
-
-  const handleReject = (purchaseId: number) => {
-    setConfirmDialog({
-      isOpen: true,
-      type: 'reject',
-      purchaseId,
-      message: 'Are you sure you want to reject this purchase request?'
-    });
-  };
-
   const confirmAction = async () => {
-    const { type, purchaseId } = confirmDialog;
+    const { purchaseId } = confirmDialog;
     if (!purchaseId) return;
 
     try {
-      switch (type) {
-        case 'approve':
-          await procurementService.approvePurchase(purchaseId);
-          toast.success('Purchase request approved successfully');
-          break;
-        case 'reject':
-          await procurementService.rejectPurchase(purchaseId, 'Rejected by procurement');
-          toast.success('Purchase request rejected');
-          break;
-        case 'email':
-          await procurementService.sendApprovalEmail(purchaseId);
-          setPmEmailedPRs(prev => new Set(prev).add(purchaseId));
-          toast.success('Approval request sent to Project Manager');
-          break;
-      }
+      await procurementService.sendApprovalEmail(purchaseId);
+      setPmEmailedPRs(prev => new Set(prev).add(purchaseId));
+      toast.success('Purchase request sent to Project Manager for approval');
       
       // Refresh data
       await fetchPurchases();
     } catch (error: any) {
-      toast.error(error.message || 'Action failed');
+      toast.error(error.message || 'Failed to send email');
     } finally {
-      setConfirmDialog({ isOpen: false, type: 'email', purchaseId: null, message: '' });
+      setConfirmDialog({ isOpen: false, purchaseId: null, message: '' });
     }
   };
 
@@ -510,13 +493,28 @@ const ProcurementHub: React.FC = () => {
             <div className="border-b px-6 pt-4">
               <TabsList className="grid grid-cols-4 w-full max-w-2xl">
                 <TabsTrigger value="pending">
-                  Pending ({purchases.filter(p => (!p.latest_status || p.latest_status === 'pending') && !pmEmailedPRs.has(p.purchase_id)).length})
+                  Pending ({purchases.filter(p => {
+                    const status = p.sender_latest_status || p.latest_status || p.status || 'pending';
+                    return status === 'pending' && !pmEmailedPRs.has(p.purchase_id);
+                  }).length})
                 </TabsTrigger>
                 <TabsTrigger value="approved">
-                  Approved ({purchases.filter(p => p.latest_status === 'approved' || pmEmailedPRs.has(p.purchase_id)).length})
+                  Approved ({purchases.filter(p => {
+                    const status = p.sender_latest_status || p.latest_status || p.status;
+                    return status === 'approved' || 
+                           pmEmailedPRs.has(p.purchase_id) ||
+                           (p.status_receiver === 'projectManager' && p.status_sender === 'procurement') ||
+                           (p.status_receiver === 'accounts') ||
+                           (p.status_receiver === 'technicalDirector' && status === 'approved');
+                  }).length})
                 </TabsTrigger>
                 <TabsTrigger value="rejected">
-                  Rejected ({purchases.filter(p => p.latest_status === 'rejected').length})
+                  Rejected ({purchases.filter(p => {
+                    const status = p.sender_latest_status || p.latest_status || p.status;
+                    return status === 'rejected' && 
+                           p.status_sender !== 'projectManager' &&
+                           p.status_role !== 'projectManager';
+                  }).length})
                 </TabsTrigger>
                 <TabsTrigger value="pm_rejected" className="text-orange-600">
                   PM Rejected ({purchases.filter(p => {
@@ -524,8 +522,9 @@ const ProcurementHub: React.FC = () => {
                       a.reviewer_role === 'projectManager' && a.status === 'rejected'
                     );
                     const rejectedByPM = (
-                      (p.status_role === 'projectManager' && p.sender_latest_status === 'rejected' && p.status_receiver === 'procurement') ||
-                      (p.status_sender === 'projectManager' && p.sender_latest_status === 'rejected')
+                      (p.status_role === 'projectManager' && p.sender_latest_status === 'rejected') ||
+                      (p.status_sender === 'projectManager' && p.sender_latest_status === 'rejected') ||
+                      (p.status_sender === 'projectManager' && p.latest_status === 'rejected')
                     );
                     return hasRejection || rejectedByPM;
                   }).length})
@@ -560,8 +559,6 @@ const ProcurementHub: React.FC = () => {
                       onViewDetails={handleViewDetails}
                       onViewHistory={handleViewHistory}
                       onSendEmail={handleSendEmail}
-                      onApprove={handleApprove}
-                      onReject={handleReject}
                       emailSent={pmEmailedPRs.has(purchase.purchase_id)}
                     />
                   ))}
@@ -606,11 +603,7 @@ const ProcurementHub: React.FC = () => {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {confirmDialog.type === 'approve' && 'Approve Purchase Request'}
-              {confirmDialog.type === 'reject' && 'Reject Purchase Request'}
-              {confirmDialog.type === 'email' && 'Send for Approval'}
-            </DialogTitle>
+            <DialogTitle>Send for Approval</DialogTitle>
             <DialogDescription>
               {confirmDialog.message}
             </DialogDescription>
@@ -623,10 +616,10 @@ const ProcurementHub: React.FC = () => {
               Cancel
             </Button>
             <Button
-              variant={confirmDialog.type === 'reject' ? 'destructive' : 'default'}
               onClick={confirmAction}
+              className="bg-blue-600 hover:bg-blue-700"
             >
-              Confirm
+              Send to PM
             </Button>
           </DialogFooter>
         </DialogContent>

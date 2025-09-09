@@ -55,7 +55,6 @@ interface PurchaseCardProps {
   onViewHistory?: (purchaseId: number) => void;
   onEdit?: (purchaseId: number) => void;
   onSendEmail?: (purchaseId: number) => void;
-  onApprove?: (purchaseId: number) => void;
   isLoading?: boolean;
   emailSent?: boolean;
 }
@@ -66,7 +65,6 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
   onViewHistory,
   onEdit,
   onSendEmail,
-  onApprove,
   isLoading = false,
   emailSent = false
 }, ref) => {
@@ -75,8 +73,10 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
     sum + (m.quantity * m.cost), 0
   ) || 0;
 
-  // Determine status display
+  // Determine status display - check sender_latest_status first for procurement view
   const getStatus = () => {
+    // For procurement view, check if they have approved it
+    if (purchase.sender_latest_status) return purchase.sender_latest_status;
     if (purchase.latest_status) return purchase.latest_status;
     if (purchase.status) return purchase.status;
     return 'pending';
@@ -284,35 +284,19 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
               )}
             </div>
 
-            {/* Secondary Actions Row - Approve/Send */}
-            {!emailSent && status !== 'approved' && status !== 'rejected' && (
-              <div className="flex items-center gap-2 justify-center">
-                {onApprove && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onApprove(purchase.purchase_id)}
-                    disabled={isLoading}
-                    className="text-green-600 hover:text-green-700 hover:bg-green-50 border-green-300"
-                    title="Approve Request"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-1" />
-                    Approve
-                  </Button>
-                )}
-                
-                {onSendEmail && (
-                  <Button
-                    size="sm"
-                    onClick={() => onSendEmail(purchase.purchase_id)}
-                    disabled={isLoading}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                    title="Send to Project Manager"
-                  >
-                    <Mail className="w-4 h-4 mr-1" />
-                    Send to PM
-                  </Button>
-                )}
+            {/* Action Row - Send to PM */}
+            {!emailSent && status === 'pending' && onSendEmail && (
+              <div className="flex items-center justify-center">
+                <Button
+                  size="sm"
+                  onClick={() => onSendEmail(purchase.purchase_id)}
+                  disabled={isLoading}
+                  className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+                  title="Send to Project Manager"
+                >
+                  <Mail className="w-4 h-4 mr-1" />
+                  Send to PM
+                </Button>
               </div>
             )}
             

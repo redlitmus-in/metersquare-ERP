@@ -458,7 +458,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
           
           try {
             const uploadResponse = await apiClient.post(
-              `/upload_file/${purchaseId}`,
+              `/upload_file?key=siteSupervisor&id=${purchaseId}`,
               formData,
               {
                 headers: {
@@ -895,33 +895,6 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                   )}
                 </div>
 
-                {/* Navigation Buttons for Materials Tab */}
-                <div className="flex flex-col sm:flex-row justify-between mt-6 gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setActiveTab('details')}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2"
-                  >
-                    <ChevronRight className="w-4 h-4 rotate-180" />
-                    Back to Details
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      if (validateMaterialsTab()) {
-                        setMaterialsCompleted(true);
-                        setActiveTab('attachments');
-                      } else {
-                        toast.error('Please add at least one material with complete information');
-                      }
-                    }}
-                    className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto flex items-center justify-center gap-2"
-                  >
-                    Next: Attachments
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                  </div>
                 </div>
               </div>
             )}
@@ -1043,18 +1016,6 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                   </div>
                 </div>
 
-                {/* Navigation for Attachments Tab */}
-                <div className="flex justify-start mt-6">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setActiveTab('materials')}
-                    className="flex items-center gap-2"
-                  >
-                    <ChevronRight className="w-4 h-4 rotate-180" />
-                    Back to Materials
-                  </Button>
-                  </div>
                 </div>
               </div>
             )}

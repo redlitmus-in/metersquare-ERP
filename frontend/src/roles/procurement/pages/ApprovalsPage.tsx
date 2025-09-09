@@ -54,6 +54,7 @@ const ApprovalsPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedApproval, setSelectedApproval] = useState<ApprovalItem | null>(null);
   const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
 
   useEffect(() => {
     fetchApprovalItems();
@@ -64,70 +65,45 @@ const ApprovalsPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // TODO: Replace with actual API call when backend is ready
-      // const response = await apiClient.get('/approvals');
+      // Fetch from procurement endpoint
+      const response = await apiClient.get('/get_all_procurement');
       
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock data for now - will be replaced with real API call
-      const mockApprovals: ApprovalItem[] = [
-        {
-          id: '1',
-          documentType: 'purchase_requisition',
-          documentId: 'PR-001',
-          documentNumber: 'PR-2024-001',
-          title: 'Construction Materials - Phase 1',
-          requester: 'Site Supervisor',
+      if (response.data.success) {
+        // Transform the API data to match our frontend structure
+        const transformedApprovals: ApprovalItem[] = response.data.procurement.map((item: any) => ({
+          id: item.purchase_id.toString(),
+          documentType: 'purchase_requisition' as const,
+          documentId: `PR-${item.purchase_id}`,
+          documentNumber: `PR-${item.purchase_id}`,
+          title: item.purpose || 'Purchase Request',
+          requester: item.requested_by || item.created_by,
           department: 'Site Operations',
-          amount: 45000,
-          priority: 'high',
-          status: 'pending',
-          submittedDate: '2024-09-01',
-          dueDate: '2024-09-05',
-          currentApprover: user?.role_id === UserRole.PROCUREMENT ? 'You' : 'Procurement',
-          approvalLevel: 1,
-          totalLevels: 4,
-          project: 'Marina Bay Residences'
-        },
-        {
-          id: '2',
-          documentType: 'vendor_quotation',
-          documentId: 'VQ-001',
-          documentNumber: 'VQ-2024-002',
-          title: 'Electrical Components Quotation',
-          requester: 'Procurement',
-          department: 'Procurement',
-          amount: 32000,
-          priority: 'medium',
-          status: 'under_review',
-          submittedDate: '2024-08-30',
-          dueDate: '2024-09-03',
-          currentApprover: user?.role_id === UserRole.PROJECT_MANAGER ? 'You' : 'Project Manager',
-          approvalLevel: 2,
-          totalLevels: 3,
-          project: 'Orchard Office Tower'
-        },
-        {
-          id: '3',
-          documentType: 'material_requisition',
-          documentId: 'MR-001',
-          documentNumber: 'MR-2024-001',
-          title: 'Factory Production Materials',
-          requester: 'Site Supervisor',
-          department: 'Production',
-          amount: 15000,
-          priority: 'urgent',
-          status: 'pending',
-          submittedDate: '2024-09-02',
-          dueDate: '2024-09-04',
-          currentApprover: user?.role_id === UserRole.PROCUREMENT ? 'You' : 'Procurement',
-          approvalLevel: 1,
-          totalLevels: 3
-        }
-      ];
-      
-      setApprovalItems(mockApprovals);
+          amount: item.materials?.reduce((sum: number, m: any) => sum + (m.quantity * m.cost), 0) || 0,
+          priority: (item.materials?.[0]?.priority?.toLowerCase() || 'medium') as 'low' | 'medium' | 'high' | 'urgent',
+          status: (item.sender_latest_status === 'approved' ? 'approved' : 
+                  item.sender_latest_status === 'rejected' ? 'rejected' : 
+                  item.sender_latest_status === 'pending' ? 'pending' : 'under_review') as 'pending' | 'approved' | 'rejected' | 'under_review',
+          submittedDate: item.date || item.created_at?.split('T')[0] || '',
+          dueDate: new Date(new Date(item.created_at).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          currentApprover: item.status_receiver === 'projectManager' ? 'Project Manager' : 
+                          item.status_receiver === 'accounts' ? 'Accounts' : 
+                          item.status_receiver === 'technicalDirector' ? 'Technical Director' : 
+                          item.status_receiver === 'estimation' ? 'Estimation' : 'Procurement',
+          approvalLevel: item.status_sender === 'procurement' ? 1 : 
+                        item.status_sender === 'projectManager' ? 2 : 
+                        item.status_sender === 'estimation' ? 3 : 
+                        item.status_sender === 'technicalDirector' ? 4 : 1,
+          totalLevels: 5,
+          project: `Project ${item.project_id}`,
+          site_location: item.site_location,
+          status_comments: item.status_comments,
+          decision_date: item.decision_date
+        }));
+        
+        setApprovalItems(transformedApprovals);
+      } else {
+        setError('Failed to fetch approvals');
+      }
     } catch (err: any) {
       console.error('Error fetching approval items:', err);
       setError(err.response?.data?.error || 'Failed to fetch approval items');
@@ -137,13 +113,17 @@ const ApprovalsPage: React.FC = () => {
     }
   };
 
-  // Role-based filtering
-  const getMyApprovals = () => {
-    return approvalItems.filter(item => item.currentApprover === 'You');
+  // Filter by status for tabs
+  const getPendingApprovals = () => {
+    return approvalItems.filter(item => item.status === 'pending' || item.status === 'under_review');
   };
 
-  const getAllApprovals = () => {
-    return approvalItems;
+  const getApprovedApprovals = () => {
+    return approvalItems.filter(item => item.status === 'approved');
+  };
+
+  const getRejectedApprovals = () => {
+    return approvalItems.filter(item => item.status === 'rejected');
   };
 
   // Filter approvals based on search and filters
@@ -173,8 +153,9 @@ const ApprovalsPage: React.FC = () => {
     return filtered;
   };
 
-  const myApprovals = getFilteredApprovals(getMyApprovals());
-  const allApprovals = getFilteredApprovals(getAllApprovals());
+  const pendingApprovals = getFilteredApprovals(getPendingApprovals());
+  const approvedApprovals = getFilteredApprovals(getApprovedApprovals());
+  const rejectedApprovals = getFilteredApprovals(getRejectedApprovals());
 
   const handleApprove = async (approvalId: string) => {
     try {
@@ -358,9 +339,9 @@ const ApprovalsPage: React.FC = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Pending My Action</p>
+                <p className="text-sm text-gray-600">Pending Approval</p>
                 <p className="text-2xl font-bold text-orange-600">
-                  {myApprovals.filter(a => a.status === 'pending').length}
+                  {pendingApprovals.length}
                 </p>
               </div>
               <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
@@ -374,9 +355,9 @@ const ApprovalsPage: React.FC = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Approvals</p>
+                <p className="text-sm text-gray-600">Total Purchases</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {allApprovals.length}
+                  {approvalItems.length}
                 </p>
               </div>
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -390,9 +371,9 @@ const ApprovalsPage: React.FC = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Approved Today</p>
+                <p className="text-sm text-gray-600">Approved</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {allApprovals.filter(a => a.status === 'approved').length}
+                  {approvedApprovals.length}
                 </p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -406,15 +387,13 @@ const ApprovalsPage: React.FC = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Overdue</p>
+                <p className="text-sm text-gray-600">Rejected</p>
                 <p className="text-2xl font-bold text-red-600">
-                  {allApprovals.filter(a => 
-                    a.status === 'pending' && new Date(a.dueDate) < new Date()
-                  ).length}
+                  {rejectedApprovals.length}
                 </p>
               </div>
               <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
+                <XCircle className="w-6 h-6 text-red-600" />
               </div>
             </div>
           </CardContent>
@@ -486,60 +465,113 @@ const ApprovalsPage: React.FC = () => {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* My Approvals */}
+        <div className="space-y-6">
+          {/* Tab Navigation */}
+          <div className="flex space-x-4 border-b">
+            <button
+              className={`px-4 py-2 font-medium transition-colors ${
+                activeTab === 'pending' 
+                  ? 'text-orange-600 border-b-2 border-orange-600' 
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+              onClick={() => setActiveTab('pending')}
+            >
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                Pending ({pendingApprovals.length})
+              </div>
+            </button>
+            <button
+              className={`px-4 py-2 font-medium transition-colors ${
+                activeTab === 'approved' 
+                  ? 'text-green-600 border-b-2 border-green-600' 
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+              onClick={() => setActiveTab('approved')}
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" />
+                Approved ({approvedApprovals.length})
+              </div>
+            </button>
+            <button
+              className={`px-4 py-2 font-medium transition-colors ${
+                activeTab === 'rejected' 
+                  ? 'text-red-600 border-b-2 border-red-600' 
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+              onClick={() => setActiveTab('rejected')}
+            >
+              <div className="flex items-center gap-2">
+                <XCircle className="w-4 h-4" />
+                Rejected ({rejectedApprovals.length})
+              </div>
+            </button>
+          </div>
+
+          {/* Tab Content */}
           <Card>
-            <CardHeader className="bg-gradient-to-r from-orange-50 to-orange-100 border-b">
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-orange-600" />
-                Pending My Approval ({myApprovals.filter(a => a.status === 'pending').length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              {myApprovals.filter(a => a.status === 'pending').length === 0 ? (
-                <div className="text-center py-8">
-                  <CheckCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No pending approvals</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {myApprovals
-                    .filter(a => a.status === 'pending')
-                    .map(approval => (
-                      <ApprovalCard 
-                        key={approval.id} 
-                        approval={approval} 
-                        showActions={true} 
-                      />
-                    ))}
+            <CardContent className="p-6">
+              {activeTab === 'pending' && (
+                <div>
+                  {pendingApprovals.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">No pending approvals</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {pendingApprovals.map(approval => (
+                        <ApprovalCard 
+                          key={approval.id} 
+                          approval={approval} 
+                          showActions={user?.role_id === UserRole.PROCUREMENT || user?.role_id === 'procurement'} 
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
-            </CardContent>
-          </Card>
 
-          {/* All Approvals */}
-          <Card>
-            <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b">
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-600" />
-                All Approvals ({allApprovals.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              {allApprovals.length === 0 ? (
-                <div className="text-center py-8">
-                  <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No approvals found</p>
+              {activeTab === 'approved' && (
+                <div>
+                  {approvedApprovals.length === 0 ? (
+                    <div className="text-center py-12">
+                      <CheckCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">No approved purchases</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {approvedApprovals.map(approval => (
+                        <ApprovalCard 
+                          key={approval.id} 
+                          approval={approval} 
+                          showActions={false} 
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {allApprovals.map(approval => (
-                    <ApprovalCard 
-                      key={approval.id} 
-                      approval={approval} 
-                      showActions={false} 
-                    />
-                  ))}
+              )}
+
+              {activeTab === 'rejected' && (
+                <div>
+                  {rejectedApprovals.length === 0 ? (
+                    <div className="text-center py-12">
+                      <XCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">No rejected purchases</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {rejectedApprovals.map(approval => (
+                        <ApprovalCard 
+                          key={approval.id} 
+                          approval={approval} 
+                          showActions={false} 
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
