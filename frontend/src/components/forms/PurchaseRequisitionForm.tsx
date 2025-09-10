@@ -123,7 +123,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       
       // Make sure purchaseDataToUse exists before accessing properties
       if (!purchaseDataToUse) {
-        console.error('No data available for editing');
+        toast.error('No data available for editing');
         return;
       }
       
@@ -192,7 +192,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       } else if (existingData && existingData.items && existingData.items > 0 && existingData.id) {
         // Fallback: fetch materials from API if not included
         fetchExistingMaterials(existingData.id).catch(err => {
-          console.log('Failed to fetch materials (non-critical):', err);
+          // Silently handle error - materials fetch is optional
         });
       }
       
@@ -219,7 +219,6 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
     } // This closes the if (isEditing && dataToEdit) block
     
     } catch (error) {
-      console.error('Error in form initialization:', error);
       toast.error('Failed to load form data. Please try again.');
     }
   }, [isEditMode, editMode, existingData, purchaseData, setValue, currentUserName]);
@@ -247,7 +246,6 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
         }
       }
     } catch (error) {
-      console.error('Error fetching materials:', error);
       toast.error('Failed to load materials');
     }
   };
@@ -284,12 +282,6 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
   const validateDetailsTab = () => {
     const values = getValues();
     const currentDate = watch('date');
-    console.log('Validation - selectedProjectId:', selectedProjectId);
-    console.log('Validation - site_location:', values.site_location);
-    console.log('Validation - requested_by:', values.requested_by);
-    console.log('Validation - date (values):', values.date);
-    console.log('Validation - date (watch):', currentDate);
-    console.log('Validation - purpose:', values.purpose);
     return selectedProjectId && values.site_location && values.requested_by && (values.date || currentDate) && values.purpose;
   };
 
@@ -339,7 +331,6 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       
       return dateStr;
     } catch (error) {
-      console.error('Date formatting error:', error);
       // Return today's date as fallback
       const today = new Date();
       return today.toISOString().split('T')[0];
@@ -374,8 +365,6 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
   };
 
   const onSubmit = async (data: PurchaseRequisitionFormData) => {
-    console.log('Form submission started', { data, isEditMode, existingData });
-    
     if (!selectedProjectId) {
       toast.error('Please select a project');
       setIsUploading(false);
@@ -395,8 +384,6 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
     const dateValue = watch('date') || formValues.date || getTodayFormatted();
     const siteLocation = watch('site_location') || formValues.site_location || '';
     const purposeValue = watch('purpose') || formValues.purpose || '';
-
-    console.log('Form values:', { dateValue, siteLocation, purposeValue, selectedProjectId });
 
     const payload = {
       project_id: selectedProjectId,
@@ -424,7 +411,8 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       let purchaseId;
       
       // Check for edit mode and use purchase_id correctly
-      const purchaseIdToUpdate = purchaseData?.purchase_id || existingData?.purchase_id || existingData?.id;
+      const dataForEdit = purchaseData || existingData;
+      const purchaseIdToUpdate = dataForEdit?.purchase_id || dataForEdit?.id;
       if ((isEditMode || editMode) && purchaseIdToUpdate) {
         // Update existing purchase requisition
         // Construct update payload matching backend expectations
@@ -434,7 +422,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
           date: formatDateForBackend(dateValue),
           project_id: selectedProjectId,
           purpose: purposeValue,
-          file_path: existingData.originalData?.file_path || '', // Preserve existing file path
+          file_path: dataForEdit?.originalData?.file_path || dataForEdit?.file_path || '', // Preserve existing file path
           materials: materials.map((m) => {
             // Build material object matching backend structure
             const materialData: any = {
@@ -458,15 +446,11 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
           })
         };
         
-        console.log('Update Payload:', updatePayload);
-        
         response = await apiClient.put(`/purchase/${purchaseIdToUpdate}`, updatePayload);
-        console.log('Update Response:', response.data);
         purchaseId = purchaseIdToUpdate;
       } else {
         // Create new purchase requisition  
         response = await apiClient.post('/purchase', payload);
-        console.log('Purchase Response:', response.data);
         purchaseId = response.data.purchase_id;
       }
       
@@ -479,8 +463,6 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       
       // Step 2: Upload files if any attachments exist (for both new and updated purchases)
       if (attachments.length > 0 && purchaseId) {
-        console.log(`Uploading ${attachments.length} file(s) for purchase ID: ${purchaseId}`);
-        
         // Upload each file
         for (const file of attachments) {
           const formData = new FormData();
@@ -496,9 +478,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                 }
               }
             );
-            console.log(`File ${file.name} uploaded successfully:`, uploadResponse.data);
           } catch (uploadError: any) {
-            console.error(`Failed to upload file ${file.name}:`, uploadError);
             toast.warning(`File ${file.name} could not be uploaded. Purchase requisition was ${isEditMode ? 'updated' : 'created'} successfully.`);
           }
         }
@@ -526,7 +506,6 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
         onClose();
       }
     } catch (error: any) {
-      console.error('Submission error:', error);
       const errorMessage = error.response?.data?.error || 
                           error.response?.data?.message || 
                           error.message || 

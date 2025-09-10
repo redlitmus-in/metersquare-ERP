@@ -42,6 +42,8 @@ interface Purchase {
   status?: string;
   total_cost?: number;
   total_quantity?: number;
+  last_modified_at?: string;
+  last_modified_by?: string;
 }
 
 interface PurchaseCardProps {
@@ -114,16 +116,22 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                 <h3 className="text-sm font-semibold text-gray-900">
                   PR #{purchase.purchase_id}
                 </h3>
-                <Badge className={`${getStatusColor(purchase.status)} text-xs flex items-center gap-1`}>
-                  {getStatusIcon(purchase.status)}
-                  {purchase.status || 'Pending'}
-                </Badge>
-                {purchase.email_sent && (
-                  <Badge variant="outline" className="text-xs border-green-500 text-green-700">
-                    <Mail className="h-3 w-3 mr-1" />
-                    Email Sent
+                <div className="flex items-center gap-1">
+                  <Badge className={`${getStatusColor(purchase.status)} text-xs flex items-center gap-1`}>
+                    {getStatusIcon(purchase.status)}
+                    {purchase.status || 'Pending'}
                   </Badge>
-                )}
+                  {purchase.last_modified_at && purchase.last_modified_at !== purchase.created_at && (
+                    <Badge variant="outline" className="text-xs border-amber-500 text-amber-700">
+                      <Edit className="h-2.5 w-2.5" />
+                    </Badge>
+                  )}
+                  {purchase.email_sent && (
+                    <Badge variant="outline" className="text-xs border-green-500 text-green-700">
+                      <Mail className="h-2.5 w-2.5" />
+                    </Badge>
+                  )}
+                </div>
               </div>
               <p className="text-xs text-gray-600 text-left">{purchase.purpose}</p>
             </div>
@@ -244,6 +252,13 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
             <p className="text-xs text-gray-500 text-left">
               Created {formatDistanceToNow(new Date(purchase.created_at), { addSuffix: true })} by {purchase.requested_by}
             </p>
+            {purchase.last_modified_at && purchase.last_modified_at !== purchase.created_at && (
+              <p className="text-xs text-amber-600 text-left mt-1">
+                <Edit className="h-3 w-3 inline mr-1" />
+                Edited {formatDistanceToNow(new Date(purchase.last_modified_at), { addSuffix: true })}
+                {purchase.last_modified_by && ` by ${purchase.last_modified_by}`}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

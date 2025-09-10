@@ -30,6 +30,8 @@ export interface Purchase {
   email_sent: boolean;
   created_at: string;
   created_by: string;
+  last_modified_at?: string;
+  last_modified_by?: string;
   approvals?: any[];
   status?: string;
   latest_status?: any;

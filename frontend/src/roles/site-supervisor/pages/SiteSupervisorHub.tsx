@@ -177,8 +177,6 @@ const SiteSupervisorHub: React.FC = () => {
       return;
     }
     
-    console.log('Edit Purchase Data:', purchaseToEdit);
-    
     // Open edit modal with the purchase data
     setEditingPurchase(purchaseToEdit);
     setEditPurchaseModalOpen(true);
