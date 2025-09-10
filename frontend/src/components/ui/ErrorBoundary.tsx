@@ -29,6 +29,12 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Store error info in state
+    this.setState({ 
+      error, 
+      errorInfo 
+    });
+    
     // Log error to console in development
     if (import.meta.env.DEV) {
       console.error('Error caught by boundary:', error, errorInfo);
@@ -48,17 +54,47 @@ class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
-      // Use CreativeErrorPage with liquid-motion variant
+      // DEBUG MODE - Show error details inline, not full screen
+      if (import.meta.env.DEV) {
+        return (
+          <div className="bg-red-50 border-2 border-red-500 rounded-lg p-6 m-4">
+            <h2 className="text-red-700 font-bold text-xl mb-3">⚠️ Component Error</h2>
+            <div className="bg-white rounded p-4 mb-3">
+              <p className="text-red-600 font-mono text-sm">
+                {this.state.error?.message || 'Unknown error'}
+              </p>
+            </div>
+            <details className="cursor-pointer">
+              <summary className="text-gray-700 font-semibold mb-2">View Stack Trace</summary>
+              <pre className="bg-gray-100 p-3 rounded text-xs overflow-auto max-h-64">
+                {this.state.error?.stack}
+              </pre>
+            </details>
+            <div className="mt-4 flex gap-2">
+              <button 
+                onClick={() => window.location.reload()} 
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Reload Page
+              </button>
+              <button 
+                onClick={() => this.setState({ hasError: false, error: undefined })} 
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // Production - still use the nice error page
       return (
         <CreativeErrorPage 
           variant="liquid-motion"
           errorCode="500"
           errorTitle="Application Error"
-          errorMessage={
-            import.meta.env.DEV && this.state.error 
-              ? this.state.error.message 
-              : "Something unexpected happened. Please refresh the page or try again."
-          }
+          errorMessage="Something unexpected happened. Please refresh the page or try again."
           onRefresh={() => window.location.reload()}
           showBackButton={false}
         />

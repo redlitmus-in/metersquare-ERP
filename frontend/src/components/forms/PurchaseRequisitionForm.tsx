@@ -100,23 +100,32 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
   const [isUploading, setIsUploading] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
+
   // Initialize form with existing data in edit mode
   useEffect(() => {
-    // Always set requested_by to current user
-    setValue('requested_by', currentUserName);
-    
-    // Check for both isEditMode and editMode props
-    const isEditing = isEditMode || editMode;
-    const dataToEdit = purchaseData || existingData;
+    try {
+      // Always set requested_by to current user
+      setValue('requested_by', currentUserName);
+      
+      // Check for both isEditMode and editMode props
+      const isEditing = isEditMode || editMode;
+      const dataToEdit = purchaseData || existingData;
     
     // Initialize date to today if not in edit mode and no existing data
     if (!isEditing && !dataToEdit) {
       setValue('date', getTodayFormatted());
     }
     
+    
     if (isEditing && dataToEdit) {
       // Set project ID - handle both direct data and originalData from dashboard
       const purchaseDataToUse = dataToEdit.originalData || dataToEdit;
+      
+      // Make sure purchaseDataToUse exists before accessing properties
+      if (!purchaseDataToUse) {
+        console.error('No data available for editing');
+        return;
+      }
       
       // Set project ID
       const projectId = purchaseDataToUse.project_id || dataToEdit.project_id;
@@ -180,31 +189,40 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
         // Calculate and set total cost
         const total = formattedMaterials.reduce((sum, m) => sum + (m.quantity * m.cost), 0);
         setValue('totalEstimatedCost', total);
-      } else if (existingData.items > 0 && existingData.id) {
+      } else if (existingData && existingData.items && existingData.items > 0 && existingData.id) {
         // Fallback: fetch materials from API if not included
-        fetchExistingMaterials(existingData.id);
+        fetchExistingMaterials(existingData.id).catch(err => {
+          console.log('Failed to fetch materials (non-critical):', err);
+        });
       }
       
       // Set approval flags if they exist
-      if (purchaseData.approvals) {
+      if (purchaseDataToUse && purchaseDataToUse.approvals) {
         setValue('approvalFlags', {
-          qtySpec: purchaseData.approvals.qtySpec || false,
-          cost: purchaseData.approvals.cost || false
+          qtySpec: purchaseDataToUse.approvals.qtySpec || false,
+          cost: purchaseDataToUse.approvals.cost || false
         });
       }
       
       // Set status
-      setValue('status', purchaseData.status || 'draft');
+      if (purchaseDataToUse) {
+        setValue('status', purchaseDataToUse.status || 'draft');
+      }
       
       // Mark tabs as completed if we have data
-      if (purchaseData.site_location && purchaseData.requested_by) {
+      if (purchaseDataToUse && purchaseDataToUse.site_location && purchaseDataToUse.requested_by) {
         setDetailsCompleted(true);
       }
-      if (materialsData.length > 0) {
+      if (materialsData && materialsData.length > 0) {
         setMaterialsCompleted(true);
       }
+    } // This closes the if (isEditing && dataToEdit) block
+    
+    } catch (error) {
+      console.error('Error in form initialization:', error);
+      toast.error('Failed to load form data. Please try again.');
     }
-  }, [isEditMode, existingData, setValue]);
+  }, [isEditMode, editMode, existingData, purchaseData, setValue, currentUserName]);
 
   // Fetch existing materials from API
   const fetchExistingMaterials = async (purchaseId: string) => {
@@ -274,6 +292,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
     console.log('Validation - purpose:', values.purpose);
     return selectedProjectId && values.site_location && values.requested_by && (values.date || currentDate) && values.purpose;
   };
+
 
   const validateMaterialsTab = () => {
     return materials.length > 0 && materials.every(m => 
@@ -404,7 +423,9 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       let response;
       let purchaseId;
       
-      if (isEditMode && existingData?.id) {
+      // Check for edit mode and use purchase_id correctly
+      const purchaseIdToUpdate = purchaseData?.purchase_id || existingData?.purchase_id || existingData?.id;
+      if ((isEditMode || editMode) && purchaseIdToUpdate) {
         // Update existing purchase requisition
         // Construct update payload matching backend expectations
         const updatePayload = {
@@ -438,9 +459,10 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
         };
         
         console.log('Update Payload:', updatePayload);
-        response = await apiClient.put(`/purchase/${existingData.id}`, updatePayload);
+        
+        response = await apiClient.put(`/purchase/${purchaseIdToUpdate}`, updatePayload);
         console.log('Update Response:', response.data);
-        purchaseId = existingData.id;
+        purchaseId = purchaseIdToUpdate;
       } else {
         // Create new purchase requisition  
         response = await apiClient.post('/purchase', payload);
@@ -450,7 +472,9 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       
       // Check if the response was successful
       if (!response.data.success && response.data.error) {
-        throw new Error(response.data.error);
+        toast.error(response.data.error || 'Failed to save purchase request');
+        setIsUploading(false);
+        return;
       }
       
       // Step 2: Upload files if any attachments exist (for both new and updated purchases)

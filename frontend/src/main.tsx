@@ -5,6 +5,7 @@ import App from './App.tsx'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 import './index.css'
 
+// RE-ENABLED WITH DEBUG VERSION
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>

@@ -205,7 +205,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
             isCollapsed ? "hidden" : "block"
           )}>
             <img 
-              src="/logo.png" 
+              src="https://i.postimg.cc/50f23gnF/logo.png" 
               alt="MeterSquare" 
               className="h-10 w-auto"
               onError={(e) => {
