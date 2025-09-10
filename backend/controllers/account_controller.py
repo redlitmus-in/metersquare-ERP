@@ -1,8 +1,10 @@
 import os
+import json
 from flask import g, request, jsonify
 from datetime import datetime
 from sqlalchemy import and_, or_, desc, func
 from sqlalchemy.orm import joinedload
+from supabase import create_client, Client
 
 from models.purchase import Purchase
 from models.purchase_status import PurchaseStatus
@@ -17,6 +19,63 @@ from config.logging import get_logger
 from config.db import db
 
 log = get_logger()
+
+# Supabase storage for Accounts attachments
+supabase_url = os.environ.get('SUPABASE_URL')
+supabase_key = os.environ.get('SUPABASE_KEY')
+# Files are stored in the main upload bucket under accounts/{purchase_id}
+SUPABASE_BUCKET = "file_upload"
+supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+
+def _get_account_bucket_attachments(purchase_id):
+    """Fetch files from ACCOUNT_BUCKET under accounts/{purchase_id} and return
+    a list of {filename, content(bytes)} suitable for EmailService attachments.
+    """
+    try:
+        if not supabase:
+            log.warning("Supabase client not initialized; skipping attachments fetch")
+            return None
+        prefix = f"accounts/{purchase_id}"
+        entries = supabase.storage.from_(SUPABASE_BUCKET).list(path=prefix)
+        if not isinstance(entries, list) or len(entries) == 0:
+            return None
+        attachments = []
+        for entry in entries:
+            name = entry.get('name') if isinstance(entry, dict) else None
+            if not name:
+                continue
+            path = f"{prefix}/{name}"
+            try:
+                file_bytes = supabase.storage.from_(SUPABASE_BUCKET).download(path)
+                attachments.append({
+                    'filename': name,
+                    'content': file_bytes
+                })
+            except Exception as e:
+                log.warning(f"Failed to download {path} from {SUPABASE_BUCKET}: {str(e)}")
+                continue
+        return attachments if attachments else None
+    except Exception as e:
+        log.warning(f"Error listing attachments for purchase {purchase_id}: {str(e)}")
+        return None
+
+def _list_account_file_paths(purchase_id):
+    """Return list of storage paths under file_upload/accounts/{purchase_id}."""
+    try:
+        if not supabase:
+            return []
+        prefix = f"accounts/{purchase_id}"
+        entries = supabase.storage.from_(SUPABASE_BUCKET).list(path=prefix)
+        paths = []
+        if isinstance(entries, list):
+            for entry in entries:
+                name = entry.get('name') if isinstance(entry, dict) else None
+                if name:
+                    paths.append(f"{prefix}/{name}")
+        return paths
+    except Exception as e:
+        log.warning(f"Failed listing account paths for purchase {purchase_id}: {str(e)}")
+        return []
 
 def process_payment_transaction():
     """
@@ -102,14 +161,16 @@ def process_payment_transaction():
         # Commit both payment transaction and status creation together
         db.session.commit()
 
-        # Send notification email
+        # Send notification email with any account bucket attachments for this purchase
         try:
             email_service = EmailService()
+            attachments = _get_account_bucket_attachments(purchase_id)
             email_service.send_payment_processing_notification(
                 purchase_id=purchase_id,
                 amount=amount,
                 payment_method=payment_method,
-                processed_by=user_name
+                processed_by=user_name,
+                attachments=attachments
             )
         except Exception as e:
             log.warning(f"Failed to send payment processing email: {str(e)}")
@@ -245,7 +306,6 @@ def create_acknowledgement():
         transaction_id = data.get('transaction_id')
         acknowledgement_type = data.get('acknowledgement_type', 'payment_received')
         acknowledgement_message = data.get('acknowledgement_message', '')
-        supporting_documents = data.get('supporting_documents', [])
 
         # Validate required fields
         if not purchase_id:
@@ -262,7 +322,7 @@ def create_acknowledgement():
             acknowledged_by=user_name,
             acknowledged_by_role=role.role,
             acknowledgement_message=acknowledgement_message,
-            supporting_documents=supporting_documents,
+            supporting_documents=json.dumps(_list_account_file_paths(purchase_id)),
             created_by=user_name
         )
         # Create acknowledgement
@@ -282,19 +342,38 @@ def create_acknowledgement():
         # Send acknowledgement notification to stakeholders (TD, Procurement, PM)
         try:
             email_service = EmailService()
+            # Attach the exact files we persisted in Acknowledgement.supporting_documents
+            attachment_paths = []
+            try:
+                if acknowledgement.supporting_documents:
+                    attachment_paths = json.loads(acknowledgement.supporting_documents) or []
+            except Exception:
+                attachment_paths = []
+            attachments = []
+            if supabase and attachment_paths:
+                for path in attachment_paths:
+                    try:
+                        name = os.path.basename(path)
+                        file_bytes = supabase.storage.from_(SUPABASE_BUCKET).download(path)
+                        attachments.append({'filename': name, 'content': file_bytes})
+                    except Exception as e:
+                        log.warning(f"Failed to download attachment {path}: {str(e)}")
+            if not attachments:
+                attachments = _get_account_bucket_attachments(purchase_id)
             email_service.send_acknowledgement_to_stakeholders(
                 purchase_id=purchase_id,
                 acknowledgement_type=acknowledgement_type,
                 acknowledged_by=user_name,
-                message=acknowledgement_message
+                message=acknowledgement_message,
+                attachments=attachments
             )
         except Exception as e:
             log.warning(f"Failed to send acknowledgement email: {str(e)}")
 
         return jsonify({
-            'message': 'Acknowledgement created successfully',
+            'message': 'Acknowledgement send successfully',
             'acknowledgement_id': acknowledgement.acknowledgement_id
-        }), 201
+        }), 200
 
     except Exception as e:
         db.session.rollback()
@@ -431,8 +510,6 @@ def get_payment_purchase(purchase_id):
     except Exception as e:
         log.error(f"Error getting payment purchase details: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
-
-
 
 def get_acknowledgements():
     """

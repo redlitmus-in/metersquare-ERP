@@ -80,6 +80,55 @@ class EmailService:
             log.error(f"Failed to send email to {to_emails}: {str(e)}")
             return False
 
+    def _prepare_attachments(self, attachments: List) -> List[Dict]:
+        """Normalize attachments into [{'filename': str, 'content': bytes}] from file paths or dicts.
+
+        Acceptable forms per element:
+        - str: treated as file path on the server
+        - {'path': str, 'filename'?: str}
+        - {'filename': str, 'content': bytes}
+        """
+        if not attachments:
+            return None
+
+        normalized: List[Dict] = []
+        for item in attachments:
+            try:
+                # If dict with direct content
+                if isinstance(item, dict) and 'content' in item and 'filename' in item:
+                    normalized.append({'filename': item['filename'], 'content': item['content']})
+                    continue
+
+                # If dict specifying a path
+                if isinstance(item, dict) and 'path' in item:
+                    path = item.get('path')
+                    if not path or not os.path.isfile(path):
+                        log.warning(f"Attachment path not found or invalid: {path}")
+                        continue
+                    filename = item.get('filename') or os.path.basename(path)
+                    with open(path, 'rb') as f:
+                        content = f.read()
+                    normalized.append({'filename': filename, 'content': content})
+                    continue
+
+                # If plain string path
+                if isinstance(item, str):
+                    path = item
+                    if not os.path.isfile(path):
+                        log.warning(f"Attachment file not found: {path}")
+                        continue
+                    filename = os.path.basename(path)
+                    with open(path, 'rb') as f:
+                        content = f.read()
+                    normalized.append({'filename': filename, 'content': content})
+                    continue
+
+                log.warning(f"Unsupported attachment format, skipping: {type(item)}")
+            except Exception as e:
+                log.warning(f"Failed to load attachment {item}: {str(e)}")
+
+        return normalized if normalized else None
+
     def get_procurement_team_emails(self) -> List[str]:
         """Fetch procurement team emails from DB"""
         try:
@@ -2950,7 +2999,7 @@ This is an automated email from the ERP system.
             return False
 
     def send_payment_processing_notification(self, purchase_id: int, amount: float, 
-                                           payment_method: str, processed_by: str) -> bool:
+                                           payment_method: str, processed_by: str, attachments: List = None) -> bool:
         """Send notification when payment processing starts"""
         try:
             # Get technical director emails
@@ -2994,13 +3043,14 @@ This is an automated email from the ERP system.
             Accounts Department
             """
 
-            return self._send_email(recipients, subject, html_content, text_content)
+            prepared_attachments = self._prepare_attachments(attachments)
+            return self._send_email(recipients, subject, html_content, text_content, prepared_attachments)
         except Exception as e:
             log.error(f"Error sending payment processing notification: {str(e)}")
             return False
 
     def send_payment_approved_notification(self, purchase_id: int, transaction_id: int, 
-                                         amount: float, approved_by: str) -> bool:
+                                         amount: float, approved_by: str, attachments: List = None) -> bool:
         """Send notification when payment is approved and processed"""
         try:
             # Get all relevant stakeholders
@@ -3045,7 +3095,8 @@ This is an automated email from the ERP system.
             Accounts Department
             """
 
-            return self._send_email(recipients, subject, html_content, text_content)
+            prepared_attachments = self._prepare_attachments(attachments)
+            return self._send_email(recipients, subject, html_content, text_content, prepared_attachments)
         except Exception as e:
             log.error(f"Error sending payment approved notification: {str(e)}")
             return False
@@ -3101,7 +3152,7 @@ This is an automated email from the ERP system.
             return False
 
     def send_acknowledgement_to_stakeholders(self, purchase_id: int, acknowledgement_type: str,
-                                            acknowledged_by: str, message: str) -> bool:
+                                            acknowledged_by: str, message: str, attachments: List = None) -> bool:
         """Send acknowledgement notification to Technical Director, Procurement, and Project Manager"""
         try:
             td_emails = self.get_technical_director_emails() or []
@@ -3144,7 +3195,8 @@ This is an automated email from the ERP system.
             ERP System
             """
 
-            return self._send_email(recipients, subject, html_content, text_content)
+            prepared_attachments = self._prepare_attachments(attachments)
+            return self._send_email(recipients, subject, html_content, text_content, prepared_attachments)
         except Exception as e:
             log.error(f"Error sending acknowledgement notification to stakeholders: {str(e)}")
             return False
