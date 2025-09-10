@@ -35,6 +35,7 @@ interface PurchaseApprovalCardProps {
   onReject?: (reason: string) => void;
   onSendToEstimation?: () => void;
   isLoading?: boolean;
+  isEstimationRejected?: boolean;
 }
 
 export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
@@ -45,7 +46,8 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
   onApprove,
   onReject,
   onSendToEstimation,
-  isLoading = false
+  isLoading = false,
+  isEstimationRejected = false
 }) => {
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -136,173 +138,83 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
+        className="h-full"
       >
-        <Card className="hover:shadow-lg transition-shadow duration-200 border-gray-200">
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="font-semibold text-lg text-gray-900">
-                    Purchase #{purchase.purchase_id}
-                  </h3>
-                  <div className="flex flex-col gap-1 items-end">
-                    <Badge className={statusInfo.color}>
-                      {statusInfo.icon}
-                      <span className="ml-1">{statusInfo.text}</span>
-                    </Badge>
-                    {rejectedByEstimation && (
-                      <Badge className="bg-orange-100 text-orange-700 border border-orange-200">
-                        <AlertTriangle className="h-3 w-3 mr-1" />
-                        Rejected by Estimation
-                      </Badge>
-                    )}
-                  </div>
+        <Card className="hover:shadow-lg transition-shadow duration-200 border-gray-200 h-full flex flex-col">
+          <CardHeader className="pb-2">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-base text-gray-900">
+                  PR #{purchase.purchase_id}
+                </h3>
+                <Badge className={`${statusInfo.color} text-xs`}>
+                  {statusInfo.text}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-gray-600">
+                <div className="flex items-center gap-1">
+                  <MapPin className="h-3 w-3" />
+                  <span className="truncate">{purchase.site_location}</span>
                 </div>
-                <div className="flex items-center gap-4 text-sm text-gray-600">
-                  <div className="flex items-center gap-1">
-                    <MapPin className="h-3 w-3" />
-                    <span>{purchase.site_location}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    <span>{formatDate(purchase.created_at || purchase.date)}</span>
-                  </div>
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  <span>{formatDate(purchase.created_at || purchase.date)}</span>
                 </div>
               </div>
             </div>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="flex-1 flex flex-col">
             {/* Purpose */}
-            <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-1">Purpose</p>
+            <div className="mb-3">
+              <p className="text-xs text-gray-600 mb-1">Purpose</p>
               <p className="text-sm font-medium text-gray-900 line-clamp-2">
                 {purchase.purpose}
               </p>
             </div>
 
-            {/* Materials Summary */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <Package className="h-4 w-4 text-gray-500" />
-                  <span className="text-xs text-gray-600">Materials</span>
+            {/* Compact Summary */}
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="bg-gray-50 rounded p-2">
+                <div className="flex items-center gap-1">
+                  <Package className="h-3 w-3 text-gray-500" />
+                  <span className="text-xs text-gray-600">Items</span>
                 </div>
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-sm font-semibold text-gray-900">
                   {purchase.materials_summary?.total_materials || 0}
                 </p>
               </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <FileText className="h-4 w-4 text-gray-500" />
-                  <span className="text-xs text-gray-600">Quantity</span>
+              <div className="bg-gray-50 rounded p-2">
+                <div className="flex items-center gap-1">
+                  <DollarSign className="h-3 w-3 text-gray-500" />
+                  <span className="text-xs text-gray-600">Total</span>
                 </div>
-                <p className="text-lg font-semibold text-gray-900">
-                  {purchase.materials_summary?.total_quantity || 0}
-                </p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <DollarSign className="h-4 w-4 text-gray-500" />
-                  <span className="text-xs text-gray-600">Total Cost</span>
-                </div>
-                <p className="text-lg font-semibold text-gray-900">
-                  AED {(purchase.materials_summary?.total_cost || 0).toLocaleString()}
+                <p className="text-sm font-semibold text-gray-900">
+                  AED {((purchase.materials_summary?.total_cost || 0)/1000).toFixed(1)}K
                 </p>
               </div>
             </div>
 
-            {/* Categories */}
-            {purchase.materials_summary?.categories && purchase.materials_summary.categories.length > 0 && (
-              <div className="mb-4">
-                <div className="flex flex-wrap gap-1">
-                  {purchase.materials_summary.categories.slice(0, 3).map((category, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {category}
-                    </Badge>
-                  ))}
-                  {purchase.materials_summary.categories.length > 3 && (
-                    <Badge variant="outline" className="text-xs">
-                      +{purchase.materials_summary.categories.length - 3} more
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            )}
 
-            {/* Workflow Status */}
-            {purchase.current_workflow_status && (
-              <div className="mb-4">
-                <p className="text-sm text-gray-600 mb-1">Workflow Status</p>
-                <Badge variant="outline" className="text-xs">
-                  {purchase.current_workflow_status.replace(/_/g, ' ')}
-                </Badge>
-              </div>
-            )}
-
-            {/* Previous Comments/Rejection Reason */}
-            {purchase.pm_rejection_reason && (
-              <div className="mb-4 p-3 bg-red-50 rounded-lg border border-red-200">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
+            {/* Rejection Alert for Estimation Rejected Tab */}
+            {rejectedByEstimation && isEstimationRejected && (
+              <div className="mb-3 p-2 bg-orange-50 rounded border border-orange-200">
+                <div className="flex items-start gap-1">
+                  <AlertTriangle className="h-3 w-3 text-orange-600 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-red-800">Previous Rejection</p>
-                    <p className="text-sm text-red-700 mt-1">{purchase.pm_rejection_reason}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Estimation Rejection Reason */}
-            {rejectedByEstimation && (
-              <div className="mb-4 p-3 bg-orange-50 rounded-lg border border-orange-200">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-orange-600 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-orange-800">Rejected by Estimation</p>
-                    {purchase.rejected_status && (
-                      <>
-                        <p className="text-sm text-orange-700 mt-1">
-                          <span className="font-medium">Rejected by:</span> {purchase.rejected_status.created_by}
-                        </p>
-                        <p className="text-sm text-orange-700">
-                          <span className="font-medium">Date:</span> {new Date(purchase.rejected_status.decision_date).toLocaleDateString()}
-                        </p>
-                        {purchase.rejected_status.reject_category && (
-                          <p className="text-sm text-orange-700">
-                            <span className="font-medium">Category:</span> {purchase.rejected_status.reject_category.replace(/_/g, ' ').toUpperCase()}
-                          </p>
-                        )}
-                        {purchase.rejected_status.comments && (
-                          <p className="text-sm text-orange-700 mt-2">
-                            <span className="font-medium">Comments:</span> {purchase.rejected_status.comments}
-                          </p>
-                        )}
-                        {purchase.rejected_status.rejection_reason && (
-                          <p className="text-sm text-orange-700">
-                            <span className="font-medium">Reason:</span> {purchase.rejected_status.rejection_reason}
-                          </p>
-                        )}
-                      </>
-                    )}
-                    {purchase.estimation_rejection_reason && (
-                      <p className="text-sm text-orange-700 mt-1">{purchase.estimation_rejection_reason}</p>
+                    <p className="text-xs font-medium text-orange-800">Est. Rejected</p>
+                    {(purchase.rejected_status?.rejection_reason || purchase.estimation_rejection_reason) && (
+                      <p className="text-xs text-orange-700 mt-1 line-clamp-2">
+                        {purchase.rejected_status?.rejection_reason || purchase.estimation_rejection_reason}
+                      </p>
                     )}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Procurement Comments if any */}
-            {purchase.procurement_comments && (
-              <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <p className="text-sm font-medium text-blue-800 mb-1">Procurement Notes</p>
-                <p className="text-sm text-blue-700">{purchase.procurement_comments}</p>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="space-y-2 pt-2">
+            {/* Action Buttons - Push to bottom */}
+            <div className="space-y-2 mt-auto pt-2">
               {/* View Buttons Row */}
               <div className="flex gap-2">
                 {onViewDetails && (
@@ -310,11 +222,11 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                     variant="outline"
                     size="sm"
                     onClick={() => onViewDetails(purchase.purchase_id)}
-                    className="flex-1"
+                    className="flex-1 h-8 text-xs"
                     disabled={isLoading}
                   >
-                    <Eye className="h-4 w-4 mr-2" />
-                    View Details
+                    <Eye className="h-3 w-3 mr-1" />
+                    Details
                   </Button>
                 )}
                 {onViewHistory && (
@@ -322,55 +234,68 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                     variant="outline"
                     size="sm"
                     onClick={() => onViewHistory(purchase.purchase_id)}
-                    className="flex-1"
+                    className="flex-1 h-8 text-xs"
                     disabled={isLoading}
                   >
-                    <History className="h-4 w-4 mr-2" />
-                    View History
+                    <History className="h-3 w-3 mr-1" />
+                    History
                   </Button>
                 )}
               </div>
               
-              {/* Action Buttons Row */}
-              {isPending && (
+              {/* Action Buttons Row - Different for each tab */}
+              {(isPending || isEstimationRejected) && (
                 <div className="flex gap-2">
                   <Button
                     variant="default"
                     size="sm"
-                    onClick={() => setShowApproveDialog(true)}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    onClick={() => {
+                      if (isEstimationRejected) {
+                        // When resending to estimation, use the dedicated handler
+                        if (onSendToEstimation) {
+                          onSendToEstimation();
+                        }
+                      } else {
+                        setShowApproveDialog(true);
+                      }
+                    }}
+                    className={`${
+                      isEstimationRejected ? 'w-full' : 'flex-1'
+                    } h-8 text-xs ${
+                      isEstimationRejected 
+                        ? 'bg-blue-600 hover:bg-blue-700' 
+                        : 'bg-green-600 hover:bg-green-700'
+                    }`}
                     disabled={isLoading}
                   >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Approve
+                    {isEstimationRejected ? (
+                      <>
+                        <Send className="h-3 w-3 mr-1" />
+                        Resend to Est
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Approve
+                      </>
+                    )}
                   </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setShowRejectDialog(true)}
-                    className="flex-1"
-                    disabled={isLoading}
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Reject
-                  </Button>
+                  {/* Only show Reject button in Pending tab, not in Est. Rejected tab */}
+                  {!isEstimationRejected && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setShowRejectDialog(true)}
+                      className="flex-1 h-8 text-xs"
+                      disabled={isLoading}
+                    >
+                      <XCircle className="h-3 w-3 mr-1" />
+                      Reject
+                    </Button>
+                  )}
                 </div>
               )}
 
-              {purchase.pm_status === 'approved' && onSendToEstimation && (
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onSendToEstimation}
-                    className="flex-1"
-                    disabled={isLoading}
-                  >
-                    <Send className="h-4 w-4 mr-2" />
-                    To Estimation
-                  </Button>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>

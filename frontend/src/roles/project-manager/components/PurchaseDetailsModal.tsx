@@ -9,8 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Card, CardContent } from '@/components/ui/card';
+import { motion } from 'framer-motion';
 import { projectManagerService, PurchaseStatusDetails } from '../services/projectManagerService';
 import { toast } from 'sonner';
+import { exportPurchaseDetailsPDF } from '@/utils/exportUtils';
 import {
   FileText,
   Building2,
@@ -28,7 +31,18 @@ import {
   Mail,
   Loader2,
   MessageSquare,
-  AlertTriangle
+  AlertTriangle,
+  Hash,
+  UserCheck,
+  CalendarCheck,
+  FileCheck,
+  ArrowRight,
+  Info,
+  TrendingUp,
+  Layers,
+  Shield,
+  Activity,
+  Target
 } from 'lucide-react';
 
 interface PurchaseDetailsModalProps {
@@ -99,7 +113,11 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
             role: null,
             date: null,
             decision_by: null,
-            comments: null
+            comments: null,
+            status_id: null,
+            is_active: false,
+            created_at: null,
+            last_modified_at: null
           },
           summary: {
             total_procurement_statuses: purchase.approvals?.filter((a: any) => a.role === 'procurement').length || 0,
@@ -142,15 +160,32 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
           },
           procurement_statuses: [],
           project_manager_statuses: [],
-          latest_pm_proc_status: latestStatus || {
+          latest_pm_proc_status: latestStatus ? {
+            status: latestStatus.status || purchase.status || 'pending',
+            sender: latestStatus.sender || null,
+            receiver: latestStatus.receiver || null,
+            role: latestStatus.role || null,
+            date: latestStatus.decision_date || latestStatus.created_at || null,
+            decision_by: latestStatus.created_by || latestStatus.decision_by || null,
+            comments: latestStatus.comments || null,
+            rejection_reason: latestStatus.rejection_reason || null,
+            status_id: latestStatus.status_id || null,
+            is_active: latestStatus.is_active || false,
+            created_at: latestStatus.created_at || purchase.created_at || null,
+            last_modified_at: latestStatus.last_modified_at || latestStatus.created_at || null
+          } : {
             status: purchase.status || 'pending',
-            sender: latestStatus?.sender,
-            receiver: latestStatus?.receiver,
-            role: latestStatus?.role,
-            date: latestStatus?.decision_date || latestStatus?.created_at,
-            decision_by: null,
-            comments: latestStatus?.comments,
-            rejection_reason: latestStatus?.rejection_reason
+            sender: null,
+            receiver: null,
+            role: null,
+            date: purchase.created_at || null,
+            decision_by: purchase.created_by || null,
+            comments: null,
+            rejection_reason: null,
+            status_id: null,
+            is_active: false,
+            created_at: purchase.created_at || null,
+            last_modified_at: purchase.last_modified_at || purchase.created_at || null
           },
           summary: {
             total_procurement_statuses: 0,
@@ -167,7 +202,10 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
       }
     } catch (error: any) {
       console.error('Error fetching purchase data:', error);
-      toast.error('Failed to fetch purchase details');
+      console.error('Purchase ID:', purchaseId);
+      console.error('Mode:', mode);
+      console.error('Response error:', error.response);
+      toast.error(error.message || 'Failed to fetch purchase details');
     } finally {
       setLoading(false);
     }
@@ -176,6 +214,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   const getStatusColor = (status?: string) => {
     switch (status?.toLowerCase()) {
       case 'approved':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'complete':
+      case 'completed':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'rejected':
         return 'bg-red-100 text-red-800 border-red-200';
@@ -192,6 +233,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   const getStatusIcon = (status?: string) => {
     switch (status?.toLowerCase()) {
       case 'approved':
+        return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'complete':
+      case 'completed':
         return <CheckCircle className="w-4 h-4 text-green-600" />;
       case 'rejected':
         return <XCircle className="w-4 h-4 text-red-600" />;
@@ -248,6 +292,19 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     return `AED ${amount.toLocaleString()}`;
   };
 
+  const formatStatusText = (status: string) => {
+    const statusMap: { [key: string]: string } = {
+      'approved': 'APPROVED',
+      'complete': 'COMPLETED',
+      'completed': 'COMPLETED',
+      'rejected': 'REJECTED',
+      'pending': 'PENDING',
+      'under_review': 'UNDER REVIEW',
+      'in_progress': 'IN PROGRESS'
+    };
+    return statusMap[status?.toLowerCase()] || status?.toUpperCase() || 'PENDING';
+  };
+
   const getPriorityColor = (priority: string) => {
     switch (priority?.toLowerCase()) {
       case 'high':
@@ -264,263 +321,423 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] h-[90vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
+      <DialogContent className="max-w-5xl max-h-[95vh] h-[95vh] overflow-hidden flex flex-col p-0 bg-gray-50">
+        <DialogHeader className="px-6 py-5 bg-gradient-to-r from-blue-600 to-blue-700 flex-shrink-0 shadow-lg">
           <DialogTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
-              Purchase Request Details
-              {statusDetails && (
-                <Badge className="ml-2">
-                  PR-{statusDetails.purchase_id}
-                </Badge>
-              )}
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/10 rounded-lg backdrop-blur">
+                <FileText className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-white text-lg font-semibold">Purchase Request Details</h2>
+                {statusDetails && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge className="bg-white/20 text-white border-white/30 hover:bg-white/30">
+                      <Hash className="w-3 h-3 mr-1" />
+                      PR-{statusDetails.purchase_id}
+                    </Badge>
+                    <Badge className={`${getStatusColor(
+                      statusDetails.latest_pm_proc_status?.status === 'approved' && 
+                      statusDetails.latest_pm_proc_status?.comments?.toLowerCase().includes('acknowledgement') 
+                        ? 'completed' 
+                        : statusDetails.latest_pm_proc_status?.status
+                    )} border`}>
+                      {getStatusIcon(
+                        statusDetails.latest_pm_proc_status?.status === 'approved' && 
+                        statusDetails.latest_pm_proc_status?.comments?.toLowerCase().includes('acknowledgement') 
+                          ? 'completed' 
+                          : statusDetails.latest_pm_proc_status?.status
+                      )}
+                      <span className="ml-1">{statusDetails.latest_pm_proc_status?.status === 'approved' && 
+                        statusDetails.latest_pm_proc_status?.comments?.toLowerCase().includes('acknowledgement') 
+                          ? 'COMPLETED' 
+                          : formatStatusText(statusDetails.latest_pm_proc_status?.status || 'pending')}</span>
+                    </Badge>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {statusDetails && (
-                <>
-                  <Badge className={`${getStatusColor(statusDetails.latest_pm_proc_status?.status)} border`}>
-                    {(statusDetails.latest_pm_proc_status?.status || 'pending').toUpperCase()}
-                  </Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleExport}
-                    title="Export"
-                  >
-                    <Download className="w-4 h-4" />
-                  </Button>
-                </>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleExport}
+                  className="bg-white/10 hover:bg-white/20 text-white border-white/30"
+                >
+                  <FileText className="w-4 h-4 mr-1" />
+                  Export PDF
+                </Button>
               )}
             </div>
           </DialogTitle>
         </DialogHeader>
 
         {loading ? (
-          <div className="flex items-center justify-center flex-1">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <div className="flex items-center justify-center flex-1 bg-white">
+            <div className="text-center">
+              <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+              <p className="text-gray-600">Loading purchase details...</p>
+            </div>
           </div>
         ) : statusDetails ? (
-          <div className="flex-1 overflow-hidden flex flex-col px-6 pb-4">
+          <div className="flex-1 overflow-hidden flex flex-col">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className={`grid w-full ${mode === 'history' ? 'grid-cols-1' : 'grid-cols-3'} mt-4 mb-4`}>
-                {mode === 'history' ? (
-                  <TabsTrigger value="history">Approval History</TabsTrigger>
-                ) : (
-                  <>
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="materials">Materials</TabsTrigger>
-                    <TabsTrigger value="details">Additional Info</TabsTrigger>
-                  </>
-                )}
-              </TabsList>
+              <div className="bg-white border-b px-6 pt-4">
+                <TabsList className={`grid w-full ${mode === 'history' ? 'grid-cols-1' : 'grid-cols-3'} max-w-2xl mx-auto bg-gray-100`}>
+                  {mode === 'history' ? (
+                    <TabsTrigger value="history" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                      <History className="w-4 h-4 mr-2" />
+                      History
+                    </TabsTrigger>
+                  ) : (
+                    <>
+                      <TabsTrigger value="details" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <Info className="w-4 h-4 mr-2" />
+                        Details
+                      </TabsTrigger>
+                      <TabsTrigger value="materials" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <Package className="w-4 h-4 mr-2" />
+                        Materials
+                      </TabsTrigger>
+                      <TabsTrigger value="status" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <Activity className="w-4 h-4 mr-2" />
+                        Latest Status
+                      </TabsTrigger>
+                    </>
+                  )}
+                </TabsList>
+              </div>
 
-              {/* Overview Tab */}
+              {/* Details Tab */}
               {mode !== 'history' && (
-                <TabsContent value="overview" className="flex-1 overflow-hidden mt-0">
-                  <div className="h-full overflow-y-auto pr-2 space-y-6">
-                    {/* Purchase Overview Section */}
-                    <div className="bg-white border rounded-lg p-4">
-                      <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-blue-600" />
-                        Purchase Overview
-                      </h3>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Left Column */}
-                        <div className="space-y-3">
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Location</label>
-                            <div className="flex items-center gap-2 mt-1">
-                              <MapPin className="w-4 h-4 text-gray-400" />
-                              <span className="font-medium">{statusDetails.purchase_details?.site_location}</span>
+                <TabsContent value="details" className="flex-1 overflow-hidden mt-0 bg-white">
+                  <div className="h-full overflow-y-auto p-6">
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="space-y-6"
+                    >
+                      {/* Summary Cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-blue-600 font-medium">Total Amount</p>
+                                <p className="text-2xl font-bold text-blue-900 mt-1">
+                                  AED {(statusDetails.purchase_details?.materials_summary?.total_cost || 0).toLocaleString()}
+                                </p>
+                              </div>
+                              <div className="p-3 bg-blue-200/30 rounded-lg">
+                                <DollarSign className="w-6 h-6 text-blue-700" />
+                              </div>
                             </div>
-                          </div>
-                          
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Purpose</label>
-                            <p className="font-medium mt-1">{statusDetails.purchase_details?.purpose}</p>
-                          </div>
-                          
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Requested By</label>
-                            <div className="flex items-center gap-2 mt-1">
-                              <User className="w-4 h-4 text-gray-400" />
-                              <span className="font-medium">{statusDetails.purchase_details?.requested_by || 'N/A'}</span>
-                            </div>
-                          </div>
-                        </div>
+                          </CardContent>
+                        </Card>
                         
-                        {/* Right Column */}
-                        <div className="space-y-3">
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Created Date</label>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Calendar className="w-4 h-4 text-gray-400" />
-                              <span className="font-medium">
-                                {formatDate(statusDetails.purchase_details?.created_at || statusDetails.purchase_details?.date || null)}
-                              </span>
+                        <Card className="border-0 shadow-sm bg-gradient-to-br from-purple-50 to-purple-100">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-purple-600 font-medium">Materials</p>
+                                <p className="text-2xl font-bold text-purple-900 mt-1">
+                                  {statusDetails.purchase_details?.materials_summary?.total_materials || 0} Items
+                                </p>
+                              </div>
+                              <div className="p-3 bg-purple-200/30 rounded-lg">
+                                <Package className="w-6 h-6 text-purple-700" />
+                              </div>
                             </div>
-                          </div>
-                          
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Project ID</label>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Building2 className="w-4 h-4 text-gray-400" />
-                              <span className="font-medium">#{statusDetails.purchase_details?.project_id || 'N/A'}</span>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card className="border-0 shadow-sm bg-gradient-to-br from-green-50 to-green-100">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-green-600 font-medium">Email Status</p>
+                                <p className="text-lg font-bold text-green-900 mt-1">
+                                  {statusDetails.purchase_details?.email_sent ? 'Sent ✓' : 'Pending'}
+                                </p>
+                              </div>
+                              <div className="p-3 bg-green-200/30 rounded-lg">
+                                <Mail className="w-6 h-6 text-green-700" />
+                              </div>
                             </div>
-                          </div>
-                          
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Email Status</label>
-                            <div className="mt-1">
-                              <Badge variant={statusDetails.purchase_details?.email_sent ? 'default' : 'outline'} className="gap-1">
-                                <Mail className="w-3 h-3" />
-                                {statusDetails.purchase_details?.email_sent ? 'Sent' : 'Not Sent'}
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
+                          </CardContent>
+                        </Card>
                       </div>
-                    </div>
 
-                    {/* Summary Statistics */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Package className="h-5 w-5 text-blue-600" />
-                          <span className="text-sm font-medium text-blue-900">Materials</span>
-                        </div>
-                        <p className="text-2xl font-bold text-blue-900">
-                          {statusDetails.purchase_details?.materials_summary?.total_materials || 0}
-                        </p>
-                      </div>
-                      
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Package className="h-5 w-5 text-green-600" />
-                          <span className="text-sm font-medium text-green-900">Quantity</span>
-                        </div>
-                        <p className="text-2xl font-bold text-green-900">
-                          {statusDetails.purchase_details?.materials_summary?.total_quantity || 0}
-                        </p>
-                      </div>
-                      
-                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <DollarSign className="h-5 w-5 text-purple-600" />
-                          <span className="text-sm font-medium text-purple-900">Total Cost</span>
-                        </div>
-                        <p className="text-xl font-bold text-purple-900">
-                          {formatCurrency(statusDetails.purchase_details?.materials_summary?.total_cost || 0)}
-                        </p>
-                      </div>
-                      
-                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <FileText className="h-5 w-5 text-orange-600" />
-                          <span className="text-sm font-medium text-orange-900">Categories</span>
-                        </div>
-                        <p className="text-2xl font-bold text-orange-900">
-                          {statusDetails.purchase_details?.materials_summary?.categories?.length || 0}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Current Status */}
-                    {statusDetails.latest_pm_proc_status && (
-                      <div className="bg-white border rounded-lg p-4">
-                        <h3 className="font-semibold text-gray-900 mb-4">Current Status</h3>
-                        <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg">
-                          {getStatusIcon(statusDetails.latest_pm_proc_status.status)}
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="font-medium">
-                                {statusDetails.latest_pm_proc_status.sender ? 
-                                  `From: ${statusDetails.latest_pm_proc_status.sender.charAt(0).toUpperCase() + statusDetails.latest_pm_proc_status.sender.slice(1)}` : 
-                                  'Status'}
-                              </span>
-                              {statusDetails.latest_pm_proc_status.receiver && (
-                                <span className="text-gray-500">→ {statusDetails.latest_pm_proc_status.receiver.charAt(0).toUpperCase() + statusDetails.latest_pm_proc_status.receiver.slice(1)}</span>
-                              )}
-                              <Badge className={`${getStatusColor(statusDetails.latest_pm_proc_status.status)} border ml-auto`}>
-                                {(statusDetails.latest_pm_proc_status.status || 'pending').toUpperCase()}
-                              </Badge>
+                      {/* Basic Information */}
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="p-2 bg-blue-100 rounded-lg">
+                              <Info className="w-5 h-5 text-blue-600" />
                             </div>
-                            {statusDetails.latest_pm_proc_status.comments && (
-                              <p className="text-sm text-gray-600 bg-blue-50 p-2 rounded mt-2">
-                                <MessageSquare className="w-3 h-3 inline mr-1" />
-                                {statusDetails.latest_pm_proc_status.comments}
-                              </p>
-                            )}
-                            {statusDetails.latest_pm_proc_status.rejection_reason && (
-                              <p className="text-sm text-red-600 bg-red-50 p-2 rounded mt-2">
-                                <AlertTriangle className="w-3 h-3 inline mr-1" />
-                                {statusDetails.latest_pm_proc_status.rejection_reason}
-                              </p>
-                            )}
-                            {statusDetails.latest_pm_proc_status.date && (
-                              <p className="text-xs text-gray-500 mt-2">
-                                {formatDate(statusDetails.latest_pm_proc_status.date)}
-                              </p>
-                            )}
+                            <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
                           </div>
-                        </div>
-                      </div>
-                    )}
+                      
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                <Building2 className="w-5 h-5 text-gray-500 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Project ID</p>
+                                  <p className="text-sm font-semibold text-gray-900 mt-0.5">{statusDetails.purchase_details?.project_id || 'N/A'}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                <UserCheck className="w-5 h-5 text-gray-500 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Requested By</p>
+                                  <p className="text-sm font-semibold text-gray-900 mt-0.5">{statusDetails.purchase_details?.requested_by || 'N/A'}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                <MapPin className="w-5 h-5 text-gray-500 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Site Location</p>
+                                  <p className="text-sm font-semibold text-gray-900 mt-0.5">{statusDetails.purchase_details?.site_location || 'N/A'}</p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-4">
+                              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                <CalendarCheck className="w-5 h-5 text-gray-500 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Request Date</p>
+                                  <p className="text-sm font-semibold text-gray-900 mt-0.5">
+                                    {formatDate(statusDetails.purchase_details?.created_at || statusDetails.purchase_details?.date || null)}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                <User className="w-5 h-5 text-gray-500 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Created By</p>
+                                  <p className="text-sm font-semibold text-gray-900 mt-0.5">{statusDetails.purchase_details?.requested_by || 'System'}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                <Mail className="w-5 h-5 text-gray-500 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Email Status</p>
+                                  <Badge variant={statusDetails.purchase_details?.email_sent ? 'default' : 'outline'} className="mt-1">
+                                    {statusDetails.purchase_details?.email_sent ? 'Sent ✓' : 'Not Sent'}
+                                  </Badge>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Purpose */}
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="p-2 bg-amber-100 rounded-lg">
+                              <Target className="w-5 h-5 text-amber-600" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900">Purpose</h3>
+                          </div>
+                          <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border border-amber-200">
+                            <p className="text-sm text-gray-800 leading-relaxed">
+                              {statusDetails.purchase_details?.purpose || 'No purpose specified'}
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                    </motion.div>
                   </div>
                 </TabsContent>
               )}
 
-              {/* Details Tab (Additional Info) */}
+              {/* Status Tab */}
               {mode !== 'history' && (
-                <TabsContent value="details" className="flex-1 overflow-hidden mt-0">
-                  <div className="h-full overflow-y-auto pr-2 space-y-6">
-                    <div className="bg-white border rounded-lg p-4">
-                      <h3 className="font-semibold text-gray-900 mb-4">Additional Information</h3>
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Purchase ID</label>
-                            <p className="font-medium mt-1">PR-{statusDetails.purchase_id}</p>
+                <TabsContent value="status" className="flex-1 overflow-hidden mt-0 bg-white">
+                  <div className="h-full overflow-y-auto p-6">
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="space-y-6"
+                    >
+                      {/* Current Status Information */}
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-6">
+                          <div className="flex items-center gap-2 mb-6">
+                            <div className="p-2 bg-blue-100 rounded-lg">
+                              <Activity className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900">Current Status Information</h3>
                           </div>
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Status</label>
-                            <Badge className={`${getStatusColor(statusDetails.latest_pm_proc_status?.status)} border mt-1`}>
-                              {(statusDetails.latest_pm_proc_status?.status || 'pending').toUpperCase()}
-                            </Badge>
-                          </div>
-                        </div>
-                        
-                        {statusDetails.purchase_details?.created_at && (
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Created At</label>
-                            <p className="font-medium mt-1">{formatDate(statusDetails.purchase_details.created_at)}</p>
-                          </div>
-                        )}
-                        
-                        {statusDetails.purchase_details?.date && statusDetails.purchase_details.date !== statusDetails.purchase_details.created_at && (
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Request Date</label>
-                            <p className="font-medium mt-1">{formatDate(statusDetails.purchase_details.date)}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Categories Breakdown */}
-                    {statusDetails.purchase_details?.materials_summary?.categories && statusDetails.purchase_details.materials_summary.categories.length > 0 && (
-                      <div className="bg-white border rounded-lg p-4">
-                        <h3 className="font-semibold text-gray-900 mb-4">Categories</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {statusDetails.purchase_details.materials_summary.categories.map((category, idx) => (
-                            <Badge key={idx} variant="outline" className="px-3 py-1">
-                              {category}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                          
+                          {statusDetails.latest_pm_proc_status && (
+                            <div className="space-y-6">
+                              {/* Status Badge */}
+                              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm font-medium text-gray-600">CURRENT STATUS</span>
+                                  <Badge className={`${getStatusColor(
+                                    statusDetails.latest_pm_proc_status.status === 'approved' && 
+                                    statusDetails.latest_pm_proc_status.comments?.toLowerCase().includes('acknowledgement') 
+                                      ? 'completed' 
+                                      : statusDetails.latest_pm_proc_status.status
+                                  )} border px-4 py-1.5`}>
+                                    {getStatusIcon(
+                                      statusDetails.latest_pm_proc_status.status === 'approved' && 
+                                      statusDetails.latest_pm_proc_status.comments?.toLowerCase().includes('acknowledgement') 
+                                        ? 'completed' 
+                                        : statusDetails.latest_pm_proc_status.status
+                                    )}
+                                    <span className="ml-1.5 font-semibold">{statusDetails.latest_pm_proc_status.status === 'approved' && 
+                                      statusDetails.latest_pm_proc_status.comments?.toLowerCase().includes('acknowledgement') 
+                                        ? 'COMPLETED' 
+                                        : formatStatusText(statusDetails.latest_pm_proc_status.status || 'pending')}</span>
+                                  </Badge>
+                                  {statusDetails.latest_pm_proc_status.is_active && (
+                                    <Badge className="bg-green-100 text-green-700 border-green-200">
+                                      <CheckCircle className="w-3 h-3 mr-1" />
+                                      Active
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-xs text-gray-500">Status ID</p>
+                                  <p className="font-semibold text-gray-900">#{statusDetails.latest_pm_proc_status.status_id || 'N/A'}</p>
+                                </div>
+                              </div>
+                              
+                              {/* Decision Information */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <Card className="border-0 bg-blue-50">
+                                  <CardContent className="p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <UserCheck className="w-4 h-4 text-blue-600" />
+                                      <h4 className="font-medium text-blue-900">Decision Information</h4>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <div>
+                                        <p className="text-xs text-blue-600">Current Role</p>
+                                        <p className="font-semibold text-blue-900">{statusDetails.latest_pm_proc_status.role || 'N/A'}</p>
+                                      </div>
+                                      {statusDetails.latest_pm_proc_status.decision_by && (
+                                        <div>
+                                          <p className="text-xs text-blue-600">Decision By</p>
+                                          <p className="font-semibold text-blue-900">{statusDetails.latest_pm_proc_status.decision_by}</p>
+                                        </div>
+                                      )}
+                                      {statusDetails.latest_pm_proc_status.date && (
+                                        <div>
+                                          <p className="text-xs text-blue-600">Decision Date</p>
+                                          <p className="font-semibold text-blue-900">{formatDate(statusDetails.latest_pm_proc_status.date)}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                                
+                                <Card className="border-0 bg-purple-50">
+                                  <CardContent className="p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <ArrowRight className="w-4 h-4 text-purple-600" />
+                                      <h4 className="font-medium text-purple-900">Workflow Path</h4>
+                                    </div>
+                                    <div className="space-y-2">
+                                      {statusDetails.latest_pm_proc_status.sender && (
+                                        <div>
+                                          <p className="text-xs text-purple-600">From (Sender)</p>
+                                          <p className="font-semibold text-purple-900">{statusDetails.latest_pm_proc_status.sender}</p>
+                                        </div>
+                                      )}
+                                      {statusDetails.latest_pm_proc_status.receiver && (
+                                        <div>
+                                          <p className="text-xs text-purple-600">To (Receiver)</p>
+                                          <p className="font-semibold text-purple-900">{statusDetails.latest_pm_proc_status.receiver}</p>
+                                        </div>
+                                      )}
+                                      <div>
+                                        <p className="text-xs text-purple-600">Purchase ID</p>
+                                        <p className="font-semibold text-purple-900">PR-{statusDetails.purchase_id}</p>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              </div>
+                              
+                              {/* Comments */}
+                              {statusDetails.latest_pm_proc_status.comments && (
+                                <Card className="border-0 bg-amber-50">
+                                  <CardContent className="p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <MessageSquare className="w-4 h-4 text-amber-600" />
+                                      <h4 className="font-medium text-amber-900">Comments</h4>
+                                    </div>
+                                    <p className="text-sm text-amber-800 italic">
+                                      "{statusDetails.latest_pm_proc_status.comments}"
+                                    </p>
+                                  </CardContent>
+                                </Card>
+                              )}
+                              
+                              {/* Rejection Reason */}
+                              {statusDetails.latest_pm_proc_status.rejection_reason && (
+                                <Card className="border-0 bg-red-50">
+                                  <CardContent className="p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <AlertTriangle className="w-4 h-4 text-red-600" />
+                                      <h4 className="font-medium text-red-900">Rejection Reason</h4>
+                                    </div>
+                                    <p className="text-sm text-red-800">
+                                      {statusDetails.latest_pm_proc_status.rejection_reason}
+                                    </p>
+                                  </CardContent>
+                                </Card>
+                              )}
+                              
+                              {/* Timeline */}
+                              <Card className="border-0 shadow-sm">
+                                <CardContent className="p-4">
+                                  <div className="flex items-center gap-2 mb-4">
+                                    <Clock className="w-4 h-4 text-gray-600" />
+                                    <h4 className="font-medium text-gray-900">Timeline</h4>
+                                  </div>
+                                  <div className="space-y-2 border-l-2 border-gray-200 pl-4 ml-2">
+                                    {statusDetails.purchase_details?.created_at && (
+                                      <div className="relative">
+                                        <div className="absolute -left-6 w-3 h-3 bg-gray-400 rounded-full" />
+                                        <div className="flex justify-between">
+                                          <span className="text-sm text-gray-600">Created At</span>
+                                          <span className="text-sm font-medium">{formatDate(statusDetails.purchase_details.created_at)}</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {statusDetails.latest_pm_proc_status?.last_modified_at && (
+                                      <div className="relative">
+                                        <div className="absolute -left-6 w-3 h-3 bg-blue-600 rounded-full" />
+                                        <div className="flex justify-between">
+                                          <span className="text-sm text-gray-600">Last Modified</span>
+                                          <span className="text-sm font-medium">{formatDate(statusDetails.latest_pm_proc_status.last_modified_at)}</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </motion.div>
                   </div>
                 </TabsContent>
               )}
@@ -662,7 +879,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                               <div className="flex gap-4">
                                 <div className="flex-shrink-0">
                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                    status.status === 'approved' ? 'bg-green-100' :
+                                    status.status === 'approved' || status.status === 'complete' || status.status === 'completed' ? 'bg-green-100' :
                                     status.status === 'rejected' ? 'bg-red-100' :
                                     'bg-yellow-100'
                                   }`}>
@@ -682,7 +899,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                       )}
                                     </div>
                                     <Badge className={`${getStatusColor(status.status)} border`}>
-                                      {status.status.toUpperCase()}
+                                      {formatStatusText(status.status)}
                                     </Badge>
                                   </div>
                                   

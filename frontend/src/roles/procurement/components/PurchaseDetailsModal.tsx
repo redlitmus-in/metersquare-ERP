@@ -109,6 +109,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     switch (status?.toLowerCase()) {
       case 'approved':
         return 'bg-green-100 text-green-800 border-green-200';
+      case 'complete':
+      case 'completed':
+        return 'bg-green-100 text-green-800 border-green-200';
       case 'rejected':
         return 'bg-red-100 text-red-800 border-red-200';
       case 'pending':
@@ -125,6 +128,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     switch (status?.toLowerCase()) {
       case 'approved':
         return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'complete':
+      case 'completed':
+        return <CheckCircle className="w-4 h-4 text-green-600" />;
       case 'rejected':
         return <XCircle className="w-4 h-4 text-red-600" />;
       case 'pending':
@@ -135,6 +141,19 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
       default:
         return <Clock className="w-4 h-4 text-gray-600" />;
     }
+  };
+
+  const formatStatusText = (status: string) => {
+    const statusMap: { [key: string]: string } = {
+      'approved': 'APPROVED',
+      'complete': 'COMPLETED',
+      'completed': 'COMPLETED',
+      'rejected': 'REJECTED',
+      'pending': 'PENDING',
+      'under_review': 'UNDER REVIEW',
+      'in_progress': 'IN PROGRESS'
+    };
+    return statusMap[status?.toLowerCase()] || status?.toUpperCase() || 'PENDING';
   };
 
   const handleExportPDF = () => {
@@ -182,9 +201,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                       <Hash className="w-3 h-3 mr-1" />
                       PR-{purchase.purchase_id}
                     </Badge>
-                    <Badge className={`${getStatusColor(purchase.status || purchase.latest_status)} border`}>
-                      {getStatusIcon(purchase.status || purchase.latest_status)}
-                      <span className="ml-1">{(purchase.status || purchase.latest_status || 'pending').toUpperCase()}</span>
+                    <Badge className={`${getStatusColor(latestStatus?.status || purchase.status || purchase.latest_status)} border`}>
+                      {getStatusIcon(latestStatus?.status || purchase.status || purchase.latest_status)}
+                      <span className="ml-1">{formatStatusText(latestStatus?.status || purchase.status || purchase.latest_status || 'pending')}</span>
                     </Badge>
                   </div>
                 )}
@@ -412,7 +431,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   className="relative"
                                 >
                                   <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200 hover:shadow-md transition-all">
-                                    <div className={`p-2 rounded-lg ${approval.status === 'approved' ? 'bg-green-100' : approval.status === 'rejected' ? 'bg-red-100' : 'bg-yellow-100'}`}>
+                                    <div className={`p-2 rounded-lg ${approval.status === 'approved' || approval.status === 'complete' || approval.status === 'completed' ? 'bg-green-100' : approval.status === 'rejected' ? 'bg-red-100' : 'bg-yellow-100'}`}>
                                       {getStatusIcon(approval.status)}
                                     </div>
                                     <div className="flex-1">
@@ -422,7 +441,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                             {approval.reviewer_role?.replace(/([A-Z])/g, ' $1').trim()}
                                           </span>
                                           <Badge className={`${getStatusColor(approval.status)} border`}>
-                                            {approval.status.toUpperCase()}
+                                            {formatStatusText(approval.status)}
                                           </Badge>
                                         </div>
                                         <span className="text-xs text-gray-500">
@@ -643,7 +662,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                     <div className="flex items-center gap-2 mt-2">
                                       <Badge className={`${getStatusColor(latestStatus.status)} border text-sm py-1 px-3`}>
                                         {getStatusIcon(latestStatus.status)}
-                                        <span className="ml-1">{latestStatus.status?.toUpperCase() || 'PENDING'}</span>
+                                        <span className="ml-1">{formatStatusText(latestStatus.status || 'pending')}</span>
                                       </Badge>
                                       {latestStatus.is_active && (
                                         <Badge className="bg-green-100 text-green-700 border-green-200">
@@ -917,7 +936,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                           <div className="flex gap-4">
                             <div className="flex-shrink-0">
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                approval.status === 'approved' ? 'bg-green-100' :
+                                approval.status === 'approved' || approval.status === 'complete' || approval.status === 'completed' ? 'bg-green-100' :
                                 approval.status === 'rejected' ? 'bg-red-100' :
                                 'bg-yellow-100'
                               }`}>
@@ -935,7 +954,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   </p>
                                 </div>
                                 <Badge className={`${getStatusColor(approval.status)} border`}>
-                                  {approval.status.toUpperCase()}
+                                  {formatStatusText(approval.status)}
                                 </Badge>
                               </div>
                               <p className="text-sm text-gray-700 mt-2">

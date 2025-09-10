@@ -169,23 +169,23 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
       transition={{ duration: 0.2 }}
     >
       <Card className="shadow-md hover:shadow-lg transition-shadow border-0">
-        <CardContent className="p-6">
+        <CardContent className="p-4">
           {/* Header */}
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-50 rounded-lg">
-                <FileText className="w-5 h-5 text-red-600" />
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-red-50 rounded-lg">
+                <FileText className="w-4 h-4 text-red-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900">
+                <h3 className="text-sm font-semibold text-gray-900">
                   {purchase.prNumber || `PR-${purchase.purchase_id}`}
                 </h3>
-                <p className="text-sm text-gray-500">
+                <p className="text-xs text-gray-500">
                   {new Date(purchase.date || purchase.created_at).toLocaleDateString()}
                 </p>
               </div>
             </div>
-            <div className="flex flex-col gap-2 items-end">
+            <div className="flex flex-col gap-1.5 items-end">
               <div className="flex flex-col gap-1 items-end">
                 <Badge className={`${getStatusColor(status)} border`}>
                   {status.toUpperCase()}
@@ -204,34 +204,30 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
             </div>
           </div>
 
-          <Separator className="my-4" />
+          <Separator className="my-3" />
 
           {/* Details */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm">
-              <Building2 className="w-4 h-4 text-gray-400" />
-              <span className="text-gray-600">Project:</span>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs">
+              <Building2 className="w-3 h-3 text-gray-400" />
               <span className="font-medium text-gray-900">{purchase.project_id}</span>
             </div>
 
-            <div className="flex items-center gap-2 text-sm">
-              <Package className="w-4 h-4 text-gray-400" />
-              <span className="text-gray-600">Requested by:</span>
+            <div className="flex items-center gap-2 text-xs">
+              <Package className="w-3 h-3 text-gray-400" />
               <span className="font-medium text-gray-900">{purchase.requested_by}</span>
             </div>
 
-            <div className="flex items-center gap-2 text-sm">
-              <DollarSign className="w-4 h-4 text-gray-400" />
-              <span className="text-gray-600">Total Amount:</span>
+            <div className="flex items-center gap-2 text-xs">
+              <DollarSign className="w-3 h-3 text-gray-400" />
               <span className="font-semibold text-gray-900">
                 AED {totalAmount.toLocaleString()}
               </span>
             </div>
 
             {purchase.materials && (
-              <div className="flex items-center gap-2 text-sm">
-                <Package className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-600">Items:</span>
+              <div className="flex items-center gap-2 text-xs">
+                <Package className="w-3 h-3 text-gray-400" />
                 <span className="font-medium text-gray-900">
                   {purchase.materials.length} material{purchase.materials.length !== 1 ? 's' : ''}
                 </span>
@@ -258,38 +254,38 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
             )}
           </div>
 
-          <Separator className="my-4" />
+          <Separator className="my-3" />
 
           {/* Actions */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             {/* Primary Actions Row */}
-            <div className="flex items-center gap-2 justify-between">
+            <div className="flex items-center gap-1.5 w-full">
               {/* View Actions - Always visible */}
-              <div className="flex items-center gap-2">
-                {onViewDetails && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onViewDetails(purchase.purchase_id)}
-                    disabled={isLoading}
-                  >
-                    <Eye className="w-4 h-4 mr-1" />
-                    View Details
-                  </Button>
-                )}
-                
-                {onViewHistory && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onViewHistory(purchase.purchase_id)}
-                    disabled={isLoading}
-                  >
-                    <History className="w-4 h-4 mr-1" />
-                    View History
-                  </Button>
-                )}
-              </div>
+              {onViewDetails && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onViewDetails(purchase.purchase_id)}
+                  disabled={isLoading}
+                  className="flex-1 h-7 text-xs flex items-center justify-center min-w-0"
+                >
+                  <Eye className="w-3 h-3 mr-1" />
+                  Details
+                </Button>
+              )}
+              
+              {onViewHistory && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onViewHistory(purchase.purchase_id)}
+                  disabled={isLoading}
+                  className="flex-1 h-7 text-xs flex items-center justify-center min-w-0"
+                >
+                  <History className="w-3 h-3 mr-1" />
+                  History
+                </Button>
+              )}
 
               {/* Edit Action - Show only for pending items */}
               {onEdit && status === 'pending' && (
@@ -299,8 +295,9 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   onClick={() => onEdit(purchase.purchase_id)}
                   disabled={isLoading}
                   title="Edit Purchase Request"
+                  className="flex-1 h-7 text-xs flex items-center justify-center min-w-0"
                 >
-                  <Edit className="w-4 h-4 mr-1" />
+                  <Edit className="w-3 h-3 mr-1" />
                   Edit
                 </Button>
               )}
@@ -313,10 +310,10 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   size="sm"
                   onClick={() => onSendEmail(purchase.purchase_id)}
                   disabled={isLoading}
-                  className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+                  className="bg-blue-600 hover:bg-blue-700 text-white w-full h-7 text-xs flex items-center justify-center"
                   title="Send to Project Manager"
                 >
-                  <Mail className="w-4 h-4 mr-1" />
+                  <Mail className="w-3 h-3 mr-1" />
                   Send to PM
                 </Button>
               </div>
@@ -329,10 +326,10 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   size="sm"
                   onClick={() => onResendToPM(purchase.purchase_id)}
                   disabled={isLoading}
-                  className="bg-orange-600 hover:bg-orange-700 text-white w-full"
+                  className="bg-orange-600 hover:bg-orange-700 text-white w-full h-7 text-xs flex items-center justify-center"
                   title="Resend to Project Manager after revision"
                 >
-                  <Mail className="w-4 h-4 mr-1" />
+                  <Mail className="w-3 h-3 mr-1" />
                   Resend to PM
                 </Button>
               </div>
@@ -345,10 +342,10 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   size="sm"
                   onClick={() => onResendToEst(purchase.purchase_id)}
                   disabled={isLoading}
-                  className="bg-purple-600 hover:bg-purple-700 text-white w-full"
+                  className="bg-purple-600 hover:bg-purple-700 text-white w-full h-7 text-xs flex items-center justify-center"
                   title="Resend to Project Manager after revision"
                 >
-                  <Mail className="w-4 h-4 mr-1" />
+                  <Mail className="w-3 h-3 mr-1" />
                   Resend to PM
                 </Button>
               </div>

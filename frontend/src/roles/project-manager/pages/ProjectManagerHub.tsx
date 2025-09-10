@@ -99,7 +99,17 @@ const ProjectManagerHub: React.FC = () => {
       
       if (response.success) {
         setPurchases(response.approved_procurement_purchases || []);
-        setEstimationRejectedPurchases(response.estimation_pm_rejections || []);
+        
+        // Filter estimation rejected purchases to exclude those rejected by PM
+        // Only show purchases that were approved by PM but rejected by Estimation
+        const estimationRejections = (response.estimation_pm_rejections || []).filter(
+          (purchase: ProcurementPurchase) => {
+            // Only include purchases where PM approved but Estimation rejected
+            // Exclude purchases where PM rejected (pm_status === 'rejected')
+            return purchase.pm_status !== 'rejected';
+          }
+        );
+        setEstimationRejectedPurchases(estimationRejections);
         
         // Calculate metrics from the response
         const metricsData: MetricCard[] = [
@@ -292,13 +302,23 @@ const ProjectManagerHub: React.FC = () => {
   // Handle rejection action
   const handleReject = async (purchaseId: number, reason: string) => {
     try {
+      // Check if the purchase has already been rejected
+      const purchase = purchases.find(p => p.purchase_id === purchaseId);
+      if (purchase?.pm_status === 'rejected') {
+        toast.warning('This purchase has already been rejected by Project Manager');
+        return;
+      }
+      
       const result = await projectManagerService.rejectPurchase(purchaseId, reason, 'Rejected by Project Manager');
       if (result.success) {
         toast.success('Purchase rejected successfully');
         setRefreshKey(prev => prev + 1);
       }
-    } catch (error) {
-      toast.error('Failed to reject purchase');
+    } catch (error: any) {
+      // Show specific error message if available
+      const errorMessage = error.message || 'Failed to reject purchase';
+      toast.error(errorMessage);
+      console.error('Rejection error:', error);
     }
   };
 
@@ -322,14 +342,59 @@ const ProjectManagerHub: React.FC = () => {
     toast.info(`Edit functionality for purchase ${purchaseId}`);
   };
 
-  // Handle send to estimation
+  // Handle send to estimation (for estimation rejected purchases)
   const handleSendToEstimation = async (purchaseId: number) => {
     try {
-      // This would call the appropriate API endpoint
-      toast.success(`Purchase ${purchaseId} sent to Estimation team`);
-      setRefreshKey(prev => prev + 1);
-    } catch (error) {
-      toast.error('Failed to send to Estimation');
+      // Find the purchase to check its status
+      const purchase = estimationRejectedPurchases.find(p => p.purchase_id === purchaseId);
+      
+      // Check if PM previously rejected this purchase
+      if (purchase?.pm_status === 'rejected') {
+        toast.error('Cannot resend: This purchase was rejected by Project Manager. Please approve it from the Pending tab first.');
+        return;
+      }
+      
+      // Log the purchase status for debugging
+      console.log('Attempting to resend purchase:', {
+        purchaseId,
+        pm_status: purchase?.pm_status,
+        rejected_status: purchase?.rejected_status
+      });
+      
+      const result = await projectManagerService.resendToEstimation(
+        purchaseId, 
+        'Reviewed and resending to Estimation for further review'
+      );
+      
+      // Check if the response indicates success
+      if (result.success || result.message?.includes('successfully')) {
+        toast.success('Purchase resent to Estimation team successfully');
+        setRefreshKey(prev => prev + 1);
+      } else {
+        // If there's an error in the response
+        toast.error(result.message || result.error || 'Failed to resend to Estimation');
+      }
+    } catch (error: any) {
+      // Handle different error structures
+      let errorMessage = 'Failed to resend to Estimation';
+      
+      if (typeof error === 'object' && error !== null) {
+        // If error is the response data directly
+        if (error.error) {
+          errorMessage = error.error;
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        // Handle axios error structure
+        else if (error.response?.data?.error) {
+          errorMessage = error.response.data.error;
+        } else if (error.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        }
+      }
+      
+      toast.error(errorMessage);
+      console.error('Error resending to estimation:', error);
     }
   };
 
@@ -496,7 +561,7 @@ const ProjectManagerHub: React.FC = () => {
                     <p className="text-gray-500">No purchases found</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {filteredPurchases.map((purchase) => (
                       <PurchaseApprovalCard
                         key={purchase.purchase_id}
@@ -508,6 +573,7 @@ const ProjectManagerHub: React.FC = () => {
                         onReject={(reason) => handleReject(purchase.purchase_id, reason)}
                         onSendToEstimation={() => handleSendToEstimation(purchase.purchase_id)}
                         isLoading={false}
+                        isEstimationRejected={activeTab === 'estimation_rejected'}
                       />
                     ))}
                   </div>

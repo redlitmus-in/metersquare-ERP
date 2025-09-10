@@ -243,7 +243,27 @@ class ProjectManagerService {
         comments: comments || ''
       });
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
+      // Handle specific error cases
+      if (error.response?.data?.error) {
+        const errorMessage = error.response.data.error;
+        
+        // Check for various forms of "already rejected" error
+        if (errorMessage.toLowerCase().includes('already rejected') || 
+            errorMessage.toLowerCase().includes('has already rejected')) {
+          // Return a standardized error message
+          throw new Error('This purchase has already been rejected by Project Manager. No further action needed.');
+        }
+        
+        // Check for "already approved" error (happens in Est. Rejected tab)
+        if (errorMessage.toLowerCase().includes('already approved')) {
+          throw new Error('Cannot reject: This purchase was already approved and is awaiting estimation review. Use "Resend to Est" instead.');
+        }
+        
+        // Pass through other specific error messages
+        throw new Error(errorMessage);
+      }
+      
       console.error('Error rejecting purchase:', error);
       throw error;
     }
@@ -384,15 +404,48 @@ class ProjectManagerService {
     }
   }
 
+
   /**
-   * Handle purchase approval workflow
+   * Resend purchase to estimation after rejection
+   * For estimation rejected purchases, we need to create a new approval
    */
-  async handlePurchaseApproval(approval: PurchaseApproval): Promise<any> {
+  async resendToEstimation(purchaseId: number, comments?: string): Promise<any> {
     try {
-      const response = await apiClient.post('/pm_approval', approval);
+      // For estimation rejected purchases, we need to approve them again from PM side
+      // The backend checks if PM already approved, so we may need to handle that error
+      const response = await apiClient.post('/pm_approval', {
+        purchase_id: purchaseId,
+        purchase_status: 'approved',
+        comments: comments || 'Reviewed estimation feedback and resending for further review'
+      });
       return response.data;
-    } catch (error) {
-      console.error('Error handling purchase approval:', error);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || '';
+      
+      // Check if the error is because PM already approved
+      if (errorMessage.toLowerCase().includes('already approved')) {
+        // This means the purchase is already in the correct state
+        // Return success since the purchase is already approved by PM
+        return {
+          success: true,
+          message: 'Purchase is already approved and in estimation review'
+        };
+      }
+      
+      // Check if the error is because PM already rejected  
+      // This includes both "already rejected" and "has already rejected" patterns
+      if (errorMessage.toLowerCase().includes('already rejected') || 
+          errorMessage.toLowerCase().includes('has already rejected')) {
+        // This is a special case - PM rejected, then it went to estimation who also rejected
+        // We need to handle this differently - the PM needs to approve again to override their rejection
+        throw new Error('This purchase was previously rejected by you. Please approve it first from the Pending tab before resending to Estimation.');
+      }
+      
+      console.error('Error resending to estimation:', error);
+      // Re-throw with more context
+      if (error.response?.data) {
+        throw error.response.data;
+      }
       throw error;
     }
   }
