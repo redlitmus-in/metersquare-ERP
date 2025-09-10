@@ -91,28 +91,27 @@ const EstimationHub: React.FC = () => {
           }
         });
         
-        const pendingValue = pendingPurchases.reduce((sum, p) => 
-          sum + (p.total_cost || 0), 0
-        );
+        // Calculate total value across ALL purchases (pending, approved, rejected, td-rejected)
+        const totalValue = purchases.reduce((sum, p) => {
+          const cost = p.total_cost || 
+                      p.materials_summary?.total_cost || 
+                      (p.materials ? p.materials.reduce((matSum, mat) => matSum + (mat.cost * mat.quantity), 0) : 0);
+          return sum + cost;
+        }, 0);
         
-        const approvedValue = approvedPurchases.reduce((sum, p) => 
-          sum + (p.total_cost || 0), 0
-        );
-        
-        const rejectedValue = rejectedPurchases.reduce((sum, p) => 
-          sum + (p.total_cost || 0), 0
-        );
-        
-        const totalQuantity = pendingPurchases.reduce((sum, p) => 
-          sum + (p.total_quantity || 0), 0
-        );
+        // Calculate total quantity across ALL purchases
+        const totalQuantity = purchases.reduce((sum, p) => {
+          const quantity = p.total_quantity || 
+                          (p.materials ? p.materials.reduce((matSum, mat) => matSum + mat.quantity, 0) : 0);
+          return sum + quantity;
+        }, 0);
 
         setMetrics({
           pendingCount: pendingPurchases.length,
           approvedCount: approvedPurchases.length,
           rejectedCount: rejectedPurchases.length,
           tdRejectedCount: tdRejectedPurchases.length,
-          totalValue: pendingValue,
+          totalValue: totalValue,
           avgProcessingTime: 0,
           totalQuantity: totalQuantity,
           costRejections: rejectedPurchases.filter(p => p.status_info?.rejection_reason?.includes('cost')).length,
@@ -454,7 +453,7 @@ const EstimationHub: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               <AnimatePresence mode="popLayout">
                 {filteredPurchases.map((purchase) => (
                   <EstimationApprovalCard
@@ -489,7 +488,7 @@ const EstimationHub: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               <AnimatePresence mode="popLayout">
                 {filteredPurchases.map((purchase) => (
                   <EstimationApprovalCard
@@ -524,7 +523,7 @@ const EstimationHub: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               <AnimatePresence mode="popLayout">
                 {filteredPurchases.map((purchase) => (
                   <EstimationApprovalCard
@@ -559,7 +558,7 @@ const EstimationHub: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               <AnimatePresence mode="popLayout">
                 {filteredPurchases.map((purchase) => (
                   <EstimationApprovalCard

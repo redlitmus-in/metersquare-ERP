@@ -106,12 +106,12 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
       transition={{ duration: 0.3 }}
     >
       <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-orange-500">
-        <CardContent className="p-4">
+        <CardContent className="p-3">
           {/* Header */}
-          <div className="flex items-start justify-between mb-4">
+          <div className="flex items-start justify-between mb-3">
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="text-lg font-semibold text-gray-900">
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-semibold text-gray-900">
                   PR #{purchase.purchase_id}
                 </h3>
                 <Badge className={`${getStatusColor(purchase.status)} text-xs flex items-center gap-1`}>
@@ -125,27 +125,24 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   </Badge>
                 )}
               </div>
-              <p className="text-sm text-gray-600">{purchase.purpose}</p>
+              <p className="text-xs text-gray-600 text-left">{purchase.purpose}</p>
             </div>
           </div>
 
           {/* Details Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-            <div className="flex items-center gap-2 text-sm">
-              <MapPin className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-600">Site:</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-3">
+            <div className="flex items-center gap-2 text-xs">
+              <MapPin className="h-3 w-3 text-gray-400 flex-shrink-0" />
               <span className="font-medium text-gray-900">{purchase.site_location}</span>
             </div>
             
-            <div className="flex items-center gap-2 text-sm">
-              <FileText className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-600">Project:</span>
+            <div className="flex items-center gap-2 text-xs">
+              <FileText className="h-3 w-3 text-gray-400 flex-shrink-0" />
               <span className="font-medium text-gray-900">{purchase.project_id}</span>
             </div>
             
-            <div className="flex items-center gap-2 text-sm">
-              <Calendar className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-600">Date:</span>
+            <div className="flex items-center gap-2 text-xs">
+              <Calendar className="h-3 w-3 text-gray-400 flex-shrink-0" />
               <span className="font-medium text-gray-900">
                 {new Date(purchase.date).toLocaleDateString()}
               </span>
@@ -153,19 +150,19 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
           </div>
 
           {/* Materials Summary */}
-          <div className="bg-gray-50 rounded-lg p-3 mb-4">
-            <div className="grid grid-cols-3 gap-3">
-              <div>
+          <div className="bg-gray-50 rounded-lg p-2 mb-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-center">
                 <p className="text-xs text-gray-500">Materials</p>
-                <p className="text-lg font-bold text-gray-900">{materialCount}</p>
+                <p className="text-sm font-bold text-gray-900">{materialCount}</p>
               </div>
-              <div>
+              <div className="text-center">
                 <p className="text-xs text-gray-500">Total Quantity</p>
-                <p className="text-lg font-bold text-blue-600">{totalQuantity}</p>
+                <p className="text-sm font-bold text-blue-600">{totalQuantity}</p>
               </div>
-              <div>
+              <div className="text-center">
                 <p className="text-xs text-gray-500">Total Cost</p>
-                <p className="text-lg font-bold text-green-600">
+                <p className="text-sm font-bold text-green-600">
                   AED {totalCost.toLocaleString()}
                 </p>
               </div>
@@ -173,17 +170,17 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {/* Always show View Details and View History */}
             <Button
               size="sm"
               variant="outline"
               onClick={() => onViewDetails(purchase.purchase_id)}
               disabled={isLoading}
-              className="flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              className="flex items-center justify-center gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-7 text-xs"
             >
-              <Eye className="h-3.5 w-3.5" />
-              View Details
+              <Eye className="h-3 w-3" />
+              Details
             </Button>
             
             <Button
@@ -191,10 +188,10 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
               variant="outline"
               onClick={() => onViewHistory(purchase.purchase_id)}
               disabled={isLoading}
-              className="flex items-center gap-1 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+              className="flex items-center justify-center gap-1 text-purple-600 hover:text-purple-700 hover:bg-purple-50 h-7 text-xs"
             >
-              <History className="h-3.5 w-3.5" />
-              View History
+              <History className="h-3 w-3" />
+              History
             </Button>
 
             {/* Show Edit, Delete, and Send Email only if email NOT sent */}
@@ -206,9 +203,9 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                     variant="outline"
                     onClick={() => onEdit(purchase.purchase_id)}
                     disabled={isLoading}
-                    className="flex items-center gap-1 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                    className="flex items-center justify-center gap-1 text-amber-600 hover:text-amber-700 hover:bg-amber-50 h-7 text-xs"
                   >
-                    <Edit className="h-3.5 w-3.5" />
+                    <Edit className="h-3 w-3" />
                     Edit
                   </Button>
                 )}
@@ -219,9 +216,9 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                     variant="outline"
                     onClick={() => onDelete(purchase.purchase_id)}
                     disabled={isLoading}
-                    className="flex items-center gap-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="flex items-center justify-center gap-1 text-red-600 hover:text-red-700 hover:bg-red-50 h-7 text-xs"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-3 w-3" />
                     Delete
                   </Button>
                 )}
@@ -232,9 +229,9 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                     variant="outline"
                     onClick={() => onSendEmail(purchase.purchase_id)}
                     disabled={isLoading}
-                    className="flex items-center gap-1 text-green-600 hover:text-green-700 hover:bg-green-50"
+                    className="flex items-center justify-center gap-1 text-green-600 hover:text-green-700 hover:bg-green-50 h-7 text-xs"
                   >
-                    <Mail className="h-3.5 w-3.5" />
+                    <Mail className="h-3 w-3" />
                     Send Email
                   </Button>
                 )}
@@ -243,8 +240,8 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
           </div>
 
           {/* Footer */}
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-xs text-gray-500">
+          <div className="mt-2 pt-2 border-t border-gray-100">
+            <p className="text-xs text-gray-500 text-left">
               Created {formatDistanceToNow(new Date(purchase.created_at), { addSuffix: true })} by {purchase.requested_by}
             </p>
           </div>

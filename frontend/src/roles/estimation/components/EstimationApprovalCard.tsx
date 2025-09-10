@@ -103,15 +103,15 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
         needsReview ? 'ring-2 ring-amber-200 border-amber-300' :
         'border-gray-200'
       }`}>
-        <CardHeader className="pb-3 px-4 pt-4">
-          <div className="flex justify-between items-start gap-3">
-            <div className="flex items-start gap-3 min-w-0 flex-1">
-              <FileText className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+        <CardHeader className="pb-2 px-3 pt-3">
+          <div className="flex justify-between items-start gap-2">
+            <div className="flex items-start gap-2 min-w-0 flex-1">
+              <FileText className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
               <div className="min-w-0 flex-1">
-                <h3 className="text-base font-semibold text-gray-900">
+                <h3 className="text-sm font-semibold text-gray-900">
                   Purchase #{purchase.purchase_id}
                 </h3>
-                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
                   <span className="flex items-center gap-1">
                     <MapPin className="h-3 w-3" />
                     {purchase.site_location}
@@ -145,35 +145,35 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
           </div>
         </CardHeader>
 
-        <CardContent className="px-4 py-3 space-y-3 flex-1 flex flex-col">
+        <CardContent className="px-3 py-2 space-y-2 flex-1 flex flex-col">
           {/* Purpose - Compact */}
           <div>
-            <p className="text-xs font-medium text-gray-600 mb-1">Purpose</p>
-            <p className="text-sm text-gray-800 line-clamp-1">{purchase.purpose}</p>
+            <p className="text-xs font-medium text-gray-600 mb-0.5">Purpose</p>
+            <p className="text-xs text-gray-800 line-clamp-1">{purchase.purpose}</p>
           </div>
 
           {/* Cost Analysis - Ultra Compact */}
-          <div className="flex items-center justify-between py-2 px-3 bg-blue-50 rounded">
+          <div className="flex items-center justify-between py-1.5 px-2 bg-blue-50 rounded">
             <div className="flex items-center gap-2">
               <DollarSign className="h-3 w-3 text-blue-600" />
               <span className="text-xs font-medium text-blue-700">Cost Analysis</span>
             </div>
-            <span className="text-base font-bold text-blue-900">
+            <span className="text-sm font-bold text-blue-900">
               {formatCurrency(totalCost)}
             </span>
           </div>
 
           {/* Material Categories - Compact */}
           {purchase.materials && purchase.materials.length > 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-0.5">
               {[...new Set(purchase.materials.map((m: Material) => m.category))]
                 .slice(0, 2).map((category, index) => (
-                <Badge key={index} variant="outline" className="text-[10px] px-2 py-0.5">
+                <Badge key={index} variant="outline" className="text-[9px] px-1.5 py-0.5">
                   {category}
                 </Badge>
               ))}
               {[...new Set(purchase.materials.map((m: Material) => m.category))].length > 2 && (
-                <Badge variant="outline" className="text-[10px] px-2 py-0.5">
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0.5">
                   +{[...new Set(purchase.materials.map((m: Material) => m.category))].length - 2}
                 </Badge>
               )}
@@ -182,7 +182,7 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
           
           {/* TD Rejection Reason if available */}
           {isTDRejected && purchase.status_info?.rejection_reason && (
-            <div className="p-2 bg-orange-50 rounded border border-orange-200">
+            <div className="p-1.5 bg-orange-50 rounded border border-orange-200">
               <div className="flex items-start gap-1.5">
                 <AlertCircle className="h-3 w-3 text-orange-600 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -198,24 +198,24 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
           
           {/* Action Buttons - Properly Aligned */}
           {needsReview && !isReadOnly && (
-            <div className="space-y-2 pt-3 mt-auto border-t border-gray-100">
-              <div className="flex gap-2">
+            <div className="space-y-1.5 pt-2 mt-auto border-t border-gray-100">
+              <div className="flex gap-1.5">
                 <Button
                   onClick={() => onApprove(purchase.purchase_id)}
                   disabled={isLoading}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white h-9 text-xs font-medium"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white h-7 text-xs font-medium flex items-center justify-center"
                 >
-                  <CheckCircle className="h-3 w-3 mr-1.5" />
-                  {isTDRejected ? 'Re-approve & Send to TD' : 'Approve & Send to TD'}
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  {isTDRejected ? 'Re-approve' : 'Approve'}
                 </Button>
                 <Button
                   onClick={() => onReject(purchase.purchase_id)}
                   disabled={isLoading}
                   variant="outline"
-                  className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 h-9 text-xs font-medium"
+                  className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 h-7 text-xs font-medium flex items-center justify-center"
                 >
-                  <XCircle className="h-3 w-3 mr-1.5" />
-                  {isTDRejected ? 'Reject & Send Back' : 'Reject with Reason'}
+                  <XCircle className="h-3 w-3 mr-1" />
+                  {isTDRejected ? 'Reject' : 'Reject'}
                 </Button>
               </div>
             </div>
@@ -223,8 +223,8 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
 
           {/* Status Display for Approved/Rejected Items */}
           {!needsReview && estimationStatus !== 'pending' && (
-            <div className="pt-2 mt-auto border-t border-gray-100">
-              <div className={`text-center py-2 rounded ${
+            <div className="pt-1.5 mt-auto border-t border-gray-100">
+              <div className={`text-center py-1.5 rounded ${
                 estimationStatus === 'approved' ? 'bg-green-50 text-green-700' : 
                 estimationStatus === 'rejected' ? 'bg-red-50 text-red-700' : 
                 'bg-gray-50 text-gray-700'
@@ -233,12 +233,12 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
                   {estimationStatus === 'approved' ? (
                     <>
                       <CheckCircle className="h-3 w-3" />
-                      <span>Approved - Sent to TD</span>
+                      <span>Approved</span>
                     </>
                   ) : estimationStatus === 'rejected' ? (
                     <>
                       <XCircle className="h-3 w-3" />
-                      <span>Rejected - Sent Back</span>
+                      <span>Rejected</span>
                     </>
                   ) : null}
                 </div>
@@ -247,24 +247,24 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
           )}
 
           {/* View Details and History Buttons - Always visible */}
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-1.5 mt-1.5">
             <Button
               onClick={() => onViewDetails ? onViewDetails(purchase.purchase_id) : null}
               variant="outline"
-              className="flex-1 h-8 text-xs font-medium border-gray-200 hover:bg-gray-50"
+              className="flex-1 h-7 text-xs font-medium border-gray-200 hover:bg-gray-50 flex items-center justify-center"
               disabled={isLoading}
             >
-              <Package className="h-3 w-3 mr-1.5" />
-              View Full Details
+              <Package className="h-3 w-3 mr-1" />
+              Details
             </Button>
             <Button
               onClick={() => onViewHistory ? onViewHistory(purchase.purchase_id) : null}
               variant="outline"
-              className="flex-1 h-8 text-xs font-medium border-gray-200 hover:bg-gray-50"
+              className="flex-1 h-7 text-xs font-medium border-gray-200 hover:bg-gray-50 flex items-center justify-center"
               disabled={isLoading}
             >
-              <History className="h-3 w-3 mr-1.5" />
-              View History
+              <History className="h-3 w-3 mr-1" />
+              History
             </Button>
           </div>
         </CardContent>

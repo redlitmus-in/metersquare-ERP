@@ -414,8 +414,9 @@ const SiteSupervisorHub: React.FC = () => {
 
         <TabsContent value={activeTab} className="space-y-4">
           {filteredPurchases.length > 0 ? (
-            <AnimatePresence mode="popLayout">
-              {filteredPurchases.map((purchase) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <AnimatePresence mode="popLayout">
+                {filteredPurchases.map((purchase) => (
                 <PurchaseCard
                   key={purchase.purchase_id}
                   purchase={purchase}
@@ -426,8 +427,9 @@ const SiteSupervisorHub: React.FC = () => {
                   onSendEmail={handleSendEmail}
                   isLoading={isLoading}
                 />
-              ))}
-            </AnimatePresence>
+                ))}
+              </AnimatePresence>
+            </div>
           ) : (
             <Card className="p-8">
               <div className="text-center">
@@ -452,7 +454,7 @@ const SiteSupervisorHub: React.FC = () => {
       {/* Purchase Details Modal */}
       {/* New Purchase Request Form Modal */}
       <Dialog open={newPurchaseModalOpen} onOpenChange={setNewPurchaseModalOpen}>
-        <DialogContent className="max-w-7xl max-h-[95vh] overflow-y-auto p-0" hideCloseButton>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto p-0" hideCloseButton>
           <PurchaseRequisitionForm
             onClose={() => {
               setNewPurchaseModalOpen(false);
@@ -465,7 +467,7 @@ const SiteSupervisorHub: React.FC = () => {
 
       {/* Edit Purchase Request Form Modal */}
       <Dialog open={editPurchaseModalOpen} onOpenChange={setEditPurchaseModalOpen}>
-        <DialogContent className="max-w-7xl max-h-[95vh] overflow-y-auto p-0" hideCloseButton>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto p-0" hideCloseButton>
           <PurchaseRequisitionForm
             onClose={() => {
               setEditPurchaseModalOpen(false);
