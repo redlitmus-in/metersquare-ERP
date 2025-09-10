@@ -76,22 +76,27 @@ apiClient.interceptors.response.use(
       }
     }
     
-    // Handle other error codes
+    // Handle other error codes and navigate to error pages
     if (error.response?.status === 403) {
-      sessionStorage.setItem('lastError', JSON.stringify({
-        code: '403',
-        message: 'Access Forbidden'
-      }));
+      // Navigate to 403 error page
+      if (!window.location.pathname.includes('/403')) {
+        window.location.replace('/403');
+      }
+    } else if (error.response?.status === 404) {
+      // Navigate to 404 error page
+      if (!window.location.pathname.includes('/404')) {
+        window.location.replace('/404');
+      }
     } else if (error.response?.status >= 500) {
-      sessionStorage.setItem('lastError', JSON.stringify({
-        code: '500',
-        message: 'Server Error'
-      }));
+      // Navigate to 500 error page
+      if (!window.location.pathname.includes('/500')) {
+        window.location.replace('/500');
+      }
     } else if (!error.response) {
-      sessionStorage.setItem('lastError', JSON.stringify({
-        code: 'offline',
-        message: 'Network Error'
-      }));
+      // Network error - navigate to 500 page
+      if (!window.location.pathname.includes('/500')) {
+        window.location.replace('/500');
+      }
     }
     
     return Promise.reject(error);

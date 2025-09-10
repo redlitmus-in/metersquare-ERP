@@ -16,6 +16,7 @@ import ProfilePage from '@/pages/common/ProfilePage';
 import AnalyticsPage from '@/pages/common/AnalyticsPage';
 import ProcurementDashboard from '@/pages/dashboards/ProcurementDashboard';
 import WorkflowStatusPage from '@/pages/common/WorkflowStatusPage';
+import CreativeErrorPage from '@/components/ui/CreativeErrorPage';
 
 // Role-specific dashboards
 import {
@@ -283,8 +284,54 @@ function App() {
           </Route>
         </Route>
 
-        {/* Catch all route - redirect to login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Error Routes */}
+        <Route 
+          path="/404" 
+          element={
+            <CreativeErrorPage 
+              variant="liquid-motion"
+              errorCode="404"
+              errorTitle="Page Not Found"
+              errorMessage="The page you're looking for doesn't exist or has been moved."
+            />
+          } 
+        />
+        <Route 
+          path="/403" 
+          element={
+            <CreativeErrorPage 
+              variant="liquid-motion"
+              errorCode="403"
+              errorTitle="Access Denied"
+              errorMessage="You don't have permission to access this resource."
+            />
+          } 
+        />
+        <Route 
+          path="/500" 
+          element={
+            <CreativeErrorPage 
+              variant="liquid-motion"
+              errorCode="500"
+              errorTitle="Server Error"
+              errorMessage="Something went wrong on our end. Please try again later."
+              onRefresh={() => window.location.reload()}
+            />
+          } 
+        />
+        
+        {/* Catch all route - show 404 error page */}
+        <Route 
+          path="*" 
+          element={
+            <CreativeErrorPage 
+              variant="liquid-motion"
+              errorCode="404"
+              errorTitle="Page Not Found"
+              errorMessage="The page you're looking for doesn't exist or has been moved."
+            />
+          } 
+        />
       </Routes>
     </div>
   );
