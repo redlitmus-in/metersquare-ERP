@@ -7,7 +7,7 @@ from flask import Blueprint
 from controllers.auth_controller import jwt_required
 from controllers.project_manager_controller import *
 
-project_manager_routes = Blueprint('project_manager_routes', __name__)
+project_manager_routes = Blueprint('project_manager_routes', __name__, url_prefix='/api')
 
 # Project Manager Approval Workflow
 @project_manager_routes.route('/pm_approval', methods=['POST'])

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from controllers.file_upload_controller import *
 # Create blueprint for purchase workflow routes
-file_upload_routes = Blueprint('file_upload', __name__)
+file_upload_routes = Blueprint('file_upload', __name__,url_prefix='/api')
 
 
 @file_upload_routes.route('/upload_file', methods=['POST'])

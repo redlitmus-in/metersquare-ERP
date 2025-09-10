@@ -4,7 +4,7 @@ from flask import Blueprint
 from controllers.auth_controller import *
 from utils.authentication import *
 
-auth_routes = Blueprint("auth_routes", __name__, url_prefix="/")
+auth_routes = Blueprint("auth_routes", __name__, url_prefix='/api')
 
 # Public routes (no authentication required)
 @auth_routes.route('/register', methods=['POST'])

@@ -2,7 +2,7 @@ from flask import Blueprint
 from controllers.auth_controller import jwt_required
 from controllers.technical_director_controller import *
 
-technical_director_routes = Blueprint('technical_director', __name__)
+technical_director_routes = Blueprint('technical_director', __name__,url_prefix='/api')
 
 # Technical Director approval workflow routes
 @technical_director_routes.route('/tech_approval', methods=['POST'])

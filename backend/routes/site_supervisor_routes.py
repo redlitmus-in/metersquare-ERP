@@ -2,7 +2,7 @@ from flask import Blueprint
 from utils.authentication import jwt_required
 from controllers.site_supervisor_controller import *
 
-site_supervisor_routes = Blueprint("site_supervisor_routes", __name__)
+site_supervisor_routes = Blueprint("site_supervisor_routes", __name__,url_prefix='/api')
 # Dashboard
 @site_supervisor_routes.route('/site_supervisor_dashboard', methods=['GET'])
 @jwt_required

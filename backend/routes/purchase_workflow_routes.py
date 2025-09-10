@@ -2,7 +2,7 @@ from flask import Blueprint
 from controllers.auth_controller import jwt_required
 from controllers.purchase_controller import *
 # Create blueprint for purchase workflow routes
-purchase_workflow_routes = Blueprint('purchase_workflow', __name__, url_prefix='/')
+purchase_workflow_routes = Blueprint('purchase_workflow', __name__, url_prefix='/api')
 
 # Step 1: Site/MEP Supervisor creates requisition
 @purchase_workflow_routes.route('/purchase', methods=['POST'])

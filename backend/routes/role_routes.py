@@ -10,7 +10,7 @@ from config.logging import get_logger
 
 log = get_logger()
 
-role_bp = Blueprint('role', __name__)
+role_bp = Blueprint('role', __name__,url_prefix='/api')
 
 @role_bp.route('/api/roles', methods=['GET'])
 def get_workflow_roles():

@@ -2,7 +2,7 @@ from flask import Blueprint
 from controllers.procurement_controller import *
 from utils.authentication import jwt_required
 
-procurement_routes = Blueprint('procurement_routes', __name__)
+procurement_routes = Blueprint('procurement_routes', __name__,url_prefix='/api')
 
 @procurement_routes.route('/all_procurement', methods=['GET'])
 @jwt_required

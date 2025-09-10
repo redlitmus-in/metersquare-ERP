@@ -3,7 +3,7 @@ from controllers.auth_controller import jwt_required
 from controllers.account_controller import *
 
 # Create blueprint for account routes
-account_routes = Blueprint('account', __name__)
+account_routes = Blueprint('account', __name__, url_prefix='/api')
 
 # Payment Transaction Routes
 @account_routes.route('/payments/process', methods=['POST'])

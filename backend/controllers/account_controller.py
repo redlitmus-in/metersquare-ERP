@@ -332,7 +332,7 @@ def create_acknowledgement():
             purchase_id=purchase_id,
             sender_role=role.role,
             receiver_role='accounts',
-            status='approved',
+            status='completed',
             decision_by_user_id=user_id,
             comments=f'Acknowledgement created by {user_name}',
             created_by=user_name

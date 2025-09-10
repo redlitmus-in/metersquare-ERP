@@ -3,7 +3,7 @@ from controllers.auth_controller import jwt_required
 from controllers.estimation_controller import *
 
 # Create blueprint for estimation routes
-estimation_routes = Blueprint('estimation_routes', __name__)
+estimation_routes = Blueprint('estimation_routes', __name__, url_prefix='/api')
 
 # Estimation Team Approval Workflow
 @estimation_routes.route('/estimation_approval', methods=['POST'])
