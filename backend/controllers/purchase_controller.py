@@ -4,6 +4,7 @@ from flask import g, request, jsonify, current_app
 from sqlalchemy import and_, func
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import flag_modified
+from models.payment_transaction import PaymentTransaction
 from models.purchase_status import PurchaseStatus
 from models.approval import Approval
 from models.material import Material
@@ -239,13 +240,10 @@ def get_purchase_request_by_id(purchase_id):
         current_user = g.user
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
-        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        # if not role or role.role != 'accounts':
-        #     return jsonify({'error': 'Only Accounts department can view purchase details'}), 403
         purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
+        account_transactions = PaymentTransaction.get_by_purchase_id(purchase_id)
         if not purchase:
             return jsonify({'error': 'Purchase request not found'}), 404
-        # Get related materials
         material_ids = purchase.material_ids or []
         materials = []
         if material_ids:
@@ -291,6 +289,38 @@ def get_purchase_request_by_id(purchase_id):
                 'last_modified_at': latest_status.last_modified_at.isoformat() if latest_status.last_modified_at else None,
                 'last_modified_by': latest_status.last_modified_by
             }
+        # Collect supporting documents from all related payment transactions
+        aggregated_supporting_docs = []
+        for tx in account_transactions or []:
+            docs = tx.supporting_documents
+            if not docs:
+                continue
+            # Legacy format: comma-separated string of filenames or paths
+            if isinstance(docs, str):
+                raw = docs.strip()
+                if raw in ('{}', '[]', 'null', ''):
+                    continue
+                parts = [p.strip() for p in raw.split(',') if p.strip() and p.strip() not in ('{}', '[]')]
+                aggregated_supporting_docs.extend(parts)
+            else:
+                # If stored as list/array, extend directly
+                for p in docs:
+                    s = str(p).strip()
+                    if s and s not in ('{}', '[]'):
+                        aggregated_supporting_docs.append(s)
+
+        # Normalize to filenames and ensure uniqueness while preserving order
+        seen = set()
+        accounts_files = []
+        for p in aggregated_supporting_docs:
+            filename = p.split('/')[-1] if '/' in p else p
+            filename = filename.strip()
+            if not filename or filename in ('{}', '[]'):
+                continue
+            if filename not in seen:
+                seen.add(filename)
+                accounts_files.append(filename)
+
         # Format purchase data
         purchase_data = {
             'purchase_id': purchase.purchase_id,
@@ -303,6 +333,7 @@ def get_purchase_request_by_id(purchase_id):
             'material_ids': purchase.material_ids,
             'materials': materials,
             'file_path': purchase.file_path,
+            'accounts_file': accounts_files,
             'is_deleted': purchase.is_deleted,
             'email_sent': purchase.email_sent,
             'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
@@ -325,6 +356,36 @@ def update_purchase_request(purchase_id):
     try:
         current_user = g.user
         data = request.get_json()
+        # 🔸 If only accounts files are being updated, handle and return early
+        if 'accounts_file' in data:
+            accounts_files = data.get('accounts_file')
+            # Normalize input to list of filenames
+            if isinstance(accounts_files, str):
+                filenames = [p.strip() for p in accounts_files.split(',') if p.strip()]
+            elif isinstance(accounts_files, list):
+                filenames = [str(p).strip() for p in accounts_files if str(p).strip()]
+            else:
+                return jsonify({'error': 'accounts_file must be string or array of filenames'}), 400
+            # Persist as comma-separated filenames on the latest payment transaction for this purchase
+            tx = PaymentTransaction.query.filter_by(
+                purchase_id=purchase_id,
+                is_deleted=False
+            ).order_by(PaymentTransaction.created_at.desc()).first()
+
+            if not tx:
+                return jsonify({'error': 'No payment transaction found to store accounts_file'}), 404
+
+            tx.supporting_documents = ','.join(filenames) if filenames else None
+            tx.last_modified_by = current_user['full_name']
+            db.session.add(tx)
+            db.session.commit()
+
+            return jsonify({
+                'success': True,
+                'message': 'Accounts files updated successfully',
+                'purchase_id': purchase_id,
+                'accounts_file': filenames if filenames else []
+            }), 200
 
         # 🔹 1. Fetch purchase by ID
         purchase = Purchase.query.filter_by(
@@ -332,8 +393,6 @@ def update_purchase_request(purchase_id):
         ).first()
         if not purchase:
             return jsonify({'error': 'Purchase request not found'}), 404
-
-        # 🔹 2. Update purchase fields
         purchase.requested_by = data.get('requested_by', purchase.requested_by)
         purchase.site_location = data.get('site_location', purchase.site_location)
         purchase.date = data.get('date', purchase.date)
@@ -341,29 +400,17 @@ def update_purchase_request(purchase_id):
         purchase.purpose = data.get('purpose', purchase.purpose)
         purchase.file_path = data.get('file_path', purchase.file_path)
         purchase.last_modified_by = current_user['full_name']
-
+        delete_file = data.get("deletedfiles_name", [])
         # 🔹 Ensure material_ids is a list
         if not purchase.material_ids:
             purchase.material_ids = []
         elif isinstance(purchase.material_ids, str):  
             import json
             purchase.material_ids = json.loads(purchase.material_ids)
-
-        # 🔹 3. Handle materials
         new_materials = data.get("materials", [])
-        
-        # Log initial state
-        log.info(f"Initial material_ids for purchase {purchase_id}: {purchase.material_ids}")
-        
-        
-        # Log initial state
-        log.info(f"Initial material_ids for purchase {purchase_id}: {purchase.material_ids}")
-        
         for mat in new_materials:
             material_id = mat.get("material_id")
-
             if material_id:
-                # ---- Update existing material ----
                 material = Material.query.filter_by(
                     material_id=material_id, is_deleted=False
                 ).first()
@@ -381,15 +428,12 @@ def update_purchase_request(purchase_id):
                 material.design_reference = mat.get('design_reference', material.design_reference)
                 material.last_modified_by = current_user['full_name']
                 db.session.add(material)
-
                 # ✅ Ensure material_id is in purchase.material_ids
                 if material_id not in purchase.material_ids:
                     log.info(f"Adding existing material_id {material_id} to purchase.material_ids")
                     log.info(f"Adding existing material_id {material_id} to purchase.material_ids")
                     purchase.material_ids.append(material_id)
-
             else:
-                # ---- Create new material ----
                 new_material = Material(
                     project_id=mat.get("project_id"),
                     description=mat.get("description"),
@@ -404,51 +448,50 @@ def update_purchase_request(purchase_id):
                 )
                 db.session.add(new_material)
                 db.session.flush()  # ✅ ensures new_material.material_id is generated before commit
-
-                # ✅ Append new material_id to purchase
-                log.info(f"Created new material with ID {new_material.material_id}")
-                log.info(f"Created new material with ID {new_material.material_id}")
                 if new_material.material_id not in purchase.material_ids:
-                    log.info(f"Adding new material_id {new_material.material_id} to purchase.material_ids")
-                    log.info(f"Adding new material_id {new_material.material_id} to purchase.material_ids")
                     purchase.material_ids.append(new_material.material_id)
-
-        # Log state before forcing update
-        log.info(f"Material_ids before forcing update: {purchase.material_ids}")
-        
-        # 🔹 Force PostgreSQL to recognize the array mutation
-        # This is crucial for ARRAY columns - we need to reassign the array
         temp_ids = list(purchase.material_ids)  # Create a new list object
         purchase.material_ids = temp_ids
         flag_modified(purchase, 'material_ids')  # Explicitly mark the field as modified
-        
-        log.info(f"Material_ids after forcing update: {purchase.material_ids}")
-        
+        # Handle file deletions from Supabase storage
+        if delete_file:
+            try:
+                # Parse current filenames from purchase.file_path
+                current_files = [f.strip() for f in (purchase.file_path or '').split(',') if f.strip()]
 
-        # Log state before forcing update
-        log.info(f"Material_ids before forcing update: {purchase.material_ids}")
-        
-        # 🔹 Force PostgreSQL to recognize the array mutation
-        # This is crucial for ARRAY columns - we need to reassign the array
-        temp_ids = list(purchase.material_ids)  # Create a new list object
-        purchase.material_ids = temp_ids
-        flag_modified(purchase, 'material_ids')  # Explicitly mark the field as modified
-        
-        log.info(f"Material_ids after forcing update: {purchase.material_ids}")
-        
-        # 🔹 Save purchase with updated material_ids
+                # Normalize requested deletions
+                to_delete = [f.strip() for f in delete_file if str(f).strip()]
+
+                log.info(f"Attempting to delete files from storage: {to_delete}")
+                log.info(f"Current files in DB (purchase.file_path): {current_files}")
+
+                deleted_files = []
+                failed_files = []
+
+                for filename in to_delete:
+                    path = f"{purchase_id}/{filename}"
+                    try:
+                        supabase.storage.from_(SUPABASE_BUCKET).remove([path])
+                        log.info(f"Deleted from Supabase: {path}")
+                        deleted_files.append(filename)
+                    except Exception as e:
+                        log.warning(f"Failed to delete {path}: {str(e)}")
+                        failed_files.append(filename)
+
+                # Update DB: remove only successfully deleted filenames
+                remaining_files = [f for f in current_files if f not in deleted_files]
+                purchase.file_path = ",".join(remaining_files) if remaining_files else None
+
+                log.info(f"Remaining files in DB after deletion: {remaining_files}")
+
+            except Exception as e:
+                log.error(f"Error handling file deletions: {str(e)}")
+                deleted_files = []
+                failed_files = to_delete
         purchase.last_modified_by = current_user['full_name']
         db.session.add(purchase)
         db.session.commit()
-        
-        # Verify the update by re-fetching
         db.session.refresh(purchase)
-        log.info(f"Final material_ids after commit and refresh: {purchase.material_ids}")
-        
-        # Verify the update by re-fetching
-        db.session.refresh(purchase)
-        log.info(f"Final material_ids after commit and refresh: {purchase.material_ids}")
-
         return jsonify({
             "success": True,
             "message": "Purchase request updated successfully",
