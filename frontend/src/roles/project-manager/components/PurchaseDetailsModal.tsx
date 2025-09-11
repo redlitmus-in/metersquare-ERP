@@ -14,6 +14,7 @@ import { motion } from 'framer-motion';
 import { projectManagerService, PurchaseStatusDetails } from '../services/projectManagerService';
 import { toast } from 'sonner';
 import { exportPurchaseDetailsPDF } from '@/utils/exportUtils';
+import { API_ENDPOINTS, API_BASE_URL } from '@/api/config';
 import {
   FileText,
   Building2,
@@ -42,7 +43,9 @@ import {
   Layers,
   Shield,
   Activity,
-  Target
+  Target,
+  Paperclip,
+  ExternalLink
 } from 'lucide-react';
 
 interface PurchaseDetailsModalProps {
@@ -61,6 +64,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   const [statusDetails, setStatusDetails] = useState<PurchaseStatusDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(mode === 'history' ? 'history' : 'details');
+  const [downloadingFile, setDownloadingFile] = useState(false);
 
   useEffect(() => {
     if (isOpen && purchaseId) {
@@ -98,6 +102,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
             created_at: purchase.created_at,
             requested_by: purchase.requested_by,
             project_id: purchase.project_id,
+            file_path: purchase.file_path || null,
             materials_summary: {
               total_materials: purchase.materials?.length || 0,
               total_quantity: purchase.materials?.reduce((sum: number, m: any) => sum + (m.quantity || 0), 0) || 0,
@@ -135,9 +140,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
         // For details mode, use /purchase/{id} endpoint
         const response = await projectManagerService.getPurchaseDetails(purchaseId);
         
-        // Handle response structure from backend
-        const purchase = response.purchase || response;
-        const latestStatus = response.latest_status || purchase.latest_status;
+        // Handle response structure from backend - the API returns {purchase: {...}, latest_status: {...}}
+        const purchase = response.purchase;
+        const latestStatus = response.latest_status;
         
         // Transform to PurchaseStatusDetails structure
         const details: PurchaseStatusDetails = {
@@ -150,6 +155,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
             created_at: purchase.created_at,
             requested_by: purchase.requested_by,
             project_id: purchase.project_id,
+            file_path: purchase.file_path || null,
             materials_summary: {
               total_materials: purchase.materials?.length || 0,
               total_quantity: purchase.materials?.reduce((sum: number, m: any) => sum + (m.quantity || 0), 0) || 0,
@@ -160,32 +166,40 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
           },
           procurement_statuses: [],
           project_manager_statuses: [],
-          latest_pm_proc_status: latestStatus ? {
+          latest_pm_proc_status: latestStatus && Object.keys(latestStatus).length > 0 ? {
             status: latestStatus.status || purchase.status || 'pending',
             sender: latestStatus.sender || null,
             receiver: latestStatus.receiver || null,
             role: latestStatus.role || null,
             date: latestStatus.decision_date || latestStatus.created_at || null,
+            decision_date: latestStatus.decision_date || null,
             decision_by: latestStatus.created_by || latestStatus.decision_by || null,
+            created_by: latestStatus.created_by || null,
             comments: latestStatus.comments || null,
             rejection_reason: latestStatus.rejection_reason || null,
+            reject_category: latestStatus.reject_category || null,
             status_id: latestStatus.status_id || null,
-            is_active: latestStatus.is_active || false,
+            is_active: latestStatus.is_active !== undefined ? latestStatus.is_active : false,
             created_at: latestStatus.created_at || purchase.created_at || null,
-            last_modified_at: latestStatus.last_modified_at || latestStatus.created_at || null
+            last_modified_at: latestStatus.last_modified_at || latestStatus.created_at || null,
+            decision_by_user_id: latestStatus.decision_by_user_id || null
           } : {
             status: purchase.status || 'pending',
             sender: null,
             receiver: null,
             role: null,
             date: purchase.created_at || null,
+            decision_date: null,
             decision_by: purchase.created_by || null,
+            created_by: purchase.created_by || null,
             comments: null,
             rejection_reason: null,
+            reject_category: null,
             status_id: null,
             is_active: false,
             created_at: purchase.created_at || null,
-            last_modified_at: purchase.last_modified_at || purchase.created_at || null
+            last_modified_at: purchase.last_modified_at || purchase.created_at || null,
+            decision_by_user_id: null
           },
           summary: {
             total_procurement_statuses: 0,
@@ -202,10 +216,22 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
       }
     } catch (error: any) {
       console.error('Error fetching purchase data:', error);
-      console.error('Purchase ID:', purchaseId);
-      console.error('Mode:', mode);
-      console.error('Response error:', error.response);
-      toast.error(error.message || 'Failed to fetch purchase details');
+      
+      // Show user-friendly error message
+      if (error.message?.includes('not found')) {
+        toast.error(`Purchase request PR-${purchaseId} not found`, {
+          description: 'This purchase may have been deleted or the ID is incorrect.'
+        });
+      } else {
+        toast.error(error.message || 'Failed to fetch purchase details');
+      }
+      
+      // Close modal on error
+      if (error.response?.status === 404) {
+        setTimeout(() => {
+          onClose();
+        }, 2000);
+      }
     } finally {
       setLoading(false);
     }
@@ -277,6 +303,102 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     toast.success('Purchase details exported successfully');
   };
 
+  const handleViewAttachment = async () => {
+    if (!statusDetails?.purchase_id) return;
+    
+    setDownloadingFile(true);
+    
+    try {
+      toast.info('Fetching attachment...');
+      
+      // First, fetch the file information from the API
+      const response = await fetch(
+        `${API_BASE_URL}${API_ENDPOINTS.DOWNLOAD_FILES('projectManager', statusDetails.purchase_id)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+          }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data.success && data.purchase_files && data.purchase_files.length > 0) {
+        // Get the first purchase file
+        const file = data.purchase_files[0];
+        
+        // Use the public_url from the response if available
+        const fileDownloadUrl = file.public_url || `${API_BASE_URL}/download_file/${file.file_path}`;
+        
+        // Create a hidden anchor element with download attribute to force download
+        const link = document.createElement('a');
+        link.href = fileDownloadUrl;
+        link.download = file.file_path?.split('/').pop() || 'attachment'; // Force download with filename
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast.success('Downloading attachment...');
+      } else if (data.accounts_files && data.accounts_files.length > 0) {
+        // Handle accounts files if present
+        toast.info('This purchase has accounts-related files. Please check with the Accounts department.');
+      } else {
+        toast.warning('No attachments found for this purchase.');
+      }
+    } catch (error) {
+      console.error('Error fetching attachment:', error);
+      
+      // Fallback: Try direct download using the file_path from purchase details
+      if (statusDetails.purchase_details?.file_path) {
+        // Try to fetch the file info again to get public_url
+        try {
+          const fallbackResponse = await fetch(
+            `${API_BASE_URL}/api/get_file_url/${statusDetails.purchase_id}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+              }
+            }
+          );
+          
+          if (fallbackResponse.ok) {
+            const fallbackData = await fallbackResponse.json();
+            if (fallbackData.public_url) {
+              const link = document.createElement('a');
+              link.href = fallbackData.public_url;
+              link.download = statusDetails.purchase_details.file_path?.split('/').pop() || 'attachment';
+              link.style.display = 'none';
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              toast.info('Downloading attachment...');
+              return;
+            }
+          }
+        } catch (e) {
+          console.error('Fallback URL fetch failed:', e);
+        }
+        
+        // Last resort: try direct file path
+        const directUrl = `${API_BASE_URL}/uploads/${statusDetails.purchase_details.file_path}`;
+        const fileName = statusDetails.purchase_details.file_path.split('/').pop() || 'attachment';
+        const link = document.createElement('a');
+        link.href = directUrl;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.info('Downloading attachment...');
+      } else {
+        toast.error('Failed to download attachment. Please try again later.');
+      }
+    } finally {
+      setDownloadingFile(false);
+    }
+  };
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-AE', {
@@ -304,6 +426,109 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     };
     return statusMap[status?.toLowerCase()] || status?.toUpperCase() || 'PENDING';
   };
+
+  // Determine the current workflow status and location
+  const getWorkflowStatus = () => {
+    const latestStatus = statusDetails?.latest_pm_proc_status;
+    
+    if (!latestStatus) {
+      return { status: 'pending', text: 'PENDING', description: 'Awaiting initial review' };
+    }
+
+    const status = latestStatus.status?.toLowerCase();
+    const sender = latestStatus.sender;
+    const receiver = latestStatus.receiver;
+    const comments = latestStatus.comments?.toLowerCase();
+
+    // Format role names for display
+    const formatRole = (role: string) => {
+      if (!role) return '';
+      const roleMap: { [key: string]: string } = {
+        'procurement': 'Procurement',
+        'projectManager': 'Project Manager',
+        'projectmanager': 'Project Manager',
+        'estimation': 'Estimation',
+        'technicalDirector': 'Technical Director',
+        'technicaldirector': 'Technical Director',
+        'accounts': 'Accounts',
+        'siteSupervisor': 'Site Supervisor',
+        'sitesupervisor': 'Site Supervisor',
+        'mepSupervisor': 'MEP Supervisor',
+        'mepsupervisor': 'MEP Supervisor',
+        'design': 'Design'
+      };
+      return roleMap[role.toLowerCase()] || role.replace(/([A-Z])/g, ' $1').trim();
+    };
+
+    // Check if it's completed (acknowledgement from accounts or status is explicitly completed)
+    if (status === 'completed' || status === 'complete') {
+      let description = 'Purchase request has been fully processed and completed';
+      if (comments?.includes('acknowledgement')) {
+        description = 'Purchase order acknowledged and completed by Accounts';
+      }
+      return { 
+        status: 'completed', 
+        text: 'COMPLETED', 
+        description 
+      };
+    }
+
+    // If status is approved
+    if (status === 'approved') {
+      // Check if it's final approval from accounts with acknowledgement
+      if (sender === 'accounts' && comments?.includes('acknowledgement')) {
+        return { 
+          status: 'completed', 
+          text: 'COMPLETED', 
+          description: 'Purchase order acknowledged and completed by Accounts' 
+        };
+      }
+      
+      const senderName = sender ? formatRole(sender) : '';
+      return { 
+        status: 'approved', 
+        text: 'APPROVED', 
+        description: senderName ? `Approved by ${senderName}` : 'Approved' 
+      };
+    }
+
+    // If there's a receiver, it's pending at that role
+    if (receiver) {
+      const receiverName = formatRole(receiver);
+      if (status === 'rejected' && sender) {
+        const senderName = formatRole(sender);
+        return { 
+          status: 'rejected', 
+          text: 'REJECTED', 
+          description: `Rejected by ${senderName}, returned to ${receiverName}` 
+        };
+      }
+      return { 
+        status: 'pending', 
+        text: 'PENDING', 
+        description: `Currently pending review at ${receiverName}` 
+      };
+    }
+
+    // If rejected without receiver
+    if (status === 'rejected' && sender) {
+      const senderName = formatRole(sender);
+      return { 
+        status: 'rejected', 
+        text: 'REJECTED', 
+        description: `Rejected by ${senderName}` 
+      };
+    }
+
+    // Default case
+    return { 
+      status: status || 'pending', 
+      text: formatStatusText(status || 'pending'), 
+      description: 'Processing in workflow' 
+    };
+  };
+
+  const workflowStatus = statusDetails ? getWorkflowStatus() : { status: 'pending', text: 'PENDING', description: 'Loading...' };
 
   const getPriorityColor = (priority: string) => {
     switch (priority?.toLowerCase()) {
@@ -336,22 +561,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                       <Hash className="w-3 h-3 mr-1" />
                       PR-{statusDetails.purchase_id}
                     </Badge>
-                    <Badge className={`${getStatusColor(
-                      statusDetails.latest_pm_proc_status?.status === 'approved' && 
-                      statusDetails.latest_pm_proc_status?.comments?.toLowerCase().includes('acknowledgement') 
-                        ? 'completed' 
-                        : statusDetails.latest_pm_proc_status?.status
-                    )} border`}>
-                      {getStatusIcon(
-                        statusDetails.latest_pm_proc_status?.status === 'approved' && 
-                        statusDetails.latest_pm_proc_status?.comments?.toLowerCase().includes('acknowledgement') 
-                          ? 'completed' 
-                          : statusDetails.latest_pm_proc_status?.status
-                      )}
-                      <span className="ml-1">{statusDetails.latest_pm_proc_status?.status === 'approved' && 
-                        statusDetails.latest_pm_proc_status?.comments?.toLowerCase().includes('acknowledgement') 
-                          ? 'COMPLETED' 
-                          : formatStatusText(statusDetails.latest_pm_proc_status?.status || 'pending')}</span>
+                    <Badge className={`${getStatusColor(workflowStatus.status)} border`}>
+                      {getStatusIcon(workflowStatus.status)}
+                      <span className="ml-1">{workflowStatus.text}</span>
                     </Badge>
                   </div>
                 )}
@@ -557,6 +769,52 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                         </CardContent>
                       </Card>
 
+                      {/* Attachment Section - Show only if file_path exists */}
+                      {statusDetails.purchase_details?.file_path && (
+                        <Card className="border-0 shadow-sm">
+                          <CardContent className="p-6">
+                            <div className="flex items-center gap-2 mb-4">
+                              <div className="p-2 bg-red-100 rounded-lg">
+                                <Paperclip className="w-5 h-5 text-red-600" />
+                              </div>
+                              <h3 className="text-lg font-semibold text-gray-900">Attachment</h3>
+                            </div>
+                            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-red-100 rounded-lg">
+                                  <FileText className="w-5 h-5 text-red-600" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {statusDetails.purchase_details.file_path.split('/').pop() || 'Purchase Document'}
+                                  </p>
+                                  <p className="text-xs text-gray-500">Click to download the attached document</p>
+                                </div>
+                              </div>
+                              <Button
+                                onClick={handleViewAttachment}
+                                variant="outline"
+                                size="sm"
+                                disabled={downloadingFile}
+                                className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {downloadingFile ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Downloading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Download
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
                     </motion.div>
                   </div>
                 </TabsContent>
@@ -584,36 +842,28 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                           {statusDetails.latest_pm_proc_status && (
                             <div className="space-y-6">
                               {/* Status Badge */}
-                              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm font-medium text-gray-600">CURRENT STATUS</span>
-                                  <Badge className={`${getStatusColor(
-                                    statusDetails.latest_pm_proc_status.status === 'approved' && 
-                                    statusDetails.latest_pm_proc_status.comments?.toLowerCase().includes('acknowledgement') 
-                                      ? 'completed' 
-                                      : statusDetails.latest_pm_proc_status.status
-                                  )} border px-4 py-1.5`}>
-                                    {getStatusIcon(
-                                      statusDetails.latest_pm_proc_status.status === 'approved' && 
-                                      statusDetails.latest_pm_proc_status.comments?.toLowerCase().includes('acknowledgement') 
-                                        ? 'completed' 
-                                        : statusDetails.latest_pm_proc_status.status
-                                    )}
-                                    <span className="ml-1.5 font-semibold">{statusDetails.latest_pm_proc_status.status === 'approved' && 
-                                      statusDetails.latest_pm_proc_status.comments?.toLowerCase().includes('acknowledgement') 
-                                        ? 'COMPLETED' 
-                                        : formatStatusText(statusDetails.latest_pm_proc_status.status || 'pending')}</span>
-                                  </Badge>
-                                  {statusDetails.latest_pm_proc_status.is_active && (
-                                    <Badge className="bg-green-100 text-green-700 border-green-200">
-                                      <CheckCircle className="w-3 h-3 mr-1" />
-                                      Active
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-xs text-gray-500">Status ID</p>
-                                  <p className="font-semibold text-gray-900">#{statusDetails.latest_pm_proc_status.status_id || 'N/A'}</p>
+                              <div className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Current Status</p>
+                                    <div className="flex items-center gap-2 mt-2">
+                                      <Badge className={`${getStatusColor(workflowStatus.status)} border text-sm py-1 px-3`}>
+                                        {getStatusIcon(workflowStatus.status)}
+                                        <span className="ml-1">{workflowStatus.text}</span>
+                                      </Badge>
+                                      {statusDetails.latest_pm_proc_status.is_active && (
+                                        <Badge className="bg-green-100 text-green-700 border-green-200">
+                                          <Activity className="w-3 h-3 mr-1" />
+                                          Active
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-gray-600 mt-2 italic">{workflowStatus.description}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xs text-gray-500">Status ID</p>
+                                    <p className="font-mono text-sm font-semibold text-gray-700">#{statusDetails.latest_pm_proc_status.status_id}</p>
+                                  </div>
                                 </div>
                               </div>
                               
@@ -626,20 +876,34 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                       <h4 className="font-medium text-blue-900">Decision Information</h4>
                                     </div>
                                     <div className="space-y-2">
-                                      <div>
-                                        <p className="text-xs text-blue-600">Current Role</p>
-                                        <p className="font-semibold text-blue-900">{statusDetails.latest_pm_proc_status.role || 'N/A'}</p>
-                                      </div>
-                                      {statusDetails.latest_pm_proc_status.decision_by && (
+                                      {statusDetails.latest_pm_proc_status.role && (
                                         <div>
-                                          <p className="text-xs text-blue-600">Decision By</p>
-                                          <p className="font-semibold text-blue-900">{statusDetails.latest_pm_proc_status.decision_by}</p>
+                                          <p className="text-xs text-blue-600">Current Role</p>
+                                          <p className="font-semibold text-blue-900 capitalize">
+                                            {statusDetails.latest_pm_proc_status.role === 'accounts' ? 'Accounts' :
+                                             statusDetails.latest_pm_proc_status.role === 'procurement' ? 'Procurement' :
+                                             statusDetails.latest_pm_proc_status.role === 'projectManager' ? 'Project Manager' :
+                                             statusDetails.latest_pm_proc_status.role === 'technicalDirector' ? 'Technical Director' :
+                                             statusDetails.latest_pm_proc_status.role === 'estimation' ? 'Estimation' :
+                                             statusDetails.latest_pm_proc_status.role === 'siteSupervisor' ? 'Site Supervisor' :
+                                             statusDetails.latest_pm_proc_status.role?.replace(/([A-Z])/g, ' $1').trim().replace('_', ' ')}
+                                          </p>
                                         </div>
                                       )}
-                                      {statusDetails.latest_pm_proc_status.date && (
+                                      {(statusDetails.latest_pm_proc_status.decision_by || statusDetails.latest_pm_proc_status.created_by) && (
+                                        <div>
+                                          <p className="text-xs text-blue-600">Decision By</p>
+                                          <p className="font-semibold text-blue-900">
+                                            {typeof statusDetails.latest_pm_proc_status.decision_by === 'string' 
+                                              ? statusDetails.latest_pm_proc_status.decision_by 
+                                              : statusDetails.latest_pm_proc_status.decision_by?.full_name || statusDetails.latest_pm_proc_status.created_by}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {(statusDetails.latest_pm_proc_status.date || statusDetails.latest_pm_proc_status.decision_date || statusDetails.latest_pm_proc_status.created_at) && (
                                         <div>
                                           <p className="text-xs text-blue-600">Decision Date</p>
-                                          <p className="font-semibold text-blue-900">{formatDate(statusDetails.latest_pm_proc_status.date)}</p>
+                                          <p className="font-semibold text-blue-900">{formatDate(statusDetails.latest_pm_proc_status.date || statusDetails.latest_pm_proc_status.decision_date || statusDetails.latest_pm_proc_status.created_at)}</p>
                                         </div>
                                       )}
                                     </div>
@@ -656,13 +920,13 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                       {statusDetails.latest_pm_proc_status.sender && (
                                         <div>
                                           <p className="text-xs text-purple-600">From (Sender)</p>
-                                          <p className="font-semibold text-purple-900">{statusDetails.latest_pm_proc_status.sender}</p>
+                                          <p className="font-semibold text-purple-900 capitalize">{statusDetails.latest_pm_proc_status.sender?.replace(/([A-Z])/g, ' $1').trim().replace('_', ' ')}</p>
                                         </div>
                                       )}
                                       {statusDetails.latest_pm_proc_status.receiver && (
                                         <div>
                                           <p className="text-xs text-purple-600">To (Receiver)</p>
-                                          <p className="font-semibold text-purple-900">{statusDetails.latest_pm_proc_status.receiver}</p>
+                                          <p className="font-semibold text-purple-900 capitalize">{statusDetails.latest_pm_proc_status.receiver?.replace(/([A-Z])/g, ' $1').trim().replace('_', ' ')}</p>
                                         </div>
                                       )}
                                       <div>

@@ -83,6 +83,7 @@ export interface PurchaseStatusDetails {
     created_at: string;
     requested_by?: string;
     project_id?: number;
+    file_path?: string | null;
     materials_summary: {
       total_materials: number;
       total_quantity: number;
@@ -131,15 +132,23 @@ export interface PurchaseStatusDetails {
     status: string;
     role: string | null;
     date: string | null;
+    decision_date?: string | null;
     sender?: string;
     receiver?: string;
-    decision_by: {
+    decision_by?: string | {
       user_id: number;
       full_name: string;
       email: string;
     } | null;
+    created_by?: string | null;
     comments: string | null;
     rejection_reason?: string | null;
+    reject_category?: string | null;
+    status_id?: number | null;
+    is_active?: boolean;
+    created_at?: string | null;
+    last_modified_at?: string | null;
+    decision_by_user_id?: number | null;
   };
   summary: {
     total_pm_statuses: number;
@@ -276,22 +285,41 @@ class ProjectManagerService {
   async getPurchaseDetails(purchaseId: number): Promise<any> {
     try {
       const response = await apiClient.get(`/purchase/${purchaseId}`);
-      // Handle different response structures
+      // Return the full response data which includes both purchase and latest_status
       if (response.data) {
-        // If response has success flag
+        // If response has success flag, still return the full data
         if (response.data.success !== undefined) {
           if (response.data.success) {
-            return response.data.purchase || response.data.data || response.data;
+            // Return the full response to get both purchase and latest_status
+            return response.data;
           } else {
             throw new Error(response.data.message || 'Failed to fetch purchase details');
           }
         }
-        // If response is the purchase object directly
+        // Return the full response object
         return response.data;
       }
       throw new Error('Failed to fetch purchase details');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching purchase details:', error);
+      
+      // Handle 404 error specifically
+      if (error.response?.status === 404) {
+        // Check if it's a user not found error
+        if (error.response?.data?.error === 'User not found') {
+          throw new Error(`Purchase request #${purchaseId} has data inconsistency. The associated user account may have been deleted.`);
+        }
+        throw new Error(`Purchase request #${purchaseId} not found. It may have been deleted or the ID is incorrect.`);
+      }
+      
+      // Handle other HTTP errors
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      
       throw error;
     }
   }

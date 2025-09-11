@@ -26,15 +26,8 @@ interface EstimationApprovalCardProps {
   isReadOnly?: boolean; // For approved/rejected items
 }
 
-export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
-  purchase,
-  onApprove,
-  onReject,
-  onViewDetails,
-  onViewHistory,
-  isLoading = false,
-  isReadOnly = false
-}) => {
+const EstimationApprovalCard = React.forwardRef<HTMLDivElement, EstimationApprovalCardProps>(
+  ({ purchase, onApprove, onReject, onViewDetails, onViewHistory, isLoading = false, isReadOnly = false }, ref) => {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-AE', {
       day: 'numeric',
@@ -91,6 +84,7 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
 
   return (
     <motion.div
+      ref={ref}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
@@ -271,4 +265,8 @@ export const EstimationApprovalCard: React.FC<EstimationApprovalCardProps> = ({
       </Card>
     </motion.div>
   );
-};
+});
+
+EstimationApprovalCard.displayName = 'EstimationApprovalCard';
+
+export { EstimationApprovalCard };

@@ -426,6 +426,7 @@ export interface PurchaseStatusDetails {
     requested_by?: string;
     project_id?: number;
     email_sent?: boolean;
+    file_path?: string | null;
     materials_summary: {
       total_materials: number;
       total_quantity: number;

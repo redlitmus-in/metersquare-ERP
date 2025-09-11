@@ -165,7 +165,12 @@ export const API_ENDPOINTS = {
     APPROVAL: '/estimation_approval',
     DASHBOARD: '/estimation_dashboard',
     PURCHASES: '/estimation_purchase',
+    PURCHASE_DETAILS: (id: string | number) => `/purchase/${id}`,
+    PURCHASE_HISTORY: (id: string | number) => `/purchase_history/${id}`,
   },
+  
+  // File Download endpoint - used across roles
+  DOWNLOAD_FILES: (key: string, id: string | number) => `/download_files?key=${key}&id=${id}`,
   
   TECHNICAL_DIRECTOR: {
     APPROVAL: '/tech_approval',

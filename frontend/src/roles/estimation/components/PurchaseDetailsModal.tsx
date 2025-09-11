@@ -17,11 +17,13 @@ import { Separator } from '@/components/ui/separator';
 import { 
   Loader2, Package, Calendar, MapPin, User, CheckCircle, 
   XCircle, Clock, AlertTriangle, MessageSquare, DollarSign,
-  FileText, Building2, Mail, Download, Hash, Info
+  FileText, Building2, Mail, Download, Hash, Info, TrendingUp,
+  UserCheck, Target, Layers, Shield, Activity, Paperclip, ExternalLink
 } from 'lucide-react';
 import { estimationService } from '../services/estimationService';
 import type { PurchaseStatusDetails } from '../services/estimationService';
 import { toast } from 'sonner';
+import { API_ENDPOINTS, API_BASE_URL } from '@/api/config';
 
 interface PurchaseDetailsModalProps {
   isOpen: boolean;
@@ -39,6 +41,7 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [purchaseDetails, setPurchaseDetails] = useState<PurchaseStatusDetails | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [downloadingFile, setDownloadingFile] = useState(false);
 
   useEffect(() => {
     if (isOpen && purchaseId) {
@@ -74,6 +77,7 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
             requested_by: purchase.requested_by || 'Not specified',
             project_id: purchase.project_id,
             email_sent: purchase.email_sent || false,
+            file_path: purchase.file_path || null,
             materials_summary: {
               total_materials: purchase.materials?.length || 0,
               total_quantity: purchase.materials?.reduce((sum: number, m: any) => sum + (m.quantity || 0), 0) || 0,
@@ -126,6 +130,7 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
             requested_by: purchase.requested_by || 'Not specified',
             project_id: purchase.project_id,
             email_sent: purchase.email_sent || false,
+            file_path: purchase.file_path || null,
             materials_summary: {
               total_materials: purchase.materials?.length || 0,
               total_quantity: purchase.materials?.reduce((sum: number, m: any) => sum + (m.quantity || 0), 0) || 0,
@@ -230,6 +235,102 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     toast.success('Purchase details exported successfully');
   };
 
+  const handleViewAttachment = async () => {
+    if (!purchaseDetails?.purchase_id) return;
+    
+    setDownloadingFile(true);
+    
+    try {
+      toast.info('Fetching attachment...');
+      
+      // First, fetch the file information from the API
+      const response = await fetch(
+        `${API_BASE_URL}${API_ENDPOINTS.DOWNLOAD_FILES('estimation', purchaseDetails.purchase_id)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+          }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data.success && data.purchase_files && data.purchase_files.length > 0) {
+        // Get the first purchase file
+        const file = data.purchase_files[0];
+        
+        // Use the public_url from the response if available
+        const fileDownloadUrl = file.public_url || `${API_BASE_URL}/download_file/${file.file_path}`;
+        
+        // Create a hidden anchor element with download attribute to force download
+        const link = document.createElement('a');
+        link.href = fileDownloadUrl;
+        link.download = file.file_path?.split('/').pop() || 'attachment'; // Force download with filename
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast.success('Downloading attachment...');
+      } else if (data.accounts_files && data.accounts_files.length > 0) {
+        // Handle accounts files if present
+        toast.info('This purchase has accounts-related files. Please check with the Accounts department.');
+      } else {
+        toast.warning('No attachments found for this purchase.');
+      }
+    } catch (error) {
+      console.error('Error fetching attachment:', error);
+      
+      // Fallback: Try direct download using the file_path from purchase details
+      if (purchaseDetails.purchase_details?.file_path) {
+        // Try to fetch the file info again to get public_url
+        try {
+          const fallbackResponse = await fetch(
+            `${API_BASE_URL}/api/get_file_url/${purchaseDetails.purchase_id}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+              }
+            }
+          );
+          
+          if (fallbackResponse.ok) {
+            const fallbackData = await fallbackResponse.json();
+            if (fallbackData.public_url) {
+              const link = document.createElement('a');
+              link.href = fallbackData.public_url;
+              link.download = purchaseDetails.purchase_details.file_path?.split('/').pop() || 'attachment';
+              link.style.display = 'none';
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              toast.info('Downloading attachment...');
+              return;
+            }
+          }
+        } catch (e) {
+          console.error('Fallback URL fetch failed:', e);
+        }
+        
+        // Last resort: try direct file path
+        const directUrl = `${API_BASE_URL}/uploads/${purchaseDetails.purchase_details.file_path}`;
+        const fileName = purchaseDetails.purchase_details.file_path.split('/').pop() || 'attachment';
+        const link = document.createElement('a');
+        link.href = directUrl;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.info('Downloading attachment...');
+      } else {
+        toast.error('Failed to download attachment. Please try again later.');
+      }
+    } finally {
+      setDownloadingFile(false);
+    }
+  };
+
   const getRoleName = (role: string) => {
     const roleMap: { [key: string]: string } = {
       'projectManager': 'Project Manager',
@@ -262,194 +363,257 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden p-0">
-        <DialogHeader className="px-6 py-4 border-b bg-gray-50">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden p-0 bg-white">
+        <DialogHeader className="px-6 py-5 bg-gradient-to-r from-red-400 to-red-500 shadow-lg">
           <DialogTitle className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <FileText className="w-5 h-5 text-amber-600" />
-              <span className="text-xl font-semibold">Purchase Request Details</span>
-              {purchaseDetails && (
-                <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                  PR-{purchaseDetails.purchase_id}
-                </Badge>
-              )}
+              <div className="p-2 bg-white/20 backdrop-blur rounded-lg">
+                <FileText className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-white text-xl font-semibold">Purchase Request Details</h2>
+                {purchaseDetails && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge className="bg-white/20 text-white border-white/30 hover:bg-white/30">
+                      <Hash className="w-3 h-3 mr-1" />
+                      PR-{purchaseDetails.purchase_id}
+                    </Badge>
+                    <Badge className={`${getStatusColor(currentStatus)} border`}>
+                      {getStatusIcon(currentStatus)}
+                      <span className="ml-1 uppercase">{currentStatus}</span>
+                    </Badge>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2">
-              <Badge className={`${getStatusColor(currentStatus)} border uppercase`}>
-                {currentStatus}
-              </Badge>
               {!showHistoryOnly && (
-                <Button variant="ghost" size="sm" onClick={handleExport}>
-                  <Download className="w-4 h-4" />
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={handleExport} 
+                  className="bg-white/10 hover:bg-white/20 text-white border-white/30"
+                >
+                  <Download className="w-4 h-4 mr-1" />
+                  Export PDF
                 </Button>
               )}
-              <Button variant="ghost" size="sm" onClick={onClose}>
-                <XCircle className="w-4 h-4" />
-              </Button>
             </div>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-hidden">
           {loading ? (
-            <div className="flex justify-center items-center py-16">
-              <Loader2 className="h-10 w-10 animate-spin text-amber-500" />
+            <div className="flex flex-col justify-center items-center py-16">
+              <Loader2 className="h-12 w-12 animate-spin text-amber-500 mb-4" />
+              <p className="text-gray-600 font-medium">Loading purchase details...</p>
             </div>
           ) : purchaseDetails ? (
             <>
               {!showHistoryOnly ? (
                 // Details View with Tabs
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="w-full justify-start rounded-none border-b bg-gray-50 h-12 p-0">
-                    <TabsTrigger 
-                      value="overview" 
-                      className="data-[state=active]:bg-white data-[state=active]:border-b-2 data-[state=active]:border-blue-500 rounded-none px-8"
-                    >
-                      Overview
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="materials"
-                      className="data-[state=active]:bg-white data-[state=active]:border-b-2 data-[state=active]:border-blue-500 rounded-none px-8"
-                    >
-                      Materials
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="additional"
-                      className="data-[state=active]:bg-white data-[state=active]:border-b-2 data-[state=active]:border-blue-500 rounded-none px-8"
-                    >
-                      Additional Info
-                    </TabsTrigger>
-                  </TabsList>
+                  <div className="bg-white border-b">
+                    <TabsList className="flex justify-center gap-8 bg-transparent p-0 h-auto">
+                      <TabsTrigger 
+                        value="overview" 
+                        className="data-[state=active]:border-b-3 data-[state=active]:border-red-500 data-[state=active]:text-red-600 border-b-2 border-transparent rounded-none pb-4 pt-4 font-medium transition-all hover:text-red-500"
+                      >
+                        <Info className="w-4 h-4 mr-2" />
+                        Overview
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="materials"
+                        className="data-[state=active]:border-b-3 data-[state=active]:border-red-500 data-[state=active]:text-red-600 border-b-2 border-transparent rounded-none pb-4 pt-4 font-medium transition-all hover:text-red-500"
+                      >
+                        <Package className="w-4 h-4 mr-2" />
+                        Materials
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="latest"
+                        className="data-[state=active]:border-b-3 data-[state=active]:border-red-500 data-[state=active]:text-red-600 border-b-2 border-transparent rounded-none pb-4 pt-4 font-medium transition-all hover:text-red-500"
+                      >
+                        <Activity className="w-4 h-4 mr-2" />
+                        Latest Info
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
 
-                  <div className="p-6">
+                  <div className="p-6 max-h-[calc(90vh-200px)] overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     <TabsContent value="overview" className="mt-0 space-y-6">
-                      {/* Purchase Overview Header */}
-                      <div>
-                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                          <FileText className="w-5 h-5 text-gray-600" />
-                          Purchase Overview
-                        </h3>
-                        
-                        {/* Two Column Layout */}
-                        <div className="grid grid-cols-2 gap-6">
-                          <div className="space-y-4">
-                            <div>
-                              <label className="text-xs text-gray-500 uppercase tracking-wide">Location</label>
-                              <div className="flex items-center gap-2 mt-1">
-                                <MapPin className="w-4 h-4 text-gray-400" />
-                                <span className="text-base font-medium">
-                                  {purchaseDetails.purchase_details?.site_location}
-                                </span>
+                      {/* Basic Information Card */}
+                      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-3 border-b">
+                          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                            <Info className="w-5 h-5 text-gray-600" />
+                            Basic Information
+                          </h3>
+                        </div>
+                        <div className="p-6">
+                          <div className="grid grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                              <div className="group hover:bg-gray-50 p-3 rounded-lg transition-colors">
+                                <div className="flex items-start gap-3">
+                                  <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
+                                    <MapPin className="w-4 h-4 text-blue-600" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-xs text-gray-500 uppercase font-medium">Site Location</p>
+                                    <p className="text-base font-semibold text-gray-900 mt-1">
+                                      {purchaseDetails.purchase_details?.site_location}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="group hover:bg-gray-50 p-3 rounded-lg transition-colors">
+                                <div className="flex items-start gap-3">
+                                  <div className="p-2 bg-red-100 rounded-lg group-hover:bg-red-200 transition-colors">
+                                    <Target className="w-4 h-4 text-red-600" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-xs text-gray-500 uppercase font-medium">Purpose</p>
+                                    <p className="text-base font-semibold text-gray-900 mt-1">
+                                      {purchaseDetails.purchase_details?.purpose}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="group hover:bg-gray-50 p-3 rounded-lg transition-colors">
+                                <div className="flex items-start gap-3">
+                                  <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
+                                    <UserCheck className="w-4 h-4 text-green-600" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-xs text-gray-500 uppercase font-medium">Requested By</p>
+                                    <p className="text-base font-semibold text-gray-900 mt-1">
+                                      {purchaseDetails.purchase_details?.requested_by}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                            
-                            <div>
-                              <label className="text-xs text-gray-500 uppercase tracking-wide">Purpose</label>
-                              <p className="text-base font-medium mt-1">
-                                {purchaseDetails.purchase_details?.purpose}
-                              </p>
-                            </div>
-                            
-                            <div>
-                              <label className="text-xs text-gray-500 uppercase tracking-wide">Requested By</label>
-                              <div className="flex items-center gap-2 mt-1">
-                                <User className="w-4 h-4 text-gray-400" />
-                                <span className="text-base font-medium">
-                                  {purchaseDetails.purchase_details?.requested_by}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
 
-                          <div className="space-y-4">
-                            <div>
-                              <label className="text-xs text-gray-500 uppercase tracking-wide">Created Date</label>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Calendar className="w-4 h-4 text-gray-400" />
-                                <span className="text-base font-medium">
-                                  {formatDate(purchaseDetails.purchase_details?.created_at)}
-                                </span>
+                            <div className="space-y-4">
+                              <div className="group hover:bg-gray-50 p-3 rounded-lg transition-colors">
+                                <div className="flex items-start gap-3">
+                                  <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
+                                    <Calendar className="w-4 h-4 text-purple-600" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-xs text-gray-500 uppercase font-medium">Created Date</p>
+                                    <p className="text-base font-semibold text-gray-900 mt-1">
+                                      {formatDate(purchaseDetails.purchase_details?.created_at)}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                            
-                            <div>
-                              <label className="text-xs text-gray-500 uppercase tracking-wide">Project ID</label>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Building2 className="w-4 h-4 text-gray-400" />
-                                <span className="text-base font-medium">
-                                  #{purchaseDetails.purchase_details?.project_id || 'N/A'}
-                                </span>
+                              
+                              <div className="group hover:bg-gray-50 p-3 rounded-lg transition-colors">
+                                <div className="flex items-start gap-3">
+                                  <div className="p-2 bg-indigo-100 rounded-lg group-hover:bg-indigo-200 transition-colors">
+                                    <Building2 className="w-4 h-4 text-indigo-600" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-xs text-gray-500 uppercase font-medium">Project ID</p>
+                                    <p className="text-base font-semibold text-gray-900 mt-1">
+                                      #{purchaseDetails.purchase_details?.project_id || 'N/A'}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                            
-                            <div>
-                              <label className="text-xs text-gray-500 uppercase tracking-wide">Email Status</label>
-                              <div className="mt-1">
-                                <Badge 
-                                  variant={purchaseDetails.purchase_details?.email_sent ? "default" : "outline"}
-                                  className={purchaseDetails.purchase_details?.email_sent ? "bg-blue-600" : ""}
-                                >
-                                  <Mail className="w-3 h-3 mr-1" />
-                                  {purchaseDetails.purchase_details?.email_sent ? 'Sent' : 'Not Sent'}
-                                </Badge>
+                              
+                              <div className="group hover:bg-gray-50 p-3 rounded-lg transition-colors">
+                                <div className="flex items-start gap-3">
+                                  <div className="p-2 bg-cyan-100 rounded-lg group-hover:bg-cyan-200 transition-colors">
+                                    <Mail className="w-4 h-4 text-cyan-600" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-xs text-gray-500 uppercase font-medium">Email Status</p>
+                                    <div className="mt-1">
+                                      <Badge 
+                                        className={purchaseDetails.purchase_details?.email_sent 
+                                          ? "bg-green-100 text-green-700 border-green-200" 
+                                          : "bg-gray-100 text-gray-700 border-gray-200"}
+                                      >
+                                        {purchaseDetails.purchase_details?.email_sent ? '✓ Sent' : '✗ Not Sent'}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      {/* Statistics Cards */}
-                      <div className="grid grid-cols-4 gap-4">
-                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Package className="w-5 h-5 text-blue-600" />
-                            <span className="text-sm text-blue-700 font-medium">Materials</span>
+                      {/* Attachment Section - Show only if file_path exists */}
+                      {purchaseDetails.purchase_details?.file_path && (
+                        <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                          <div className="bg-gradient-to-r from-red-50 to-red-100 px-6 py-3 border-b">
+                            <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                              <Paperclip className="w-5 h-5 text-red-600" />
+                              Attachment
+                            </h3>
                           </div>
-                          <p className="text-2xl font-bold text-blue-900">
-                            {purchaseDetails.purchase_details?.materials_summary?.total_materials || 0}
-                          </p>
-                        </div>
-                        
-                        <div className="bg-green-50 border border-green-100 rounded-lg p-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Package className="w-5 h-5 text-green-600" />
-                            <span className="text-sm text-green-700 font-medium">Quantity</span>
+                          <div className="p-6">
+                            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-red-100 rounded-lg">
+                                  <FileText className="w-5 h-5 text-red-600" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">{purchaseDetails.purchase_details.file_path.split('/').pop() || 'Purchase Document'}</p>
+                                  <p className="text-xs text-gray-500">Click to download the attached document</p>
+                                </div>
+                              </div>
+                              <Button
+                                onClick={handleViewAttachment}
+                                variant="outline"
+                                size="sm"
+                                disabled={downloadingFile}
+                                className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {downloadingFile ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Downloading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Download
+                                  </>
+                                )}
+                              </Button>
+                            </div>
                           </div>
-                          <p className="text-2xl font-bold text-green-900">
-                            {purchaseDetails.purchase_details?.materials_summary?.total_quantity || 0}
-                          </p>
                         </div>
-                        
-                        <div className="bg-purple-50 border border-purple-100 rounded-lg p-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <DollarSign className="w-5 h-5 text-purple-600" />
-                            <span className="text-sm text-purple-700 font-medium">Total Cost</span>
-                          </div>
-                          <p className="text-xl font-bold text-purple-900">
-                            {formatCurrency(purchaseDetails.purchase_details?.materials_summary?.total_cost || 0)}
-                          </p>
-                        </div>
-                        
-                        <div className="bg-orange-50 border border-orange-100 rounded-lg p-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <FileText className="w-5 h-5 text-orange-600" />
-                            <span className="text-sm text-orange-700 font-medium">Categories</span>
-                          </div>
-                          <p className="text-2xl font-bold text-orange-900">
-                            {purchaseDetails.purchase_details?.materials_summary?.categories?.length || 0}
-                          </p>
-                        </div>
-                      </div>
+                      )}
 
-                      {/* Current Status */}
-                      <div>
-                        <h3 className="text-lg font-semibold mb-3">Current Status</h3>
-                        <div className="bg-gray-50 rounded-lg p-4 flex items-center gap-3">
-                          <Clock className="w-5 h-5 text-gray-600" />
-                          <div className="flex-1">
-                            <span className="text-sm text-gray-600 mr-2">Status</span>
-                            <Badge className={`${getStatusColor(currentStatus)} border uppercase`}>
-                              {currentStatus}
+                      {/* Current Status Card */}
+                      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                        <div className="bg-gradient-to-r from-red-50 to-red-100 px-6 py-3 border-b">
+                          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                            <Activity className="w-5 h-5 text-red-600" />
+                            Current Workflow Status
+                          </h3>
+                        </div>
+                        <div className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {getStatusIcon(currentStatus)}
+                              <div>
+                                <p className="text-sm text-gray-600">Current Status</p>
+                                <p className="text-lg font-semibold text-gray-900 uppercase">{currentStatus}</p>
+                              </div>
+                            </div>
+                            <Badge className={`${getStatusColor(currentStatus)} px-4 py-2 text-sm`}>
+                              {currentStatus === 'approved' ? 'APPROVED' :
+                               currentStatus === 'rejected' ? 'REJECTED' :
+                               currentStatus === 'completed' ? 'COMPLETED' :
+                               'PENDING REVIEW'}
                             </Badge>
                           </div>
                         </div>
@@ -460,49 +624,52 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                       <h3 className="text-lg font-semibold mb-4">Materials List</h3>
                       {purchaseDetails.purchase_details?.materials_summary?.materials && 
                        purchaseDetails.purchase_details.materials_summary.materials.length > 0 ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                           {purchaseDetails.purchase_details.materials_summary.materials.map((material, idx) => (
-                            <div key={material.material_id || idx} className="border rounded-lg p-4 hover:bg-gray-50">
-                              <div className="flex justify-between items-start mb-3">
-                                <div className="flex-1">
-                                  <h4 className="font-semibold text-gray-900">
-                                    {material.description || `Material ${idx + 1}`}
-                                  </h4>
-                                  {material.specification && (
-                                    <p className="text-sm text-gray-600 mt-1">{material.specification}</p>
-                                  )}
-                                </div>
-                                <div className="flex gap-2">
-                                  {material.category && (
-                                    <Badge variant="outline">{material.category}</Badge>
-                                  )}
-                                  {material.priority && (
-                                    <Badge 
-                                      variant="outline" 
-                                      className={
-                                        material.priority === 'high' ? 'border-red-500 text-red-700' :
-                                        material.priority === 'medium' ? 'border-yellow-500 text-yellow-700' :
-                                        'border-green-500 text-green-700'
-                                      }
-                                    >
-                                      {material.priority.toUpperCase()}
-                                    </Badge>
-                                  )}
+                            <div key={material.material_id || idx} className="bg-gray-50 rounded-lg p-5">
+                              <div className="mb-3">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <h4 className="font-semibold text-gray-900 text-base">
+                                      {material.description || `Material ${idx + 1}`}
+                                    </h4>
+                                    {material.specification && (
+                                      <p className="text-sm text-gray-600 mt-1">{material.specification}</p>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {material.category && (
+                                      <Badge className="bg-blue-100 text-blue-700 border-0">
+                                        {material.category}
+                                      </Badge>
+                                    )}
+                                    {material.priority && (
+                                      <Badge 
+                                        className={
+                                          material.priority === 'high' ? 'bg-red-100 text-red-700 border-0' :
+                                          material.priority === 'medium' ? 'bg-yellow-100 text-yellow-700 border-0' :
+                                          'bg-green-100 text-green-700 border-0'
+                                        }
+                                      >
+                                        {material.priority.toUpperCase()}
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                               
-                              <div className="grid grid-cols-3 gap-4 text-sm">
+                              <div className="grid grid-cols-3 gap-6 pt-3">
                                 <div>
-                                  <span className="text-gray-500">Quantity:</span>
-                                  <p className="font-semibold">{material.quantity} {material.unit}</p>
+                                  <p className="text-xs text-gray-500 uppercase mb-1">Quantity:</p>
+                                  <p className="font-semibold text-gray-900">{material.quantity} {material.unit}</p>
                                 </div>
                                 <div>
-                                  <span className="text-gray-500">Unit Cost:</span>
-                                  <p className="font-semibold">{formatCurrency(material.cost || 0)}</p>
+                                  <p className="text-xs text-gray-500 uppercase mb-1">Unit Cost:</p>
+                                  <p className="font-semibold text-gray-900">{formatCurrency(material.cost || 0)}</p>
                                 </div>
                                 <div>
-                                  <span className="text-gray-500">Total:</span>
-                                  <p className="font-semibold text-green-600">
+                                  <p className="text-xs text-gray-500 uppercase mb-1">Total:</p>
+                                  <p className="font-semibold text-green-600 text-lg">
                                     {formatCurrency((material.quantity || 0) * (material.cost || 0))}
                                   </p>
                                 </div>
@@ -510,88 +677,214 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                             </div>
                           ))}
                           
-                          <div className="border-t pt-4 mt-4">
-                            <div className="flex justify-between items-center text-lg">
-                              <span className="font-semibold">Grand Total:</span>
-                              <span className="font-bold text-green-600 text-xl">
+                          <div className="border-t-2 pt-4 mt-6">
+                            <div className="flex justify-between items-center">
+                              <span className="text-lg font-semibold text-gray-900">Grand Total:</span>
+                              <span className="text-2xl font-bold text-green-600">
                                 {formatCurrency(purchaseDetails.purchase_details?.materials_summary?.total_cost || 0)}
                               </span>
                             </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="text-center py-8 text-gray-500">
+                        <div className="text-center py-12 text-gray-500">
                           <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                           <p>No materials found</p>
                         </div>
                       )}
                     </TabsContent>
 
-                    <TabsContent value="additional" className="mt-0 space-y-4">
-                      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <TabsContent value="latest" className="mt-0 space-y-6">
+                      <div className="flex items-center gap-2 mb-4">
                         <Info className="w-5 h-5 text-gray-600" />
-                        Additional Information
-                      </h3>
+                        <h3 className="text-lg font-semibold">Latest Information</h3>
+                      </div>
                       
-                      <div className="bg-gray-50 rounded-lg p-6 space-y-4">
-                        <div className="grid grid-cols-2 gap-6">
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Purchase ID</label>
-                            <p className="text-base font-medium mt-1">PR-{purchaseDetails.purchase_id}</p>
+                      {/* Purchase Basic Info */}
+                      <div className="bg-white rounded-lg border border-gray-200 p-5">
+                        <h4 className="text-sm font-semibold text-gray-700 uppercase mb-4">Purchase Details</h4>
+                        <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+                          <div className="flex justify-between">
+                            <span className="text-sm text-gray-600">Purchase ID:</span>
+                            <span className="text-sm font-medium text-gray-900">PR-{purchaseDetails.purchase_id}</span>
                           </div>
                           
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Request Date</label>
-                            <p className="text-base font-medium mt-1">
+                          <div className="flex justify-between">
+                            <span className="text-sm text-gray-600">Request Date:</span>
+                            <span className="text-sm font-medium text-gray-900">
                               {formatDate(purchaseDetails.purchase_details?.date || purchaseDetails.purchase_details?.created_at)}
-                            </p>
+                            </span>
                           </div>
-                        </div>
-                        
-                        {purchaseDetails.purchase_details?.materials_summary?.categories && 
-                         purchaseDetails.purchase_details.materials_summary.categories.length > 0 && (
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase tracking-wide">Categories</label>
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {purchaseDetails.purchase_details.materials_summary.categories.map((category) => (
-                                <Badge key={category} variant="secondary">
-                                  {category}
-                                </Badge>
-                              ))}
-                            </div>
+                          
+                          <div className="flex justify-between">
+                            <span className="text-sm text-gray-600">Site Location:</span>
+                            <span className="text-sm font-medium text-gray-900">{purchaseDetails.purchase_details?.site_location}</span>
                           </div>
-                        )}
-                        
-                        <div>
-                          <label className="text-xs text-gray-500 uppercase tracking-wide">Summary</label>
-                          <div className="grid grid-cols-3 gap-4 mt-2">
-                            <div className="text-center">
-                              <p className="text-2xl font-bold text-blue-600">
-                                {purchaseDetails.purchase_details?.materials_summary?.total_materials || 0}
-                              </p>
-                              <p className="text-sm text-gray-600">Total Items</p>
+                          
+                          <div className="flex justify-between">
+                            <span className="text-sm text-gray-600">Project ID:</span>
+                            <span className="text-sm font-medium text-gray-900">#{purchaseDetails.purchase_details?.project_id || 'N/A'}</span>
+                          </div>
+                          
+                          <div className="flex justify-between">
+                            <span className="text-sm text-gray-600">Created By:</span>
+                            <span className="text-sm font-medium text-gray-900">{purchaseDetails.purchase_details?.requested_by || 'N/A'}</span>
+                          </div>
+                          
+                          <div className="flex justify-between">
+                            <span className="text-sm text-gray-600">Email Sent:</span>
+                            <Badge className={purchaseDetails.purchase_details?.email_sent ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>
+                              {purchaseDetails.purchase_details?.email_sent ? 'Yes' : 'No'}
+                            </Badge>
+                          </div>
+                          
+                          {purchaseDetails.purchase_details?.materials_summary?.categories?.length > 0 && (
+                            <div className="col-span-2">
+                              <div className="flex justify-between items-start">
+                                <span className="text-sm text-gray-600">Categories:</span>
+                                <div className="flex flex-wrap gap-2 justify-end">
+                                  {purchaseDetails.purchase_details.materials_summary.categories.map((category) => (
+                                    <Badge key={category} variant="outline" className="text-xs">
+                                      {category}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-center">
-                              <p className="text-2xl font-bold text-green-600">
-                                {purchaseDetails.purchase_details?.materials_summary?.total_quantity || 0}
-                              </p>
-                              <p className="text-sm text-gray-600">Total Quantity</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-xl font-bold text-purple-600">
-                                {formatCurrency(purchaseDetails.purchase_details?.materials_summary?.total_cost || 0)}
-                              </p>
-                              <p className="text-sm text-gray-600">Total Value</p>
+                          )}
+                          
+                          <div className="col-span-2">
+                            <div className="flex justify-between items-start">
+                              <span className="text-sm text-gray-600">Purpose:</span>
+                              <span className="text-sm font-medium text-gray-900 text-right max-w-xs">
+                                {purchaseDetails.purchase_details?.purpose}
+                              </span>
                             </div>
                           </div>
                         </div>
                       </div>
+
+                      {/* Latest Status Comprehensive Details */}
+                      {purchaseDetails.latest_pm_proc_status && (
+                        <div className="bg-white rounded-lg border border-gray-200 p-5">
+                          <h4 className="text-sm font-semibold text-gray-700 uppercase mb-4">Latest Status Information</h4>
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+                              <div className="flex justify-between">
+                                <span className="text-sm text-gray-600">Status:</span>
+                                <Badge className={`${getStatusColor(purchaseDetails.latest_pm_proc_status.status)} uppercase`}>
+                                  {purchaseDetails.latest_pm_proc_status.status}
+                                </Badge>
+                              </div>
+                              
+                              <div className="flex justify-between">
+                                <span className="text-sm text-gray-600">Role:</span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {getRoleName(purchaseDetails.latest_pm_proc_status.role || '')}
+                                </span>
+                              </div>
+                              
+                              <div className="flex justify-between">
+                                <span className="text-sm text-gray-600">From:</span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {getRoleName(purchaseDetails.latest_pm_proc_status.sender || '')}
+                                </span>
+                              </div>
+                              
+                              <div className="flex justify-between">
+                                <span className="text-sm text-gray-600">To:</span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {getRoleName(purchaseDetails.latest_pm_proc_status.receiver || '')}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            {purchaseDetails.latest_pm_proc_status.comments && (
+                              <div className="border-t pt-3 mt-3">
+                                <p className="text-sm text-gray-600 mb-1">Comments:</p>
+                                <div className="bg-blue-50 p-3 rounded-md">
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {purchaseDetails.latest_pm_proc_status.comments}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {purchaseDetails.latest_pm_proc_status.rejection_reason && (
+                              <div className="border-t pt-3 mt-3">
+                                <p className="text-sm text-gray-600 mb-1">Rejection Reason:</p>
+                                <div className="bg-red-50 p-3 rounded-md">
+                                  <p className="text-sm font-medium text-red-700">
+                                    {purchaseDetails.latest_pm_proc_status.rejection_reason}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {purchaseDetails.latest_pm_proc_status.reject_category && (
+                              <div className="flex justify-between">
+                                <span className="text-sm text-gray-600">Reject Category:</span>
+                                <Badge variant="destructive">
+                                  {purchaseDetails.latest_pm_proc_status.reject_category}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Materials Summary */}
+                      {purchaseDetails.purchase_details?.materials_summary && (
+                        <div className="bg-white rounded-lg border border-gray-200 p-5">
+                          <h4 className="text-sm font-semibold text-gray-700 uppercase mb-4">Materials Summary</h4>
+                          <div className="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                              <p className="text-2xl font-bold text-blue-600">
+                                {purchaseDetails.purchase_details.materials_summary.total_materials || 0}
+                              </p>
+                              <p className="text-xs text-gray-600 mt-1">Total Items</p>
+                            </div>
+                            <div>
+                              <p className="text-2xl font-bold text-green-600">
+                                {purchaseDetails.purchase_details.materials_summary.total_quantity || 0}
+                              </p>
+                              <p className="text-xs text-gray-600 mt-1">Total Quantity</p>
+                            </div>
+                            <div>
+                              <p className="text-xl font-bold text-purple-600">
+                                {formatCurrency(purchaseDetails.purchase_details.materials_summary.total_cost || 0)}
+                              </p>
+                              <p className="text-xs text-gray-600 mt-1">Total Value</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Timestamps Section */}
+                      {(purchaseDetails.purchase_details?.created_at || purchaseDetails.purchase_details?.last_modified_at) && (
+                        <div className="bg-gray-50 rounded-lg p-4 text-sm">
+                          <div className="grid grid-cols-2 gap-4">
+                            {purchaseDetails.purchase_details?.created_at && (
+                              <div>
+                                <span className="text-gray-600">Created At: </span>
+                                <span className="font-medium">{formatDate(purchaseDetails.purchase_details.created_at)}</span>
+                              </div>
+                            )}
+                            {purchaseDetails.purchase_details?.last_modified_at && (
+                              <div>
+                                <span className="text-gray-600">Last Modified: </span>
+                                <span className="font-medium">{formatDate(purchaseDetails.purchase_details.last_modified_at)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </TabsContent>
                   </div>
                 </Tabs>
               ) : (
                 // History View
-                <div className="p-6">
+                <div className="p-6 max-h-[calc(90vh-200px)] overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                   <h2 className="text-xl font-semibold mb-6 text-center">Approval History</h2>
                   
                   {allStatuses.length > 0 ? (
