@@ -101,15 +101,15 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   const getStatusColor = (status?: string) => {
     switch (status?.toLowerCase()) {
       case 'approved':
-        return 'bg-green-100 text-green-800 border-green-200';
+        return 'bg-green-50 text-green-700 border-green-100';
       case 'rejected':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'bg-red-50 text-red-700 border-red-100';
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        return 'bg-yellow-50 text-yellow-700 border-yellow-100';
       case 'under_review':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'bg-blue-50 text-blue-700 border-blue-100';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-gray-50 text-gray-700 border-gray-100';
     }
   };
 
@@ -280,7 +280,11 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                       </div>
                       <div>
                         <p className="text-xs text-gray-500">Email Status</p>
-                        <Badge variant={purchase.email_sent ? 'default' : 'outline'} className="text-xs">
+                        <Badge className={`text-xs ${
+                          purchase.email_sent 
+                            ? 'bg-green-50 text-green-700 border-green-100' 
+                            : 'bg-blue-50 text-blue-700 border-blue-100'
+                        }`}>
                           {purchase.email_sent ? 'Sent' : 'Not Sent'}
                         </Badge>
                       </div>
@@ -347,12 +351,12 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                           </div>
                         </div>
                       </div>
-                      <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+                      <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                         <div className="flex items-center gap-2">
-                          <DollarSign className="h-5 w-5 text-amber-600" />
+                          <DollarSign className="h-5 w-5 text-green-600" />
                           <div>
-                            <p className="text-xs text-amber-600">Total Cost</p>
-                            <p className="text-xl font-bold text-amber-900">
+                            <p className="text-xs text-green-600">Total Cost</p>
+                            <p className="text-xl font-bold text-green-900">
                               AED {totalCost.toLocaleString()}
                             </p>
                           </div>
@@ -465,9 +469,13 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                           <div>
                             <p className="text-xs text-gray-500">Priority</p>
                             <Badge
-                              variant={material.priority === 'high' ? 'destructive' : 
-                                      material.priority === 'medium' ? 'default' : 'secondary'}
-                              className="text-xs"
+                              className={`text-xs ${
+                                material.priority?.toLowerCase() === 'high' || material.priority?.toLowerCase() === 'urgent' 
+                                  ? 'bg-red-50 text-red-700 border-red-100' : 
+                                material.priority?.toLowerCase() === 'medium' 
+                                  ? 'bg-yellow-50 text-yellow-700 border-yellow-100' : 
+                                  'bg-gray-50 text-gray-700 border-gray-100'
+                              }`}
                             >
                               {material.priority}
                             </Badge>
@@ -506,10 +514,10 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                         <div key={approval.status_id} className="relative flex items-start mb-6">
                           {/* Timeline dot */}
                           <div className={`absolute left-2.5 w-3 h-3 rounded-full border-2 border-white ${
-                            approval.status === 'approved' ? 'bg-green-500' :
-                            approval.status === 'rejected' ? 'bg-red-500' :
-                            approval.status === 'pending' ? 'bg-yellow-500' :
-                            'bg-blue-500'
+                            approval.status === 'approved' ? 'bg-green-400' :
+                            approval.status === 'rejected' ? 'bg-red-400' :
+                            approval.status === 'pending' ? 'bg-yellow-400' :
+                            'bg-blue-400'
                           }`}></div>
                           
                           {/* Content */}

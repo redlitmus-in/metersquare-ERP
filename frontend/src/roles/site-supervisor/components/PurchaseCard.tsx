@@ -68,15 +68,15 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
   const getStatusColor = (status?: string) => {
     switch (status?.toLowerCase()) {
       case 'approved':
-        return 'bg-green-100 text-green-800 border-green-200';
+        return 'bg-green-50 text-green-700 border-green-100';
       case 'rejected':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'bg-red-50 text-red-700 border-red-100';
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        return 'bg-yellow-50 text-yellow-700 border-yellow-100';
       case 'under_review':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'bg-blue-50 text-blue-700 border-blue-100';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-gray-50 text-gray-700 border-gray-100';
     }
   };
 
@@ -122,7 +122,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                     {purchase.status || 'Pending'}
                   </Badge>
                   {purchase.email_sent && (
-                    <Badge variant="outline" className="text-xs border-green-500 text-green-700">
+                    <Badge className="text-xs bg-green-50 text-green-700 border-green-100">
                       <Mail className="h-2.5 w-2.5" />
                     </Badge>
                   )}

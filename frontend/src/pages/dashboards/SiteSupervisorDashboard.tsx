@@ -433,7 +433,7 @@ const SiteSupervisorDashboard: React.FC = () => {
               console.log('Procurement Hub clicked - navigating to /procurement');
               navigate('../procurement', { replace: false });
             }}
-            className="h-8 px-4 flex items-center gap-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-md transition-all duration-200 shadow-sm hover:shadow-md mr-12"
+            className="h-8 px-4 flex items-center gap-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-md transition-all duration-200 shadow-sm hover:shadow-md"
           >
             <Package className="w-4 h-4" />
             <span>Procurement Hub</span>
@@ -442,7 +442,7 @@ const SiteSupervisorDashboard: React.FC = () => {
             aria-label="Select Period"
             value={selectedPeriod}
             onChange={(e) => setSelectedPeriod(e.target.value as any)}
-            className="h-8 px-3 text-sm border border-gray-300 rounded-md bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent cursor-pointer transition-colors"
+            className="h-8 px-3 mr-12 text-sm border border-gray-300 rounded-md bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent cursor-pointer transition-colors"
           >
             <option value="day">Today</option>
             <option value="week">This Week</option>
