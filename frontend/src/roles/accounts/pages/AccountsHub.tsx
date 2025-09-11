@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -460,26 +461,24 @@ const AccountsHub: React.FC = () => {
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 pb-8">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
-        <div className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
-            <CreditCard className="h-6 w-6 sm:h-8 sm:w-8 text-green-600" />
-            <span className="truncate">Accounts Hub</span>
-          </h1>
-          <p className="text-sm sm:text-base text-gray-600">
-            Process payments and manage financial transactions
-          </p>
+      {/* Green Gradient Header */}
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gradient-to-r from-green-100 via-green-50 to-emerald-50 p-6 rounded-xl mb-6 shadow-lg border border-green-200"
+      >
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+          <div className="space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-green-800 flex items-center gap-3">
+              <CreditCard className="h-7 w-7 sm:h-8 sm:w-8 text-green-700 drop-shadow-md" />
+              <span>Accounts Hub</span>
+            </h1>
+            <p className="text-green-700 text-sm sm:text-base opacity-90">
+              Process payments and manage financial transactions
+            </p>
+          </div>
         </div>
-        <Button
-          onClick={fetchPurchases}
-          disabled={isLoading}
-          className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
-      </div>
+      </motion.div>
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
@@ -517,7 +516,7 @@ const AccountsHub: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-3 sm:px-6">
-            <p className="text-sm sm:text-lg lg:text-xl font-bold text-purple-600 truncate">
+            <p className="text-sm sm:text-lg lg:text-xl font-bold text-green-600 truncate">
               {formatCurrency(metrics.totalValue)}
             </p>
             <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Processing value</p>
@@ -818,7 +817,7 @@ const AccountsHub: React.FC = () => {
           <TabsContent key={tabValue} value={tabValue} className="space-y-4">
             {isLoading ? (
               <div className="flex justify-center items-center py-12">
-                <RefreshCw className="h-8 w-8 animate-spin text-green-600" />
+                <ModernLoadingSpinners variant="pulse-wave" className="text-green-600" />
               </div>
             ) : filteredPurchases.length === 0 ? (
               <Card>
