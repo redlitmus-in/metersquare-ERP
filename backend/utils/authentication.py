@@ -3,14 +3,23 @@ import os
 from flask import g, jsonify, make_response, request, session, url_for
 import smtplib
 import random
+import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
 from datetime import datetime
 from datetime import datetime, timedelta
 from sqlalchemy import func
 import jwt
 from models.user import User
 
+try:
+    from .email_config import LOGO_URL, USE_BASE64_LOGO, USE_TEXT_ONLY
+except ImportError:
+    # Default values if config file doesn't exist
+    LOGO_URL = "https://via.placeholder.com/140x70/243d8a/ffffff?text=Meter+Square"
+    USE_BASE64_LOGO = False
+    USE_TEXT_ONLY = False
 
 from config.logging import get_logger
 
@@ -23,6 +32,79 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 
 otp_storage = {}
 
+def get_logo_base64():
+    """Convert logo.png to base64 string for embedding in email"""
+    try:
+        # Try multiple possible paths for the logo
+        possible_paths = [
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logo.png'),  # backend/logo.png
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logo.png'),  # project root
+            os.path.join(os.getcwd(), 'logo.png'),  # current working directory
+        ]
+        
+        logo_path = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                logo_path = path
+                break
+        
+        if not logo_path:
+            log.warning("Logo file not found in any expected location, using text-only header")
+            return None
+            
+        with open(logo_path, 'rb') as logo_file:
+            logo_data = logo_file.read()
+            # Ensure the image data is valid
+            if len(logo_data) == 0:
+                log.error("Logo file is empty")
+                return None
+            
+            base64_logo = base64.b64encode(logo_data).decode('utf-8')
+            log.info(f"Successfully loaded logo from: {logo_path} (size: {len(logo_data)} bytes, base64 length: {len(base64_logo)})")
+            
+            # Validate base64 encoding
+            try:
+                base64.b64decode(base64_logo)
+                return base64_logo
+            except Exception as decode_error:
+                log.error(f"Base64 validation failed: {decode_error}")
+                return None
+                
+    except Exception as e:
+        log.error(f"Error reading logo file: {e}")
+        return None
+
+def test_logo_loading():
+    """Test function to verify logo loading works correctly"""
+    logo_data = get_logo_base64()
+    if logo_data:
+        print(f"✅ Logo loaded successfully! Base64 length: {len(logo_data)} characters")
+        print(f"First 100 characters: {logo_data[:100]}...")
+        return True
+    else:
+        print("❌ Logo loading failed - will use text-only header")
+        return False
+
+def test_email_template():
+    """Test function to generate a sample email HTML for debugging"""
+    base64_logo = get_logo_base64()
+    if base64_logo:
+        print("✅ Logo found, generating sample HTML...")
+        # Generate a sample HTML snippet
+        sample_html = f'''
+        <div class="header">
+            <div class="logo-container">
+                <img src="data:image/png;base64,{base64_logo}" alt="Meter Square Interiors LLC" class="logo-image" style="display: block; max-width: 140px; max-height: 70px; width: auto; height: auto; border: none; outline: none;">
+                <h1 class="logo-text">Meter Square</h1>
+            </div>
+        </div>
+        '''
+        print("Sample HTML generated successfully!")
+        return sample_html
+    else:
+        print("❌ No logo found, cannot generate sample HTML")
+        return None
+
 def send_otp(email_id):
     try:
         otp = random.randint(100000, 999999)
@@ -30,162 +112,125 @@ def send_otp(email_id):
             "otp": otp,
             "expires_at": (datetime.utcnow() + timedelta(seconds=300)).timestamp()
         }
-
+        
         sender_email = SENDER_EMAIL
         password = SENDER_EMAIL_PASSWORD
         smtp_server = "smtp.gmail.com"
         smtp_port = 465
         subject = "Your OTP Code"
-
+        
+        # Create the HTML body
         body = f"""
             <!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
-                <style>
-                    body {{
-                        margin: 0;
-                        padding: 0;
-                        font-family: Arial, Helvetica, sans-serif;
-                        background-color: #f4f6fb;
-                        color: #333;
-                    }}
-                    .wrapper {{
-                        width: 100%;
-                        padding: 30px 0;
-                        background-color: #f4f6fb;
-                    }}
-                    .email-container {{
-                        max-width: 600px;
-                        margin: 0 auto;
-                        background-color: #ffffff;
-                        border-radius: 10px;
-                        overflow: hidden;
-                        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-                        border: 1px solid #e0e6f5;
-                    }}
-                    .header {{
-                        background-color: #243d8a; /* Brand Blue */
-                        color: white;
-                        text-align: center;
-                        padding: 25px;
-                    }}
-                    .header .logo {{
-                        margin: 0;
-                        font-size: 26px;
-                        font-weight: bold;
-                        letter-spacing: 0.5px;
-                    }}
-                    .content {{
-                        padding: 35px 25px;
-                        text-align: center;
-                    }}
-                    .content .title {{
-                        font-size: 22px;
-                        font-weight: bold;
-                        color: #243d8a;
-                        margin-bottom: 18px;
-                    }}
-                    .content .message {{
-                        font-size: 15px;
-                        line-height: 1.6;
-                        color: #444;
-                        margin-bottom: 28px;
-                    }}
-                    .otp-container {{
-                        margin: 25px auto;
-                        display: inline-block;
-                        padding: 18px 28px;
-                        border: 2px solid #243d8a;
-                        border-radius: 8px;
-                        background-color: #f0f4ff;
-                    }}
-                    .otp-code {{
-                        font-size: 30px;
-                        font-weight: bold;
-                        letter-spacing: 6px;
-                        color: #243d8a;
-                        margin-bottom: 12px;
-                    }}
-                    .timer {{
-                        font-size: 13px;
-                        color: #555;
-                    }}
-                    .warning {{
-                        font-size: 13px;
-                        color: #777;
-                        margin-top: 25px;
-                        line-height: 1.5;
-                    }}
-                    .signature {{
-                        text-align: left;
-                        margin-top: 35px;
-                        font-size: 14px;
-                        color: #444;
-                    }}
-                    .signature strong {{
-                        color: #243d8a;
-                    }}
-                    .footer {{
-                        background-color: #f4f6fb;
-                        text-align: center;
-                        padding: 18px;
-                        border-top: 1px solid #e0e6f5;
-                    }}
-                    .footer-text {{
-                        font-size: 12px;
-                        color: #888;
-                        margin: 0;
-                    }}
-                </style>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>OTP Verification</title>
             </head>
-            <body>
-                <div class="wrapper">
-                    <div class="email-container">
-                        <div class="header">
-                            <h1 class="logo">Meter Square</h1>
-                        </div>
-                        <div class="content">
-                            <h2 class="title">Welcome to Meter Square</h2>
-                            <p class="message">
-                                We're excited to have you on board! To secure your account,
-                                please use the verification code below to complete your registration.
-                            </p>
-                            <div class="otp-container">
-                                <div class="otp-code">{otp}</div>
-                                <div class="timer">
-                                    This code will expire in <strong>5 minutes</strong>
-                                </div>
-                            </div>
-                            <div class="warning">
-                                If you did not request this verification code, you can safely ignore this email.
-                                Your account security is our top priority.
-                            </div>
-
-                            <div class="signature">
-                                Best regards,<br>
-                                <strong>Redlitmus Team</strong>
-                            </div>
-                        </div>
-                        <div class="footer">
-                            <p class="footer-text">© 2025 Meter Square. All rights reserved.</p>
-                        </div>
-                    </div>
-                </div>
+            <body style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background-color: #f4f6fb; color: #333;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f4f6fb; padding: 30px 0;">
+                    <tr>
+                        <td align="center">
+                            <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08); border: 1px solid #e0e6f5;">
+                                <!-- Header -->
+                                <tr>
+                                    <td style="background: linear-gradient(to right, rgb(255, 255, 255), rgb(255, 255, 255)); border-bottom: 2px solid rgb(254, 202, 202); padding: 25px; text-align: center;">
+                                        <!-- Logo Image using CID reference -->
+                                        <img src="cid:logo" alt="Meter Square Logo" style="display: block; max-width: 200px; height: auto; margin: 0 auto;">
+                                    </td>
+                                </tr>
+                                <!-- Content -->
+                                <tr>
+                                    <td style="padding: 35px 25px; text-align: center;">
+                                        <h2 style="font-size: 22px; font-weight: bold; color: #243d8a; margin: 0 0 18px 0;">Welcome</h2>
+                                        <p style="font-size: 15px; line-height: 1.6; color: #444; margin: 0 0 28px 0;">
+                                            We're excited to have you on board! To secure your account,
+                                            please use the verification code below to complete your registration.
+                                        </p>
+                                        
+                                        <table align="center" cellpadding="0" cellspacing="0" border="0" style="margin: 25px auto;">
+                                            <tr>
+                                                <td style="padding: 18px 28px; border: 2px solid #243d8a; border-radius: 8px; background-color: #f0f4ff;">
+                                                    <div style="font-size: 30px; font-weight: bold; letter-spacing: 6px; color: #243d8a; margin-bottom: 12px;">{otp}</div>
+                                                    <div style="font-size: 13px; color: #555;">
+                                                        This code will expire in <strong>5 minutes</strong>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        
+                                        <p style="font-size: 13px; color: #777; margin: 25px 0 0 0; line-height: 1.5;">
+                                            If you did not request this verification code, you can safely ignore this email.
+                                            Your account security is our top priority.
+                                        </p>
+                                        
+                                        <div style="text-align: left; margin-top: 35px; font-size: 14px; color: #444;">
+                                            Best regards,<br>
+                                            <strong style="color: #243d8a;">Redlitmus Team</strong>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <!-- Footer -->
+                                <tr>
+                                    <td style="background-color: #f4f6fb; text-align: center; padding: 18px; border-top: 1px solid #e0e6f5;">
+                                        <p style="font-size: 12px; color: #888; margin: 0;">© 2025 Meter Square. All rights reserved.</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
             </body>
             </html>
             """
 
-        message = MIMEMultipart()
+        # Create message with related type for embedded images
+        message = MIMEMultipart('related')
         message["From"] = sender_email
         message["To"] = email_id
         message["Subject"] = subject
-        message.attach(MIMEText(body, "html"))
+        
+        # Create alternative part for HTML
+        msg_alternative = MIMEMultipart('alternative')
+        message.attach(msg_alternative)
+        
+        # Attach HTML body
+        msg_alternative.attach(MIMEText(body, "html"))
+        
+        # Attach the logo image from your local file
+        logo_attached = False
+        try:
+            # Try to find and attach the logo
+            possible_logo_paths = [
+                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logo.png'),  # Project root
+                os.path.join(os.getcwd(), 'logo.png'),  # Current working directory
+                'C:\\Users\\developer\\Documents\\metersquare-ERP\\logo.png',  # Absolute path
+            ]
+            
+            for logo_path in possible_logo_paths:
+                if os.path.exists(logo_path):
+                    with open(logo_path, 'rb') as f:
+                        logo_data = f.read()
+                        logo_image = MIMEImage(logo_data, _subtype='png')
+                        logo_image.add_header('Content-ID', '<logo>')
+                        logo_image.add_header('Content-Disposition', 'inline', filename='logo.png')
+                        message.attach(logo_image)
+                        logo_attached = True
+                        log.info(f"Logo attached successfully from: {logo_path}")
+                        break
+            
+            if not logo_attached:
+                log.warning("Logo file not found, sending email without logo")
+        
+        except Exception as e:
+            log.error(f"Error attaching logo: {e}")
 
         with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
             server.login(sender_email, password)
             server.sendmail(sender_email, email_id, message.as_string())
 
+        log.info(f"OTP email sent successfully to {email_id}")
         return otp
 
     except smtplib.SMTPException as e:
