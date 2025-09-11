@@ -147,13 +147,45 @@ class ProcurementService {
   // Update purchase
   async updatePurchase(purchaseId: number, purchaseData: any): Promise<any> {
     try {
-      const response = await apiClient.put(`/purchase/${purchaseId}`, purchaseData);
+      // Log the update data for debugging
+      console.log('Updating purchase:', purchaseId, 'with data:', purchaseData);
+      
+      // Get current user info from localStorage or auth store
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const userName = user.full_name || user.name || 'Procurement Team';
+      
+      // Include status reset to pending after edit and track edit history
+      const updatePayload = {
+        ...purchaseData,
+        status: 'pending',  // Reset to pending after procurement edits
+        sender_latest_status: 'pending',
+        email_sent: false,  // Reset email sent flag so it can be sent to PM again
+        last_modified_by: userName,  // Track who edited
+        last_modified_at: new Date().toISOString()  // Track when edited
+      };
+      
+      const response = await apiClient.put(`/purchase/${purchaseId}`, updatePayload);
+      
       if (response.data.success) {
         return response.data;
       }
       throw new Error(response.data.message || 'Failed to update purchase');
     } catch (error: any) {
       console.error('Error updating purchase:', error);
+      
+      // More specific error handling
+      if (error.response?.status === 404) {
+        throw new Error('Purchase request not found');
+      }
+      
+      if (error.response?.status === 403) {
+        throw new Error('You do not have permission to edit this purchase request');
+      }
+      
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      
       throw error;
     }
   }

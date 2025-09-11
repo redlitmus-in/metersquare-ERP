@@ -19,6 +19,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 
 interface Material {
   material_id: number;
@@ -60,6 +61,7 @@ interface PurchaseCardProps {
   onResendToEst?: (purchaseId: number) => void;
   isLoading?: boolean;
   emailSent?: boolean;
+  sendingEmail?: boolean;
 }
 
 const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
@@ -71,7 +73,8 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
   onResendToPM,
   onResendToEst,
   isLoading = false,
-  emailSent = false
+  emailSent = false,
+  sendingEmail = false
 }, ref) => {
   // Calculate total amount from materials
   const totalAmount = purchase.materials?.reduce((sum, m) => 
@@ -128,6 +131,11 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'approved':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'completed':
+      case 'delivered':
+      case 'closed':
+      case 'finished':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'rejected':
         return 'bg-red-100 text-red-800 border-red-200';
@@ -309,12 +317,24 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                 <Button
                   size="sm"
                   onClick={() => onSendEmail(purchase.purchase_id)}
-                  disabled={isLoading}
-                  className="bg-blue-600 hover:bg-blue-700 text-white w-full h-7 text-xs flex items-center justify-center"
+                  disabled={isLoading || sendingEmail}
+                  className="text-white w-full h-7 text-xs flex items-center justify-center"
+                  style={{ backgroundColor: sendingEmail ? '#64748b' : '#243d8a' }}
+                  onMouseEnter={(e) => !sendingEmail && (e.currentTarget.style.backgroundColor = '#1a2d66')}
+                  onMouseLeave={(e) => !sendingEmail && (e.currentTarget.style.backgroundColor = '#243d8a')}
                   title="Send to Project Manager"
                 >
-                  <Mail className="w-3 h-3 mr-1" />
-                  Send to PM
+                  {sendingEmail ? (
+                    <>
+                      <ModernLoadingSpinners variant="dots" size="sm" className="mr-1" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-3 h-3 mr-1" />
+                      Send to PM
+                    </>
+                  )}
                 </Button>
               </div>
             )}
@@ -326,7 +346,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   size="sm"
                   onClick={() => onResendToPM(purchase.purchase_id)}
                   disabled={isLoading}
-                  className="bg-orange-600 hover:bg-orange-700 text-white w-full h-7 text-xs flex items-center justify-center"
+                  className="bg-red-600 hover:bg-red-700 text-white w-full h-7 text-xs flex items-center justify-center"
                   title="Resend to Project Manager after revision"
                 >
                   <Mail className="w-3 h-3 mr-1" />
@@ -335,18 +355,21 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
               </div>
             )}
             
-            {/* Resend to PM Button for Est-rejected PRs */}
+            {/* Resend to Estimation Button for Est-rejected PRs */}
             {rejectedByEst && onResendToEst && (
               <div className="flex items-center justify-center">
                 <Button
                   size="sm"
                   onClick={() => onResendToEst(purchase.purchase_id)}
                   disabled={isLoading}
-                  className="bg-purple-600 hover:bg-purple-700 text-white w-full h-7 text-xs flex items-center justify-center"
-                  title="Resend to Project Manager after revision"
+                  className="text-white w-full h-7 text-xs flex items-center justify-center"
+                  style={{ backgroundColor: '#243d8a', hover: { backgroundColor: '#1a2d66' } }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a2d66'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#243d8a'}
+                  title="Resend to Estimation after revision"
                 >
                   <Mail className="w-3 h-3 mr-1" />
-                  Resend to PM
+                  Resend to Estimation
                 </Button>
               </div>
             )}

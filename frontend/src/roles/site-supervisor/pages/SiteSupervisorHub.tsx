@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import PurchaseCard from '../components/PurchaseCard';
 import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
 import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
@@ -64,6 +65,17 @@ const SiteSupervisorHub: React.FC = () => {
   const [projectFilter, setProjectFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
+  
+  // Dialog states for confirmations
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    purchaseId: number | null;
+    type: 'email' | 'delete';
+  }>({ isOpen: false, purchaseId: null, type: 'email' });
+  const [successDialog, setSuccessDialog] = useState<{
+    isOpen: boolean;
+    message: string;
+  }>({ isOpen: false, message: '' });
 
   // Metrics state
   const [metrics, setMetrics] = useState({
@@ -72,7 +84,8 @@ const SiteSupervisorHub: React.FC = () => {
     approvedCount: 0,
     rejectedCount: 0,
     totalValue: 0,
-    emailSentCount: 0
+    emailSentCount: 0,
+    completedCount: 0
   });
 
   // Fetch purchases on component mount
@@ -116,6 +129,13 @@ const SiteSupervisorHub: React.FC = () => {
       case 'email-sent':
         // Only show purchases that have been sent via email
         filtered = filtered.filter(p => p.email_sent);
+        break;
+      case 'completed':
+        // Only show purchases that are fully completed (delivered, closed, finished, completed)
+        filtered = filtered.filter(p => {
+          const status = p.status?.toLowerCase();
+          return status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished';
+        });
         break;
     }
 
@@ -228,6 +248,11 @@ const SiteSupervisorHub: React.FC = () => {
     const rejected = purchases.filter(p => p.status === 'rejected').length;
     // Email sent count: all purchases that have been sent via email
     const emailSent = purchases.filter(p => p.email_sent).length;
+    // Completed count: fully completed purchases
+    const completed = purchases.filter(p => {
+      const status = p.status?.toLowerCase();
+      return status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished';
+    }).length;
 
     const totalValue = purchases.reduce((sum, purchase) => {
       const purchaseTotal = purchase.materials?.reduce((materialSum, mat) => 
@@ -241,7 +266,8 @@ const SiteSupervisorHub: React.FC = () => {
       approvedCount: approved,
       rejectedCount: rejected,
       totalValue,
-      emailSentCount: emailSent
+      emailSentCount: emailSent,
+      completedCount: completed
     });
   };
 
@@ -300,15 +326,32 @@ const SiteSupervisorHub: React.FC = () => {
       return;
     }
     
-    if (!window.confirm('Are you sure you want to delete this purchase request? This action cannot be undone.')) {
-      return;
-    }
+    // Show confirmation dialog
+    setConfirmDialog({ isOpen: true, purchaseId, type: 'delete' });
+  };
 
+  const handleSendEmail = (purchaseId: number) => {
+    // Show confirmation dialog
+    setConfirmDialog({ isOpen: true, purchaseId, type: 'email' });
+  };
+  
+  const confirmDelete = async () => {
+    if (!confirmDialog.purchaseId) return;
+    
+    const purchaseId = confirmDialog.purchaseId;
+    setConfirmDialog({ isOpen: false, purchaseId: null, type: 'delete' });
     setIsLoading(true);
+    
     try {
       await siteSupervisorService.deletePurchase(purchaseId);
-      toast.success('Purchase request deleted successfully');
-      // Remove the deleted purchase from the list immediately for better UX
+      
+      // Show success dialog
+      setSuccessDialog({
+        isOpen: true,
+        message: 'Purchase request has been deleted successfully!'
+      });
+      
+      // Remove the deleted purchase from the list
       setPurchases(prev => prev.filter(p => p.purchase_id !== purchaseId));
     } catch (error: any) {
       console.error('Delete error:', error);
@@ -317,16 +360,23 @@ const SiteSupervisorHub: React.FC = () => {
       setIsLoading(false);
     }
   };
-
-  const handleSendEmail = async (purchaseId: number) => {
-    if (!window.confirm('Send this purchase request via email to the procurement team?')) {
-      return;
-    }
+  
+  const confirmSendEmail = async () => {
+    if (!confirmDialog.purchaseId) return;
+    
+    const purchaseId = confirmDialog.purchaseId;
+    setConfirmDialog({ isOpen: false, purchaseId: null, type: 'email' });
 
     setIsLoading(true);
+    
     try {
       await siteSupervisorService.sendPurchaseEmail(purchaseId);
-      toast.success('Email sent successfully to procurement team');
+      
+      // Show success dialog
+      setSuccessDialog({
+        isOpen: true,
+        message: 'Email has been sent successfully to the procurement team!'
+      });
       
       // Update the purchase to mark it as email sent with current timestamp
       const now = new Date().toISOString();
@@ -692,7 +742,7 @@ const SiteSupervisorHub: React.FC = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 h-auto max-w-md">
+        <TabsList className="grid w-full grid-cols-3 h-auto max-w-lg">
           <TabsTrigger value="pending" className="flex items-center gap-1">
             <Clock className="h-3.5 w-3.5" />
             Pending ({metrics.pendingCount})
@@ -700,6 +750,10 @@ const SiteSupervisorHub: React.FC = () => {
           <TabsTrigger value="email-sent" className="flex items-center gap-1">
             <Mail className="h-3.5 w-3.5" />
             Email Sent ({metrics.emailSentCount})
+          </TabsTrigger>
+          <TabsTrigger value="completed" className="flex items-center gap-1 text-green-600 data-[state=active]:text-green-700">
+            <CheckSquare className="h-3.5 w-3.5" />
+            Completed ({metrics.completedCount || 0})
           </TabsTrigger>
         </TabsList>
 
@@ -727,7 +781,8 @@ const SiteSupervisorHub: React.FC = () => {
                 <Package className="h-12 w-12 mx-auto text-gray-300 mb-3" />
                 <h3 className="text-lg font-medium text-gray-900 mb-1">No purchases found</h3>
                 <p className="text-sm text-gray-500">
-                  {activeTab === 'pending' ? 'No pending purchase requests' : 'No email sent purchases'}
+                  {activeTab === 'pending' ? 'No pending purchase requests' : 
+                   activeTab === 'email-sent' ? 'No email sent purchases' : 'No completed purchases'}
                 </p>
                 <Button
                   onClick={() => setNewPurchaseModalOpen(true)}
@@ -780,6 +835,33 @@ const SiteSupervisorHub: React.FC = () => {
         }}
         purchaseId={selectedPurchaseId}
         mode={modalMode}
+      />
+      
+      {/* Confirmation Dialog for Email/Delete */}
+      <ConfirmationDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ isOpen: false, purchaseId: null, type: 'email' })}
+        type={confirmDialog.type === 'email' ? 'email' : 'warning'}
+        title={confirmDialog.type === 'email' ? 'Send Email Confirmation' : 'Delete Confirmation'}
+        message={
+          confirmDialog.type === 'email' 
+            ? 'Are you sure you want to send this purchase request via email to the procurement team?' 
+            : 'Are you sure you want to delete this purchase request? This action cannot be undone.'
+        }
+        confirmText={confirmDialog.type === 'email' ? 'Send Email' : 'Delete'}
+        cancelText="Cancel"
+        showCancel={true}
+        onConfirm={confirmDialog.type === 'email' ? confirmSendEmail : confirmDelete}
+      />
+      
+      {/* Success Dialog */}
+      <ConfirmationDialog
+        isOpen={successDialog.isOpen}
+        onClose={() => setSuccessDialog({ isOpen: false, message: '' })}
+        type="success"
+        message={successDialog.message}
+        confirmText="OK"
+        showCancel={false}
       />
     </div>
   );

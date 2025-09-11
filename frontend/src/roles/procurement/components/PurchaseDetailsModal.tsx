@@ -40,7 +40,15 @@ import {
   Layers,
   Shield,
   Activity,
-  Target
+  Target,
+  Paperclip,
+  Eye,
+  File,
+  FileImage,
+  FileSpreadsheet,
+  Edit,
+  UserCog,
+  PenTool
 } from 'lucide-react';
 
 interface PurchaseDetailsModalProps {
@@ -85,15 +93,25 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
       if (mode === 'history') {
         // Use getPurchaseHistory for history view
         const { purchase: purchaseData, latest_status } = await procurementService.getPurchaseHistory(purchaseId);
+        console.log('History mode - Purchase data:', purchaseData);
         setPurchase(purchaseData);
         setLatestStatus(latest_status);
       } else {
         // Use getPurchaseDetails for details view with full response
         const response = await procurementService.getPurchaseDetails(purchaseId);
+        console.log('Details mode - Purchase response:', response);
+        
         if (response.purchase) {
+          console.log('Purchase file_path:', response.purchase.file_path);
+          console.log('Purchase last_modified_by:', response.purchase.last_modified_by);
+          console.log('Purchase last_modified_at:', response.purchase.last_modified_at);
           setPurchase(response.purchase);
           setLatestStatus(response.latest_status);
         } else {
+          console.log('Direct purchase data:', response);
+          console.log('Purchase file_path:', response.file_path);
+          console.log('Purchase last_modified_by:', response.last_modified_by);
+          console.log('Purchase last_modified_at:', response.last_modified_at);
           setPurchase(response);
         }
       }
@@ -143,6 +161,74 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     }
   };
 
+  // File helper functions
+  const getFileIcon = (filePath: string | undefined) => {
+    if (!filePath) return <File className="h-5 w-5 text-gray-400" />;
+    
+    const extension = filePath.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return <FileText className="h-5 w-5 text-red-500" />;
+      case 'doc':
+      case 'docx':
+        return <FileText className="h-5 w-5 text-blue-500" />;
+      case 'xls':
+      case 'xlsx':
+        return <FileSpreadsheet className="h-5 w-5 text-green-500" />;
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'gif':
+        return <FileImage className="h-5 w-5 text-purple-500" />;
+      default:
+        return <File className="h-5 w-5 text-gray-400" />;
+    }
+  };
+
+  const getFileName = (filePath: string | undefined) => {
+    if (!filePath) return 'Unknown file';
+    const parts = filePath.split('/');
+    return parts[parts.length - 1] || 'Attached document';
+  };
+
+  const handleViewFile = (filePath: string | undefined) => {
+    if (!filePath) {
+      toast.error('File path not available');
+      return;
+    }
+    
+    // Check if it's a full URL or relative path
+    const isFullUrl = filePath.startsWith('http://') || filePath.startsWith('https://');
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    const fileUrl = isFullUrl ? filePath : `${apiUrl}${filePath}`;
+    
+    // Open in new tab
+    window.open(fileUrl, '_blank');
+  };
+
+  const handleDownloadFile = (filePath: string | undefined) => {
+    if (!filePath) {
+      toast.error('File path not available');
+      return;
+    }
+    
+    // Check if it's a full URL or relative path
+    const isFullUrl = filePath.startsWith('http://') || filePath.startsWith('https://');
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    const fileUrl = isFullUrl ? filePath : `${apiUrl}${filePath}`;
+    
+    // Create a temporary link and trigger download
+    const link = document.createElement('a');
+    link.href = fileUrl;
+    link.download = getFileName(filePath);
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('Download started');
+  };
+
   const formatStatusText = (status: string) => {
     const statusMap: { [key: string]: string } = {
       'approved': 'APPROVED',
@@ -187,17 +273,17 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-5xl max-h-[95vh] h-[95vh] overflow-hidden flex flex-col p-0 bg-gray-50">
-        <DialogHeader className="px-6 py-5 bg-gradient-to-r from-red-600 to-red-700 flex-shrink-0 shadow-lg">
+        <DialogHeader className="px-6 py-5 bg-gradient-to-r from-red-50 to-red-100 flex-shrink-0 shadow-lg border-b border-red-200">
           <DialogTitle className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/10 rounded-lg backdrop-blur">
-                <FileText className="w-6 h-6 text-white" />
+              <div className="p-2 bg-white/50 rounded-lg backdrop-blur">
+                <FileText className="w-6 h-6 text-red-600" />
               </div>
               <div>
-                <h2 className="text-white text-lg font-semibold">Purchase Request Details</h2>
+                <h2 className="text-gray-900 text-lg font-semibold">Purchase Request Details</h2>
                 {purchase && (
                   <div className="flex items-center gap-2 mt-1">
-                    <Badge className="bg-white/20 text-white border-white/30 hover:bg-white/30">
+                    <Badge className="bg-red-100 text-red-700 border-red-300 hover:bg-red-200">
                       <Hash className="w-3 h-3 mr-1" />
                       PR-{purchase.purchase_id}
                     </Badge>
@@ -212,12 +298,12 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
             <div className="flex items-center gap-2">
               {purchase && (
                 <Button
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
                   onClick={handleExportPDF}
-                  className="bg-white/10 hover:bg-white/20 text-white border-white/30"
+                  className="bg-white hover:bg-red-50 text-gray-700 border-red-300"
                 >
-                  <FileText className="w-4 h-4 mr-1" />
+                  <FileText className="w-4 h-4 mr-1 text-red-600" />
                   Export PDF
                 </Button>
               )}
@@ -412,6 +498,110 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                         </CardContent>
                       </Card>
 
+                      {/* Edit History */}
+                      {(purchase.last_modified_by || purchase.last_modified_at) && (
+                        <Card className="border-0 shadow-sm">
+                          <CardContent className="p-6">
+                            <div className="flex items-center gap-2 mb-4">
+                              <div className="p-2 bg-blue-100 rounded-lg">
+                                <Edit className="w-5 h-5 text-blue-600" />
+                              </div>
+                              <h3 className="text-lg font-semibold text-gray-900">Edit History</h3>
+                            </div>
+                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <UserCog className="w-5 h-5 text-blue-600" />
+                                  <div>
+                                    <p className="text-xs text-gray-500">Last edited by</p>
+                                    <p className="text-sm font-semibold text-gray-900">{purchase.last_modified_by || 'Procurement Team'}</p>
+                                  </div>
+                                </div>
+                                {purchase.last_modified_at && (
+                                  <div className="flex items-center gap-3">
+                                    <Clock className="w-5 h-5 text-blue-600" />
+                                    <div>
+                                      <p className="text-xs text-gray-500">Last edited on</p>
+                                      <p className="text-sm font-semibold text-gray-900">
+                                        {new Date(purchase.last_modified_at).toLocaleString()}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="mt-2 p-2 bg-white rounded">
+                                  <p className="text-xs text-amber-600">
+                                    <AlertCircle className="w-3 h-3 inline mr-1" />
+                                    Edited purchase requests require re-approval from Project Manager
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Document Attachments */}
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="p-2 bg-purple-100 rounded-lg">
+                              <Paperclip className="w-5 h-5 text-purple-600" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900">Document Attachments</h3>
+                          </div>
+                          
+                          {purchase.file_path ? (
+                            <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg border border-purple-200">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  {getFileIcon(purchase.file_path)}
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900">
+                                      {getFileName(purchase.file_path)}
+                                    </p>
+                                    <p className="text-xs text-gray-500">Uploaded by {purchase.requested_by || 'Site Supervisor'}</p>
+                                  </div>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex items-center gap-2"
+                                    onClick={() => handleViewFile(purchase.file_path)}
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                    View
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex items-center gap-2"
+                                    onClick={() => handleDownloadFile(purchase.file_path)}
+                                  >
+                                    <Download className="h-3.5 w-3.5" />
+                                    Download
+                                  </Button>
+                                </div>
+                              </div>
+                              
+                              {/* Additional info */}
+                              <div className="text-xs text-gray-500 flex items-center gap-1 mt-3">
+                                <AlertCircle className="h-3 w-3" />
+                                Files are securely stored and can be accessed by authorized personnel only
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="bg-gray-50 rounded-lg p-6 text-center">
+                              <Paperclip className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                              <p className="text-sm text-gray-500">No attachments uploaded</p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                Documents can be attached when creating purchase requests
+                              </p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
                       {/* Approval Status */}
                       {purchase.approvals && purchase.approvals.length > 0 && (
                         <Card className="border-0 shadow-sm">
@@ -597,23 +787,23 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                         ))}
                         
                         {/* Total Summary */}
-                        <Card className="border-0 shadow-lg bg-gradient-to-r from-green-600 to-green-700">
+                        <Card className="border-2 border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
                           <CardContent className="p-6">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
-                                <div className="p-3 bg-white/20 rounded-lg">
-                                  <DollarSign className="w-6 h-6 text-white" />
+                                <div className="p-3 bg-green-100 rounded-lg">
+                                  <DollarSign className="w-6 h-6 text-green-600" />
                                 </div>
                                 <div>
-                                  <p className="text-white/80 text-sm">Grand Total</p>
-                                  <p className="text-3xl font-bold text-white">
+                                  <p className="text-sm text-gray-600">Grand Total</p>
+                                  <p className="text-3xl font-bold text-gray-900">
                                     AED {totalAmount.toLocaleString()}
                                   </p>
                                 </div>
                               </div>
                               <div className="text-right">
-                                <p className="text-white/80 text-sm">{purchase.materials.length} Items</p>
-                                <p className="text-white/90 text-xs mt-1">All prices inclusive</p>
+                                <p className="text-sm text-gray-600">{purchase.materials.length} Items</p>
+                                <p className="text-xs text-gray-500 mt-1">All prices inclusive</p>
                               </div>
                             </div>
                           </CardContent>
@@ -689,19 +879,19 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   <div className="space-y-2">
                                     <div>
                                       <p className="text-xs text-blue-600">Current Role</p>
-                                      <p className="text-sm font-semibold text-blue-900">
+                                      <p className="text-sm font-semibold text-gray-900">
                                         {latestStatus.role?.replace(/([A-Z])/g, ' $1').trim() || 'N/A'}
                                       </p>
                                     </div>
                                     <div>
                                       <p className="text-xs text-blue-600">Decision By</p>
-                                      <p className="text-sm font-semibold text-blue-900">
+                                      <p className="text-sm font-semibold text-gray-900">
                                         {latestStatus.created_by || 'N/A'}
                                       </p>
                                     </div>
                                     <div>
                                       <p className="text-xs text-blue-600">Decision Date</p>
-                                      <p className="text-sm font-semibold text-blue-900">
+                                      <p className="text-sm font-semibold text-gray-900">
                                         {latestStatus.decision_date ? 
                                           new Date(latestStatus.decision_date).toLocaleDateString('en-US', {
                                             month: 'short',
@@ -723,19 +913,19 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   <div className="space-y-2">
                                     <div>
                                       <p className="text-xs text-purple-600">From (Sender)</p>
-                                      <p className="text-sm font-semibold text-purple-900">
+                                      <p className="text-sm font-semibold text-gray-900">
                                         {latestStatus.sender?.replace(/([A-Z])/g, ' $1').trim() || 'N/A'}
                                       </p>
                                     </div>
                                     <div>
                                       <p className="text-xs text-purple-600">To (Receiver)</p>
-                                      <p className="text-sm font-semibold text-purple-900">
+                                      <p className="text-sm font-semibold text-gray-900">
                                         {latestStatus.receiver?.replace(/([A-Z])/g, ' $1').trim() || 'N/A'}
                                       </p>
                                     </div>
                                     <div>
                                       <p className="text-xs text-purple-600">Purchase ID</p>
-                                      <p className="text-sm font-semibold text-purple-900">
+                                      <p className="text-sm font-semibold text-gray-900">
                                         PR-{latestStatus.purchase_id || 'N/A'}
                                       </p>
                                     </div>

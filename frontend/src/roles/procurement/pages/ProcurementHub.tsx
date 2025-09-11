@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import PurchaseCard from '../components/PurchaseCard';
 import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
+import EditPurchaseModal from '../components/EditPurchaseModal';
 import { procurementService, Purchase } from '../services/procurementService';
 
 import {
@@ -73,16 +74,21 @@ const ProcurementHub: React.FC = () => {
   const [modalMode, setModalMode] = useState<'details' | 'history'>('details');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [pmEmailedPRs, setPmEmailedPRs] = useState<Set<number>>(new Set());
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
+  const [sendingEmailIds, setSendingEmailIds] = useState<Set<number>>(new Set());
 
   // Confirmation Dialog for email
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     purchaseId: number | null;
     message: string;
+    isLoading?: boolean;
   }>({
     isOpen: false,
     purchaseId: null,
-    message: ''
+    message: '',
+    isLoading: false
   });
 
   // Fetch data on mount with delay to prevent duplicate calls
@@ -224,6 +230,27 @@ const ProcurementHub: React.FC = () => {
 
   const filterPurchases = () => {
     let filtered = [...purchases];
+    
+    // Sort by most recent activity - check multiple date fields
+    filtered.sort((a, b) => {
+      // Get the most recent date for each purchase
+      const getLatestDate = (p: Purchase) => {
+        const dates = [
+          p.last_modified_at,
+          p.status_date,
+          p.decision_date,
+          p.created_at
+        ].filter(d => d).map(d => new Date(d).getTime());
+        
+        return Math.max(...dates, new Date(p.created_at).getTime());
+      };
+      
+      const dateA = getLatestDate(a);
+      const dateB = getLatestDate(b);
+      
+      // Sort by most recent first
+      return dateB - dateA;
+    });
 
     // Apply search filter
     if (searchTerm) {
@@ -238,10 +265,11 @@ const ProcurementHub: React.FC = () => {
     // Apply tab filter based on actual status from backend
     switch (activeTab) {
       case 'pending':
-        // Show only pending items that haven't been sent to PM
+        // Show pending items including those edited by procurement
         filtered = filtered.filter(p => {
           const status = p.sender_latest_status || p.latest_status || p.status || 'pending';
-          return status === 'pending' && !pmEmailedPRs.has(p.purchase_id);
+          // Include pending items that haven't been sent to PM or were just edited
+          return (status === 'pending' || status === 'draft') && !pmEmailedPRs.has(p.purchase_id);
         });
         break;
         
@@ -300,6 +328,14 @@ const ProcurementHub: React.FC = () => {
         });
         break;
         
+      case 'completed':
+        // Filter for fully completed/delivered purchases
+        filtered = filtered.filter(p => {
+          const status = p.sender_latest_status || p.latest_status || p.status;
+          return status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished';
+        });
+        break;
+        
       default:
         // Default to pending
         filtered = filtered.filter(p => {
@@ -326,8 +362,41 @@ const ProcurementHub: React.FC = () => {
   };
 
   const handleEdit = (purchaseId: number) => {
-    // Navigate to purchase form in edit mode
-    navigate(`/purchase-form?edit=${purchaseId}`);
+    // Find the purchase to edit
+    const purchaseToEdit = purchases.find(p => p.purchase_id === purchaseId);
+    if (!purchaseToEdit) {
+      toast.error('Purchase not found');
+      return;
+    }
+    
+    // Check if purchase can be edited by procurement
+    // Procurement can edit purchases that are pending or rejected by PM/Estimation
+    const status = purchaseToEdit.sender_latest_status || purchaseToEdit.latest_status || purchaseToEdit.status;
+    
+    // Allow editing if:
+    // 1. Status is pending (not yet sent to PM)
+    // 2. Rejected by PM (needs revision)
+    // 3. Rejected by Estimation (needs revision)
+    const canEdit = (
+      status === 'pending' ||
+      status === 'rejected' ||
+      activeTab === 'pm_rejected' ||
+      activeTab === 'est_rejected'
+    );
+    
+    if (!canEdit && status === 'approved') {
+      toast.error('Cannot edit approved purchase requests');
+      return;
+    }
+    
+    if (!canEdit && pmEmailedPRs.has(purchaseId)) {
+      toast.error('Cannot edit purchase requests that have been sent for approval');
+      return;
+    }
+    
+    // Open edit modal
+    setEditingPurchase(purchaseToEdit);
+    setShowEditModal(true);
   };
 
   const handleSendEmail = (purchaseId: number) => {
@@ -356,6 +425,12 @@ const ProcurementHub: React.FC = () => {
     if (!purchaseId) return;
 
     try {
+      // Set loading state for dialog button
+      setConfirmDialog(prev => ({ ...prev, isLoading: true }));
+      
+      // Add to sending state
+      setSendingEmailIds(prev => new Set(prev).add(purchaseId));
+      
       await procurementService.sendApprovalEmail(purchaseId);
       setPmEmailedPRs(prev => new Set(prev).add(purchaseId));
       toast.success('Purchase request sent to Project Manager for approval');
@@ -365,7 +440,13 @@ const ProcurementHub: React.FC = () => {
     } catch (error: any) {
       toast.error(error.message || 'Failed to send email');
     } finally {
-      setConfirmDialog({ isOpen: false, purchaseId: null, message: '' });
+      // Remove from sending state
+      setSendingEmailIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(purchaseId);
+        return newSet;
+      });
+      setConfirmDialog({ isOpen: false, purchaseId: null, message: '', isLoading: false });
     }
   };
 
@@ -409,17 +490,21 @@ const ProcurementHub: React.FC = () => {
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-xl shadow-sm p-6 border"
+        className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl shadow-xl p-6 text-gray-800 border border-red-200"
       >
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Package className="w-7 h-7 text-red-600" />
-              Procurement Hub
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Process purchase requisitions, manage vendor quotations, and handle approvals
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-white/20 rounded-lg backdrop-blur">
+              <Package className="w-8 h-8 text-red-600" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Procurement Hub
+              </h1>
+              <p className="text-sm text-gray-600 mt-1">
+                Process purchase requisitions, manage vendor quotations, and handle approvals
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -517,11 +602,11 @@ const ProcurementHub: React.FC = () => {
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <div className="border-b px-6 pt-4">
-              <TabsList className="grid grid-cols-4 w-full max-w-2xl">
+              <TabsList className="grid grid-cols-5 w-full max-w-4xl">
                 <TabsTrigger value="pending">
                   Pending ({purchases.filter(p => {
                     const status = p.sender_latest_status || p.latest_status || p.status || 'pending';
-                    return status === 'pending' && !pmEmailedPRs.has(p.purchase_id);
+                    return (status === 'pending' || status === 'draft') && !pmEmailedPRs.has(p.purchase_id);
                   }).length})
                 </TabsTrigger>
                 <TabsTrigger value="approved">
@@ -534,7 +619,7 @@ const ProcurementHub: React.FC = () => {
                            (p.status_receiver === 'technicalDirector' && status === 'approved');
                   }).length})
                 </TabsTrigger>
-                <TabsTrigger value="pm_rejected" className="text-orange-600">
+                <TabsTrigger value="pm_rejected" className="text-red-600 data-[state=active]:text-red-700 data-[state=active]:border-red-500">
                   PM Reject ({purchases.filter(p => {
                     const hasRejection = p.approvals?.some((a: any) => 
                       a.reviewer_role === 'projectManager' && a.status === 'rejected'
@@ -547,7 +632,7 @@ const ProcurementHub: React.FC = () => {
                     return hasRejection || rejectedByPM;
                   }).length})
                 </TabsTrigger>
-                <TabsTrigger value="est_rejected" className="text-purple-600">
+                <TabsTrigger value="est_rejected" className="text-blue-600 data-[state=active]:text-blue-700 data-[state=active]:border-blue-500">
                   Est Reject ({purchases.filter(p => {
                     const hasRejection = p.approvals?.some((a: any) => 
                       a.reviewer_role === 'estimation' && a.status === 'rejected'
@@ -560,20 +645,26 @@ const ProcurementHub: React.FC = () => {
                     return hasRejection || rejectedByEst;
                   }).length})
                 </TabsTrigger>
+                <TabsTrigger value="completed" className="text-green-600 data-[state=active]:text-green-700 data-[state=active]:border-green-500">
+                  Completed ({purchases.filter(p => {
+                    const status = p.sender_latest_status || p.latest_status || p.status;
+                    return status === 'completed' || status === 'delivered' || status === 'closed';
+                  }).length})
+                </TabsTrigger>
               </TabsList>
             </div>
 
             {/* Purchase Cards Grid - 2 columns */}
             <TabsContent value={activeTab} className="p-6">
               {activeTab === 'pm_rejected' && filteredPurchases.length > 0 && (
-                <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-orange-600 mt-0.5" />
+                    <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium text-orange-900">
+                      <p className="text-sm font-medium text-red-900">
                         These purchase requests were rejected by the Project Manager
                       </p>
-                      <p className="text-xs text-orange-700 mt-1">
+                      <p className="text-xs text-red-700 mt-1">
                         Review the rejection reasons and make necessary revisions. You can resend these to PM after addressing the issues.
                       </p>
                     </div>
@@ -582,15 +673,31 @@ const ProcurementHub: React.FC = () => {
               )}
               
               {activeTab === 'est_rejected' && filteredPurchases.length > 0 && (
-                <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-purple-600 mt-0.5" />
+                    <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium text-purple-900">
+                      <p className="text-sm font-medium text-blue-900">
                         These purchase requests were rejected by the Estimation team
                       </p>
-                      <p className="text-xs text-purple-700 mt-1">
+                      <p className="text-xs text-blue-700 mt-1">
                         Review the technical specifications and cost estimates. You can resend these to Estimation after corrections.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === 'completed' && filteredPurchases.length > 0 && (
+                <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-green-900">
+                        These purchase requests have been fully completed
+                      </p>
+                      <p className="text-xs text-green-700 mt-1">
+                        These purchases have gone through the entire approval process and have been delivered/closed successfully.
                       </p>
                     </div>
                   </div>
@@ -610,6 +717,7 @@ const ProcurementHub: React.FC = () => {
                       onResendToPM={handleResendToPM}
                       onResendToEst={handleResendToPM}
                       emailSent={pmEmailedPRs.has(purchase.purchase_id)}
+                      sendingEmail={sendingEmailIds.has(purchase.purchase_id)}
                     />
                   ))}
                 </div>
@@ -621,6 +729,8 @@ const ProcurementHub: React.FC = () => {
                       ? 'No PM rejected requisitions found' 
                       : activeTab === 'est_rejected'
                       ? 'No Estimation rejected requisitions found'
+                      : activeTab === 'completed'
+                      ? 'No completed requisitions found'
                       : 'No purchase requisitions found'}
                   </p>
                   <p className="text-sm mt-1">
@@ -630,6 +740,8 @@ const ProcurementHub: React.FC = () => {
                       ? 'Purchase requests rejected by PM will appear here for revision'
                       : activeTab === 'est_rejected'
                       ? 'Purchase requests rejected by Estimation will appear here for revision'
+                      : activeTab === 'completed'
+                      ? 'Fully completed/delivered purchase requests will appear here'
                       : 'Waiting for new purchase requisitions to process'}
                   </p>
                 </div>
@@ -671,13 +783,47 @@ const ProcurementHub: React.FC = () => {
             </Button>
             <Button
               onClick={confirmAction}
-              className="bg-blue-600 hover:bg-blue-700"
+              disabled={confirmDialog.isLoading}
+              style={{ backgroundColor: confirmDialog.isLoading ? '#64748b' : '#243d8a' }}
+              onMouseEnter={(e) => !confirmDialog.isLoading && (e.currentTarget.style.backgroundColor = '#1a2d66')}
+              onMouseLeave={(e) => !confirmDialog.isLoading && (e.currentTarget.style.backgroundColor = '#243d8a')}
+              className="text-white flex items-center gap-2"
             >
-              Send to PM
+              {confirmDialog.isLoading ? (
+                <>
+                  <ModernLoadingSpinners variant="dots" size="sm" />
+                  Sending...
+                </>
+              ) : (
+                'Send to PM'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Purchase Modal */}
+      <EditPurchaseModal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingPurchase(null);
+        }}
+        purchase={editingPurchase}
+        onSave={() => {
+          // Remove from emailed set if it was edited
+          if (editingPurchase) {
+            setPmEmailedPRs(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(editingPurchase.purchase_id);
+              return newSet;
+            });
+          }
+          setShowEditModal(false);
+          setEditingPurchase(null);
+          fetchPurchases(); // Refresh the list after saving
+        }}
+      />
     </div>
   );
 };
