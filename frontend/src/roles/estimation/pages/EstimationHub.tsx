@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -228,12 +229,16 @@ const EstimationHub: React.FC = () => {
     switch (activeTab) {
       case 'pending':
         filtered = purchases.filter(p => {
+          // Comprehensive completion check
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
                              p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
-                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
+                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved') ||
+                             (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'acknowledged') ||
+                             (p.status_info?.sender === 'accounts' && p.status_info?.accounts_status === 'acknowledged') ||
+                             (p.status_info?.td_status === 'approved' && p.status_info?.receiver === 'accounts');
           if (isCompleted) return false;
           
           const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
@@ -243,12 +248,15 @@ const EstimationHub: React.FC = () => {
         
       case 'approved':
         filtered = purchases.filter(p => {
+          // More comprehensive completion check
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
                              p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
-                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
+                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved') ||
+                             (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'acknowledged') ||
+                             (p.status_info?.sender === 'accounts' && p.status_info?.accounts_status === 'acknowledged');
           if (isCompleted) return false;
           
           const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
@@ -258,12 +266,16 @@ const EstimationHub: React.FC = () => {
         
       case 'rejected':
         filtered = purchases.filter(p => {
+          // Comprehensive completion check
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
                              p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
-                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
+                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved') ||
+                             (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'acknowledged') ||
+                             (p.status_info?.sender === 'accounts' && p.status_info?.accounts_status === 'acknowledged') ||
+                             (p.status_info?.td_status === 'approved' && p.status_info?.receiver === 'accounts');
           if (isCompleted) return false;
           
           const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
@@ -275,12 +287,16 @@ const EstimationHub: React.FC = () => {
         
       case 'td-rejected':
         filtered = purchases.filter(p => {
+          // Comprehensive completion check
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
                              p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
-                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
+                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved') ||
+                             (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'acknowledged') ||
+                             (p.status_info?.sender === 'accounts' && p.status_info?.accounts_status === 'acknowledged') ||
+                             (p.status_info?.td_status === 'approved' && p.status_info?.receiver === 'accounts');
           if (isCompleted) return false;
           
           return p.status_info?.receiver === 'estimation' && 
@@ -290,12 +306,17 @@ const EstimationHub: React.FC = () => {
         
       case 'completed':
         filtered = purchases.filter(p => {
+          // Comprehensive completion check - any of these conditions means completed
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
                              p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
-                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
+                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved') ||
+                             (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'acknowledged') ||
+                             (p.status_info?.sender === 'accounts' && p.status_info?.accounts_status === 'acknowledged') ||
+                             // Also check if TD approved AND accounts received it
+                             (p.status_info?.td_status === 'approved' && p.status_info?.receiver === 'accounts');
           return isCompleted;
         });
         break;
@@ -327,15 +348,29 @@ const EstimationHub: React.FC = () => {
     }
 
 
-    // Sort
+    // Sort - Prioritize chronological ordering by recent activity
     filtered.sort((a, b) => {
       let aValue: any;
       let bValue: any;
 
       switch (sortBy) {
         case 'date':
-          aValue = new Date(a.date || a.created_at || '').getTime();
-          bValue = new Date(b.date || b.created_at || '').getTime();
+          // Get the most recent activity timestamp for chronological ordering
+          const getRecentActivity = (purchase: any) => {
+            const dates = [
+              purchase.latest_status?.created_at,
+              purchase.status_info?.last_modified_at,
+              purchase.status_info?.decision_date,
+              purchase.last_modified_at,
+              purchase.updated_at,
+              purchase.created_at,
+              purchase.date
+            ].filter(Boolean).map(d => new Date(d).getTime());
+            return Math.max(...dates, 0);
+          };
+          
+          aValue = getRecentActivity(a);
+          bValue = getRecentActivity(b);
           break;
         case 'amount':
           aValue = getPurchaseAmount(a);
@@ -351,8 +386,22 @@ const EstimationHub: React.FC = () => {
           bValue = b.purchase_id;
           break;
         default:
-          aValue = a.purchase_id;
-          bValue = b.purchase_id;
+          // Default to chronological ordering by recent activity
+          const getDefaultActivity = (purchase: any) => {
+            const dates = [
+              purchase.latest_status?.created_at,
+              purchase.status_info?.last_modified_at,
+              purchase.status_info?.decision_date,
+              purchase.last_modified_at,
+              purchase.updated_at,
+              purchase.created_at,
+              purchase.date
+            ].filter(Boolean).map(d => new Date(d).getTime());
+            return Math.max(...dates, 0);
+          };
+          
+          aValue = getDefaultActivity(a);
+          bValue = getDefaultActivity(b);
       }
 
       if (sortOrder === 'asc') {
@@ -446,101 +495,104 @@ const EstimationHub: React.FC = () => {
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 pb-8">
-      {/* Page Header - Responsive */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
-        <div className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
-            <Calculator className="h-6 w-6 sm:h-8 sm:w-8 text-amber-600" />
-            <span className="truncate">Estimation Hub</span>
-          </h1>
-          <p className="text-sm sm:text-base text-gray-600">
-            Review and analyze cost implications
-          </p>
+      {/* Blue Gradient Header */}
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 rounded-xl shadow-xl p-6 border border-[#243d8a]/20"
+      >
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold text-[#243d8a] flex items-center gap-3">
+              <Calculator className="h-6 w-6 text-[#243d8a] drop-shadow-md" />
+              <span>Estimation Hub</span>
+            </h1>
+            <p className="text-[#243d8a]/80 mt-1">
+              Review and analyze cost implications
+            </p>
+          </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Metrics Cards - Responsive Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 mb-6">
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500 flex-shrink-0" />
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <Clock className="h-3 w-3 text-amber-500 flex-shrink-0" />
               <span className="truncate">Pending Review</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-xl sm:text-2xl font-bold text-amber-600">{metrics.pendingCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Awaiting analysis</p>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-amber-600">{metrics.pendingCount}</p>
+            <p className="text-xs text-gray-500 truncate">Awaiting analysis</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <CheckSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <CheckSquare className="h-3 w-3 text-green-500 flex-shrink-0" />
               <span className="truncate">Approved</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-xl sm:text-2xl font-bold text-green-600">{metrics.approvedCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Sent to TD</p>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-green-600">{metrics.approvedCount}</p>
+            <p className="text-xs text-gray-500 truncate">Sent to TD</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <XSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500 flex-shrink-0" />
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <XSquare className="h-3 w-3 text-red-500 flex-shrink-0" />
               <span className="truncate">Rejected</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-xl sm:text-2xl font-bold text-red-600">{metrics.rejectedCount}</p>
-            <div className="text-xs text-gray-500 mt-0.5 sm:mt-1 space-y-0.5">
-              <p className="truncate">Cost: {metrics.costRejections}</p>
-              <p className="truncate">PM Flag: {metrics.pmFlagRejections}</p>
-            </div>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-red-600">{metrics.rejectedCount}</p>
+            <p className="text-xs text-gray-500 truncate">Sent back</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-500 flex-shrink-0" />
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3 text-orange-500 flex-shrink-0" />
               <span className="truncate">TD Rejected</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-xl sm:text-2xl font-bold text-orange-600">{metrics.tdRejectedCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Sent back by TD</p>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-orange-600">{metrics.tdRejectedCount}</p>
+            <p className="text-xs text-gray-500 truncate">Sent back by TD</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500 flex-shrink-0" />
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <DollarSign className="h-3 w-3 text-green-500 flex-shrink-0" />
               <span className="truncate">Total Value</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-sm sm:text-lg lg:text-xl font-bold text-blue-600 truncate">
+          <CardContent className="px-3 pb-3">
+            <p className="text-sm font-bold text-green-600 truncate">
               {formatCurrency(metrics.totalValue)}
             </p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Pending value</p>
+            <p className="text-xs text-gray-500 truncate">Pending value</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow sm:col-span-2 lg:col-span-1">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500 flex-shrink-0" />
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <TrendingUp className="h-3 w-3 text-purple-500 flex-shrink-0" />
               <span className="truncate">Total Quantity</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-xl sm:text-2xl font-bold text-purple-600">{metrics.totalQuantity}</p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Pending items</p>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-purple-600">{metrics.totalQuantity}</p>
+            <p className="text-xs text-gray-500 truncate">Pending items</p>
           </CardContent>
         </Card>
       </div>
@@ -725,7 +777,7 @@ const EstimationHub: React.FC = () => {
         <TabsContent value="pending" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
+              <ModernLoadingSpinners variant="pulse-wave" className="text-amber-600" />
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>
@@ -765,7 +817,7 @@ const EstimationHub: React.FC = () => {
         <TabsContent value="approved" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
+              <ModernLoadingSpinners variant="pulse-wave" className="text-amber-600" />
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>
@@ -800,7 +852,7 @@ const EstimationHub: React.FC = () => {
         <TabsContent value="rejected" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
+              <ModernLoadingSpinners variant="pulse-wave" className="text-amber-600" />
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>
@@ -835,7 +887,7 @@ const EstimationHub: React.FC = () => {
         <TabsContent value="td-rejected" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
+              <ModernLoadingSpinners variant="pulse-wave" className="text-amber-600" />
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>
@@ -870,7 +922,7 @@ const EstimationHub: React.FC = () => {
         <TabsContent value="completed" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
+              <ModernLoadingSpinners variant="pulse-wave" className="text-amber-600" />
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>

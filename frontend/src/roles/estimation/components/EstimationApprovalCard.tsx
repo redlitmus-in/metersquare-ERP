@@ -133,9 +133,9 @@ const EstimationApprovalCard = React.forwardRef<HTMLDivElement, EstimationApprov
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-1">
+            <div className="flex flex-col items-end gap-1 min-w-0 flex-shrink-0">
               {isCompleted || currentWorkflowStatus.status === 'completed' ? (
-                <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5">
+                <Badge className="bg-green-100 text-green-800 text-xs px-2 py-0.5">
                   <CheckCircle className="h-3 w-3 mr-1" />
                   Completed
                 </Badge>
@@ -143,15 +143,15 @@ const EstimationApprovalCard = React.forwardRef<HTMLDivElement, EstimationApprov
                 <>
                   {/* Show actual current workflow status instead of hardcoded "PM Approved" */}
                   {!needsReview && currentWorkflowStatus.status === 'pending' && (
-                    <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5">
-                      <Clock className="h-3 w-3 mr-1" />
-                      {currentWorkflowStatus.label}
+                    <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 max-w-32 truncate">
+                      <Clock className="h-3 w-3 mr-1 flex-shrink-0" />
+                      <span className="truncate">Pending TD</span>
                     </Badge>
                   )}
                   {!needsReview && currentWorkflowStatus.status === 'approved' && (
-                    <Badge className="bg-green-100 text-green-800 text-xs px-2 py-0.5">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      {currentWorkflowStatus.label}
+                    <Badge className="bg-green-100 text-green-800 text-xs px-2 py-0.5 max-w-32 truncate">
+                      <CheckCircle className="h-3 w-3 mr-1 flex-shrink-0" />
+                      <span className="truncate">Approved</span>
                     </Badge>
                   )}
                   {!needsReview && currentWorkflowStatus.status === 'rejected' && (
@@ -161,14 +161,14 @@ const EstimationApprovalCard = React.forwardRef<HTMLDivElement, EstimationApprov
                     </Badge>
                   )}
                   {isTDRejected && (
-                    <Badge className="bg-orange-100 text-orange-800 text-xs px-2 py-0.5">
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                      TD Rejected - Review Required
+                    <Badge className="bg-orange-100 text-orange-800 text-xs px-2 py-0.5 max-w-32 truncate">
+                      <AlertCircle className="h-3 w-3 mr-1 flex-shrink-0" />
+                      <span className="truncate">TD Rejected</span>
                     </Badge>
                   )}
                   {needsReview && !isTDRejected && (
-                    <Badge className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5">
-                      Awaiting Cost Analysis
+                    <Badge className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 max-w-32 truncate">
+                      <span className="truncate">Cost Analysis</span>
                     </Badge>
                   )}
                 </>
@@ -185,12 +185,12 @@ const EstimationApprovalCard = React.forwardRef<HTMLDivElement, EstimationApprov
           </div>
 
           {/* Cost Analysis - Ultra Compact */}
-          <div className="flex items-center justify-between py-1.5 px-2 bg-blue-50 rounded">
+          <div className="flex items-center justify-between py-1.5 px-2 bg-green-50 rounded">
             <div className="flex items-center gap-2">
-              <DollarSign className="h-3 w-3 text-blue-600" />
-              <span className="text-xs font-medium text-blue-700">Cost Analysis</span>
+              <DollarSign className="h-3 w-3 text-green-600" />
+              <span className="text-xs font-medium text-green-700">Cost Analysis</span>
             </div>
-            <span className="text-sm font-bold text-blue-900">
+            <span className="text-sm font-bold text-green-600">
               {formatCurrency(totalCost)}
             </span>
           </div>

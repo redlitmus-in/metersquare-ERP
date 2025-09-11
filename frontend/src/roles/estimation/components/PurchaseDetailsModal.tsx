@@ -364,20 +364,20 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden p-0 bg-white">
-        <DialogHeader className="px-6 py-4 bg-gradient-to-r from-blue-500 to-blue-600 shadow-lg">
+        <DialogHeader className="px-6 py-4 bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 shadow-lg border-b border-[#243d8a]/20">
           <DialogTitle className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 backdrop-blur rounded-lg">
-                <FileText className="w-5 h-5 text-white" />
+              <div className="p-2 bg-[#243d8a]/10 backdrop-blur rounded-lg">
+                <FileText className="w-5 h-5 text-[#243d8a]" />
               </div>
               <div className="flex items-center gap-3">
-                <h2 className="text-white text-lg font-semibold">Purchase Request Details</h2>
-                <Badge className="bg-white/90 text-blue-600 px-3 py-1">
+                <h2 className="text-[#243d8a] text-lg font-semibold">Purchase Request Details</h2>
+                <Badge className="bg-[#243d8a]/10 text-[#243d8a] px-3 py-1">
                   <Hash className="w-3 h-3 mr-1" />
                   PR-{purchaseDetails?.purchase_id || purchaseId}
                 </Badge>
                 {purchaseDetails && currentStatus === 'completed' && (
-                  <Badge className="bg-white/90 text-blue-600 px-3 py-1">
+                  <Badge className="bg-green-100 text-green-700 px-3 py-1">
                     <Clock className="w-3 h-3 mr-1" />
                     COMPLETED
                   </Badge>
@@ -666,7 +666,7 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                 </div>
                                 <div>
                                   <p className="text-xs text-gray-500 uppercase mb-1">Unit Cost:</p>
-                                  <p className="font-semibold text-gray-900">{formatCurrency(material.cost || 0)}</p>
+                                  <p className="font-semibold text-green-600">{formatCurrency(material.cost || 0)}</p>
                                 </div>
                                 <div>
                                   <p className="text-xs text-gray-500 uppercase mb-1">Total:</p>
@@ -852,7 +852,7 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                               <p className="text-xs text-gray-600 mt-1">Total Quantity</p>
                             </div>
                             <div>
-                              <p className="text-xl font-bold text-purple-600">
+                              <p className="text-xl font-bold text-green-600">
                                 {formatCurrency(purchaseDetails.purchase_details.materials_summary.total_cost || 0)}
                               </p>
                               <p className="text-xs text-gray-600 mt-1">Total Value</p>
