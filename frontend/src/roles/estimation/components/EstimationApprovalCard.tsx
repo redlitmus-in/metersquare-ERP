@@ -77,6 +77,7 @@ const EstimationApprovalCard = React.forwardRef<HTMLDivElement, EstimationApprov
   const isCompleted = currentWorkflowStatus.status === 'completed' ||
                      purchase.latest_status?.status === 'completed' || 
                      purchase.latest_status?.status === 'complete' ||
+                     purchase.status_info?.completed_status === 'completed' ||
                      purchase.accounts_acknowledgement === true ||
                      purchase.status_info?.accounts_acknowledgement === true ||
                      (purchase.status_info?.receiver === 'accounts' && purchase.status_info?.accounts_status === 'acknowledged') ||

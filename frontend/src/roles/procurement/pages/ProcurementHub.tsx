@@ -19,7 +19,6 @@ import {
   AlertCircle,
   FileText,
   Download,
-  Search,
   Building2,
   ShoppingCart,
   TrendingDown,
@@ -29,7 +28,12 @@ import {
   Filter,
   RefreshCw,
   FileSpreadsheet,
-  FileDown
+  FileDown,
+  SlidersHorizontal,
+  DollarSign,
+  Calendar,
+  ArrowUpDown,
+  MapPin
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -65,7 +69,14 @@ const ProcurementHub: React.FC = () => {
 
   // State Management
   const [activeTab, setActiveTab] = useState('pending'); // Changed default to 'pending'
-  const [searchTerm, setSearchTerm] = useState('');
+  const [filterPriority, setFilterPriority] = useState('all');
+  const [filterProject, setFilterProject] = useState('all');
+  const [filterLocation, setFilterLocation] = useState('all');
+  const [filterAmountRange, setFilterAmountRange] = useState({ min: '', max: '' });
+  const [filterDateRange, setFilterDateRange] = useState('all');
+  const [sortBy, setSortBy] = useState('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
   const [metrics, setMetrics] = useState<MetricCard[]>([]);
@@ -99,10 +110,10 @@ const ProcurementHub: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Filter purchases when tab or search changes
+  // Filter purchases when filters change
   useEffect(() => {
     filterPurchases();
-  }, [activeTab, searchTerm, purchases]);
+  }, [activeTab, filterPriority, filterProject, filterLocation, filterAmountRange, filterDateRange, sortBy, sortOrder, purchases]);
 
   const fetchPurchases = async () => {
     try {
@@ -252,14 +263,56 @@ const ProcurementHub: React.FC = () => {
       return dateB - dateA;
     });
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(purchase =>
-        purchase.purchase_id.toString().includes(searchTerm) ||
-        purchase.purpose?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        purchase.site_location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        purchase.project_id?.toLowerCase().includes(searchTerm.toLowerCase())
+    // Apply priority filter
+    if (filterPriority !== 'all') {
+      filtered = filtered.filter(purchase => {
+        const priority = purchase.materials?.[0]?.priority?.toLowerCase() || 'medium';
+        return priority === filterPriority;
+      });
+    }
+
+    // Apply project filter
+    if (filterProject !== 'all') {
+      filtered = filtered.filter(purchase => 
+        purchase.project_id === filterProject
       );
+    }
+
+    // Apply location filter
+    if (filterLocation !== 'all') {
+      filtered = filtered.filter(purchase => 
+        purchase.site_location === filterLocation
+      );
+    }
+
+    // Apply amount range filter
+    if (filterAmountRange.min || filterAmountRange.max) {
+      filtered = filtered.filter(purchase => {
+        const amount = purchase.materials?.reduce((sum, m) => sum + (m.quantity * m.cost), 0) || 0;
+        const min = filterAmountRange.min ? parseFloat(filterAmountRange.min) : 0;
+        const max = filterAmountRange.max ? parseFloat(filterAmountRange.max) : Infinity;
+        return amount >= min && amount <= max;
+      });
+    }
+
+    // Apply date range filter
+    if (filterDateRange !== 'all') {
+      const today = new Date();
+      filtered = filtered.filter(purchase => {
+        const purchaseDate = new Date(purchase.created_at);
+        const daysDiff = Math.ceil((today.getTime() - purchaseDate.getTime()) / (1000 * 3600 * 24));
+        
+        switch (filterDateRange) {
+          case 'today':
+            return daysDiff === 0;
+          case 'week':
+            return daysDiff <= 7;
+          case 'month':
+            return daysDiff <= 30;
+          default:
+            return true;
+        }
+      });
     }
 
     // Apply tab filter based on actual status from backend
@@ -344,6 +397,44 @@ const ProcurementHub: React.FC = () => {
         });
         break;
     }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortBy) {
+        case 'date':
+          aValue = new Date(a.created_at).getTime();
+          bValue = new Date(b.created_at).getTime();
+          break;
+        case 'amount':
+          aValue = a.materials?.reduce((sum, m) => sum + (m.quantity * m.cost), 0) || 0;
+          bValue = b.materials?.reduce((sum, m) => sum + (m.quantity * m.cost), 0) || 0;
+          break;
+        case 'priority':
+          const priorityOrder = { 'high': 3, 'medium': 2, 'low': 1 };
+          aValue = priorityOrder[a.materials?.[0]?.priority?.toLowerCase() || 'medium'] || 2;
+          bValue = priorityOrder[b.materials?.[0]?.priority?.toLowerCase() || 'medium'] || 2;
+          break;
+        case 'project':
+          aValue = a.project_id?.toLowerCase() || '';
+          bValue = b.project_id?.toLowerCase() || '';
+          break;
+        case 'location':
+          aValue = a.site_location?.toLowerCase() || '';
+          bValue = b.site_location?.toLowerCase() || '';
+          break;
+        default:
+          aValue = a.purchase_id;
+          bValue = b.purchase_id;
+      }
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortOrder === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+      } else {
+        return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+    });
 
     setFilteredPurchases(filtered);
   };
@@ -507,15 +598,6 @@ const ProcurementHub: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Search purchases..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 w-64"
-              />
-            </div>
             <Button
               variant="outline"
               size="icon"
@@ -593,10 +675,229 @@ const ProcurementHub: React.FC = () => {
       {/* Main Content */}
       <Card className="shadow-lg border-0">
         <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b">
-          <CardTitle className="flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5 text-red-600" />
-            Purchase Requisitions
-          </CardTitle>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <CardTitle className="flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5 text-red-600" />
+              Purchase Requisitions
+            </CardTitle>
+            
+            {/* Filter and Sort Controls */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select value={filterPriority} onValueChange={setFilterPriority}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Priority</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date">Date</SelectItem>
+                  <SelectItem value="amount">Amount</SelectItem>
+                  <SelectItem value="priority">Priority</SelectItem>
+                  <SelectItem value="project">Project</SelectItem>
+                  <SelectItem value="location">Location</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                title={`Sort ${sortOrder === 'asc' ? 'Descending' : 'Ascending'}`}
+              >
+                <ArrowUpDown className="w-4 h-4" />
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              >
+                <SlidersHorizontal className="w-4 h-4 mr-1" />
+                {showAdvancedFilters ? 'Hide' : 'More'} Filters
+              </Button>
+            </div>
+          </div>
+          
+          {/* Advanced Filters Panel */}
+          {showAdvancedFilters && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-4 p-4 bg-white/80 rounded-lg border border-red-200"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                    <Package className="w-4 h-4" />
+                    Project
+                  </label>
+                  <Select value={filterProject} onValueChange={setFilterProject}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Projects" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Projects</SelectItem>
+                      {[...new Set(purchases.map(p => p.project_id).filter(Boolean))].map(project => (
+                        <SelectItem key={project} value={project}>{project}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                    <MapPin className="w-4 h-4" />
+                    Location
+                  </label>
+                  <Select value={filterLocation} onValueChange={setFilterLocation}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Locations" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Locations</SelectItem>
+                      {[...new Set(purchases.map(p => p.site_location).filter(Boolean))].map(location => (
+                        <SelectItem key={location} value={location}>{location}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    Date Range
+                  </label>
+                  <Select value={filterDateRange} onValueChange={setFilterDateRange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Time</SelectItem>
+                      <SelectItem value="today">Today</SelectItem>
+                      <SelectItem value="week">Past Week</SelectItem>
+                      <SelectItem value="month">Past Month</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                    <DollarSign className="w-4 h-4" />
+                    Amount Range (AED)
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      placeholder="Min"
+                      value={filterAmountRange.min}
+                      onChange={(e) => setFilterAmountRange(prev => ({ ...prev, min: e.target.value }))}
+                      className="text-sm"
+                    />
+                    <Input
+                      type="number"
+                      placeholder="Max"
+                      value={filterAmountRange.max}
+                      onChange={(e) => setFilterAmountRange(prev => ({ ...prev, max: e.target.value }))}
+                      className="text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-4 flex justify-between items-center">
+                <div className="flex flex-wrap gap-2">
+                  {(filterPriority !== 'all' || filterProject !== 'all' || filterLocation !== 'all' || filterDateRange !== 'all' || filterAmountRange.min || filterAmountRange.max) && (
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span className="text-sm text-gray-500">Active filters:</span>
+                      {filterPriority !== 'all' && (
+                        <Badge variant="secondary" className="text-xs">
+                          Priority: {filterPriority}
+                          <button 
+                            className="ml-1 text-gray-400 hover:text-gray-600"
+                            onClick={() => setFilterPriority('all')}
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      )}
+                      {filterProject !== 'all' && (
+                        <Badge variant="secondary" className="text-xs">
+                          Project: {filterProject}
+                          <button 
+                            className="ml-1 text-gray-400 hover:text-gray-600"
+                            onClick={() => setFilterProject('all')}
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      )}
+                      {filterLocation !== 'all' && (
+                        <Badge variant="secondary" className="text-xs">
+                          Location: {filterLocation}
+                          <button 
+                            className="ml-1 text-gray-400 hover:text-gray-600"
+                            onClick={() => setFilterLocation('all')}
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      )}
+                      {filterDateRange !== 'all' && (
+                        <Badge variant="secondary" className="text-xs">
+                          Date: {filterDateRange}
+                          <button 
+                            className="ml-1 text-gray-400 hover:text-gray-600"
+                            onClick={() => setFilterDateRange('all')}
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      )}
+                      {(filterAmountRange.min || filterAmountRange.max) && (
+                        <Badge variant="secondary" className="text-xs">
+                          Amount: AED {filterAmountRange.min || '0'} - {filterAmountRange.max || '∞'}
+                          <button 
+                            className="ml-1 text-gray-400 hover:text-gray-600"
+                            onClick={() => setFilterAmountRange({ min: '', max: '' })}
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFilterPriority('all');
+                    setFilterProject('all');
+                    setFilterLocation('all');
+                    setFilterDateRange('all');
+                    setFilterAmountRange({ min: '', max: '' });
+                    setSortBy('date');
+                    setSortOrder('desc');
+                  }}
+                >
+                  Clear All Filters
+                </Button>
+              </div>
+            </motion.div>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           {/* Tabs */}
@@ -734,8 +1035,8 @@ const ProcurementHub: React.FC = () => {
                       : 'No purchase requisitions found'}
                   </p>
                   <p className="text-sm mt-1">
-                    {searchTerm 
-                      ? 'Try adjusting your search terms' 
+                    {(filterPriority !== 'all' || filterProject !== 'all' || filterLocation !== 'all' || filterDateRange !== 'all' || filterAmountRange.min || filterAmountRange.max)
+                      ? 'Try adjusting your filter settings' 
                       : activeTab === 'pm_rejected'
                       ? 'Purchase requests rejected by PM will appear here for revision'
                       : activeTab === 'est_rejected'

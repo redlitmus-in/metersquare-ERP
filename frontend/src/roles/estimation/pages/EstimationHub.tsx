@@ -103,6 +103,7 @@ const EstimationHub: React.FC = () => {
           // Check if purchase is completed (accounts has acknowledged or status is complete)
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
+                             p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
                              (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
@@ -229,6 +230,7 @@ const EstimationHub: React.FC = () => {
         filtered = purchases.filter(p => {
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
+                             p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
                              (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
@@ -243,6 +245,7 @@ const EstimationHub: React.FC = () => {
         filtered = purchases.filter(p => {
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
+                             p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
                              (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
@@ -257,6 +260,7 @@ const EstimationHub: React.FC = () => {
         filtered = purchases.filter(p => {
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
+                             p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
                              (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
@@ -273,6 +277,7 @@ const EstimationHub: React.FC = () => {
         filtered = purchases.filter(p => {
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
+                             p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
                              (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
@@ -287,6 +292,7 @@ const EstimationHub: React.FC = () => {
         filtered = purchases.filter(p => {
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
+                             p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
                              (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
