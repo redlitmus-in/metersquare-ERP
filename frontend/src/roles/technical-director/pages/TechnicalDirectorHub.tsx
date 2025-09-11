@@ -272,24 +272,22 @@ const TechnicalDirectorHub: React.FC = () => {
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 pb-8">
       {/* Page Header - Responsive */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
-        <div className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
-            <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" />
-            <span className="truncate">Technical Director Hub</span>
-          </h1>
-          <p className="text-sm sm:text-base text-gray-600">
-            Review and approve technical specifications
-          </p>
-        </div>
-        <Button
-          onClick={fetchPurchases}
-          disabled={isLoading}
-          className="bg-indigo-600 hover:bg-indigo-700 w-full sm:w-auto"
+      <div className="mb-6">
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 rounded-xl shadow-xl p-6 border border-[#243d8a]/20"
         >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-[#243d8a] rounded-lg shadow-lg">
+              <Shield className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-[#243d8a]">Technical Director Hub</h1>
+              <p className="text-[#243d8a]/80 mt-1">Review and approve technical specifications</p>
+            </div>
+          </div>
+        </motion.div>
       </div>
 
       {/* Metrics Cards - Responsive Grid */}
@@ -417,8 +415,17 @@ const TechnicalDirectorHub: React.FC = () => {
         {/* Pending Tab */}
         <TabsContent value="pending" className="space-y-4">
           {isLoading ? (
-            <div className="flex justify-center items-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-indigo-600" />
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center space-x-1">
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2"></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.3s' }}></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+                <p className="text-sm text-gray-600">Loading purchases...</p>
+              </div>
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>
@@ -455,8 +462,17 @@ const TechnicalDirectorHub: React.FC = () => {
         {/* Approved Tab */}
         <TabsContent value="approved" className="space-y-4">
           {isLoading ? (
-            <div className="flex justify-center items-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-indigo-600" />
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center space-x-1">
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2"></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.3s' }}></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+                <p className="text-sm text-gray-600">Loading purchases...</p>
+              </div>
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>
@@ -490,8 +506,17 @@ const TechnicalDirectorHub: React.FC = () => {
         {/* Rejected Tab */}
         <TabsContent value="rejected" className="space-y-4">
           {isLoading ? (
-            <div className="flex justify-center items-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-indigo-600" />
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center space-x-1">
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2"></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.3s' }}></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+                <p className="text-sm text-gray-600">Loading purchases...</p>
+              </div>
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>
@@ -525,8 +550,17 @@ const TechnicalDirectorHub: React.FC = () => {
         {/* Completed Tab */}
         <TabsContent value="completed" className="space-y-4">
           {isLoading ? (
-            <div className="flex justify-center items-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-indigo-600" />
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center space-x-1">
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2"></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.3s' }}></div>
+                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+                <p className="text-sm text-gray-600">Loading purchases...</p>
+              </div>
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>

@@ -709,15 +709,22 @@ const ProjectManagerHub: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header Section */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Project Manager Hub</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Manage purchase approvals and project workflows
-            </p>
+      <div className="px-6 py-4">
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 rounded-xl shadow-xl p-6 border border-[#243d8a]/20"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-[#243d8a] rounded-lg shadow-lg">
+              <Package className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-[#243d8a]">Project Manager Hub</h1>
+              <p className="text-[#243d8a]/80 mt-1">Manage purchase approvals and project workflows</p>
+            </div>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Metrics Section */}
