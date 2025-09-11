@@ -162,25 +162,25 @@ def process_payment_transaction():
         db.session.commit()
 
         # Send notification email with any account bucket attachments for this purchase
-        try:
-            email_service = EmailService()
-            attachments = _get_account_bucket_attachments(purchase_id)
-            email_service.send_payment_processing_notification(
-                purchase_id=purchase_id,
-                amount=amount,
-                payment_method=payment_method,
-                processed_by=user_name,
-                attachments=attachments
-            )
-        except Exception as e:
-            log.warning(f"Failed to send payment processing email: {str(e)}")
+        # try:
+        #     email_service = EmailService()
+        #     attachments = _get_account_bucket_attachments(purchase_id)
+        #     email_service.send_payment_processing_notification(
+        #         purchase_id=purchase_id,
+        #         amount=amount,
+        #         payment_method=payment_method,
+        #         processed_by=user_name,
+        #         attachments=attachments
+        #     )
+        # except Exception as e:
+        #     log.warning(f"Failed to send payment processing email: {str(e)}")
 
-        log.info(f"Payment transaction created for purchase {purchase_id} by {user_name}")
+        # log.info(f"Payment transaction created for purchase {purchase_id} by {user_name}")
 
         return jsonify({
             'message': 'Payment transaction created successfully',
             'transaction_id': payment_transaction.transaction_id,
-            'status': 'pending_approval'
+            'status': 'approved'
         }), 201
 
     except Exception as e:

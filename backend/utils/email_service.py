@@ -3,6 +3,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
+from email.mime.image import MIMEImage
 from email import encoders
 from datetime import datetime
 from typing import List, Dict
@@ -15,6 +16,13 @@ from models.user import User
 from models.role import Role
 from models.purchase import Purchase
 from models.material import Material
+
+try:
+    from .email_styles import get_email_styles
+except ImportError:
+    # Fallback if styles file doesn't exist
+    def get_email_styles():
+        return ""
 
 log = get_logger()
 
@@ -50,16 +58,48 @@ class EmailService:
                     text_content: str = None, attachments: List[Dict] = None) -> bool:
         """Send email with error handling and logging"""
         try:
-            msg = MIMEMultipart('alternative')
+            # Use 'related' type to support embedded images
+            msg = MIMEMultipart('related')
             msg['From'] = self.sender_email
             msg['To'] = ', '.join(to_emails)
             msg['Subject'] = subject
             msg['Date'] = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S +0000')
+            
+            # Create alternative part for text and HTML
+            msg_alternative = MIMEMultipart('alternative')
+            msg.attach(msg_alternative)
 
             if text_content:
-                msg.attach(MIMEText(text_content, 'plain', 'utf-8'))
+                msg_alternative.attach(MIMEText(text_content, 'plain', 'utf-8'))
 
-            msg.attach(MIMEText(html_content, 'html', 'utf-8'))
+            msg_alternative.attach(MIMEText(html_content, 'html', 'utf-8'))
+            
+            # Attach logo image
+            logo_attached = False
+            try:
+                logo_paths = [
+                    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logo.png'),
+                    os.path.join(os.getcwd(), 'logo.png'),
+                    'C:\\Users\\developer\\Documents\\metersquare-ERP\\logo.png'
+                ]
+                
+                for logo_path in logo_paths:
+                    if os.path.exists(logo_path):
+                        with open(logo_path, 'rb') as f:
+                            logo_data = f.read()
+                            logo = MIMEImage(logo_data, _subtype='png')
+                            logo.add_header('Content-ID', '<logo>')
+                            logo.add_header('Content-Disposition', 'inline', filename='logo.png')
+                            msg.attach(logo)
+                            logo_attached = True
+                            log.info(f"Logo attached from: {logo_path}")
+                            break
+                
+                if not logo_attached:
+                    log.warning("Logo file not found for email")
+                    
+            except Exception as e:
+                log.error(f"Error attaching logo: {e}")
 
             if attachments:
                 for attachment in attachments:
@@ -181,59 +221,66 @@ class EmailService:
                 <meta http-equiv="X-UA-Compatible" content="IE=edge">
                 <meta name="format-detection" content="telephone=no">
                 <style>
-                /* Base styles */
+                /* Base styles - Clean Blue and White Theme */
                 body {{
-                    font-family: Arial, sans-serif !important;
-                    background-color: #f5f9ff !important;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+                    background-color: #f5f5f5 !important;
                     margin: 0 !important;
-                    padding: 10px !important;
-                    color: #333 !important;
+                    padding: 20px !important;
+                    color: #333333 !important;
                     width: 100% !important;
                     -webkit-text-size-adjust: 100% !important;
                     -ms-text-size-adjust: 100% !important;
                 }}
                 .email-container {{
-                    max-width: 650px !important;
+                    max-width: 600px !important;
                     margin: 0 auto !important;
                     background: #ffffff !important;
                     border-radius: 8px !important;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+                    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.15) !important;
                     overflow: hidden !important;
-                    border: 1px solid #d0e2ff !important;
+                    border: 2px solid #a8c5f0 !important;
                     width: 100% !important;
                 }}
                 .header {{
-                    background: #243d8a !important;
-                    color: #ffffff !important;
-                    padding: 15px !important;
+                    background: #4285f4 !important;
+                    padding: 16px 20px !important;
                     text-align: center !important;
+                    border-bottom: none !important;
                 }}
                 .header h2 {{
                     margin: 0 !important;
                     font-size: 18px !important;
-                    font-weight: bold !important;
+                    font-weight: 600 !important;
+                    color: #ffffff !important;
+                    text-transform: uppercase !important;
+                    letter-spacing: 0.5px !important;
                 }}
                 .content {{
-                    padding: 15px !important;
+                    padding: 24px !important;
+                    background: #ffffff !important;
                 }}
                 .content p {{
                     font-size: 14px !important;
                     margin: 8px 0 !important;
-                    line-height: 1.6 !important;
+                    line-height: 1.5 !important;
                     word-wrap: break-word !important;
+                    color: #333333 !important;
                 }}
                 .label {{
-                    font-weight: bold !important;
-                    color: #243d8a !important;
+                    font-weight: 600 !important;
+                    color: #333333 !important;
+                    display: inline-block !important;
+                    min-width: 110px !important;
                 }}
                 h3 {{
-                    margin-top: 20px !important;
-                    margin-bottom: 10px !important;
-                    color: #243d8a !important;
+                    margin-top: 24px !important;
+                    margin-bottom: 16px !important;
+                    color: #333333 !important;
                     font-size: 16px !important;
-                    border-bottom: 2px solid #243d8a !important;
-                    display: inline-block !important;
-                    padding-bottom: 4px !important;
+                    font-weight: 600 !important;
+                    border: none !important;
+                    padding: 0 !important;
                 }}
                 .table-container {{
                     overflow-x: auto !important;
@@ -243,44 +290,69 @@ class EmailService:
                 table {{
                     width: 100% !important;
                     border-collapse: collapse !important;
-                    min-width: 600px !important;
+                    min-width: 500px !important;
+                    background: #ffffff !important;
+                    border: 1px solid #e0e0e0 !important;
+                    margin-top: 16px !important;
                 }}
                 table th {{
-                    background: #243d8a !important;
-                    color: #fff !important;
-                    padding: 8px 6px !important;
+                    background: #4285f4 !important;
+                    color: #ffffff !important;
+                    padding: 10px 12px !important;
                     text-align: left !important;
-                    font-size: 12px !important;
-                    white-space: nowrap !important;
+                    font-size: 13px !important;
+                    font-weight: 600 !important;
+                    border: none !important;
                 }}
                 table td {{
-                    padding: 8px 6px !important;
-                    border: 1px solid #d0e2ff !important;
-                    font-size: 12px !important;
+                    padding: 10px 12px !important;
+                    border-bottom: 1px solid #e0e0e0 !important;
+                    font-size: 13px !important;
                     word-wrap: break-word !important;
+                    background: #ffffff !important;
+                    color: #333333 !important;
+                }}
+                table tr:last-child td {{
+                    border-bottom: none !important;
                 }}
                 .total-cost {{
-                    margin-top: 15px !important;
-                    text-align: right !important;
-                    font-weight: bold !important;
-                    font-size: 14px !important;
+                    margin-top: 20px !important;
+                    padding: 16px 20px !important;
+                    text-align: center !important;
+                    font-weight: 600 !important;
+                    font-size: 16px !important;
+                    background: #ffffff !important;
+                    border: 1px solid #4285f4 !important;
+                    border-radius: 4px !important;
                     color: #243d8a !important;
                     padding: 10px !important;
                     background: #f5f9ff !important;
                     border-radius: 4px !important;
                 }}
                 .signature {{
-                    margin-top: 20px !important;
+                    margin-top: 24px !important;
+                    padding-top: 0 !important;
+                    border: none !important;
                     font-size: 14px !important;
-                    color: #333 !important;
+                    color: #333333 !important;
+                }}
+                .signature strong {{
+                    color: #4285f4 !important;
+                    font-weight: 600 !important;
                 }}
                 .footer {{
                     text-align: center !important;
-                    background: #f5f9ff !important;
-                    padding: 10px !important;
-                    font-size: 12px !important;
-                    color: #666 !important;
-                    border-top: 1px solid #d0e2ff !important;
+                    background: #f8f9fa !important;
+                    padding: 20px !important;
+                    font-size: 13px !important;
+                    color: #666666 !important;
+                    border-top: 1px solid #e0e0e0 !important;
+                }}
+                .footer img {{
+                    display: block !important;
+                    margin: 12px auto !important;
+                    max-width: 150px !important;
+                    height: auto !important;
                 }}
                 .company {{
                     color: #243d8a !important;
@@ -425,7 +497,7 @@ class EmailService:
                         </div>
                         
                         <div class="total-cost">
-                            Overall Total Cost: {overall_total:.2f}
+                            <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{overall_total:.2f}</span>
                         </div>
 
                         <div class="signature">
@@ -434,8 +506,8 @@ class EmailService:
                         </div>
                     </div>
                     <div class="footer">
-                        <p>Thank you for using</p>
-                        <p class="company">ERP System</p>
+                        <p style="margin-bottom: 10px;">Thank you for using</p>
+                        <img src="cid:logo" alt="Meter Square" style="display: block; max-width: 150px; height: auto; margin: 0 auto;">
                     </div>
                 </div>
             </body>
@@ -503,7 +575,6 @@ class EmailService:
             ).all()
 
             emails = [u.email for u in users if u.email]
-            print("project manager emails:", emails)
             return emails if emails else None
         except Exception as e:
             log.error(f"Error fetching project manager emails: {str(e)}")
@@ -517,7 +588,6 @@ class EmailService:
         try:
             # Get project manager emails only
             recipients = self.get_project_manager_emails()
-            print("project manager recipients:", recipients)
             
             if not recipients:
                 log.error("No project manager emails found")
@@ -586,13 +656,13 @@ class EmailService:
                     margin: 0 auto !important;
                     background: #ffffff !important;
                     border-radius: 8px !important;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+                    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.15) !important;
                     overflow: hidden !important;
-                    border: 1px solid #d0e2ff !important;
+                    border: 2px solid #a8c5f0 !important;
                     width: 100% !important;
                 }}
                 .header {{
-                    background: #059669 !important;
+                    background: #4285f4 !important;
                     color: #ffffff !important;
                     padding: 15px !important;
                     text-align: center !important;
@@ -613,14 +683,14 @@ class EmailService:
                 }}
                 .label {{
                     font-weight: bold !important;
-                    color: #059669 !important;
+                    color: #333333 !important;
                 }}
                 h3 {{
                     margin-top: 20px !important;
                     margin-bottom: 10px !important;
-                    color: #059669 !important;
+                    color: #333333 !important;
                     font-size: 16px !important;
-                    border-bottom: 2px solid #059669 !important;
+                    border-bottom: 2px solid #4285f4 !important;
                     display: inline-block !important;
                     padding-bottom: 4px !important;
                 }}
@@ -635,7 +705,7 @@ class EmailService:
                     min-width: 600px !important;
                 }}
                 table th {{
-                    background: #059669 !important;
+                    background: #4285f4 !important;
                     color: #fff !important;
                     padding: 8px 6px !important;
                     text-align: left !important;
@@ -649,39 +719,64 @@ class EmailService:
                     word-wrap: break-word !important;
                 }}
                 .total-cost {{
-                    margin-top: 15px !important;
-                    text-align: right !important;
-                    font-weight: bold !important;
-                    font-size: 14px !important;
-                    color: #059669 !important;
+                    margin-top: 20px !important;
+                    padding: 16px 20px !important;
+                    text-align: center !important;
+                    font-weight: 600 !important;
+                    font-size: 16px !important;
+                    background: #ffffff !important;
+                    border: 1px solid #4285f4 !important;
+                    border-radius: 4px !important;
+                    color: #333333 !important;
                     padding: 10px !important;
                     background: #f5f9ff !important;
                     border-radius: 4px !important;
                 }}
                 .signature {{
-                    margin-top: 20px !important;
+                    margin-top: 24px !important;
+                    padding-top: 0 !important;
+                    border: none !important;
                     font-size: 14px !important;
-                    color: #333 !important;
+                    color: #333333 !important;
+                }}
+                .signature strong {{
+                    color: #4285f4 !important;
+                    font-weight: 600 !important;
                 }}
                 .footer {{
                     text-align: center !important;
-                    background: #f5f9ff !important;
-                    padding: 10px !important;
-                    font-size: 12px !important;
-                    color: #666 !important;
-                    border-top: 1px solid #d0e2ff !important;
+                    background: #f8f9fa !important;
+                    padding: 20px !important;
+                    font-size: 13px !important;
+                    color: #666666 !important;
+                    border-top: 1px solid #e0e0e0 !important;
+                }}
+                .footer img {{
+                    display: block !important;
+                    margin: 12px auto !important;
+                    max-width: 150px !important;
+                    height: auto !important;
                 }}
                 .company {{
-                    color: #059669 !important;
+                    color: #333333 !important;
                     font-weight: bold !important;
                     margin-top: 5px !important;
                 }}
                 .approval-section {{
-                    background: #f0fdf4 !important;
-                    border: 1px solid #bbf7d0 !important;
+                    background: #e6f3ff !important;
+                    border: 1px solid #4285f4 !important;
                     border-radius: 6px !important;
                     padding: 15px !important;
                     margin: 20px 0 !important;
+                }}
+                .approval-section p {{
+                    margin: 8px 0 !important;
+                    color: #333333 !important;
+                    font-size: 14px !important;
+                }}
+                .approval-section strong {{
+                    color: #333333 !important;
+                    font-weight: 600 !important;
                 }}
                 
                 /* Mobile Responsive - Enhanced */
@@ -827,7 +922,7 @@ class EmailService:
                         </div>
                         
                         <div class="total-cost">
-                            Overall Total Cost: {overall_total:.2f}
+                            <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{overall_total:.2f}</span>
                         </div>
 
                         <div class="signature">
@@ -837,8 +932,8 @@ class EmailService:
                         </div>
                     </div>
                     <div class="footer">
-                        <p>Thank you for using</p>
-                        <p class="company">ERP System</p>
+                        <p style="margin-bottom: 10px;">Thank you for using</p>
+                        <img src="cid:logo" alt="Meter Square" style="display: block; max-width: 150px; height: auto; margin: 0 auto;">
                     </div>
                 </div>
             </body>
@@ -949,13 +1044,13 @@ Procurement Team
                     margin: 0 auto !important;
                     background: #ffffff !important;
                     border-radius: 8px !important;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+                    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.15) !important;
                     overflow: hidden !important;
-                    border: 1px solid #d0e2ff !important;
+                    border: 2px solid #a8c5f0 !important;
                     width: 100% !important;
                 }}
                 .header {{
-                    background: #7c3aed !important;
+                    background: #4285f4 !important;
                     color: #ffffff !important;
                     padding: 15px !important;
                     text-align: center !important;
@@ -976,14 +1071,14 @@ Procurement Team
                 }}
                 .label {{
                     font-weight: bold !important;
-                    color: #7c3aed !important;
+                    color: #333333 !important;
                 }}
                 h3 {{
                     margin-top: 20px !important;
                     margin-bottom: 10px !important;
-                    color: #7c3aed !important;
+                    color: #333333 !important;
                     font-size: 16px !important;
-                    border-bottom: 2px solid #7c3aed !important;
+                    border-bottom: 2px solid #4285f4 !important;
                     display: inline-block !important;
                     padding-bottom: 4px !important;
                 }}
@@ -998,7 +1093,7 @@ Procurement Team
                     min-width: 600px !important;
                 }}
                 table th {{
-                    background: #7c3aed !important;
+                    background: #4285f4 !important;
                     color: #fff !important;
                     padding: 8px 6px !important;
                     text-align: left !important;
@@ -1012,39 +1107,64 @@ Procurement Team
                     word-wrap: break-word !important;
                 }}
                 .total-cost {{
-                    margin-top: 15px !important;
-                    text-align: right !important;
-                    font-weight: bold !important;
-                    font-size: 14px !important;
-                    color: #7c3aed !important;
+                    margin-top: 20px !important;
+                    padding: 16px 20px !important;
+                    text-align: center !important;
+                    font-weight: 600 !important;
+                    font-size: 16px !important;
+                    background: #ffffff !important;
+                    border: 1px solid #4285f4 !important;
+                    border-radius: 4px !important;
+                    color: #333333 !important;
                     padding: 10px !important;
                     background: #f5f9ff !important;
                     border-radius: 4px !important;
                 }}
                 .signature {{
-                    margin-top: 20px !important;
+                    margin-top: 24px !important;
+                    padding-top: 0 !important;
+                    border: none !important;
                     font-size: 14px !important;
-                    color: #333 !important;
+                    color: #333333 !important;
+                }}
+                .signature strong {{
+                    color: #4285f4 !important;
+                    font-weight: 600 !important;
                 }}
                 .footer {{
                     text-align: center !important;
-                    background: #f5f9ff !important;
-                    padding: 10px !important;
-                    font-size: 12px !important;
-                    color: #666 !important;
-                    border-top: 1px solid #d0e2ff !important;
+                    background: #f8f9fa !important;
+                    padding: 20px !important;
+                    font-size: 13px !important;
+                    color: #666666 !important;
+                    border-top: 1px solid #e0e0e0 !important;
+                }}
+                .footer img {{
+                    display: block !important;
+                    margin: 12px auto !important;
+                    max-width: 150px !important;
+                    height: auto !important;
                 }}
                 .company {{
-                    color: #7c3aed !important;
+                    color: #333333 !important;
                     font-weight: bold !important;
                     margin-top: 5px !important;
                 }}
                 .approval-section {{
-                    background: #f3e8ff !important;
-                    border: 1px solid #c4b5fd !important;
+                    background: #e6f3ff !important;
+                    border: 1px solid #4285f4 !important;
                     border-radius: 6px !important;
                     padding: 15px !important;
                     margin: 20px 0 !important;
+                }}
+                .approval-section p {{
+                    margin: 8px 0 !important;
+                    color: #333333 !important;
+                    font-size: 14px !important;
+                }}
+                .approval-section strong {{
+                    color: #333333 !important;
+                    font-weight: 600 !important;
                 }}
                 
                 /* Mobile Responsive - Enhanced */
@@ -1190,7 +1310,7 @@ Procurement Team
                         </div>
                         
                         <div class="total-cost">
-                            Overall Total Cost: {overall_total:.2f}
+                            <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{overall_total:.2f}</span>
                         </div>
 
                         <div class="signature">
@@ -1200,8 +1320,8 @@ Procurement Team
                         </div>
                     </div>
                     <div class="footer">
-                        <p>Thank you for using</p>
-                        <p class="company">ERP System</p>
+                        <p style="margin-bottom: 10px;">Thank you for using</p>
+                        <img src="cid:logo" alt="Meter Square" style="display: block; max-width: 150px; height: auto; margin: 0 auto;">
                     </div>
                 </div>
             </body>
@@ -1312,9 +1432,9 @@ Project Manager
                     margin: 0 auto !important;
                     background: #ffffff !important;
                     border-radius: 8px !important;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+                    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.15) !important;
                     overflow: hidden !important;
-                    border: 1px solid #d0e2ff !important;
+                    border: 2px solid #a8c5f0 !important;
                     width: 100% !important;
                 }}
                 .header {{
@@ -1339,14 +1459,14 @@ Project Manager
                 }}
                 .label {{
                     font-weight: bold !important;
-                    color: #dc2626 !important;
+                    color: #333333 !important;
                 }}
                 h3 {{
                     margin-top: 20px !important;
                     margin-bottom: 10px !important;
-                    color: #dc2626 !important;
+                    color: #333333 !important;
                     font-size: 16px !important;
-                    border-bottom: 2px solid #dc2626 !important;
+                    border-bottom: 2px solid #333333 !important;
                     display: inline-block !important;
                     padding-bottom: 4px !important;
                 }}
@@ -1375,30 +1495,46 @@ Project Manager
                     word-wrap: break-word !important;
                 }}
                 .total-cost {{
-                    margin-top: 15px !important;
-                    text-align: right !important;
-                    font-weight: bold !important;
-                    font-size: 14px !important;
-                    color: #dc2626 !important;
+                    margin-top: 20px !important;
+                    padding: 16px 20px !important;
+                    text-align: center !important;
+                    font-weight: 600 !important;
+                    font-size: 16px !important;
+                    background: #ffffff !important;
+                    border: 1px solid #4285f4 !important;
+                    border-radius: 4px !important;
+                    color: #333333 !important;
                     padding: 10px !important;
                     background: #f5f9ff !important;
                     border-radius: 4px !important;
                 }}
                 .signature {{
-                    margin-top: 20px !important;
+                    margin-top: 24px !important;
+                    padding-top: 0 !important;
+                    border: none !important;
                     font-size: 14px !important;
-                    color: #333 !important;
+                    color: #333333 !important;
+                }}
+                .signature strong {{
+                    color: #4285f4 !important;
+                    font-weight: 600 !important;
                 }}
                 .footer {{
                     text-align: center !important;
-                    background: #f5f9ff !important;
-                    padding: 10px !important;
-                    font-size: 12px !important;
-                    color: #666 !important;
-                    border-top: 1px solid #d0e2ff !important;
+                    background: #f8f9fa !important;
+                    padding: 20px !important;
+                    font-size: 13px !important;
+                    color: #666666 !important;
+                    border-top: 1px solid #e0e0e0 !important;
+                }}
+                .footer img {{
+                    display: block !important;
+                    margin: 12px auto !important;
+                    max-width: 150px !important;
+                    height: auto !important;
                 }}
                 .company {{
-                    color: #dc2626 !important;
+                    color: #333333 !important;
                     font-weight: bold !important;
                     margin-top: 5px !important;
                 }}
@@ -1408,6 +1544,13 @@ Project Manager
                     border-radius: 6px !important;
                     padding: 15px !important;
                     margin: 20px 0 !important;
+                }}
+                .rejection-section p {{
+                    color: #333333 !important;
+                    margin: 8px 0 !important;
+                }}
+                .rejection-section strong {{
+                    color: #333333 !important;
                 }}
                 
                 /* Mobile Responsive - Enhanced */
@@ -1532,7 +1675,7 @@ Project Manager
                         <p><span class="label">Rejected By:</span> {pm_info.get('full_name', 'Project Manager')} (Project Manager)</p>
 
                         <div class="rejection-section">
-                            <p><strong>❌ Project Manager Rejection</strong></p>
+                            <p><strong style="color: #333333 !important;">✗ Project Manager Rejection</strong></p>
                             <p><strong>Rejection Reason:</strong> {rejection_reason}</p>
                             <p>This purchase request has been reviewed and rejected by the Project Manager. Please revise the request based on the feedback provided and resubmit.</p>
                         </div>
@@ -1554,7 +1697,7 @@ Project Manager
                         </div>
                         
                         <div class="total-cost">
-                            Overall Total Cost: {overall_total:.2f}
+                            <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{overall_total:.2f}</span>
                         </div>
 
                         <div class="signature">
@@ -1564,8 +1707,8 @@ Project Manager
                         </div>
                     </div>
                     <div class="footer">
-                        <p>Thank you for using</p>
-                        <p class="company">ERP System</p>
+                        <p style="margin-bottom: 10px;">Thank you for using</p>
+                        <img src="cid:logo" alt="Meter Square" style="display: block; max-width: 150px; height: auto; margin: 0 auto;">
                     </div>
                 </div>
             </body>
@@ -1609,7 +1752,7 @@ Date          : {purchase_data['date']}
 Requested By  : {requester_info['full_name']} ({requester_info['role']})
 Rejected By   : {pm_info.get('full_name', 'Project Manager')} (Project Manager)
 
-❌ PROJECT MANAGER REJECTION
+<span style="color: #333333 !important;">✗ PROJECT MANAGER REJECTION</span>
 Rejection Reason: {rejection_reason}
 
 This purchase request has been reviewed and rejected by the Project Manager.
@@ -1641,7 +1784,6 @@ Project Manager
             ).all()
 
             emails = [u.email for u in users if u.email]
-            print("estimation team emails:", emails)
             return emails if emails else None
         except Exception as e:
             log.error(f"Error fetching estimation team emails: {str(e)}")
@@ -1653,7 +1795,6 @@ Project Manager
         try:
             # Get estimation team emails
             recipients = self.get_estimation_team_emails()
-            print("estimation team recipients:", recipients)
             
             if not recipients:
                 log.error("No estimation team emails found")
@@ -1677,7 +1818,6 @@ Project Manager
         try:
             # Get procurement team emails
             recipients = self.get_procurement_team_emails()
-            print("procurement recipients for rejection:", recipients)
             
             if not recipients:
                 log.error("No procurement team emails found")
@@ -1701,7 +1841,6 @@ Project Manager
         try:
             # Get technical director emails
             recipients = self.get_technical_director_emails()
-            print("technical director recipients:", recipients)
             
             if not recipients:
                 log.error("No technical director emails found")
@@ -1725,7 +1864,6 @@ Project Manager
         try:
             # Get procurement team emails
             recipients = self.get_procurement_team_emails()
-            print("procurement recipients for cost rejection:", recipients)
             
             if not recipients:
                 log.error("No procurement team emails found")
@@ -1749,7 +1887,6 @@ Project Manager
         try:
             # Get project manager emails
             recipients = self.get_project_manager_emails()
-            print("project manager recipients for PM flag rejection:", recipients)
             
             if not recipients:
                 log.error("No project manager emails found")
@@ -1784,7 +1921,6 @@ Project Manager
             ).all()
 
             emails = [u.email for u in users if u.email]
-            print("technical director emails:", emails)
             return emails if emails else None
         except Exception as e:
             log.error(f"Error fetching technical director emails: {str(e)}")
@@ -1835,73 +1971,134 @@ Project Manager
                     margin: 0 auto !important;
                     background-color: #ffffff !important;
                     border-radius: 8px !important;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+                    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.15) !important;
                     overflow: hidden !important;
+                    border: 2px solid #a8c5f0 !important;
                 }}
                 .header {{
-                    background-color: #243d8a !important;
+                    background-color: #4285f4 !important;
                     color: white !important;
-                    padding: 20px !important;
+                    padding: 16px 20px !important;
                     text-align: center !important;
                 }}
                 .header h2 {{
                     margin: 0 !important;
-                    font-size: 24px !important;
-                    font-weight: bold !important;
+                    font-size: 18px !important;
+                    font-weight: 600 !important;
+                    text-transform: uppercase !important;
+                    letter-spacing: 0.5px !important;
                 }}
                 .content {{
-                    padding: 20px !important;
+                    padding: 24px !important;
+                    background: #ffffff !important;
                 }}
                 .content p {{
                     font-size: 14px !important;
-                    line-height: 1.6 !important;
-                    margin-bottom: 15px !important;
+                    line-height: 1.5 !important;
+                    margin: 8px 0 !important;
+                    color: #333333 !important;
                 }}
                 h3 {{
-                    color: #243d8a !important;
-                    font-size: 18px !important;
-                    margin-top: 20px !important;
-                    margin-bottom: 10px !important;
+                    color: #333333 !important;
+                    font-size: 16px !important;
+                    margin-top: 24px !important;
+                    margin-bottom: 16px !important;
+                    font-weight: 600 !important;
+                    border-bottom: 2px solid #4285f4 !important;
+                    padding-bottom: 8px !important;
+                }}
+                .info-section {{
+                    background: #ffffff !important;
+                    padding: 16px !important;
+                    margin: 16px 0 !important;
+                }}
+                .info-section p {{
+                    margin: 4px 0 !important;
+                    color: #333333 !important;
+                }}
+                .info-section .label {{
+                    font-weight: 600 !important;
+                    color: #333333 !important;
+                    display: inline-block !important;
+                    min-width: 120px !important;
                 }}
                 table {{
                     width: 100% !important;
                     border-collapse: collapse !important;
-                    margin: 15px 0 !important;
-                    font-size: 12px !important;
+                    margin: 16px 0 !important;
+                    font-size: 13px !important;
+                    background: #ffffff !important;
+                    border: 1px solid #e0e0e0 !important;
                 }}
                 table th {{
-                    background-color: #243d8a !important;
+                    background-color: #4285f4 !important;
                     color: white !important;
-                    padding: 10px 8px !important;
+                    padding: 10px 12px !important;
                     text-align: left !important;
-                    font-weight: bold !important;
-                    border: 1px solid #ddd !important;
+                    font-weight: 600 !important;
+                    border: none !important;
                 }}
                 table td {{
-                    padding: 8px !important;
-                    border: 1px solid #ddd !important;
+                    padding: 10px 12px !important;
+                    border-bottom: 1px solid #e0e0e0 !important;
                     text-align: left !important;
+                    background: #ffffff !important;
+                    color: #333333 !important;
+                }}
+                table tr:last-child td {{
+                    border-bottom: none !important;
                 }}
                 .total-cost {{
-                    background-color: #f0f4ff !important;
-                    font-weight: bold !important;
+                    background-color: #ffffff !important;
+                    font-weight: 600 !important;
                     font-size: 16px !important;
-                    padding: 15px !important;
+                    padding: 16px 20px !important;
                     text-align: center !important;
-                    border: 2px solid #243d8a !important;
+                    border: 1px solid #4285f4 !important;
+                    border-radius: 4px !important;
+                    margin: 20px 0 !important;
+                    color: #333333 !important;
+                }}
+                .total-cost span {{
+                    color: #4285f4 !important;
+                    font-size: 18px !important;
+                }}
+                .approval-box {{
+                    background: #e6f3ff !important;
+                    border: 1px solid #4285f4 !important;
+                    border-radius: 4px !important;
+                    padding: 16px !important;
                     margin: 20px 0 !important;
                 }}
+                .approval-box p {{
+                    margin: 8px 0 !important;
+                    color: #333333 !important;
+                }}
                 .signature {{
-                    margin-top: 20px !important;
+                    margin-top: 24px !important;
+                    padding-top: 0 !important;
+                    border: none !important;
                     font-size: 14px !important;
-                    color: #666 !important;
+                    color: #333333 !important;
+                }}
+                .signature strong {{
+                    color: #4285f4 !important;
+                    font-weight: 600 !important;
                 }}
                 .footer {{
                     background-color: #f8f9fa !important;
-                    padding: 15px !important;
+                    padding: 20px !important;
                     text-align: center !important;
-                    font-size: 12px !important;
-                    color: #666 !important;
+                    font-size: 13px !important;
+                    color: #666666 !important;
+                    border-top: 1px solid #e0e0e0 !important;
+                    margin-top: 0 !important;
+                }}
+                .footer img {{
+                    display: block !important;
+                    margin: 12px auto !important;
+                    max-width: 150px !important;
+                    height: auto !important;
                 }}
                 .table-container {{
                     overflow-x: auto !important;
@@ -1945,16 +2142,18 @@ Project Manager
                     <h2>Purchase Request Approved by Estimation Team</h2>
                 </div>
                 <div class="content">
-                    <p>Dear Technical Director,</p>
-                    <p>The Estimation team has approved the following purchase request and it is now ready for your technical review:</p>
+                    <p style="color: #333333;">Dear Technical Director,</p>
+                    <p style="color: #333333;">The Estimation team has approved the following purchase request and it is now ready for your technical review:</p>
                     
-                    <h3>Purchase Request Details</h3>
-                    <p><strong>Request ID:</strong> #{purchase_data.get('purchase_id')}</p>
-                    <p><strong>Requested By:</strong> {requester_info.get('full_name', 'N/A')}</p>
-                    <p><strong>Site Location:</strong> {purchase_data.get('site_location', 'N/A')}</p>
-                    <p><strong>Date:</strong> {purchase_data.get('date', 'N/A')}</p>
-                    <p><strong>Project Name:</strong> {project.project_name if project else 'N/A'}</p>
-                    <p><strong>Purpose:</strong> {purchase_data.get('purpose', 'N/A')}</p>
+                    <div class="info-section" style="background: #ffffff; padding: 16px; margin: 16px 0;">
+                        <h3 style="margin-top: 0;">Purchase Request Details</h3>
+                        <p><span class="label" style="font-weight: 600; color: #333333; display: inline-block; min-width: 120px;">Request ID:</span> #{purchase_data.get('purchase_id')}</p>
+                        <p><span class="label" style="font-weight: 600; color: #333333; display: inline-block; min-width: 120px;">Requested By:</span> {requester_info.get('full_name', 'N/A')}</p>
+                        <p><span class="label" style="font-weight: 600; color: #333333; display: inline-block; min-width: 120px;">Site Location:</span> {purchase_data.get('site_location', 'N/A')}</p>
+                        <p><span class="label" style="font-weight: 600; color: #333333; display: inline-block; min-width: 120px;">Date:</span> {purchase_data.get('date', 'N/A')}</p>
+                        <p><span class="label" style="font-weight: 600; color: #333333; display: inline-block; min-width: 120px;">Project Name:</span> {project.project_name if project else 'N/A'}</p>
+                        <p><span class="label" style="font-weight: 600; color: #333333; display: inline-block; min-width: 120px;">Purpose:</span> {purchase_data.get('purpose', 'N/A')}</p>
+                    </div>
                     
                     <h3>Materials List</h3>
                     <div class="table-container">
@@ -1978,23 +2177,25 @@ Project Manager
                     </div>
                     
                     <div class="total-cost">
-                        <strong>Overall Total Cost: ${total_cost:.2f}</strong>
+                        <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">${total_cost:.2f}</span>
                     </div>
                     
-                    <h3>Estimation Team Approval</h3>
-                    <p><strong>Approved By:</strong> {estimation_info.get('full_name', 'N/A')}</p>
-                    <p><strong>Role:</strong> {estimation_info.get('role', 'N/A')}</p>
+                    <div class="approval-box" style="background: #e6f3ff; border: 1px solid #4285f4; border-radius: 4px; padding: 16px; margin: 20px 0;">
+                        <h3 style="margin-top: 0; color: #333333;">Estimation Team Approval</h3>
+                        <p><span style="font-weight: 600; color: #333333;">Approved By:</span> {estimation_info.get('full_name', 'N/A')}</p>
+                        <p><span style="font-weight: 600; color: #333333;">Role:</span> {estimation_info.get('role', 'N/A')}</p>
+                    </div>
                     
-                    <p>Please review this purchase request and provide your technical approval.</p>
+                    <p style="color: #333333; margin-top: 20px;">Please review this purchase request and provide your technical approval.</p>
                     
                     <div class="signature">
                         <p>Best regards,<br>
-                        Estimation Team<br>
-                        ERP System</p>
+                        Estimation Team</p>
                     </div>
                 </div>
                 <div class="footer">
-                    <p>This is an automated email from the ERP system. Please do not reply to this email.</p>
+                    <p style="margin-bottom: 10px;">Thank you for using</p>
+                    <img src="cid:logo" alt="Meter Square" style="display: block; max-width: 150px; height: auto; margin: 0 auto;">
                 </div>
             </div>
         </body>
@@ -2042,9 +2243,6 @@ Please review this purchase request and provide your technical approval.
 
 Best regards,
 Estimation Team
-ERP System
-
-This is an automated email from the ERP system.
         """
 
     def _generate_estimation_cost_rejection_email_html(self, purchase_data: Dict, materials_data: List[Dict],
@@ -2092,8 +2290,9 @@ This is an automated email from the ERP system.
                     margin: 0 auto !important;
                     background-color: #ffffff !important;
                     border-radius: 8px !important;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+                    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.15) !important;
                     overflow: hidden !important;
+                    border: 2px solid #a8c5f0 !important;
                 }}
                 .header {{
                     background-color: #dc3545 !important;
@@ -2115,7 +2314,7 @@ This is an automated email from the ERP system.
                     margin-bottom: 15px !important;
                 }}
                 h3 {{
-                    color: #dc3545 !important;
+                    color: #333333 !important;
                     font-size: 18px !important;
                     margin-top: 20px !important;
                     margin-bottom: 10px !important;
@@ -2123,7 +2322,7 @@ This is an automated email from the ERP system.
                 .rejection-reason {{
                     background-color: #f8d7da !important;
                     border: 1px solid #f5c6cb !important;
-                    color: #721c24 !important;
+                    color: #333333 !important;
                     padding: 15px !important;
                     border-radius: 5px !important;
                     margin: 15px 0 !important;
@@ -2135,7 +2334,7 @@ This is an automated email from the ERP system.
                     font-size: 12px !important;
                 }}
                 table th {{
-                    background-color: #243d8a !important;
+                    background-color: #dc2626 !important;
                     color: white !important;
                     padding: 10px 8px !important;
                     text-align: left !important;
@@ -2157,16 +2356,30 @@ This is an automated email from the ERP system.
                     margin: 20px 0 !important;
                 }}
                 .signature {{
-                    margin-top: 20px !important;
+                    margin-top: 24px !important;
+                    padding-top: 0 !important;
+                    border: none !important;
                     font-size: 14px !important;
-                    color: #666 !important;
+                    color: #333333 !important;
+                }}
+                .signature strong {{
+                    color: #4285f4 !important;
+                    font-weight: 600 !important;
                 }}
                 .footer {{
                     background-color: #f8f9fa !important;
-                    padding: 15px !important;
+                    padding: 20px !important;
                     text-align: center !important;
-                    font-size: 12px !important;
-                    color: #666 !important;
+                    font-size: 13px !important;
+                    color: #666666 !important;
+                    border-top: 1px solid #e0e0e0 !important;
+                    margin-top: 0 !important;
+                }}
+                .footer img {{
+                    display: block !important;
+                    margin: 12px auto !important;
+                    max-width: 150px !important;
+                    height: auto !important;
                 }}
                 .table-container {{
                     overflow-x: auto !important;
@@ -2249,7 +2462,7 @@ This is an automated email from the ERP system.
                     </div>
                     
                     <div class="total-cost">
-                        <strong>Overall Total Cost: ${total_cost:.2f}</strong>
+                        <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">${total_cost:.2f}</span>
                     </div>
                     
                     <h3>Estimation Team Decision</h3>
@@ -2260,12 +2473,12 @@ This is an automated email from the ERP system.
                     
                     <div class="signature">
                         <p>Best regards,<br>
-                        Estimation Team<br>
-                        ERP System</p>
+                        Estimation Team</p>
                     </div>
                 </div>
                 <div class="footer">
-                    <p>This is an automated email from the ERP system. Please do not reply to this email.</p>
+                    <p style="margin-bottom: 10px;">Thank you for using</p>
+                    <img src="cid:logo" alt="Meter Square" style="display: block; max-width: 150px; height: auto; margin: 0 auto;">
                 </div>
             </div>
         </body>
@@ -2317,9 +2530,6 @@ Please review the cost-related issues and revise the purchase request accordingl
 
 Best regards,
 Estimation Team
-ERP System
-
-This is an automated email from the ERP system.
         """
 
     def _generate_estimation_pm_flag_rejection_email_html(self, purchase_data: Dict, materials_data: List[Dict],
@@ -2367,12 +2577,13 @@ This is an automated email from the ERP system.
                     margin: 0 auto !important;
                     background-color: #ffffff !important;
                     border-radius: 8px !important;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+                    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.15) !important;
                     overflow: hidden !important;
+                    border: 2px solid #a8c5f0 !important;
                 }}
                 .header {{
-                    background-color: #ffc107 !important;
-                    color: #212529 !important;
+                    background-color: #dc2626 !important;
+                    color: #ffffff !important;
                     padding: 20px !important;
                     text-align: center !important;
                 }}
@@ -2390,7 +2601,7 @@ This is an automated email from the ERP system.
                     margin-bottom: 15px !important;
                 }}
                 h3 {{
-                    color: #ffc107 !important;
+                    color: #333333 !important;
                     font-size: 18px !important;
                     margin-top: 20px !important;
                     margin-bottom: 10px !important;
@@ -2410,7 +2621,7 @@ This is an automated email from the ERP system.
                     font-size: 12px !important;
                 }}
                 table th {{
-                    background-color: #243d8a !important;
+                    background-color: #dc2626 !important;
                     color: white !important;
                     padding: 10px 8px !important;
                     text-align: left !important;
@@ -2432,16 +2643,30 @@ This is an automated email from the ERP system.
                     margin: 20px 0 !important;
                 }}
                 .signature {{
-                    margin-top: 20px !important;
+                    margin-top: 24px !important;
+                    padding-top: 0 !important;
+                    border: none !important;
                     font-size: 14px !important;
-                    color: #666 !important;
+                    color: #333333 !important;
+                }}
+                .signature strong {{
+                    color: #4285f4 !important;
+                    font-weight: 600 !important;
                 }}
                 .footer {{
                     background-color: #f8f9fa !important;
-                    padding: 15px !important;
+                    padding: 20px !important;
                     text-align: center !important;
-                    font-size: 12px !important;
-                    color: #666 !important;
+                    font-size: 13px !important;
+                    color: #666666 !important;
+                    border-top: 1px solid #e0e0e0 !important;
+                    margin-top: 0 !important;
+                }}
+                .footer img {{
+                    display: block !important;
+                    margin: 12px auto !important;
+                    max-width: 150px !important;
+                    height: auto !important;
                 }}
                 .table-container {{
                     overflow-x: auto !important;
@@ -2524,7 +2749,7 @@ This is an automated email from the ERP system.
                     </div>
                     
                     <div class="total-cost">
-                        <strong>Overall Total Cost: ${total_cost:.2f}</strong>
+                        <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">${total_cost:.2f}</span>
                     </div>
                     
                     <h3>Estimation Team Decision</h3>
@@ -2535,12 +2760,12 @@ This is an automated email from the ERP system.
                     
                     <div class="signature">
                         <p>Best regards,<br>
-                        Estimation Team<br>
-                        ERP System</p>
+                        Estimation Team</p>
                     </div>
                 </div>
                 <div class="footer">
-                    <p>This is an automated email from the ERP system. Please do not reply to this email.</p>
+                    <p style="margin-bottom: 10px;">Thank you for using</p>
+                    <img src="cid:logo" alt="Meter Square" style="display: block; max-width: 150px; height: auto; margin: 0 auto;">
                 </div>
             </div>
         </body>
@@ -2592,9 +2817,6 @@ Please review the flagged issues and provide your guidance.
 
 Best regards,
 Estimation Team
-ERP System
-
-This is an automated email from the ERP system.
     """
 
     def send_technical_director_to_accounts_notification(self, purchase_data: Dict, materials_data: List[Dict],
@@ -2603,7 +2825,6 @@ This is an automated email from the ERP system.
         try:
             # Get accounts team emails
             recipients = self.get_accounts_team_emails()
-            print("accounts recipients:", recipients)
             
             if not recipients:
                 log.error("No accounts team emails found")
@@ -2627,7 +2848,6 @@ This is an automated email from the ERP system.
         try:
             # Get estimation team emails
             recipients = self.get_estimation_team_emails()
-            print("estimation recipients for technical director rejection:", recipients)
             
             if not recipients:
                 log.error("No estimation team emails found")
@@ -2662,7 +2882,6 @@ This is an automated email from the ERP system.
             ).all()
 
             emails = [u.email for u in users if u.email]
-            print("accounts team emails:", emails)
             return emails if emails else None
         except Exception as e:
             log.error(f"Error fetching accounts team emails: {str(e)}")
@@ -2689,94 +2908,201 @@ This is an automated email from the ERP system.
             """
         
         return f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Purchase Request Approved by Technical Director</title>
-        </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <h1 style="margin: 0; font-size: 24px;">Purchase Request Approved by Technical Director</h1>
-                <p style="margin: 10px 0 0 0; font-size: 16px;">Ready for Payment Processing</p>
-            </div>
-            
-            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <h2 style="color: #495057; margin-top: 0;">Purchase Request Details</h2>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <tr>
-                        <td style="padding: 8px; font-weight: bold; width: 30%;">Request ID:</td>
-                        <td style="padding: 8px;">#{purchase_data.get('purchase_id')}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px; font-weight: bold;">Requested By:</td>
-                        <td style="padding: 8px;">{requester_info.get('full_name', 'N/A')}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px; font-weight: bold;">Site Location:</td>
-                        <td style="padding: 8px;">{purchase_data.get('site_location', 'N/A')}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px; font-weight: bold;">Date:</td>
-                        <td style="padding: 8px;">{purchase_data.get('date', 'N/A')}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px; font-weight: bold;">Project Name:</td>
-                        <td style="padding: 8px;">{project.project_name if project else 'N/A'}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px; font-weight: bold;">Purpose:</td>
-                        <td style="padding: 8px;">{purchase_data.get('purpose', 'N/A')}</td>
-                    </tr>
-                </table>
-            </div>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                <meta http-equiv="X-UA-Compatible" content="IE=edge">
+                <meta name="format-detection" content="telephone=no">
+                <style>
+                /* Base styles */
+                body {{
+                    font-family: Arial, sans-serif !important;
+                    background-color: #f5f9ff !important;
+                    margin: 0 !important;
+                    padding: 10px !important;
+                    color: #333 !important;
+                    width: 100% !important;
+                    -webkit-text-size-adjust: 100% !important;
+                    -ms-text-size-adjust: 100% !important;
+                }}
+                .email-container {{
+                    max-width: 650px !important;
+                    margin: 0 auto !important;
+                    background: #ffffff !important;
+                    border-radius: 8px !important;
+                    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.15) !important;
+                    overflow: hidden !important;
+                    border: 2px solid #a8c5f0 !important;
+                    width: 100% !important;
+                }}
+                .header {{
+                    background: #4285f4 !important;
+                    color: #ffffff !important;
+                    padding: 15px !important;
+                    text-align: center !important;
+                }}
+                .header h2 {{
+                    margin: 0 !important;
+                    font-size: 18px !important;
+                    font-weight: bold !important;
+                }}
+                .content {{
+                    padding: 15px !important;
+                }}
+                .content p {{
+                    font-size: 14px !important;
+                    margin: 8px 0 !important;
+                    line-height: 1.6 !important;
+                    word-wrap: break-word !important;
+                }}
+                .label {{
+                    font-weight: bold !important;
+                    color: #333333 !important;
+                }}
+                h3 {{
+                    margin-top: 20px !important;
+                    margin-bottom: 10px !important;
+                    color: #333333 !important;
+                    font-size: 16px !important;
+                    border-bottom: 2px solid #4285f4 !important;
+                    display: inline-block !important;
+                    padding-bottom: 4px !important;
+                }}
+                .table-container {{
+                    overflow-x: auto !important;
+                    margin-top: 10px !important;
+                    -webkit-overflow-scrolling: touch !important;
+                }}
+                table {{
+                    width: 100% !important;
+                    border-collapse: collapse !important;
+                    min-width: 600px !important;
+                }}
+                table th {{
+                    background: #4285f4 !important;
+                    color: #ffffff !important;
+                    padding: 8px 6px !important;
+                    text-align: left !important;
+                    font-size: 12px !important;
+                    white-space: nowrap !important;
+                }}
+                table td {{
+                    padding: 8px 6px !important;
+                    border: 1px solid #d0e2ff !important;
+                    font-size: 12px !important;
+                    word-wrap: break-word !important;
+                }}
+                .total-cost {{
+                    margin-top: 20px !important;
+                    padding: 16px 20px !important;
+                    text-align: center !important;
+                    font-weight: 600 !important;
+                    font-size: 16px !important;
+                    background: #ffffff !important;
+                    border: 1px solid #4285f4 !important;
+                    border-radius: 4px !important;
+                    color: #333333 !important;
+                    padding: 10px !important;
+                    background: #f5f9ff !important;
+                    border-radius: 4px !important;
+                }}
+                .signature {{
+                    margin-top: 24px !important;
+                    padding-top: 0 !important;
+                    border: none !important;
+                    font-size: 14px !important;
+                    color: #333333 !important;
+                }}
+                .signature strong {{
+                    color: #4285f4 !important;
+                    font-weight: 600 !important;
+                }}
+                .footer {{
+                    text-align: center !important;
+                    background: #f8f9fa !important;
+                    padding: 20px !important;
+                    font-size: 13px !important;
+                    color: #666666 !important;
+                    border-top: 1px solid #e0e0e0 !important;
+                }}
+                .footer img {{
+                    display: block !important;
+                    margin: 12px auto !important;
+                    max-width: 150px !important;
+                    height: auto !important;
+                }}
+                .approval-section {{
+                    background: #e6f3ff !important;
+                    border: 1px solid #4285f4 !important;
+                    border-radius: 6px !important;
+                    padding: 15px !important;
+                    margin: 20px 0 !important;
+                }}
+                .approval-section p {{
+                    margin: 8px 0 !important;
+                    color: #333333 !important;
+                    font-size: 14px !important;
+                }}
+                .approval-section strong {{
+                    color: #333333 !important;
+                    font-weight: 600 !important;
+                }}
+                </style>
+            </head>
+            <body>
+                <div class="email-container">
+                    <div class="header">
+                        <h2>Purchase Request Approved by Technical Director</h2>
+                        <p style="margin: 5px 0 0 0; font-size: 14px;">Ready for Payment Processing</p>
+                    </div>
+                    <div class="content">
+                        <p><span class="label">Project Name:</span> {project.project_name if project else 'N/A'}</p>
+                        <p><span class="label">Site Location:</span> {purchase_data.get('site_location', 'N/A')}</p>
+                        <p><span class="label">Date:</span> {purchase_data.get('date', 'N/A')}</p>
+                        <p><span class="label">Requested By:</span> {requester_info.get('full_name', 'N/A')}</p>
+                        <p><span class="label">Approved By:</span> {technical_director_info.get('full_name', 'Technical Director')} (Technical Director)</p>
 
-            <div style="background: #e8f5e8; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <h2 style="color: #2d5a2d; margin-top: 0;">Technical Director Approval</h2>
-                <p style="margin: 0; font-weight: bold;">✅ This purchase request has been approved by the Technical Director and is ready for payment processing.</p>
-                <p style="margin: 10px 0 0 0;"><strong>Approved By:</strong> {technical_director_info.get('full_name', 'N/A')}</p>
-                <p style="margin: 5px 0 0 0;"><strong>Role:</strong> {technical_director_info.get('role', 'N/A')}</p>
-            </div>
+                        <div class="approval-section">
+                            <p><strong>✅ Technical Director Approval Complete</strong></p>
+                            <p>This purchase request has been approved by the Technical Director and is ready for payment processing.</p>
+                        </div>
 
-            <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <h2 style="color: #495057; margin-top: 0;">Materials List</h2>
-                <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
-                    <thead>
-                        <tr style="background: #f8f9fa;">
-                            <th style="padding: 12px; border: 1px solid #ddd; text-align: center;">#</th>
-                            <th style="padding: 12px; border: 1px solid #ddd;">Category</th>
-                            <th style="padding: 12px; border: 1px solid #ddd;">Description</th>
-                            <th style="padding: 12px; border: 1px solid #ddd;">Specification</th>
-                            <th style="padding: 12px; border: 1px solid #ddd; text-align: center;">Quantity</th>
-                            <th style="padding: 12px; border: 1px solid #ddd;">Unit</th>
-                            <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Unit Cost</th>
-                            <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Total Cost</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {materials_table}
-                    </tbody>
-                    <tfoot>
-                        <tr style="background: #f8f9fa; font-weight: bold;">
-                            <td colspan="7" style="padding: 12px; border: 1px solid #ddd; text-align: right;">Total Cost:</td>
-                            <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${total_cost:.2f}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+                        <h3>Materials List</h3>
+                        <div class="table-container">
+                            <table>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Category</th>
+                                    <th>Description</th>
+                                    <th>Specification</th>
+                                    <th>Quantity</th>
+                                    <th>Unit</th>
+                                    <th>Unit Cost</th>
+                                    <th>Total Cost</th>
+                                </tr>
+                                {materials_table}
+                            </table>
+                        </div>
+                        
+                        <div class="total-cost">
+                            <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">${total_cost:.2f}</span>
+                        </div>
 
-            <div style="background: #fff3cd; padding: 20px; border-radius: 8px; border-left: 4px solid #ffc107;">
-                <h3 style="color: #856404; margin-top: 0;">Next Steps</h3>
-                <p style="margin: 0; color: #856404;">Please process the payment for this approved purchase request. All technical requirements have been verified and approved.</p>
-            </div>
-
-            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-                <p style="color: #666; font-size: 14px;">This is an automated email from the ERP system.</p>
-                <p style="color: #666; font-size: 14px;">Please do not reply to this email.</p>
-            </div>
-        </body>
-        </html>
-        """
+                        <div class="signature">
+                            <p>Please process the payment for this approved purchase request. All technical requirements have been verified and approved.</p>
+                            <p>Best regards,</p>
+                            <strong>Technical Director</strong>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        <p style="margin-bottom: 10px;">Thank you for using</p>
+                        <img src="cid:logo" alt="Meter Square" style="display: block; max-width: 150px; height: auto; margin: 0 auto;">
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
 
     def _generate_technical_director_to_accounts_email_text(self, purchase_data: Dict, materials_data: List[Dict],
                                                           requester_info: Dict, technical_director_info: Dict) -> str:
@@ -2820,9 +3146,8 @@ Please process the payment for this approved purchase request. All technical req
 
 Best regards,
 Technical Director
-ERP System
-
-This is an automated email from the ERP system.
+Thank you for using
+Meter Square
     """
 
     def _generate_technical_director_rejection_email_html(self, purchase_data: Dict, materials_data: List[Dict],
@@ -2852,8 +3177,8 @@ This is an automated email from the ERP system.
             <meta charset="UTF-8">
             <title>Purchase Request Rejected by Technical Director</title>
         </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f9ff; border: 2px solid #a8c5f0; border-radius: 8px;">
+            <div style="background: #dc2626; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #a8c5f0;">
                 <h1 style="margin: 0; font-size: 24px;">Purchase Request Rejected by Technical Director</h1>
                 <p style="margin: 10px 0 0 0; font-size: 16px;">Requires Estimation Review</p>
             </div>
@@ -2889,8 +3214,8 @@ This is an automated email from the ERP system.
             </div>
 
             <div style="background: #f8d7da; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <h2 style="color: #721c24; margin-top: 0;">Technical Director Rejection</h2>
-                <p style="margin: 0; font-weight: bold;">❌ This purchase request has been rejected by the Technical Director.</p>
+                <h2 style="color: #333333; margin-top: 0;">Technical Director Rejection</h2>
+                <p style="margin: 0; font-weight: bold; color: #333333 !important;">✗ This purchase request has been rejected by the Technical Director.</p>
                 <p style="margin: 10px 0 0 0;"><strong>Rejected By:</strong> {technical_director_info.get('full_name', 'N/A')}</p>
                 <p style="margin: 5px 0 0 0;"><strong>Role:</strong> {technical_director_info.get('role', 'N/A')}</p>
                 <p style="margin: 10px 0 0 0;"><strong>Rejection Reason:</strong> {rejection_reason}</p>
@@ -2900,7 +3225,7 @@ This is an automated email from the ERP system.
                 <h2 style="color: #495057; margin-top: 0;">Materials List</h2>
                 <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
                     <thead>
-                        <tr style="background: #f8f9fa;">
+                        <tr style="background: #dc2626; color: white;">
                             <th style="padding: 12px; border: 1px solid #ddd; text-align: center;">#</th>
                             <th style="padding: 12px; border: 1px solid #ddd;">Category</th>
                             <th style="padding: 12px; border: 1px solid #ddd;">Description</th>
@@ -2929,8 +3254,8 @@ This is an automated email from the ERP system.
             </div>
 
             <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-                <p style="color: #666; font-size: 14px;">This is an automated email from the ERP system.</p>
-                <p style="color: #666; font-size: 14px;">Please do not reply to this email.</p>
+                <p style="color: #666; font-size: 14px; margin-bottom: 10px;">Thank you for using</p>
+                <img src="cid:logo" alt="Meter Square" style="display: block; max-width: 150px; height: auto; margin: 0 auto;">
             </div>
         </body>
         </html>
@@ -2979,9 +3304,8 @@ Please review the rejection reason and make necessary corrections to the purchas
 
 Best regards,
 Technical Director
-ERP System
-
-This is an automated email from the ERP system.
+Thank you for using
+Meter Square
     """
 
     def send_purchase_request_notification(self, purchase_data: Dict, materials_data: List[Dict],
@@ -3178,7 +3502,8 @@ This is an automated email from the ERP system.
                     <p><strong>Date:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
                     <p><strong>Message:</strong> {message}</p>
                 </div>
-                <p>Best regards,<br/>ERP System</p>
+                <p>Best regards,<br/>
+                <img src="cid:logo" alt="Meter Square" style="display: inline-block; max-width: 120px; height: auto; margin-top: 10px;"></p>
             </body>
             </html>
             """
@@ -3192,7 +3517,7 @@ This is an automated email from the ERP system.
             Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             Message: {message}
 
-            ERP System
+            Meter Square
             """
 
             prepared_attachments = self._prepare_attachments(attachments)
