@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Search, Filter, Download, Eye, Edit2, Trash2, CheckCircle, XCircle, FileText, Clock, AlertTriangle, Package, Mail, AlertCircle as AlertCircleIcon } from 'lucide-react';
+import { Plus, Filter, Download, Eye, Edit2, Trash2, CheckCircle, XCircle, FileText, Clock, AlertTriangle, Package, Mail, AlertCircle as AlertCircleIcon, SlidersHorizontal, Calendar, DollarSign, Building2 } from 'lucide-react';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
 import { Button } from '@/components/ui/button';
@@ -25,10 +25,17 @@ const PurchaseRequestsPage: React.FC = () => {
   
   // State for form modal (for non-Site Supervisors)
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterPriority, setFilterPriority] = useState('all');
+  const [filterDateRange, setFilterDateRange] = useState('all');
+  const [filterProject, setFilterProject] = useState('all');
+  const [filterDepartment, setFilterDepartment] = useState('all');
+  const [filterAmount, setFilterAmount] = useState({ min: '', max: '' });
+  const [sortBy, setSortBy] = useState('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('pending');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // Initialize empty purchase requests - will be fetched from API
   const [purchaseRequests, setPurchaseRequests] = useState<any[]>([]);
@@ -237,7 +244,7 @@ const PurchaseRequestsPage: React.FC = () => {
     return counts;
   }, [purchaseRequests]);
 
-  // Filter requests based on user role and tab
+  // Filter and sort requests based on user role and tab
   const filteredRequests = useMemo(() => {
     let filtered = purchaseRequests;
 
@@ -259,13 +266,24 @@ const PurchaseRequestsPage: React.FC = () => {
       filtered = filtered.filter(request => request.status === 'rejected' && request.rejectionType === 'estimation');
     }
 
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(request => 
-        request.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        request.project.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        request.requestor.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    // Filter by project
+    if (filterProject !== 'all') {
+      filtered = filtered.filter(request => request.project === filterProject);
+    }
+
+    // Filter by department
+    if (filterDepartment !== 'all') {
+      filtered = filtered.filter(request => request.department === filterDepartment);
+    }
+
+    // Filter by amount range
+    if (filterAmount.min || filterAmount.max) {
+      filtered = filtered.filter(request => {
+        const amount = request.amount;
+        const min = filterAmount.min ? parseFloat(filterAmount.min) : 0;
+        const max = filterAmount.max ? parseFloat(filterAmount.max) : Infinity;
+        return amount >= min && amount <= max;
+      });
     }
 
     // Filter by status (from dropdown)
@@ -273,8 +291,84 @@ const PurchaseRequestsPage: React.FC = () => {
       filtered = filtered.filter(request => request.status === filterStatus);
     }
 
+    // Filter by priority
+    if (filterPriority !== 'all') {
+      filtered = filtered.filter(request => request.priority === filterPriority);
+    }
+
+    // Filter by date range
+    if (filterDateRange !== 'all') {
+      const today = new Date();
+      const requestDate = new Date(request.date);
+      
+      switch (filterDateRange) {
+        case 'today':
+          filtered = filtered.filter(request => {
+            const reqDate = new Date(request.date);
+            return reqDate.toDateString() === today.toDateString();
+          });
+          break;
+        case 'week':
+          const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+          filtered = filtered.filter(request => {
+            const reqDate = new Date(request.date);
+            return reqDate >= weekAgo;
+          });
+          break;
+        case 'month':
+          const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+          filtered = filtered.filter(request => {
+            const reqDate = new Date(request.date);
+            return reqDate >= monthAgo;
+          });
+          break;
+      }
+    }
+
+    // Sort results
+    filtered.sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortBy) {
+        case 'date':
+          aValue = new Date(a.date).getTime();
+          bValue = new Date(b.date).getTime();
+          break;
+        case 'amount':
+          aValue = a.amount;
+          bValue = b.amount;
+          break;
+        case 'priority':
+          const priorityOrder = { 'high': 3, 'medium': 2, 'low': 1 };
+          aValue = priorityOrder[a.priority] || 2;
+          bValue = priorityOrder[b.priority] || 2;
+          break;
+        case 'project':
+          aValue = a.project.toLowerCase();
+          bValue = b.project.toLowerCase();
+          break;
+        case 'requestor':
+          aValue = a.requestor.toLowerCase();
+          bValue = b.requestor.toLowerCase();
+          break;
+        case 'status':
+          aValue = a.status;
+          bValue = b.status;
+          break;
+        default:
+          aValue = a.id;
+          bValue = b.id;
+      }
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortOrder === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+      } else {
+        return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+    });
+
     return filtered;
-  }, [purchaseRequests, activeTab, searchTerm, filterStatus, isSiteSupervisor, user?.id]);
+  }, [purchaseRequests, activeTab, filterStatus, filterPriority, filterDateRange, filterProject, filterDepartment, filterAmount, sortBy, sortOrder, isSiteSupervisor, user?.id]);
 
   // Get role-specific title
   const getPageTitle = () => {
@@ -419,43 +513,252 @@ const PurchaseRequestsPage: React.FC = () => {
         />
       )}
 
-      {/* Filters and Search */}
+      {/* Filters and Sort Controls */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search by PR number, project, or requestor..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          <div className="space-y-4">
+            {/* Primary Filter and Sort Row */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex gap-2 flex-wrap flex-1">
+                <select
+                  className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 bg-white min-w-[150px]"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  aria-label="Filter by status"
+                  title="Filter by status"
+                >
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="in_review">In Review</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+                
+                <select
+                  className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 bg-white min-w-[150px]"
+                  value={filterPriority}
+                  onChange={(e) => setFilterPriority(e.target.value)}
+                  aria-label="Filter by priority"
+                  title="Filter by priority"
+                >
+                  <option value="all">All Priorities</option>
+                  <option value="high">High Priority</option>
+                  <option value="medium">Medium Priority</option>
+                  <option value="low">Low Priority</option>
+                </select>
+                
+                <select
+                  className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 bg-white min-w-[150px]"
+                  value={filterDateRange}
+                  onChange={(e) => setFilterDateRange(e.target.value)}
+                  aria-label="Filter by date range"
+                  title="Filter by date range"
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="week">Past Week</option>
+                  <option value="month">Past Month</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <select
+                  className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 bg-white min-w-[150px]"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  aria-label="Sort by"
+                  title="Sort by"
+                >
+                  <option value="date">Sort by Date</option>
+                  <option value="amount">Sort by Amount</option>
+                  <option value="priority">Sort by Priority</option>
+                  <option value="project">Sort by Project</option>
+                  <option value="requestor">Sort by Requestor</option>
+                  <option value="status">Sort by Status</option>
+                </select>
+                
+                <Button 
+                  variant="outline" 
+                  className="px-3"
+                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  title={`Sort ${sortOrder === 'asc' ? 'Descending' : 'Ascending'}`}
+                >
+                  {sortOrder === 'asc' ? '↑' : '↓'}
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  className="px-4"
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                >
+                  <SlidersHorizontal className="w-4 h-4 mr-2" />
+                  {showAdvancedFilters ? 'Hide' : 'More'} Filters
+                </Button>
+                
+                <Button variant="outline" className="px-4">
+                  <Download className="w-4 h-4 mr-2" />
+                  Export
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <select
-                className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                aria-label="Filter by status"
-                title="Filter by status"
+
+            {/* Advanced Filters Row */}
+            {showAdvancedFilters && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg border"
               >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="in_review">In Review</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-              </select>
-              <Button variant="outline" className="px-4">
-                <Filter className="w-4 h-4 mr-2" />
-                More Filters
-              </Button>
-              <Button variant="outline" className="px-4">
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </Button>
-            </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                    <Package className="w-4 h-4" />
+                    Project
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 bg-white text-sm"
+                    value={filterProject}
+                    onChange={(e) => setFilterProject(e.target.value)}
+                  >
+                    <option value="all">All Projects</option>
+                    {[...new Set(purchaseRequests.map(r => r.project))].map(project => (
+                      <option key={project} value={project}>{project}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                    <Building2 className="w-4 h-4" />
+                    Department
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 bg-white text-sm"
+                    value={filterDepartment}
+                    onChange={(e) => setFilterDepartment(e.target.value)}
+                  >
+                    <option value="all">All Departments</option>
+                    {[...new Set(purchaseRequests.map(r => r.department))].map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                    <DollarSign className="w-4 h-4" />
+                    Amount Range (AED)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                      value={filterAmount.min}
+                      onChange={(e) => setFilterAmount(prev => ({ ...prev, min: e.target.value }))}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                      value={filterAmount.max}
+                      onChange={(e) => setFilterAmount(prev => ({ ...prev, max: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-end">
+                  <Button
+                    variant="outline"
+                    className="px-4 py-2 text-sm w-full"
+                    onClick={() => {
+                      setFilterStatus('all');
+                      setFilterPriority('all');
+                      setFilterDateRange('all');
+                      setFilterProject('all');
+                      setFilterDepartment('all');
+                      setFilterAmount({ min: '', max: '' });
+                      setSortBy('date');
+                      setSortOrder('desc');
+                    }}
+                  >
+                    Clear All Filters
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Active Filters Display */}
+            {(filterStatus !== 'all' || filterPriority !== 'all' || filterDateRange !== 'all' || filterProject !== 'all' || filterDepartment !== 'all' || filterAmount.min || filterAmount.max) && (
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-sm text-gray-500">Active filters:</span>
+                {filterStatus !== 'all' && (
+                  <Badge variant="secondary" className="text-xs">
+                    Status: {filterStatus}
+                    <button 
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => setFilterStatus('all')}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+                {filterPriority !== 'all' && (
+                  <Badge variant="secondary" className="text-xs">
+                    Priority: {filterPriority}
+                    <button 
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => setFilterPriority('all')}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+                {filterDateRange !== 'all' && (
+                  <Badge variant="secondary" className="text-xs">
+                    Date: {filterDateRange}
+                    <button 
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => setFilterDateRange('all')}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+                {filterProject !== 'all' && (
+                  <Badge variant="secondary" className="text-xs">
+                    Project: {filterProject}
+                    <button 
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => setFilterProject('all')}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+                {filterDepartment !== 'all' && (
+                  <Badge variant="secondary" className="text-xs">
+                    Department: {filterDepartment}
+                    <button 
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => setFilterDepartment('all')}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+                {(filterAmount.min || filterAmount.max) && (
+                  <Badge variant="secondary" className="text-xs">
+                    Amount: AED {filterAmount.min || '0'} - {filterAmount.max || '∞'}
+                    <button 
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => setFilterAmount({ min: '', max: '' })}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -576,29 +879,113 @@ const PurchaseRequestsPage: React.FC = () => {
                     <table className="w-full min-w-[600px]">
                       <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            PR Number
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => {
+                              setSortBy('id');
+                              setSortOrder(sortBy === 'id' && sortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            title="Click to sort by PR Number"
+                          >
+                            <div className="flex items-center gap-1">
+                              PR Number
+                              {sortBy === 'id' && (
+                                <span className="text-red-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Project
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => {
+                              setSortBy('project');
+                              setSortOrder(sortBy === 'project' && sortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            title="Click to sort by Project"
+                          >
+                            <div className="flex items-center gap-1">
+                              Project
+                              {sortBy === 'project' && (
+                                <span className="text-red-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Requestor
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => {
+                              setSortBy('requestor');
+                              setSortOrder(sortBy === 'requestor' && sortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            title="Click to sort by Requestor"
+                          >
+                            <div className="flex items-center gap-1">
+                              Requestor
+                              {sortBy === 'requestor' && (
+                                <span className="text-red-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Department
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Date
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => {
+                              setSortBy('date');
+                              setSortOrder(sortBy === 'date' && sortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            title="Click to sort by Date"
+                          >
+                            <div className="flex items-center gap-1">
+                              Date
+                              {sortBy === 'date' && (
+                                <span className="text-red-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Amount
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => {
+                              setSortBy('amount');
+                              setSortOrder(sortBy === 'amount' && sortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            title="Click to sort by Amount"
+                          >
+                            <div className="flex items-center gap-1">
+                              Amount
+                              {sortBy === 'amount' && (
+                                <span className="text-red-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Priority
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => {
+                              setSortBy('priority');
+                              setSortOrder(sortBy === 'priority' && sortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            title="Click to sort by Priority"
+                          >
+                            <div className="flex items-center gap-1">
+                              Priority
+                              {sortBy === 'priority' && (
+                                <span className="text-red-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => {
+                              setSortBy('status');
+                              setSortOrder(sortBy === 'status' && sortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            title="Click to sort by Status"
+                          >
+                            <div className="flex items-center gap-1">
+                              Status
+                              {sortBy === 'status' && (
+                                <span className="text-red-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Actions

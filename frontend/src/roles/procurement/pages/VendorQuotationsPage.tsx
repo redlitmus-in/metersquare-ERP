@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Search, Filter, Download, Eye, Edit2, Trash2, Building2 } from 'lucide-react';
+import { Plus, Filter, Download, Eye, Edit2, Trash2, Building2, SlidersHorizontal, DollarSign, Calendar, Package, Users } from 'lucide-react';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import VendorQuotationForm from '@/components/forms/VendorQuotationForm';
 import { Button } from '@/components/ui/button';
@@ -28,8 +28,15 @@ interface VendorQuotation {
 const VendorQuotationsPage: React.FC = () => {
   const { user } = useAuthStore();
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterVendor, setFilterVendor] = useState('all');
+  const [filterProject, setFilterProject] = useState('all');
+  const [filterValidityRange, setFilterValidityRange] = useState('all');
+  const [filterAmountRange, setFilterAmountRange] = useState({ min: '', max: '' });
+  const [filterItemsRange, setFilterItemsRange] = useState({ min: '', max: '' });
+  const [sortBy, setSortBy] = useState('submittedDate');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState<VendorQuotation | null>(null);
   const [vendorQuotations, setVendorQuotations] = useState<VendorQuotation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,17 +135,59 @@ const VendorQuotationsPage: React.FC = () => {
     }
   };
 
-  // Filter quotations based on search and status
-  const getFilteredQuotations = () => {
+  // Get unique vendors for filter dropdown
+  const uniqueVendors = useMemo(() => {
+    const vendors = [...new Set(vendorQuotations.map(q => q.vendor))];
+    return vendors.sort();
+  }, [vendorQuotations]);
+
+  // Filter and sort quotations
+  const filteredQuotations = useMemo(() => {
     let filtered = vendorQuotations;
 
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(quotation => 
-        quotation.vqNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        quotation.vendor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        quotation.project.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    // Filter by project
+    if (filterProject !== 'all') {
+      filtered = filtered.filter(quotation => quotation.project === filterProject);
+    }
+
+    // Filter by validity range
+    if (filterValidityRange !== 'all') {
+      const today = new Date();
+      filtered = filtered.filter(quotation => {
+        const validUntil = new Date(quotation.validUntil);
+        const daysDiff = Math.ceil((validUntil.getTime() - today.getTime()) / (1000 * 3600 * 24));
+        
+        switch (filterValidityRange) {
+          case 'expired':
+            return daysDiff < 0;
+          case 'expiring_soon':
+            return daysDiff >= 0 && daysDiff <= 7;
+          case 'valid':
+            return daysDiff > 7;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Filter by amount range
+    if (filterAmountRange.min || filterAmountRange.max) {
+      filtered = filtered.filter(quotation => {
+        const amount = quotation.amount;
+        const min = filterAmountRange.min ? parseFloat(filterAmountRange.min) : 0;
+        const max = filterAmountRange.max ? parseFloat(filterAmountRange.max) : Infinity;
+        return amount >= min && amount <= max;
+      });
+    }
+
+    // Filter by items range
+    if (filterItemsRange.min || filterItemsRange.max) {
+      filtered = filtered.filter(quotation => {
+        const items = quotation.items;
+        const min = filterItemsRange.min ? parseInt(filterItemsRange.min) : 0;
+        const max = filterItemsRange.max ? parseInt(filterItemsRange.max) : Infinity;
+        return items >= min && items <= max;
+      });
     }
 
     // Filter by status
@@ -146,10 +195,58 @@ const VendorQuotationsPage: React.FC = () => {
       filtered = filtered.filter(quotation => quotation.status === filterStatus);
     }
 
-    return filtered;
-  };
+    // Filter by vendor
+    if (filterVendor !== 'all') {
+      filtered = filtered.filter(quotation => quotation.vendor === filterVendor);
+    }
 
-  const filteredQuotations = getFilteredQuotations();
+    // Sort results
+    filtered.sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortBy) {
+        case 'submittedDate':
+          aValue = new Date(a.submittedDate).getTime();
+          bValue = new Date(b.submittedDate).getTime();
+          break;
+        case 'amount':
+          aValue = a.amount;
+          bValue = b.amount;
+          break;
+        case 'validUntil':
+          aValue = new Date(a.validUntil).getTime();
+          bValue = new Date(b.validUntil).getTime();
+          break;
+        case 'vendor':
+          aValue = a.vendor.toLowerCase();
+          bValue = b.vendor.toLowerCase();
+          break;
+        case 'project':
+          aValue = a.project.toLowerCase();
+          bValue = b.project.toLowerCase();
+          break;
+        case 'status':
+          aValue = a.status;
+          bValue = b.status;
+          break;
+        case 'items':
+          aValue = a.items;
+          bValue = b.items;
+          break;
+        default:
+          aValue = a.vqNumber;
+          bValue = b.vqNumber;
+      }
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortOrder === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+      } else {
+        return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+    });
+
+    return filtered;
+  }, [vendorQuotations, filterStatus, filterVendor, filterProject, filterValidityRange, filterAmountRange, filterItemsRange, sortBy, sortOrder]);
 
   const handleEdit = (quotation: VendorQuotation) => {
     setSelectedQuotation(quotation);
@@ -269,44 +366,260 @@ const VendorQuotationsPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* Filters and Search */}
+      {/* Filters and Sort Controls */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search by VQ number, vendor, or project..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          <div className="space-y-4">
+            {/* Primary Filter and Sort Row */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex gap-2 flex-wrap flex-1">
+                <select
+                  className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white min-w-[150px]"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  aria-label="Filter by status"
+                  title="Filter by status"
+                >
+                  <option value="all">All Status</option>
+                  <option value="submitted">Submitted</option>
+                  <option value="under_review">Under Review</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="negotiation">Negotiation</option>
+                </select>
+                
+                <select
+                  className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white min-w-[150px]"
+                  value={filterVendor}
+                  onChange={(e) => setFilterVendor(e.target.value)}
+                  aria-label="Filter by vendor"
+                  title="Filter by vendor"
+                >
+                  <option value="all">All Vendors</option>
+                  {uniqueVendors.map(vendor => (
+                    <option key={vendor} value={vendor}>{vendor}</option>
+                  ))}
+                </select>
+                
+                <select
+                  className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white min-w-[150px]"
+                  value={filterValidityRange}
+                  onChange={(e) => setFilterValidityRange(e.target.value)}
+                  aria-label="Filter by validity"
+                  title="Filter by validity"
+                >
+                  <option value="all">All Validity</option>
+                  <option value="expired">Expired</option>
+                  <option value="expiring_soon">Expiring Soon</option>
+                  <option value="valid">Valid</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <select
+                  className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white min-w-[150px]"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  aria-label="Sort by"
+                  title="Sort by"
+                >
+                  <option value="submittedDate">Sort by Date</option>
+                  <option value="amount">Sort by Amount</option>
+                  <option value="vendor">Sort by Vendor</option>
+                  <option value="project">Sort by Project</option>
+                  <option value="status">Sort by Status</option>
+                  <option value="validUntil">Sort by Valid Until</option>
+                  <option value="items">Sort by Items</option>
+                </select>
+                
+                <Button 
+                  variant="outline" 
+                  className="px-3"
+                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  title={`Sort ${sortOrder === 'asc' ? 'Descending' : 'Ascending'}`}
+                >
+                  {sortOrder === 'asc' ? '↑' : '↓'}
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  className="px-4"
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                >
+                  <SlidersHorizontal className="w-4 h-4 mr-2" />
+                  {showAdvancedFilters ? 'Hide' : 'More'} Filters
+                </Button>
+                
+                <Button variant="outline" className="px-4">
+                  <Download className="w-4 h-4 mr-2" />
+                  Export
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <select
-                className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                aria-label="Filter by status"
-                title="Filter by status"
+
+            {/* Advanced Filters Row */}
+            {showAdvancedFilters && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg border"
               >
-                <option value="all">All Status</option>
-                <option value="submitted">Submitted</option>
-                <option value="under_review">Under Review</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="negotiation">Negotiation</option>
-              </select>
-              <Button variant="outline" className="px-4">
-                <Filter className="w-4 h-4 mr-2" />
-                More Filters
-              </Button>
-              <Button variant="outline" className="px-4">
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </Button>
-            </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                    <Package className="w-4 h-4" />
+                    Project
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white text-sm"
+                    value={filterProject}
+                    onChange={(e) => setFilterProject(e.target.value)}
+                  >
+                    <option value="all">All Projects</option>
+                    {[...new Set(vendorQuotations.map(q => q.project))].map(project => (
+                      <option key={project} value={project}>{project}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                    <DollarSign className="w-4 h-4" />
+                    Amount Range (AED)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                      value={filterAmountRange.min}
+                      onChange={(e) => setFilterAmountRange(prev => ({ ...prev, min: e.target.value }))}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                      value={filterAmountRange.max}
+                      onChange={(e) => setFilterAmountRange(prev => ({ ...prev, max: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                    <Package className="w-4 h-4" />
+                    Items Count Range
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                      value={filterItemsRange.min}
+                      onChange={(e) => setFilterItemsRange(prev => ({ ...prev, min: e.target.value }))}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                      value={filterItemsRange.max}
+                      onChange={(e) => setFilterItemsRange(prev => ({ ...prev, max: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-end">
+                  <Button
+                    variant="outline"
+                    className="px-4 py-2 text-sm w-full"
+                    onClick={() => {
+                      setFilterStatus('all');
+                      setFilterVendor('all');
+                      setFilterProject('all');
+                      setFilterValidityRange('all');
+                      setFilterAmountRange({ min: '', max: '' });
+                      setFilterItemsRange({ min: '', max: '' });
+                      setSortBy('submittedDate');
+                      setSortOrder('desc');
+                    }}
+                  >
+                    Clear All Filters
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Active Filters Display */}
+            {(filterStatus !== 'all' || filterVendor !== 'all' || filterProject !== 'all' || filterValidityRange !== 'all' || filterAmountRange.min || filterAmountRange.max || filterItemsRange.min || filterItemsRange.max) && (
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-sm text-gray-500">Active filters:</span>
+                {filterStatus !== 'all' && (
+                  <Badge variant="secondary" className="text-xs">
+                    Status: {filterStatus}
+                    <button 
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => setFilterStatus('all')}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+                {filterVendor !== 'all' && (
+                  <Badge variant="secondary" className="text-xs">
+                    Vendor: {filterVendor}
+                    <button 
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => setFilterVendor('all')}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+                {filterProject !== 'all' && (
+                  <Badge variant="secondary" className="text-xs">
+                    Project: {filterProject}
+                    <button 
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => setFilterProject('all')}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+                {filterValidityRange !== 'all' && (
+                  <Badge variant="secondary" className="text-xs">
+                    Validity: {filterValidityRange.replace('_', ' ')}
+                    <button 
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => setFilterValidityRange('all')}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+                {(filterAmountRange.min || filterAmountRange.max) && (
+                  <Badge variant="secondary" className="text-xs">
+                    Amount: AED {filterAmountRange.min || '0'} - {filterAmountRange.max || '∞'}
+                    <button 
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => setFilterAmountRange({ min: '', max: '' })}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+                {(filterItemsRange.min || filterItemsRange.max) && (
+                  <Badge variant="secondary" className="text-xs">
+                    Items: {filterItemsRange.min || '0'} - {filterItemsRange.max || '∞'}
+                    <button 
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => setFilterItemsRange({ min: '', max: '' })}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -351,26 +664,110 @@ const VendorQuotationsPage: React.FC = () => {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      VQ Number
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => {
+                        setSortBy('vqNumber');
+                        setSortOrder(sortBy === 'vqNumber' && sortOrder === 'asc' ? 'desc' : 'asc');
+                      }}
+                      title="Click to sort by VQ Number"
+                    >
+                      <div className="flex items-center gap-1">
+                        VQ Number
+                        {sortBy === 'vqNumber' && (
+                          <span className="text-purple-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Vendor
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => {
+                        setSortBy('vendor');
+                        setSortOrder(sortBy === 'vendor' && sortOrder === 'asc' ? 'desc' : 'asc');
+                      }}
+                      title="Click to sort by Vendor"
+                    >
+                      <div className="flex items-center gap-1">
+                        Vendor
+                        {sortBy === 'vendor' && (
+                          <span className="text-purple-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Project
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => {
+                        setSortBy('project');
+                        setSortOrder(sortBy === 'project' && sortOrder === 'asc' ? 'desc' : 'asc');
+                      }}
+                      title="Click to sort by Project"
+                    >
+                      <div className="flex items-center gap-1">
+                        Project
+                        {sortBy === 'project' && (
+                          <span className="text-purple-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => {
+                        setSortBy('amount');
+                        setSortOrder(sortBy === 'amount' && sortOrder === 'asc' ? 'desc' : 'asc');
+                      }}
+                      title="Click to sort by Amount"
+                    >
+                      <div className="flex items-center gap-1">
+                        Amount
+                        {sortBy === 'amount' && (
+                          <span className="text-purple-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Items
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => {
+                        setSortBy('items');
+                        setSortOrder(sortBy === 'items' && sortOrder === 'asc' ? 'desc' : 'asc');
+                      }}
+                      title="Click to sort by Items"
+                    >
+                      <div className="flex items-center gap-1">
+                        Items
+                        {sortBy === 'items' && (
+                          <span className="text-purple-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => {
+                        setSortBy('status');
+                        setSortOrder(sortBy === 'status' && sortOrder === 'asc' ? 'desc' : 'asc');
+                      }}
+                      title="Click to sort by Status"
+                    >
+                      <div className="flex items-center gap-1">
+                        Status
+                        {sortBy === 'status' && (
+                          <span className="text-purple-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Valid Until
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => {
+                        setSortBy('validUntil');
+                        setSortOrder(sortBy === 'validUntil' && sortOrder === 'asc' ? 'desc' : 'asc');
+                      }}
+                      title="Click to sort by Valid Until"
+                    >
+                      <div className="flex items-center gap-1">
+                        Valid Until
+                        {sortBy === 'validUntil' && (
+                          <span className="text-purple-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions

@@ -9,11 +9,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
 import { 
   RefreshCw, Search, CreditCard, 
   CheckSquare, XSquare, Clock, TrendingUp,
   DollarSign, FileText, BarChart3, AlertCircle,
-  Building, Receipt, Banknote, ArrowUpDown, ArrowUp, ArrowDown
+  Building, Receipt, Banknote, ArrowUpDown, ArrowUp, ArrowDown,
+  Filter, Calendar, SlidersHorizontal, X
 } from 'lucide-react';
 import AccountsApprovalCard from '../components/AccountsApprovalCard';
 import PaymentProcessingModal from '../components/PaymentProcessingModal';
@@ -31,7 +35,15 @@ const AccountsHub: React.FC = () => {
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'project' | 'location'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  
+  // Filter states
+  const [showFilters, setShowFilters] = useState(false);
+  const [amountFilter, setAmountFilter] = useState({ min: '', max: '' });
+  const [locationFilter, setLocationFilter] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
+  const [dateRangeFilter, setDateRangeFilter] = useState({ start: '', end: '' });
   
   // Modal states
   const [paymentProcessingModalOpen, setPaymentProcessingModalOpen] = useState(false);
@@ -247,15 +259,75 @@ const AccountsHub: React.FC = () => {
       );
     }
 
-    // Sort by date
+    // Amount filter
+    if (amountFilter.min || amountFilter.max) {
+      filtered = filtered.filter(p => {
+        const amount = p.total_cost || 0;
+        const min = amountFilter.min ? parseFloat(amountFilter.min) : 0;
+        const max = amountFilter.max ? parseFloat(amountFilter.max) : Infinity;
+        return amount >= min && amount <= max;
+      });
+    }
+
+    // Location filter
+    if (locationFilter) {
+      filtered = filtered.filter(p => 
+        p.site_location.toLowerCase().includes(locationFilter.toLowerCase())
+      );
+    }
+
+    // Project filter
+    if (projectFilter) {
+      filtered = filtered.filter(p => 
+        p.project_id?.toString().includes(projectFilter)
+      );
+    }
+
+    // Date range filter
+    if (dateRangeFilter.start || dateRangeFilter.end) {
+      filtered = filtered.filter(p => {
+        const purchaseDate = new Date(p.created_at || p.date);
+        const startDate = dateRangeFilter.start ? new Date(dateRangeFilter.start) : new Date('1900-01-01');
+        const endDate = dateRangeFilter.end ? new Date(dateRangeFilter.end) : new Date();
+        return purchaseDate >= startDate && purchaseDate <= endDate;
+      });
+    }
+
+    // Sort by selected criteria
     filtered.sort((a, b) => {
-      const dateA = new Date(a.created_at || a.date).getTime();
-      const dateB = new Date(b.created_at || b.date).getTime();
-      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+      let aValue, bValue;
+      
+      switch (sortBy) {
+        case 'amount':
+          aValue = a.total_cost || 0;
+          bValue = b.total_cost || 0;
+          break;
+        case 'project':
+          aValue = a.project_id?.toString() || '';
+          bValue = b.project_id?.toString() || '';
+          break;
+        case 'location':
+          aValue = a.site_location || '';
+          bValue = b.site_location || '';
+          break;
+        case 'date':
+        default:
+          aValue = new Date(a.created_at || a.date).getTime();
+          bValue = new Date(b.created_at || b.date).getTime();
+          break;
+      }
+
+      if (sortBy === 'amount' || sortBy === 'date') {
+        return sortOrder === 'desc' ? bValue - aValue : aValue - bValue;
+      } else {
+        return sortOrder === 'desc' 
+          ? bValue.localeCompare(aValue)
+          : aValue.localeCompare(bValue);
+      }
     });
 
     setFilteredPurchases(filtered);
-  }, [purchases, activeTab, searchTerm, sortOrder]);
+  }, [purchases, activeTab, searchTerm, sortBy, sortOrder, amountFilter, locationFilter, projectFilter, dateRangeFilter]);
 
   // Handle process payment button click
   const handleProcessPayment = (purchaseId: number) => {
@@ -352,6 +424,40 @@ const AccountsHub: React.FC = () => {
     return `AED ${amount.toLocaleString()}`;
   };
 
+  // Clear all filters
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setAmountFilter({ min: '', max: '' });
+    setLocationFilter('');
+    setProjectFilter('');
+    setDateRangeFilter({ start: '', end: '' });
+    setSortBy('date');
+    setSortOrder('desc');
+  };
+
+  // Get unique locations for dropdown
+  const getUniqueLocations = () => {
+    const locations = purchases.map(p => p.site_location).filter(Boolean);
+    return [...new Set(locations)].sort();
+  };
+
+  // Get unique projects for dropdown
+  const getUniqueProjects = () => {
+    const projects = purchases.map(p => p.project_id?.toString()).filter(Boolean);
+    return [...new Set(projects)].sort();
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = () => {
+    return searchTerm || 
+           amountFilter.min || 
+           amountFilter.max || 
+           locationFilter || 
+           projectFilter || 
+           dateRangeFilter.start || 
+           dateRangeFilter.end;
+  };
+
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 pb-8">
       {/* Page Header */}
@@ -432,34 +538,256 @@ const AccountsHub: React.FC = () => {
         </Card>
       </div>
 
-      {/* Search Bar and Sort */}
-      <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 lg:max-w-2xl">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-          <Input
-            placeholder="Search purchases..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8 sm:pl-10 h-9 sm:h-10 text-sm sm:text-base bg-white border-gray-200 focus:border-green-500 focus:ring-green-500"
-          />
+      {/* Search Bar, Filters and Sort */}
+      <div className="mb-4 sm:mb-6 space-y-3">
+        {/* Search and Filter Controls */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1 lg:max-w-2xl">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <Input
+              placeholder="Search by ID, location, purpose, or project..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 sm:pl-10 h-9 sm:h-10 text-sm sm:text-base bg-white border-gray-200 focus:border-green-500 focus:ring-green-500"
+            />
+          </div>
+          
+          {/* Filter Toggle Button */}
+          <Popover open={showFilters} onOpenChange={setShowFilters}>
+            <PopoverTrigger asChild>
+              <Button
+                variant={hasActiveFilters() ? "default" : "outline"}
+                className={`flex items-center gap-2 min-w-[100px] ${
+                  hasActiveFilters() ? 'bg-green-600 hover:bg-green-700 text-white' : ''
+                }`}
+              >
+                <Filter className="h-4 w-4" />
+                Filters
+                {hasActiveFilters() && (
+                  <span className="bg-white text-green-600 rounded-full px-1.5 py-0.5 text-xs font-medium">
+                    {[searchTerm, amountFilter.min, amountFilter.max, locationFilter, projectFilter, dateRangeFilter.start, dateRangeFilter.end].filter(Boolean).length}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-4 space-y-4" align="end">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-gray-900">Filters</h4>
+                {hasActiveFilters() && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearAllFilters}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Clear All
+                  </Button>
+                )}
+              </div>
+
+              {/* Amount Range Filter */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Amount Range (AED)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Min"
+                    type="number"
+                    value={amountFilter.min}
+                    onChange={(e) => setAmountFilter({ ...amountFilter, min: e.target.value })}
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    placeholder="Max"
+                    type="number"
+                    value={amountFilter.max}
+                    onChange={(e) => setAmountFilter({ ...amountFilter, max: e.target.value })}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Location Filter */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Location</Label>
+                <Select value={locationFilter} onValueChange={setLocationFilter}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Locations</SelectItem>
+                    {getUniqueLocations().map((location) => (
+                      <SelectItem key={location} value={location}>
+                        {location}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Project Filter */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Project ID</Label>
+                <Select value={projectFilter} onValueChange={setProjectFilter}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Select project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Projects</SelectItem>
+                    {getUniqueProjects().map((project) => (
+                      <SelectItem key={project} value={project}>
+                        Project {project}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Date Range Filter */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Date Range</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="date"
+                    value={dateRangeFilter.start}
+                    onChange={(e) => setDateRangeFilter({ ...dateRangeFilter, start: e.target.value })}
+                    className="h-8 text-sm"
+                    max={dateRangeFilter.end || undefined}
+                  />
+                  <Input
+                    type="date"
+                    value={dateRangeFilter.end}
+                    onChange={(e) => setDateRangeFilter({ ...dateRangeFilter, end: e.target.value })}
+                    className="h-8 text-sm"
+                    min={dateRangeFilter.start || undefined}
+                  />
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest')}
-          className="flex items-center gap-2 min-w-[120px]"
-        >
-          {sortOrder === 'newest' ? (
-            <>
-              <ArrowDown className="h-4 w-4" />
-              Newest First
-            </>
-          ) : (
-            <>
-              <ArrowUp className="h-4 w-4" />
-              Oldest First
-            </>
-          )}
-        </Button>
+
+        {/* Sort Controls */}
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <div className="flex items-center gap-2">
+            <Label className="text-sm font-medium whitespace-nowrap">Sort by:</Label>
+            <Select value={sortBy} onValueChange={(value: 'date' | 'amount' | 'project' | 'location') => setSortBy(value)}>
+              <SelectTrigger className="w-[140px] h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date">Date</SelectItem>
+                <SelectItem value="amount">Amount</SelectItem>
+                <SelectItem value="project">Project</SelectItem>
+                <SelectItem value="location">Location</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+            className="flex items-center gap-2 min-w-[120px] h-8"
+          >
+            {sortOrder === 'desc' ? (
+              <>
+                <ArrowDown className="h-3.5 w-3.5" />
+                Descending
+              </>
+            ) : (
+              <>
+                <ArrowUp className="h-3.5 w-3.5" />
+                Ascending
+              </>
+            )}
+          </Button>
+        </div>
+
+        {/* Active Filters Display */}
+        {hasActiveFilters() && (
+          <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-50 rounded-lg border">
+            <span className="text-sm font-medium text-gray-700">Active filters:</span>
+            
+            {searchTerm && (
+              <div className="flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                <span>Search: "{searchTerm}"</span>
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="hover:bg-green-200 rounded-full p-0.5"
+                  aria-label="Clear search filter"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            
+            {(amountFilter.min || amountFilter.max) && (
+              <div className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                <span>
+                  Amount: {amountFilter.min || '0'} - {amountFilter.max || '∞'} AED
+                </span>
+                <button
+                  onClick={() => setAmountFilter({ min: '', max: '' })}
+                  className="hover:bg-blue-200 rounded-full p-0.5"
+                  aria-label="Clear amount filter"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            
+            {locationFilter && (
+              <div className="flex items-center gap-1 bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
+                <span>Location: {locationFilter}</span>
+                <button
+                  onClick={() => setLocationFilter('')}
+                  className="hover:bg-purple-200 rounded-full p-0.5"
+                  aria-label="Clear location filter"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            
+            {projectFilter && (
+              <div className="flex items-center gap-1 bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
+                <span>Project: {projectFilter}</span>
+                <button
+                  onClick={() => setProjectFilter('')}
+                  className="hover:bg-orange-200 rounded-full p-0.5"
+                  aria-label="Clear project filter"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            
+            {(dateRangeFilter.start || dateRangeFilter.end) && (
+              <div className="flex items-center gap-1 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs">
+                <span>
+                  Date: {dateRangeFilter.start || 'Start'} to {dateRangeFilter.end || 'End'}
+                </span>
+                <button
+                  onClick={() => setDateRangeFilter({ start: '', end: '' })}
+                  className="hover:bg-indigo-200 rounded-full p-0.5"
+                  aria-label="Clear date range filter"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearAllFilters}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 ml-2"
+            >
+              Clear All
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}

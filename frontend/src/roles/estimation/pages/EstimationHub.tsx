@@ -9,10 +9,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { 
   RefreshCw, Search, Filter, Calculator, 
   CheckSquare, XSquare, Clock, TrendingUp,
-  DollarSign, FileText, BarChart3, AlertCircle
+  DollarSign, FileText, BarChart3, AlertCircle,
+  ArrowUpDown, ArrowUp, ArrowDown, X
 } from 'lucide-react';
 import { EstimationApprovalCard } from '../components/EstimationApprovalCard';
 import { EstimationApprovalModal } from '../components/EstimationApprovalModal';
@@ -26,6 +35,14 @@ const EstimationHub: React.FC = () => {
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Sort and Filter states
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'priority' | 'id'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [filterByAmount, setFilterByAmount] = useState<'all' | 'low' | 'medium' | 'high'>('all');
+  const [filterByPriority, setFilterByPriority] = useState<'all' | 'low' | 'medium' | 'high'>('all');
+  const [filterByCategory, setFilterByCategory] = useState<string>('all');
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   
   // Modal states
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -61,6 +78,19 @@ const EstimationHub: React.FC = () => {
         const allPurchases = response.purchases;
         
         setPurchases(allPurchases);
+        
+        // Extract unique categories from all purchases
+        const categories = new Set<string>();
+        allPurchases.forEach(purchase => {
+          if (purchase.materials) {
+            purchase.materials.forEach(material => {
+              if (material.category) {
+                categories.add(material.category);
+              }
+            });
+          }
+        });
+        setAvailableCategories(Array.from(categories).sort());
         
         // Calculate metrics based on actual estimation status in each purchase
         let pendingPurchases: Purchase[] = [];
@@ -170,14 +200,32 @@ const EstimationHub: React.FC = () => {
     fetchPurchases();
   }, []);
 
-  // Filter purchases based on tab and search
+  // Helper function to get purchase amount
+  const getPurchaseAmount = (purchase: Purchase) => {
+    return purchase.total_cost || 
+           purchase.materials_summary?.total_cost || 
+           (purchase.materials ? purchase.materials.reduce((sum, mat) => sum + (mat.cost * mat.quantity), 0) : 0);
+  };
+
+  // Helper function to get purchase priority
+  const getPurchasePriority = (purchase: Purchase) => {
+    if (!purchase.materials || purchase.materials.length === 0) return 'medium';
+    
+    // Find highest priority material
+    const priorities = purchase.materials.map(m => m.priority?.toLowerCase()).filter(Boolean);
+    if (priorities.includes('high')) return 'high';
+    if (priorities.includes('medium')) return 'medium';
+    if (priorities.includes('low')) return 'low';
+    return 'medium'; // default
+  };
+
+  // Filter and sort purchases based on tab, filters, and search
   useEffect(() => {
     let filtered = [...purchases];
 
     // Tab filter - Check estimation_status field from status_info and completion status
     switch (activeTab) {
       case 'pending':
-        // Show purchases where estimation_status is pending (exclude completed)
         filtered = purchases.filter(p => {
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
@@ -192,7 +240,6 @@ const EstimationHub: React.FC = () => {
         break;
         
       case 'approved':
-        // Show purchases where estimation_status is approved (exclude completed)
         filtered = purchases.filter(p => {
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
@@ -207,7 +254,6 @@ const EstimationHub: React.FC = () => {
         break;
         
       case 'rejected':
-        // Show purchases where estimation_status is rejected BY ESTIMATION (not TD rejections, exclude completed)
         filtered = purchases.filter(p => {
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
@@ -217,7 +263,6 @@ const EstimationHub: React.FC = () => {
           if (isCompleted) return false;
           
           const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
-          // Check that it's rejected AND sender is estimation (meaning estimation rejected it)
           const isEstimationRejected = estimationStatus === 'rejected' && 
                                        p.status_info?.sender === 'estimation';
           return isEstimationRejected;
@@ -225,7 +270,6 @@ const EstimationHub: React.FC = () => {
         break;
         
       case 'td-rejected':
-        // Show purchases rejected by Technical Director - sent back to estimation (exclude completed)
         filtered = purchases.filter(p => {
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
@@ -240,7 +284,6 @@ const EstimationHub: React.FC = () => {
         break;
         
       case 'completed':
-        // Show completed purchases only
         filtered = purchases.filter(p => {
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
@@ -252,18 +295,69 @@ const EstimationHub: React.FC = () => {
         break;
     }
 
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(p => 
-        p.purchase_id.toString().includes(searchTerm) ||
-        p.site_location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.purpose.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.project_id?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    // Amount filter
+    if (filterByAmount !== 'all') {
+      filtered = filtered.filter(p => {
+        const amount = getPurchaseAmount(p);
+        switch (filterByAmount) {
+          case 'low': return amount < 5000;
+          case 'medium': return amount >= 5000 && amount < 25000;
+          case 'high': return amount >= 25000;
+          default: return true;
+        }
+      });
     }
 
+    // Priority filter
+    if (filterByPriority !== 'all') {
+      filtered = filtered.filter(p => getPurchasePriority(p) === filterByPriority);
+    }
+
+    // Category filter
+    if (filterByCategory !== 'all') {
+      filtered = filtered.filter(p => {
+        return p.materials?.some(m => m.category === filterByCategory) || false;
+      });
+    }
+
+
+    // Sort
+    filtered.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortBy) {
+        case 'date':
+          aValue = new Date(a.date || a.created_at || '').getTime();
+          bValue = new Date(b.date || b.created_at || '').getTime();
+          break;
+        case 'amount':
+          aValue = getPurchaseAmount(a);
+          bValue = getPurchaseAmount(b);
+          break;
+        case 'priority':
+          const priorityOrder = { 'high': 3, 'medium': 2, 'low': 1 };
+          aValue = priorityOrder[getPurchasePriority(a) as keyof typeof priorityOrder];
+          bValue = priorityOrder[getPurchasePriority(b) as keyof typeof priorityOrder];
+          break;
+        case 'id':
+          aValue = a.purchase_id;
+          bValue = b.purchase_id;
+          break;
+        default:
+          aValue = a.purchase_id;
+          bValue = b.purchase_id;
+      }
+
+      if (sortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
     setFilteredPurchases(filtered);
-  }, [purchases, activeTab, searchTerm]);
+  }, [purchases, activeTab, sortBy, sortOrder, filterByAmount, filterByPriority, filterByCategory]);
 
   // Handle approve button click
   const handleApprove = (purchaseId: number) => {
@@ -325,6 +419,25 @@ const EstimationHub: React.FC = () => {
     return `AED ${amount.toLocaleString()}`;
   };
 
+  // Toggle sort order
+  const toggleSortOrder = () => {
+    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+  };
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setSortBy('date');
+    setSortOrder('desc');
+    setFilterByAmount('all');
+    setFilterByPriority('all');
+    setFilterByCategory('all');
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = sortBy !== 'date' || sortOrder !== 'desc' || 
+                          filterByAmount !== 'all' || filterByPriority !== 'all' || 
+                          filterByCategory !== 'all';
+
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 pb-8">
       {/* Page Header - Responsive */}
@@ -338,14 +451,6 @@ const EstimationHub: React.FC = () => {
             Review and analyze cost implications
           </p>
         </div>
-        <Button
-          onClick={fetchPurchases}
-          disabled={isLoading}
-          className="bg-amber-600 hover:bg-amber-700 w-full sm:w-auto"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
       </div>
 
       {/* Metrics Cards - Responsive Grid */}
@@ -434,17 +539,133 @@ const EstimationHub: React.FC = () => {
         </Card>
       </div>
 
-      {/* Search Bar - Responsive */}
+      {/* Sort and Filter Controls */}
       <div className="mb-4 sm:mb-6">
-        <div className="relative w-full lg:max-w-2xl">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-          <Input
-            placeholder="Search purchases..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8 sm:pl-10 h-9 sm:h-10 text-sm sm:text-base bg-white border-gray-200 focus:border-amber-500 focus:ring-amber-500"
-          />
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          {/* Sort and Filter Row */}
+          <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
+            {/* Sort Controls */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600 font-medium">Sort:</span>
+              <Select value={sortBy} onValueChange={(value: 'date' | 'amount' | 'priority' | 'id') => setSortBy(value)}>
+                <SelectTrigger className="w-32 h-9 bg-white border-gray-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date">Date</SelectItem>
+                  <SelectItem value="amount">Amount</SelectItem>
+                  <SelectItem value="priority">Priority</SelectItem>
+                  <SelectItem value="id">ID</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleSortOrder}
+                className="h-9 w-9 p-0 border-gray-200"
+              >
+                {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+              </Button>
+            </div>
+
+            {/* Amount Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600 font-medium">Amount:</span>
+              <Select value={filterByAmount} onValueChange={(value: 'all' | 'low' | 'medium' | 'high') => setFilterByAmount(value)}>
+                <SelectTrigger className="w-28 h-9 bg-white border-gray-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="low">&lt; 5K</SelectItem>
+                  <SelectItem value="medium">5K - 25K</SelectItem>
+                  <SelectItem value="high">&gt; 25K</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Priority Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600 font-medium">Priority:</span>
+              <Select value={filterByPriority} onValueChange={(value: 'all' | 'low' | 'medium' | 'high') => setFilterByPriority(value)}>
+                <SelectTrigger className="w-24 h-9 bg-white border-gray-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Category Filter */}
+            {availableCategories.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 font-medium">Category:</span>
+                <Select value={filterByCategory} onValueChange={setFilterByCategory}>
+                  <SelectTrigger className="w-32 h-9 bg-white border-gray-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {availableCategories.map(category => (
+                      <SelectItem key={category} value={category}>{category}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          {/* Clear Filters Button */}
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearAllFilters}
+                className="h-9 text-sm border-gray-200 text-gray-600 hover:text-gray-800"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear
+              </Button>
+            )}
+          </div>
         </div>
+
+        {/* Active Filters Display */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            <span className="text-xs text-gray-500 font-medium">Active filters:</span>
+            {sortBy !== 'date' && (
+              <Badge variant="secondary" className="text-xs">
+                Sort: {sortBy} {sortOrder === 'asc' ? '↑' : '↓'}
+              </Badge>
+            )}
+            {sortOrder !== 'desc' && sortBy === 'date' && (
+              <Badge variant="secondary" className="text-xs">
+                Sort: oldest first
+              </Badge>
+            )}
+            {filterByAmount !== 'all' && (
+              <Badge variant="secondary" className="text-xs">
+                Amount: {filterByAmount === 'low' ? '< 5K' : filterByAmount === 'medium' ? '5K-25K' : '> 25K'}
+              </Badge>
+            )}
+            {filterByPriority !== 'all' && (
+              <Badge variant="secondary" className="text-xs">
+                Priority: {filterByPriority}
+              </Badge>
+            )}
+            {filterByCategory !== 'all' && (
+              <Badge variant="secondary" className="text-xs">
+                Category: {filterByCategory}
+              </Badge>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tabs - Responsive */}

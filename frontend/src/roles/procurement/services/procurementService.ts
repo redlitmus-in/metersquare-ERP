@@ -232,6 +232,36 @@ class ProcurementService {
     }
   }
 
+  // Reject purchase request
+  async rejectPurchase(purchaseId: number, reason?: string): Promise<any> {
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const userName = user.full_name || user.name || 'Procurement Team';
+      
+      const rejectionData = {
+        status: 'rejected',
+        sender_latest_status: 'rejected',
+        receiver_latest_status: 'rejected',
+        status_comments: reason || 'Rejected by Procurement',
+        status_date: new Date().toISOString(),
+        status_sender: userName,
+        status_receiver: 'Site Supervisor',
+        status_role: 'Procurement',
+        last_modified_by: userName,
+        last_modified_at: new Date().toISOString()
+      };
+
+      const response = await apiClient.put(`/purchase/${purchaseId}`, rejectionData);
+      if (response.data.success) {
+        return response.data;
+      }
+      throw new Error(response.data.message || 'Failed to reject purchase');
+    } catch (error: any) {
+      console.error('Error rejecting purchase:', error);
+      throw error;
+    }
+  }
+
 
   // Get procurement dashboard metrics
   async getDashboardMetrics(): Promise<any> {

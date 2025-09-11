@@ -385,17 +385,7 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {!showHistoryOnly && (
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={handleExport} 
-                  className="bg-white text-blue-600 hover:bg-white/90"
-                >
-                  <Download className="w-4 h-4 mr-1" />
-                  Export PDF
-                </Button>
-              )}
+              {/* Export option removed as requested */}
             </div>
           </DialogTitle>
         </DialogHeader>

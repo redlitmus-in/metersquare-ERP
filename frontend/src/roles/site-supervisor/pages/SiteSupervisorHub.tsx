@@ -40,6 +40,7 @@ import { toast } from 'sonner';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import PurchaseCard from '../components/PurchaseCard';
 import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
+import PurchaseHistoryModal from '../components/PurchaseHistoryModal';
 import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
 import { siteSupervisorService, Purchase } from '../services/siteSupervisorService';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
@@ -52,8 +53,9 @@ const SiteSupervisorHub: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [activeTab, setActiveTab] = useState('pending');
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
-  const [modalMode, setModalMode] = useState<'details' | 'history'>('details');
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyPurchaseId, setHistoryPurchaseId] = useState<number | null>(null);
   const [newPurchaseModalOpen, setNewPurchaseModalOpen] = useState(false);
   const [editPurchaseModalOpen, setEditPurchaseModalOpen] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
@@ -127,12 +129,35 @@ const SiteSupervisorHub: React.FC = () => {
         filtered = filtered.filter(p => (p.status === 'pending' || !p.status) && !p.email_sent);
         break;
       case 'email-sent':
-        // Only show purchases that have been sent via email
-        filtered = filtered.filter(p => p.email_sent);
+        // Only show purchases that have been sent via email BUT are not completed
+        filtered = filtered.filter(p => {
+          if (!p.email_sent) return false;
+          
+          // Exclude completed purchases
+          if (p.latest_status) {
+            const latestStatus = p.latest_status.status?.toLowerCase();
+            const senderStatus = p.latest_status.sender_latest_status?.toLowerCase();
+            const isCompleted = latestStatus === 'completed' || senderStatus === 'completed' ||
+                               latestStatus === 'delivered' || latestStatus === 'closed' || latestStatus === 'finished';
+            return !isCompleted;
+          }
+          
+          // Fallback check for regular status
+          const status = p.status?.toLowerCase();
+          const isCompleted = status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished';
+          return !isCompleted;
+        });
         break;
       case 'completed':
-        // Only show purchases that are fully completed (delivered, closed, finished, completed)
+        // Only show purchases that are fully completed based on latest_status
         filtered = filtered.filter(p => {
+          if (p.latest_status) {
+            const latestStatus = p.latest_status.status?.toLowerCase();
+            const senderStatus = p.latest_status.sender_latest_status?.toLowerCase();
+            return latestStatus === 'completed' || senderStatus === 'completed' ||
+                   latestStatus === 'delivered' || latestStatus === 'closed' || latestStatus === 'finished';
+          }
+          // Fallback to regular status if latest_status is not available
           const status = p.status?.toLowerCase();
           return status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished';
         });
@@ -246,10 +271,33 @@ const SiteSupervisorHub: React.FC = () => {
     const pending = purchases.filter(p => (p.status === 'pending' || !p.status) && !p.email_sent).length;
     const approved = purchases.filter(p => p.status === 'approved').length;
     const rejected = purchases.filter(p => p.status === 'rejected').length;
-    // Email sent count: all purchases that have been sent via email
-    const emailSent = purchases.filter(p => p.email_sent).length;
-    // Completed count: fully completed purchases
+    // Email sent count: purchases that have been sent via email BUT are not completed
+    const emailSent = purchases.filter(p => {
+      if (!p.email_sent) return false;
+      
+      // Exclude completed purchases
+      if (p.latest_status) {
+        const latestStatus = p.latest_status.status?.toLowerCase();
+        const senderStatus = p.latest_status.sender_latest_status?.toLowerCase();
+        const isCompleted = latestStatus === 'completed' || senderStatus === 'completed' ||
+                           latestStatus === 'delivered' || latestStatus === 'closed' || latestStatus === 'finished';
+        return !isCompleted;
+      }
+      
+      // Fallback check for regular status
+      const status = p.status?.toLowerCase();
+      const isCompleted = status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished';
+      return !isCompleted;
+    }).length;
+    // Completed count: fully completed purchases based on latest_status
     const completed = purchases.filter(p => {
+      if (p.latest_status) {
+        const latestStatus = p.latest_status.status?.toLowerCase();
+        const senderStatus = p.latest_status.sender_latest_status?.toLowerCase();
+        return latestStatus === 'completed' || senderStatus === 'completed' ||
+               latestStatus === 'delivered' || latestStatus === 'closed' || latestStatus === 'finished';
+      }
+      // Fallback to regular status if latest_status is not available
       const status = p.status?.toLowerCase();
       return status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished';
     }).length;
@@ -273,14 +321,12 @@ const SiteSupervisorHub: React.FC = () => {
 
   const handleViewDetails = (purchaseId: number) => {
     setSelectedPurchaseId(purchaseId);
-    setModalMode('details');
     setDetailsModalOpen(true);
   };
 
   const handleViewHistory = (purchaseId: number) => {
-    setSelectedPurchaseId(purchaseId);
-    setModalMode('history');
-    setDetailsModalOpen(true);
+    setHistoryPurchaseId(purchaseId);
+    setHistoryModalOpen(true);
   };
 
   const handleEdit = async (purchaseId: number) => {
@@ -583,6 +629,8 @@ const SiteSupervisorHub: React.FC = () => {
               <button
                 onClick={() => setSearchTerm('')}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                aria-label="Clear search"
+                title="Clear search"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -834,7 +882,16 @@ const SiteSupervisorHub: React.FC = () => {
           setSelectedPurchaseId(null);
         }}
         purchaseId={selectedPurchaseId}
-        mode={modalMode}
+        mode="details"
+      />
+
+      <PurchaseHistoryModal
+        isOpen={historyModalOpen}
+        onClose={() => {
+          setHistoryModalOpen(false);
+          setHistoryPurchaseId(null);
+        }}
+        purchaseId={historyPurchaseId}
       />
       
       {/* Confirmation Dialog for Email/Delete */}

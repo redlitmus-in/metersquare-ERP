@@ -13,7 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { procurementService, Purchase, Material } from '../services/procurementService';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import { exportPurchaseDetailsPDF } from '@/utils/exportUtils';
+import { API_BASE_URL } from '@/api/config';
 import {
   FileText,
   Building2,
@@ -42,7 +42,6 @@ import {
   Activity,
   Target,
   Paperclip,
-  Eye,
   File,
   FileImage,
   FileSpreadsheet,
@@ -191,42 +190,54 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     return parts[parts.length - 1] || 'Attached document';
   };
 
-  const handleViewFile = (filePath: string | undefined) => {
-    if (!filePath) {
-      toast.error('File path not available');
-      return;
-    }
-    
-    // Check if it's a full URL or relative path
-    const isFullUrl = filePath.startsWith('http://') || filePath.startsWith('https://');
-    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-    const fileUrl = isFullUrl ? filePath : `${apiUrl}${filePath}`;
-    
-    // Open in new tab
-    window.open(fileUrl, '_blank');
-  };
 
-  const handleDownloadFile = (filePath: string | undefined) => {
-    if (!filePath) {
-      toast.error('File path not available');
-      return;
+  const handleDownloadFile = async (filePath?: string) => {
+    if (!filePath || !purchaseId) return;
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/download_files?key=procurement&id=${purchaseId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Failed to get download URL`);
+      }
+      
+      const data = await response.json();
+      console.log('Download API response:', data); // Debug log
+      
+      // Extract public_url from the nested response structure
+      let downloadUrl = null;
+      
+      if (data.purchase_files && data.purchase_files.length > 0) {
+        // Get the first file's public_url (assuming one file per purchase)
+        downloadUrl = data.purchase_files[0].public_url;
+      } else if (data.accounts_files && data.accounts_files.length > 0) {
+        // Fallback to accounts_files if purchase_files is empty
+        downloadUrl = data.accounts_files[0].public_url;
+      }
+      
+      if (downloadUrl) {
+        // Create a temporary anchor element to trigger download
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = getFileName(filePath);
+        link.target = '_blank'; // Fallback to open in new tab if download fails
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success('Download started');
+      } else {
+        console.error('No download URL found in response:', data);
+        toast.error('No file available for download');
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error(`Failed to download file: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    
-    // Check if it's a full URL or relative path
-    const isFullUrl = filePath.startsWith('http://') || filePath.startsWith('https://');
-    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-    const fileUrl = isFullUrl ? filePath : `${apiUrl}${filePath}`;
-    
-    // Create a temporary link and trigger download
-    const link = document.createElement('a');
-    link.href = fileUrl;
-    link.download = getFileName(filePath);
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    toast.success('Download started');
   };
 
   const formatStatusText = (status: string) => {
@@ -242,16 +253,6 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     return statusMap[status?.toLowerCase()] || status?.toUpperCase() || 'PENDING';
   };
 
-  const handleExportPDF = () => {
-    if (!purchase) return;
-    
-    try {
-      exportPurchaseDetailsPDF(purchase, latestStatus);
-      toast.success('PDF exported successfully');
-    } catch (error) {
-      toast.error('Failed to export PDF');
-    }
-  };
   
   const handleSendEmail = async () => {
     if (!purchaseId) return;
@@ -296,17 +297,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {purchase && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportPDF}
-                  className="bg-white hover:bg-red-50 text-gray-700 border-red-300"
-                >
-                  <FileText className="w-4 h-4 mr-1 text-red-600" />
-                  Export PDF
-                </Button>
-              )}
+              {/* Export functionality removed for procurement role */}
             </div>
           </DialogTitle>
         </DialogHeader>
@@ -563,15 +554,6 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   </div>
                                 </div>
                                 <div className="flex gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex items-center gap-2"
-                                    onClick={() => handleViewFile(purchase.file_path)}
-                                  >
-                                    <Eye className="h-3.5 w-3.5" />
-                                    View
-                                  </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"

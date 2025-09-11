@@ -13,7 +13,8 @@ import {
   Mail,
   CheckCircle,
   Clock,
-  XCircle
+  XCircle,
+  Info
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,15 @@ interface Purchase {
   total_quantity?: number;
   last_modified_at?: string;
   last_modified_by?: string;
+  latest_status?: {
+    status: string;
+    sender_latest_status: string;
+    receiver_latest_status: string;
+    comments?: string;
+    created_by?: string;
+    sender?: string;
+    receiver?: string;
+  };
 }
 
 interface PurchaseCardProps {
@@ -71,6 +81,8 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
         return 'bg-green-50 text-green-700 border-green-100';
       case 'rejected':
         return 'bg-red-50 text-red-700 border-red-100';
+      case 'completed':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-100';
       case 'pending':
         return 'bg-yellow-50 text-yellow-700 border-yellow-100';
       case 'under_review':
@@ -86,6 +98,8 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
         return <CheckCircle className="h-3.5 w-3.5" />;
       case 'rejected':
         return <XCircle className="h-3.5 w-3.5" />;
+      case 'completed':
+        return <CheckCircle className="h-3.5 w-3.5" />;
       case 'pending':
       case 'under_review':
         return <Clock className="h-3.5 w-3.5" />;
@@ -93,6 +107,68 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
         return null;
     }
   };
+
+  // Get the current status, prioritizing latest_status
+  const getCurrentStatus = () => {
+    if (purchase.latest_status) {
+      // Check if it's completed in sender_latest_status or receiver_latest_status
+      if (purchase.latest_status.sender_latest_status?.toLowerCase() === 'completed' || 
+          purchase.latest_status.receiver_latest_status?.toLowerCase() === 'task completed') {
+        return 'completed';
+      }
+      // Check if it's completed in main status
+      if (purchase.latest_status.status?.toLowerCase() === 'completed') {
+        return 'completed';
+      }
+      // Return the main status from latest_status
+      return purchase.latest_status.status || purchase.status || 'pending';
+    }
+    // Fallback to regular status
+    return purchase.status || 'pending';
+  };
+
+  // Get current workflow stage information
+  const getCurrentWorkflowStage = () => {
+    if (purchase.latest_status) {
+      const status = purchase.latest_status.status;
+      const receiver = purchase.latest_status.receiver;
+      const sender = purchase.latest_status.sender;
+      
+      if (status === 'completed' || purchase.latest_status.receiver_latest_status === 'task completed') {
+        return { stage: 'Completed', color: 'text-green-600' };
+      } else if (status === 'rejected') {
+        return { stage: `Rejected by ${formatRole(sender)}`, color: 'text-red-600' };
+      } else if (status === 'approved') {
+        return { stage: `With ${formatRole(receiver)}`, color: 'text-blue-600' };
+      } else {
+        return { stage: `Pending with ${formatRole(receiver)}`, color: 'text-yellow-600' };
+      }
+    }
+    return { stage: 'Not Started', color: 'text-gray-600' };
+  };
+
+  const formatRole = (role?: string) => {
+    if (!role) return 'Unknown';
+    switch (role.toLowerCase()) {
+      case 'sitesupervisor':
+        return 'Site Supervisor';
+      case 'procurement':
+        return 'Procurement';
+      case 'projectmanager':
+        return 'Project Manager';
+      case 'estimation':
+        return 'Estimation';
+      case 'technicaldirector':
+        return 'Technical Director';
+      case 'accounts':
+        return 'Accounts';
+      default:
+        return role.charAt(0).toUpperCase() + role.slice(1);
+    }
+  };
+
+  const currentStatus = getCurrentStatus();
+  const workflowStage = getCurrentWorkflowStage();
 
   // Calculate totals from materials
   const totalCost = purchase.materials?.reduce((sum, mat) => sum + (mat.cost * mat.quantity), 0) || 0;
@@ -116,16 +192,21 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                 <h3 className="text-sm font-semibold text-gray-900">
                   PR #{purchase.purchase_id}
                 </h3>
-                <div className="flex items-center gap-1">
-                  <Badge className={`${getStatusColor(purchase.status)} text-xs flex items-center gap-1 hover:bg-transparent focus:ring-0 focus:outline-none cursor-default`}>
-                    {getStatusIcon(purchase.status)}
-                    {purchase.status || 'Pending'}
+                <div className="flex flex-col items-end gap-1">
+                  <Badge className={`${getStatusColor(currentStatus)} text-xs flex items-center gap-1 hover:bg-transparent focus:ring-0 focus:outline-none cursor-default`}>
+                    {getStatusIcon(currentStatus)}
+                    {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
                   </Badge>
-                  {purchase.email_sent && (
-                    <Badge className="text-xs bg-green-50 text-green-700 border-green-100">
-                      <Mail className="h-2.5 w-2.5" />
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-1">
+                    <span className={`text-xs font-medium ${workflowStage.color}`}>
+                      {workflowStage.stage}
+                    </span>
+                    {purchase.email_sent && (
+                      <Badge className="text-xs bg-green-50 text-green-700 border-green-100">
+                        <Mail className="h-2.5 w-2.5" />
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </div>
               <p className="text-xs text-gray-600 text-left">{purchase.purpose}</p>
@@ -242,11 +323,42 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
             )}
           </div>
 
+          {/* Status Details */}
+          {purchase.latest_status && (purchase.latest_status.rejection_reason || purchase.latest_status.comments) && (
+            <div className="mt-2 p-2 rounded-lg bg-gray-50 border border-gray-100">
+              {purchase.latest_status.rejection_reason && (
+                <div className="flex items-start gap-2 mb-1">
+                  <XCircle className="w-3 h-3 text-red-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-red-600 font-medium">Rejection Reason:</p>
+                    <p className="text-xs text-red-700">{purchase.latest_status.rejection_reason}</p>
+                  </div>
+                </div>
+              )}
+              {purchase.latest_status.comments && !purchase.latest_status.rejection_reason && (
+                <div className="flex items-start gap-2">
+                  <Info className="w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-blue-600 font-medium">Latest Comment:</p>
+                    <p className="text-xs text-blue-700">{purchase.latest_status.comments}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Footer */}
           <div className="mt-2 pt-2 border-t border-gray-100">
-            <p className="text-xs text-gray-500 text-left">
-              Created {formatDistanceToNow(new Date(purchase.created_at), { addSuffix: true })} by {purchase.requested_by}
-            </p>
+            <div className="flex justify-between items-center">
+              <p className="text-xs text-gray-500">
+                Created {formatDistanceToNow(new Date(purchase.created_at), { addSuffix: true })} by {purchase.requested_by}
+              </p>
+              {purchase.latest_status && purchase.latest_status.decision_date && (
+                <p className="text-xs text-gray-400">
+                  Updated {formatDistanceToNow(new Date(purchase.latest_status.decision_date), { addSuffix: true })}
+                </p>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
