@@ -152,7 +152,7 @@ def process_payment_transaction():
             purchase_id=purchase_id,
             sender_role='accounts',
             receiver_role='technicalDirector',
-            status='completed',
+            status='approved',
             decision_by_user_id=user_id,
             comments=f'Payment transaction created by {user_name}',
             created_by=user_name
