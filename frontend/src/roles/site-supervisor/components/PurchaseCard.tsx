@@ -107,7 +107,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3 }}
     >
-      <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-orange-500">
+      <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-red-400/60 bg-gradient-to-r from-red-50/30 to-transparent focus:outline-none focus:ring-0 select-none">
         <CardContent className="p-3">
           {/* Header */}
           <div className="flex items-start justify-between mb-3">
@@ -117,15 +117,10 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   PR #{purchase.purchase_id}
                 </h3>
                 <div className="flex items-center gap-1">
-                  <Badge className={`${getStatusColor(purchase.status)} text-xs flex items-center gap-1`}>
+                  <Badge className={`${getStatusColor(purchase.status)} text-xs flex items-center gap-1 hover:bg-transparent focus:ring-0 focus:outline-none cursor-default`}>
                     {getStatusIcon(purchase.status)}
                     {purchase.status || 'Pending'}
                   </Badge>
-                  {purchase.last_modified_at && purchase.last_modified_at !== purchase.created_at && (
-                    <Badge variant="outline" className="text-xs border-amber-500 text-amber-700">
-                      <Edit className="h-2.5 w-2.5" />
-                    </Badge>
-                  )}
                   {purchase.email_sent && (
                     <Badge variant="outline" className="text-xs border-green-500 text-green-700">
                       <Mail className="h-2.5 w-2.5" />
@@ -166,7 +161,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
               </div>
               <div className="text-center">
                 <p className="text-xs text-gray-500">Total Quantity</p>
-                <p className="text-sm font-bold text-blue-600">{totalQuantity}</p>
+                <p className="text-sm font-bold text-gray-900">{totalQuantity}</p>
               </div>
               <div className="text-center">
                 <p className="text-xs text-gray-500">Total Cost</p>
@@ -196,7 +191,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
               variant="outline"
               onClick={() => onViewHistory(purchase.purchase_id)}
               disabled={isLoading}
-              className="flex items-center justify-center gap-1 text-purple-600 hover:text-purple-700 hover:bg-purple-50 h-7 text-xs"
+              className="flex items-center justify-center gap-1 text-red-600 hover:text-red-700 hover:bg-red-50 h-7 text-xs"
             >
               <History className="h-3 w-3" />
               History
@@ -252,13 +247,6 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
             <p className="text-xs text-gray-500 text-left">
               Created {formatDistanceToNow(new Date(purchase.created_at), { addSuffix: true })} by {purchase.requested_by}
             </p>
-            {purchase.last_modified_at && purchase.last_modified_at !== purchase.created_at && (
-              <p className="text-xs text-amber-600 text-left mt-1">
-                <Edit className="h-3 w-3 inline mr-1" />
-                Edited {formatDistanceToNow(new Date(purchase.last_modified_at), { addSuffix: true })}
-                {purchase.last_modified_by && ` by ${purchase.last_modified_by}`}
-              </p>
-            )}
           </div>
         </CardContent>
       </Card>

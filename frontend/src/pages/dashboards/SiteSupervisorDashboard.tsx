@@ -253,7 +253,7 @@ const SiteSupervisorDashboard: React.FC = () => {
           change: 0, 
           trend: 'stable' as const, 
           icon: Package, 
-          color: 'text-orange-600', 
+          color: 'text-red-600', 
           subtitle: `${recentRequests.length} recent` 
         },
         { 
@@ -288,7 +288,7 @@ const SiteSupervisorDashboard: React.FC = () => {
 
     // Fallback to default metrics if no data
     return [
-      { title: 'Total Purchases', value: 0, change: 0, trend: 'stable' as const, icon: Package, color: 'text-orange-600', subtitle: 'No data' },
+      { title: 'Total Purchases', value: 0, change: 0, trend: 'stable' as const, icon: Package, color: 'text-red-600', subtitle: 'No data' },
       { title: 'Total Materials', value: 0, change: 0, trend: 'stable' as const, icon: Hammer, color: 'text-blue-600', subtitle: 'No data' },
       { title: 'Total Cost', value: 'AED 0', change: 0, trend: 'stable' as const, icon: TrendingUp, color: 'text-green-600', subtitle: 'No data' },
       { title: 'Email Status', value: 0, change: 0, trend: 'stable' as const, icon: Bell, color: 'text-purple-600', subtitle: 'No data' }
@@ -414,7 +414,7 @@ const SiteSupervisorDashboard: React.FC = () => {
   }
 
   return (
-    <div className="p-2 sm:p-3 md:p-4 space-y-3 md:space-y-4 bg-gray-50 min-h-screen w-full overflow-x-hidden">
+    <div className="p-2 sm:p-3 md:p-4 space-y-3 md:space-y-4 bg-gray-50 min-h-screen w-full overflow-x-hidden [&_*:focus]:outline-none [&_*:focus]:ring-0">
       {/* Header Section */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -433,7 +433,7 @@ const SiteSupervisorDashboard: React.FC = () => {
               console.log('Procurement Hub clicked - navigating to /procurement');
               navigate('../procurement', { replace: false });
             }}
-            className="h-8 px-4 flex items-center gap-2 text-sm font-medium bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-all duration-200 shadow-sm hover:shadow-md"
+            className="h-8 px-4 flex items-center gap-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-md transition-all duration-200 shadow-sm hover:shadow-md mr-12"
           >
             <Package className="w-4 h-4" />
             <span>Procurement Hub</span>
@@ -442,7 +442,7 @@ const SiteSupervisorDashboard: React.FC = () => {
             aria-label="Select Period"
             value={selectedPeriod}
             onChange={(e) => setSelectedPeriod(e.target.value as any)}
-            className="h-8 px-3 text-sm border border-gray-300 rounded-md bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent cursor-pointer transition-colors"
+            className="h-8 px-3 text-sm border border-gray-300 rounded-md bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent cursor-pointer transition-colors"
           >
             <option value="day">Today</option>
             <option value="week">This Week</option>
@@ -460,7 +460,7 @@ const SiteSupervisorDashboard: React.FC = () => {
           value: metric.value,
           subtitle: metric.subtitle,
           icon: <metric.icon className={`w-4 h-4 ${metric.color}`} />,
-          bgColor: 'bg-orange-100',
+          bgColor: 'bg-red-100',
           trend: metric.change !== 0 ? {
             value: Math.abs(metric.change),
             isUp: metric.trend === 'up'
@@ -477,7 +477,7 @@ const SiteSupervisorDashboard: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
           >
-            <Card className="hover:shadow-md transition-all duration-200 border-l-4 border-l-orange-500">
+            <Card className="hover:shadow-md transition-all duration-200 border-l-4 border-l-red-500">
               <CardContent className="p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
@@ -501,7 +501,7 @@ const SiteSupervisorDashboard: React.FC = () => {
                     </div>
                     <p className="text-xs text-gray-500">{metric.subtitle}</p>
                   </div>
-                  <div className={`p-2 rounded-lg bg-gradient-to-br from-orange-50 to-orange-100`}>
+                  <div className={`p-2 rounded-lg bg-gradient-to-br from-red-50 to-red-100`}>
                     <metric.icon className={`w-4 h-4 ${metric.color}`} />
                   </div>
                 </div>
@@ -517,7 +517,7 @@ const SiteSupervisorDashboard: React.FC = () => {
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <TrendingUp className="w-4 h-4 text-orange-600" />
+              <TrendingUp className="w-4 h-4 text-red-600" />
               Site Progress Tracking - {getPeriodLabel()}
             </CardTitle>
           </CardHeader>
@@ -711,7 +711,7 @@ const SiteSupervisorDashboard: React.FC = () => {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-sm">
-                <HardHat className="w-4 h-4 text-orange-600" />
+                <HardHat className="w-4 h-4 text-red-600" />
                 Recent Purchase Requests
               </CardTitle>
               <div className="flex items-center gap-2">
@@ -722,7 +722,7 @@ const SiteSupervisorDashboard: React.FC = () => {
                     e.preventDefault();
                     navigate('../procurement', { replace: false });
                   }}
-                  className="text-xs h-6 px-2 bg-orange-600 hover:bg-orange-700"
+                  className="text-xs h-6 px-2 bg-red-600 hover:bg-red-700"
                   title="Create New Purchase Request"
                 >
                   <Plus className="w-3 h-3 mr-1" />
@@ -748,7 +748,7 @@ const SiteSupervisorDashboard: React.FC = () => {
             {sites.map((site, index) => (
               <motion.div 
                 key={site.id} 
-                className="p-3 border rounded-lg hover:bg-orange-50 transition-all cursor-pointer"
+                className="p-3 border rounded-lg hover:bg-red-50 transition-all cursor-pointer"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}

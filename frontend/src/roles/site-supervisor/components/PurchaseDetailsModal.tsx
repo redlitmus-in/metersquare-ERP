@@ -27,7 +27,13 @@ import {
   TrendingUp,
   Building,
   Hash,
-  Layers
+  Layers,
+  Edit,
+  Paperclip,
+  Eye,
+  File,
+  Image as FileImage,
+  Table as FileSpreadsheet
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { siteSupervisorService, Purchase } from '../services/siteSupervisorService';
@@ -126,6 +132,72 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   const totalCost = purchase?.materials?.reduce((sum, mat) => sum + (mat.cost * mat.quantity), 0) || 0;
   const totalQuantity = purchase?.materials?.reduce((sum, mat) => sum + mat.quantity, 0) || 0;
 
+  // File helper functions
+  const getFileIcon = (filePath: string | undefined) => {
+    if (!filePath) return <File className="h-5 w-5 text-gray-400" />;
+    
+    const extension = filePath.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return <FileText className="h-5 w-5 text-red-500" />;
+      case 'doc':
+      case 'docx':
+        return <FileText className="h-5 w-5 text-blue-500" />;
+      case 'xls':
+      case 'xlsx':
+        return <FileSpreadsheet className="h-5 w-5 text-green-500" />;
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'gif':
+        return <FileImage className="h-5 w-5 text-purple-500" />;
+      default:
+        return <File className="h-5 w-5 text-gray-400" />;
+    }
+  };
+
+  const getFileName = (filePath: string | undefined) => {
+    if (!filePath) return 'Unknown file';
+    const parts = filePath.split('/');
+    return parts[parts.length - 1] || 'Attached document';
+  };
+
+  const handleViewFile = (filePath: string | undefined) => {
+    if (!filePath) {
+      toast.error('File path not available');
+      return;
+    }
+    
+    // Check if it's a full URL or relative path
+    const isFullUrl = filePath.startsWith('http://') || filePath.startsWith('https://');
+    const fileUrl = isFullUrl ? filePath : `${import.meta.env.VITE_API_BASE_URL}${filePath}`;
+    
+    // Open in new tab
+    window.open(fileUrl, '_blank');
+  };
+
+  const handleDownloadFile = (filePath: string | undefined) => {
+    if (!filePath) {
+      toast.error('File path not available');
+      return;
+    }
+    
+    // Check if it's a full URL or relative path
+    const isFullUrl = filePath.startsWith('http://') || filePath.startsWith('https://');
+    const fileUrl = isFullUrl ? filePath : `${import.meta.env.VITE_API_BASE_URL}${filePath}`;
+    
+    // Create a temporary link and trigger download
+    const link = document.createElement('a');
+    link.href = fileUrl;
+    link.download = getFileName(filePath);
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('Download started');
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
@@ -213,6 +285,31 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                         </Badge>
                       </div>
                     </div>
+                    
+                    {/* Edit Information - Only show if actually edited (more than 1 minute difference) */}
+                    {purchase.last_modified_at && purchase.created_at && 
+                     (new Date(purchase.last_modified_at).getTime() - new Date(purchase.created_at).getTime() > 60000) && (
+                      <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Edit className="h-4 w-4 text-amber-600" />
+                          <span className="text-sm font-semibold text-amber-700">Last Modified</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs text-amber-600">Modified Date</p>
+                            <p className="text-sm font-medium text-amber-900">
+                              {format(new Date(purchase.last_modified_at), 'PPp')}
+                            </p>
+                          </div>
+                          {purchase.last_modified_by && (
+                            <div>
+                              <p className="text-xs text-amber-600">Modified By</p>
+                              <p className="text-sm font-medium text-amber-900">{purchase.last_modified_by}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Purpose */}
@@ -264,23 +361,67 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Attachments */}
-                  {purchase.file_path && (
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Attachments</h3>
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex items-center gap-2"
-                          onClick={() => window.open(purchase.file_path, '_blank')}
-                        >
-                          <Download className="h-4 w-4" />
-                          Download Attachment
-                        </Button>
+                  {/* Attachments Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <Paperclip className="h-4 w-4" />
+                      Attachments & Documents
+                    </h3>
+                    {purchase.file_path ? (
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                        {/* Main uploaded file */}
+                        <div className="border border-gray-200 rounded-lg p-3 bg-white">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {getFileIcon(purchase.file_path)}
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">
+                                  {getFileName(purchase.file_path)}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Uploaded with purchase request
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-2"
+                                onClick={() => handleViewFile(purchase.file_path)}
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-2"
+                                onClick={() => handleDownloadFile(purchase.file_path)}
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                                Download
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Additional info */}
+                        <div className="text-xs text-gray-500 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          Files are securely stored and can be accessed by authorized personnel only
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="bg-gray-50 rounded-lg p-6 text-center">
+                        <Paperclip className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">No attachments uploaded</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Documents can be attached when creating or editing purchase requests
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </TabsContent>

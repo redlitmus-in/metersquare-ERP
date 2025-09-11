@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { Plus, Search, Filter, Download, Eye, Edit2, Trash2, Building2 } from 'lucide-react';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import VendorQuotationForm from '@/components/forms/VendorQuotationForm';
@@ -163,26 +164,37 @@ const VendorQuotationsPage: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Vendor Quotations</h1>
-          <p className="text-gray-600 mt-1">
-            Manage vendor quotations and compare proposals
-          </p>
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl shadow-xl p-6 text-gray-800 border border-red-200"
+      >
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-white/20 rounded-lg backdrop-blur">
+              <Building2 className="w-8 h-8" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Vendor Quotations</h1>
+              <p className="text-gray-600 mt-1">
+                Manage vendor quotations and compare proposals
+              </p>
+            </div>
+          </div>
+          {canCreateQuotation() && (
+            <Button 
+              onClick={() => {
+                setSelectedQuotation(null);
+                setIsFormOpen(true);
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Quotation
+            </Button>
+          )}
         </div>
-        {canCreateQuotation() && (
-          <Button 
-            onClick={() => {
-              setSelectedQuotation(null);
-              setIsFormOpen(true);
-            }}
-            className="bg-purple-600 hover:bg-purple-700 text-white"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Quotation
-          </Button>
-        )}
-      </div>
+      </motion.div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

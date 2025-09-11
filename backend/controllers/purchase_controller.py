@@ -220,6 +220,8 @@ def get_all_purchase_request():
                 'email_sent': purchase.email_sent,
                 'created_at': purchase.created_at,
                 'created_by': purchase.created_by,
+                'last_modified_at': purchase.last_modified_at,
+                'last_modified_by': purchase.last_modified_by,
                 'latest_status': latest_status_info  # ✅ latest status details
             })
 

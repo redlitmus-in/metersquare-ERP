@@ -529,7 +529,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center">
               <Package className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -540,7 +540,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Badge variant="secondary" className="bg-orange-50 text-orange-700 border-orange-200">
+            <Badge variant="secondary" className="bg-red-50 text-red-700 border-red-200">
               <Hash className="w-3 h-3 mr-1" />
               PR-2024-001
             </Badge>
@@ -572,7 +572,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
               onClick={() => handleTabChange('details')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'details'
-                  ? 'border-orange-500 text-orange-600'
+                  ? 'border-red-500 text-red-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -584,7 +584,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
               onClick={() => handleTabChange('materials')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'materials'
-                  ? 'border-orange-500 text-orange-600'
+                  ? 'border-red-500 text-red-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -596,7 +596,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
               onClick={() => handleTabChange('attachments')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'attachments'
-                  ? 'border-orange-500 text-orange-600'
+                  ? 'border-red-500 text-red-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -616,7 +616,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
               <div className="bg-white rounded-lg border border-gray-200">
                 <div className="p-6 border-b border-gray-100">
                   <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <Building className="w-5 h-5 text-orange-600" />
+                    <Building className="w-5 h-5 text-red-600" />
                     Project & Requester Information
                   </h3>
                 </div>
@@ -634,7 +634,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                         setValue('project_id', projectId);
                       }}
                     >
-                      <SelectTrigger className="h-11 border-gray-300 focus:border-orange-500 focus:ring-orange-500">
+                      <SelectTrigger className="h-11 border-gray-300 focus:border-red-500 focus:ring-red-500">
                         <SelectValue placeholder="Select project" />
                       </SelectTrigger>
                       <SelectContent>
@@ -652,7 +652,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                     <Input 
                       {...register('site_location', { required: true })}
                       placeholder="Enter site location (e.g., Erode)"
-                      className="h-11 border-gray-300 focus:border-orange-500 focus:ring-orange-500"
+                      className="h-11 border-gray-300 focus:border-red-500 focus:ring-red-500"
                     />
                   </div>
 
@@ -695,7 +695,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                     </Label>
                     <textarea 
                       {...register('purpose', { required: true })}
-                      className="w-full min-h-[100px] p-3 border border-gray-300 rounded-lg focus:border-orange-500 focus:ring-orange-500"
+                      className="w-full min-h-[100px] p-3 border border-gray-300 rounded-lg focus:border-red-500 focus:ring-red-500"
                       placeholder="Explain the purpose and urgency of this requisition (e.g., Foundation materials)..."
                     />
                   </div>
@@ -709,11 +709,11 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                 <div className="p-6 border-b border-gray-100">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                      <Package className="w-5 h-5 text-orange-600" />
+                      <Package className="w-5 h-5 text-red-600" />
                       Material Requirements
                     </h3>
                     <div className="flex items-center gap-3">
-                      <Badge variant="secondary" className="bg-orange-50 text-orange-700 border-orange-200">
+                      <Badge variant="secondary" className="bg-red-50 text-red-700 border-red-200">
                         {materials.length} Items
                       </Badge>
                       <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">
@@ -913,7 +913,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
               <div className="bg-white rounded-lg border border-gray-200">
                 <div className="p-6 border-b border-gray-100">
                   <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <Paperclip className="w-5 h-5 text-orange-600" />
+                    <Paperclip className="w-5 h-5 text-red-600" />
                     Documents & References
                   </h3>
                 </div>
@@ -1068,7 +1068,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                       toast.error('Please fill all required fields');
                     }
                   }}
-                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                  className="bg-red-600 hover:bg-red-700 text-white"
                 >
                   Next: Materials
                   <ChevronRight className="w-4 h-4 ml-2" />
@@ -1078,7 +1078,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                 <Button
                   type="button"
                   onClick={() => handleTabChange('attachments')}
-                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                  className="bg-red-600 hover:bg-red-700 text-white"
                 >
                   Next: Attachments
                   <ChevronRight className="w-4 h-4 ml-2" />
@@ -1087,7 +1087,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
               {activeTab === 'attachments' && (
                 <Button
                   type="submit"
-                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                  className="bg-red-600 hover:bg-red-700 text-white"
                 >
                   Submit Request
                   <Send className="w-4 h-4 ml-2" />

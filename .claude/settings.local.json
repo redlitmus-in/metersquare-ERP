@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Read(/c:\\Users\\meganathan.s\\Pictures\\Screenshots/**)",
-      "Read(/C:\\Users\\admin\\Desktop\\metersquare-ERP\\backend\\controllers/**)"
+      "Read(/C:\\Users\\admin\\Desktop\\metersquare-ERP\\backend\\controllers/**)",
+      "Read(//c/Users/meganathan.s/Pictures/Screenshots/**)"
     ],
     "deny": [],
     "ask": []

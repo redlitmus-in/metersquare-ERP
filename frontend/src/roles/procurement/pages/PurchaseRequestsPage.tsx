@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { Plus, Search, Filter, Download, Eye, Edit2, Trash2, CheckCircle, XCircle, FileText, Clock, AlertTriangle, Package, Mail, AlertCircle as AlertCircleIcon } from 'lucide-react';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
@@ -310,25 +311,36 @@ const PurchaseRequestsPage: React.FC = () => {
   return (
     <div className="w-full px-3 py-4 sm:p-4 md:p-6 space-y-4 md:space-y-6 max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">{getPageTitle()}</h1>
-          <p className="text-gray-600 mt-1">
-            {isSiteSupervisor && 'Create and track your purchase requisitions'}
-            {user?.role_id === UserRole.PROCUREMENT && 'Process and manage incoming purchase requests'}
-            {user?.role_id === UserRole.PROJECT_MANAGER && 'Review and approve purchase requests'}
-          </p>
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl shadow-xl p-6 text-gray-800 border border-red-200"
+      >
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-white/20 rounded-lg backdrop-blur">
+              <FileText className="w-8 h-8" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">{getPageTitle()}</h1>
+              <p className="text-gray-600 mt-1">
+                {isSiteSupervisor && 'Create and track your purchase requisitions'}
+                {user?.role_id === UserRole.PROCUREMENT && 'Process and manage incoming purchase requests'}
+                {user?.role_id === UserRole.PROJECT_MANAGER && 'Review and approve purchase requests'}
+              </p>
+            </div>
+          </div>
+          {canCreateRequest() && !isFormOpen && (
+            <Button 
+              onClick={() => setIsFormOpen(true)}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Purchase Request
+            </Button>
+          )}
         </div>
-        {canCreateRequest() && !isFormOpen && (
-          <Button 
-            onClick={() => setIsFormOpen(true)}
-            className="bg-red-600 hover:bg-red-700 text-white"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Purchase Request
-          </Button>
-        )}
-      </div>
+      </motion.div>
 
       {/* Role-specific Stats Cards - Horizontal scroll on mobile */}
       {isSiteSupervisor && (

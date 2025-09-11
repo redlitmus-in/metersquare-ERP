@@ -16,7 +16,12 @@ import {
   AlertCircle,
   Mail,
   Loader2,
-  ArrowLeft
+  ArrowLeft,
+  Search,
+  Filter,
+  X,
+  Building2,
+  MapPin
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -51,6 +56,14 @@ const SiteSupervisorHub: React.FC = () => {
   const [newPurchaseModalOpen, setNewPurchaseModalOpen] = useState(false);
   const [editPurchaseModalOpen, setEditPurchaseModalOpen] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
+  
+  // Search and Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [projectFilter, setProjectFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
 
   // Metrics state
   const [metrics, setMetrics] = useState({
@@ -67,10 +80,10 @@ const SiteSupervisorHub: React.FC = () => {
     fetchPurchases();
   }, []);
 
-  // Filter and sort purchases based on tab and sort order
+  // Filter and sort purchases based on tab, filters, search and sort order
   useEffect(() => {
     filterPurchases();
-  }, [purchases, sortOrder, activeTab]);
+  }, [purchases, sortOrder, activeTab, searchTerm, statusFilter, projectFilter, locationFilter, dateFilter]);
 
   // Calculate metrics whenever purchases change
   useEffect(() => {
@@ -106,15 +119,101 @@ const SiteSupervisorHub: React.FC = () => {
         break;
     }
 
-    // Apply date sorting
+    // Apply search filter
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(p => {
+        // Convert all fields to strings safely before searching
+        const purchaseId = p.purchase_id ? p.purchase_id.toString() : '';
+        const purpose = p.purpose || '';
+        const siteLocation = p.site_location || '';
+        const projectId = p.project_id ? p.project_id.toString() : '';
+        const requestedBy = p.requested_by || '';
+        
+        // Check if search term matches any field
+        const matchesBasicFields = 
+          purchaseId.includes(search) ||
+          purpose.toLowerCase().includes(search) ||
+          siteLocation.toLowerCase().includes(search) ||
+          projectId.toLowerCase().includes(search) ||
+          requestedBy.toLowerCase().includes(search);
+        
+        // Check materials
+        const matchesMaterials = p.materials?.some(m => {
+          const description = m.description || '';
+          const category = m.category || '';
+          return description.toLowerCase().includes(search) || 
+                 category.toLowerCase().includes(search);
+        }) || false;
+        
+        return matchesBasicFields || matchesMaterials;
+      });
+    }
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(p => p.status === statusFilter);
+    }
+
+    // Apply project filter
+    if (projectFilter !== 'all') {
+      filtered = filtered.filter(p => p.project_id === projectFilter);
+    }
+
+    // Apply location filter  
+    if (locationFilter !== 'all') {
+      filtered = filtered.filter(p => p.site_location === locationFilter);
+    }
+
+    // Apply date filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const filterDate = (date: string) => {
+        const purchaseDate = new Date(date);
+        switch (dateFilter) {
+          case 'today':
+            return purchaseDate.toDateString() === now.toDateString();
+          case 'week':
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            return purchaseDate >= weekAgo;
+          case 'month':
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            return purchaseDate >= monthAgo;
+          case 'quarter':
+            const quarterAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+            return purchaseDate >= quarterAgo;
+          default:
+            return true;
+        }
+      };
+      filtered = filtered.filter(p => filterDate(p.date || p.created_at));
+    }
+
+    // Apply date sorting - prioritize most recent activity
     filtered.sort((a, b) => {
-      const dateA = new Date(a.date || a.created_at).getTime();
-      const dateB = new Date(b.date || b.created_at).getTime();
+      // For sorting, use the most recent date available:
+      // 1. last_modified_at (if exists) - shows recent edits/email sends
+      // 2. created_at (if exists)
+      // 3. date (fallback)
+      
+      const getMostRecentDate = (purchase: Purchase) => {
+        // If email was sent, last_modified_at should reflect when it was sent
+        if (purchase.last_modified_at) {
+          return new Date(purchase.last_modified_at).getTime();
+        }
+        if (purchase.created_at) {
+          return new Date(purchase.created_at).getTime();
+        }
+        return new Date(purchase.date).getTime();
+      };
+      
+      const dateA = getMostRecentDate(a);
+      const dateB = getMostRecentDate(b);
       
       if (sortOrder === 'newest') {
-        return dateB - dateA; // Newest first
+        return dateB - dateA; // Newest activity first
       } else {
-        return dateA - dateB; // Oldest first
+        return dateA - dateB; // Oldest activity first
       }
     });
 
@@ -228,10 +327,24 @@ const SiteSupervisorHub: React.FC = () => {
     try {
       await siteSupervisorService.sendPurchaseEmail(purchaseId);
       toast.success('Email sent successfully to procurement team');
-      // Update the purchase's email_sent status immediately
+      
+      // Update the purchase to mark it as email sent with current timestamp
+      const now = new Date().toISOString();
       setPurchases(prev => prev.map(p => 
-        p.purchase_id === purchaseId ? { ...p, email_sent: true } : p
+        p.purchase_id === purchaseId 
+          ? { 
+              ...p, 
+              email_sent: true,
+              last_modified_at: now, // Set to current time to ensure it appears at top
+              last_modified_by: 'Site Supervisor'
+            } 
+          : p
       ));
+      
+      // Optional: Fetch fresh data to ensure we have the latest from server
+      // Uncomment if you want to ensure server-side data is synced
+      // setTimeout(() => fetchPurchases(), 500);
+      
     } catch (error: any) {
       console.error('Send email error:', error);
       toast.error(error.message || 'Failed to send email');
@@ -242,6 +355,36 @@ const SiteSupervisorHub: React.FC = () => {
 
   const formatCurrency = (value: number) => {
     return `AED ${value.toLocaleString()}`;
+  };
+
+  // Get unique values for filter dropdowns
+  const getUniqueProjects = () => {
+    const projects = [...new Set(purchases.map(p => p.project_id))].filter(Boolean);
+    return projects;
+  };
+
+  const getUniqueLocations = () => {
+    const locations = [...new Set(purchases.map(p => p.site_location))].filter(Boolean);
+    return locations;
+  };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setProjectFilter('all');
+    setLocationFilter('all');
+    setDateFilter('all');
+    setShowFilters(false);
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = () => {
+    return searchTerm !== '' || 
+           statusFilter !== 'all' || 
+           projectFilter !== 'all' || 
+           locationFilter !== 'all' || 
+           dateFilter !== 'all';
   };
 
   // Show loading state
@@ -257,32 +400,45 @@ const SiteSupervisorHub: React.FC = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
+    <div className="p-4 sm:p-6 bg-gray-50 min-h-screen [&_*:focus]:outline-none [&_*:focus]:ring-0">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <div className="mb-6 space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/dashboards/site-supervisor')}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Dashboard
+          </Button>
+          <div className="mr-12">
             <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/dashboards/site-supervisor')}
-              className="flex items-center gap-2"
+              onClick={() => setNewPurchaseModalOpen(true)}
+              className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap"
             >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
+              <Plus className="h-4 w-4 mr-2" />
+              New Purchase Request
             </Button>
           </div>
-          <Button
-            onClick={() => setNewPurchaseModalOpen(true)}
-            className="bg-orange-600 hover:bg-orange-700 text-white"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Purchase Request
-          </Button>
         </div>
         
-        <h1 className="text-2xl font-bold text-gray-900 mt-4">Purchase Management Hub</h1>
-        <p className="text-gray-600 text-sm mt-1">Manage and track all your purchase requests</p>
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl shadow-xl p-6 text-gray-800 border border-red-200"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-white/20 rounded-lg backdrop-blur">
+              <Package className="w-8 h-8" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Purchase Management Hub</h1>
+              <p className="text-gray-600 mt-1">Manage and track all your purchase requests</p>
+            </div>
+          </div>
+        </motion.div>
       </div>
 
       {/* Metrics Cards */}
@@ -290,7 +446,7 @@ const SiteSupervisorHub: React.FC = () => {
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <Package className="h-4 w-4 text-orange-500" />
+              <Package className="h-4 w-4 text-red-500" />
               Total Purchases
             </CardTitle>
           </CardHeader>
@@ -350,53 +506,188 @@ const SiteSupervisorHub: React.FC = () => {
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-purple-500" />
+              <DollarSign className="h-4 w-4 text-green-500" />
               Total Value
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-lg font-bold text-purple-600">{formatCurrency(metrics.totalValue)}</p>
+            <p className="text-lg font-bold text-green-600">{formatCurrency(metrics.totalValue)}</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Sort and Actions Bar */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-            <CalendarDays className="h-4 w-4" />
-            Sort by Date:
-          </span>
-          <Select value={sortOrder} onValueChange={(value: 'newest' | 'oldest') => setSortOrder(value)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Sort by date" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">
-                <span className="flex items-center gap-2">
-                  <ArrowUpDown className="h-3.5 w-3.5" />
-                  Newest First
-                </span>
-              </SelectItem>
-              <SelectItem value="oldest">
-                <span className="flex items-center gap-2">
-                  <ArrowUpDown className="h-3.5 w-3.5 rotate-180" />
-                  Oldest First
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
+      {/* Search and Filter Bar */}
+      <div className="space-y-4 mb-6">
+        {/* Search Bar and Actions */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Search by PR#, purpose, location, project, or material..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-10"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setShowFilters(!showFilters)}
+              variant={hasActiveFilters() ? "default" : "outline"}
+              className={hasActiveFilters() ? "bg-red-600 hover:bg-red-700" : ""}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filters
+              {hasActiveFilters() && (
+                <Badge variant="secondary" className="ml-2 bg-white text-red-600">
+                  Active
+                </Badge>
+              )}
+            </Button>
+            <Select value={sortOrder} onValueChange={(value: 'newest' | 'oldest') => setSortOrder(value)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">
+                  <span className="flex items-center gap-2">
+                    <ArrowUpDown className="h-3.5 w-3.5" />
+                    Newest First
+                  </span>
+                </SelectItem>
+                <SelectItem value="oldest">
+                  <span className="flex items-center gap-2">
+                    <ArrowUpDown className="h-3.5 w-3.5 rotate-180" />
+                    Oldest First
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={fetchPurchases}
+              disabled={isLoading}
+              variant="outline"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
         </div>
-        <div className="flex-1" />
-        <Button
-          onClick={fetchPurchases}
-          disabled={isLoading}
-          variant="outline"
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+
+        {/* Filter Panel */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <Card className="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Status Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Status</label>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                        <SelectItem value="under_review">Under Review</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Project Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Project</label>
+                    <Select value={projectFilter} onValueChange={setProjectFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Projects" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Projects</SelectItem>
+                        {getUniqueProjects().map(project => (
+                          <SelectItem key={project} value={project}>
+                            <span className="flex items-center gap-2">
+                              <Building2 className="h-3 w-3" />
+                              {project}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Location Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Location</label>
+                    <Select value={locationFilter} onValueChange={setLocationFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Locations" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Locations</SelectItem>
+                        {getUniqueLocations().map(location => (
+                          <SelectItem key={location} value={location}>
+                            <span className="flex items-center gap-2">
+                              <MapPin className="h-3 w-3" />
+                              {location}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date Range Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Date Range</label>
+                    <Select value={dateFilter} onValueChange={setDateFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Time</SelectItem>
+                        <SelectItem value="today">Today</SelectItem>
+                        <SelectItem value="week">Last 7 Days</SelectItem>
+                        <SelectItem value="month">Last 30 Days</SelectItem>
+                        <SelectItem value="quarter">Last 90 Days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Clear Filters Button */}
+                {hasActiveFilters() && (
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      onClick={clearFilters}
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Clear All Filters
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Tabs */}
@@ -440,7 +731,7 @@ const SiteSupervisorHub: React.FC = () => {
                 </p>
                 <Button
                   onClick={() => setNewPurchaseModalOpen(true)}
-                  className="mt-4 bg-orange-600 hover:bg-orange-700"
+                  className="mt-4 bg-red-600 hover:bg-red-700"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Create Purchase Request

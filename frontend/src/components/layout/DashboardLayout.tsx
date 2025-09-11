@@ -74,8 +74,8 @@ const DashboardLayout: React.FC = () => {
         </main>
       </div>
 
-      {/* Floating Notifications - Always visible in top-right */}
-      <div className="fixed top-4 right-4 z-50">
+      {/* Floating Notifications - Positioned to align with page buttons */}
+      <div className="fixed top-6 right-4 z-[100]">
         <NotificationSystem />
       </div>
     </div>
