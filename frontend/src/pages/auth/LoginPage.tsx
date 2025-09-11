@@ -60,10 +60,10 @@ const availableRoles = [
   { value: 'projectManager', label: 'Project Manager', icon: Users },
   { value: 'procurement', label: 'Procurement', icon: Package },
   { value: 'siteSupervisor', label: 'Site Supervisor', icon: HardHat },
-  { value: 'mepSupervisor', label: 'MEP Supervisor', icon: Activity },
+  // { value: 'mepSupervisor', label: 'MEP Supervisor', icon: Activity },
   { value: 'estimation', label: 'Estimation', icon: BarChart3 },
   { value: 'accounts', label: 'Accounts', icon: Building2 },
-  { value: 'design', label: 'Design', icon: Layers },
+  // { value: 'design', label: 'Design', icon: Layers },
 ];
 
 type LoginFormData = z.infer<typeof loginSchema>;
