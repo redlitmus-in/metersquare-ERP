@@ -14,15 +14,25 @@ import {
   RefreshCw, Download, Search, Filter, LayoutDashboard, 
   Package, CheckSquare, BarChart3, Bell, Settings,
   Clock, CheckCircle, XCircle, AlertTriangle, FileText,
-  TrendingUp, Users, Calendar
+  TrendingUp, Users, Calendar, X
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { PurchaseApprovalCard } from '../components/PurchaseApprovalCard';
 import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
 import { projectManagerService, ProcurementPurchase } from '../services/projectManagerService';
 import { toast } from 'sonner';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
+import { AnimatePresence } from 'framer-motion';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 // Metric card component
 interface MetricCard {
@@ -39,14 +49,14 @@ const MetricCardComponent: React.FC<{ metric: MetricCard }> = ({ metric }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
-    className={`${metric.bgColor} rounded-lg p-6 border border-gray-100`}
+    className={`${metric.bgColor} rounded-lg p-4 border border-gray-100`}
   >
     <div className="flex items-center justify-between">
       <div>
         <p className="text-sm font-medium text-gray-600">{metric.title}</p>
-        <p className="text-2xl font-bold text-gray-900 mt-2">{metric.value}</p>
+        <p className="text-xl font-bold text-gray-900 mt-1">{metric.value}</p>
         {metric.trend && (
-          <div className="flex items-center mt-2">
+          <div className="flex items-center mt-1">
             <TrendingUp className={`h-4 w-4 ${
               metric.trendType === 'up' ? 'text-green-600' : 
               metric.trendType === 'down' ? 'text-red-600' : 
@@ -62,7 +72,7 @@ const MetricCardComponent: React.FC<{ metric: MetricCard }> = ({ metric }) => (
           </div>
         )}
       </div>
-      <div className={`${metric.iconColor} p-3 rounded-lg`}>
+      <div className={`${metric.iconColor} p-2 rounded-lg`}>
         {metric.icon}
       </div>
     </div>
@@ -85,10 +95,34 @@ const ProjectManagerHub: React.FC = () => {
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   
+  // Filter states
+  const [showFilters, setShowFilters] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [projectFilter, setProjectFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
+  
   // Modal states
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
   const [modalMode, setModalMode] = useState<'details' | 'history'>('details');
+  
+  // Success dialog state
+  const [successDialog, setSuccessDialog] = useState<{
+    isOpen: boolean;
+    message: string;
+  }>({ isOpen: false, message: '' });
+  
+  // Processing states for individual purchases
+  const [processingPurchases, setProcessingPurchases] = useState<{
+    approving: Set<number>;
+    rejecting: Set<number>;
+    resending: Set<number>;
+  }>({
+    approving: new Set(),
+    rejecting: new Set(),
+    resending: new Set()
+  });
 
   // Fetch purchases from API
   const fetchPurchases = useCallback(async () => {
@@ -229,15 +263,6 @@ const ProjectManagerHub: React.FC = () => {
             iconColor: 'bg-indigo-100',
             trend: '+15%',
             trendType: 'up'
-          },
-          {
-            title: 'Avg Processing Time',
-            value: '2.5 days',
-            icon: <Calendar className="h-5 w-5 text-purple-600" />,
-            bgColor: 'bg-purple-50',
-            iconColor: 'bg-purple-100',
-            trend: 'Stable',
-            trendType: 'neutral'
           }
         ];
         
@@ -353,31 +378,146 @@ const ProjectManagerHub: React.FC = () => {
 
     // Apply search filter
     if (searchTerm) {
-      filtered = filtered.filter(p =>
-        p.purchase_id?.toString().includes(searchTerm) ||
-        p.site_location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.purpose?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(p => {
+        const purchaseId = p.purchase_id ? p.purchase_id.toString() : '';
+        const purpose = p.purpose || '';
+        const siteLocation = p.site_location || '';
+        
+        return purchaseId.includes(search) ||
+               purpose.toLowerCase().includes(search) ||
+               siteLocation.toLowerCase().includes(search);
+      });
+    }
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(p => {
+        const status = p.pm_status || p.current_workflow_status || 'pending';
+        return status === statusFilter;
+      });
+    }
+
+    // Apply location filter
+    if (locationFilter !== 'all') {
+      filtered = filtered.filter(p => p.site_location === locationFilter);
+    }
+
+    // Apply date filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const filterDate = (date: string) => {
+        const purchaseDate = new Date(date);
+        switch (dateFilter) {
+          case 'today':
+            return purchaseDate.toDateString() === now.toDateString();
+          case 'week':
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            return purchaseDate >= weekAgo;
+          case 'month':
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            return purchaseDate >= monthAgo;
+          default:
+            return true;
+        }
+      };
+      filtered = filtered.filter(p => filterDate(p.created_at || p.date));
+    }
+
+    // Sort purchases based on tab
+    switch (activeTab) {
+      case 'pending':
+        // Sort pending by creation date (oldest first - FIFO for processing)
+        filtered.sort((a, b) => {
+          const dateA = new Date(a.created_at || a.date || 0).getTime();
+          const dateB = new Date(b.created_at || b.date || 0).getTime();
+          return dateA - dateB;
+        });
+        break;
+      case 'approved':
+        // Sort approved by approval date (recently approved first)
+        filtered.sort((a, b) => {
+          const dateA = new Date(a.pm_status_date || a.created_at || a.date || 0).getTime();
+          const dateB = new Date(b.pm_status_date || b.created_at || b.date || 0).getTime();
+          return dateB - dateA;
+        });
+        break;
+      case 'rejected':
+        // Sort rejected by rejection date (recently rejected first)
+        filtered.sort((a, b) => {
+          const dateA = new Date(a.pm_status_date || a.created_at || a.date || 0).getTime();
+          const dateB = new Date(b.pm_status_date || b.created_at || b.date || 0).getTime();
+          return dateB - dateA;
+        });
+        break;
+      case 'completed':
+        // Sort completed by completion date (recently completed first)
+        filtered.sort((a, b) => {
+          const dateA = new Date(a.latest_status?.date || a.created_at || a.date || 0).getTime();
+          const dateB = new Date(b.latest_status?.date || b.created_at || b.date || 0).getTime();
+          return dateB - dateA;
+        });
+        break;
+      case 'estimation_rejected':
+        // Sort estimation rejected by creation date (oldest first)
+        filtered.sort((a, b) => {
+          const dateA = new Date(a.created_at || a.date || 0).getTime();
+          const dateB = new Date(b.created_at || b.date || 0).getTime();
+          return dateA - dateB;
+        });
+        break;
+      default:
+        // Default sort by creation date (newest first)
+        filtered.sort((a, b) => {
+          const dateA = new Date(a.created_at || a.date || 0).getTime();
+          const dateB = new Date(b.created_at || b.date || 0).getTime();
+          return dateB - dateA;
+        });
     }
 
     setFilteredPurchases(filtered);
-  }, [purchases, estimationRejectedPurchases, completedPurchases, activeTab, searchTerm]);
+  }, [purchases, estimationRejectedPurchases, completedPurchases, activeTab, searchTerm, statusFilter, projectFilter, locationFilter, dateFilter]);
 
   // Handle approval action
   const handleApprove = async (purchaseId: number) => {
+    // Add to approving set
+    setProcessingPurchases(prev => ({
+      ...prev,
+      approving: new Set(prev.approving).add(purchaseId)
+    }));
+    
     try {
       const result = await projectManagerService.approvePurchase(purchaseId, 'Approved by Project Manager');
       if (result.success) {
-        toast.success('Purchase approved successfully');
+        // Show success dialog
+        setSuccessDialog({
+          isOpen: true,
+          message: 'Purchase request has been approved successfully and sent to the next workflow stage!'
+        });
+        
+        // Refresh data
         setRefreshKey(prev => prev + 1);
       }
     } catch (error) {
       toast.error('Failed to approve purchase');
+    } finally {
+      // Remove from approving set
+      setProcessingPurchases(prev => {
+        const newApproving = new Set(prev.approving);
+        newApproving.delete(purchaseId);
+        return { ...prev, approving: newApproving };
+      });
     }
   };
 
   // Handle rejection action
   const handleReject = async (purchaseId: number, reason: string) => {
+    // Add to rejecting set
+    setProcessingPurchases(prev => ({
+      ...prev,
+      rejecting: new Set(prev.rejecting).add(purchaseId)
+    }));
+    
     try {
       // Check if the purchase has already been rejected
       const purchase = purchases.find(p => p.purchase_id === purchaseId);
@@ -388,7 +528,13 @@ const ProjectManagerHub: React.FC = () => {
       
       const result = await projectManagerService.rejectPurchase(purchaseId, reason, 'Rejected by Project Manager');
       if (result.success) {
-        toast.success('Purchase rejected successfully');
+        // Show success dialog
+        setSuccessDialog({
+          isOpen: true,
+          message: 'Purchase request has been rejected and sent back to the requester for revision!'
+        });
+        
+        // Refresh data
         setRefreshKey(prev => prev + 1);
       }
     } catch (error: any) {
@@ -396,6 +542,13 @@ const ProjectManagerHub: React.FC = () => {
       const errorMessage = error.message || 'Failed to reject purchase';
       toast.error(errorMessage);
       console.error('Rejection error:', error);
+    } finally {
+      // Remove from rejecting set
+      setProcessingPurchases(prev => {
+        const newRejecting = new Set(prev.rejecting);
+        newRejecting.delete(purchaseId);
+        return { ...prev, rejecting: newRejecting };
+      });
     }
   };
 
@@ -421,6 +574,12 @@ const ProjectManagerHub: React.FC = () => {
 
   // Handle send to estimation (for estimation rejected purchases)
   const handleSendToEstimation = async (purchaseId: number) => {
+    // Add to resending set
+    setProcessingPurchases(prev => ({
+      ...prev,
+      resending: new Set(prev.resending).add(purchaseId)
+    }));
+    
     try {
       // Find the purchase to check its status
       const purchase = estimationRejectedPurchases.find(p => p.purchase_id === purchaseId);
@@ -445,7 +604,11 @@ const ProjectManagerHub: React.FC = () => {
       
       // Check if the response indicates success
       if (result.success || result.message?.includes('successfully')) {
-        toast.success('Purchase resent to Estimation team successfully');
+        // Show success dialog
+        setSuccessDialog({
+          isOpen: true,
+          message: 'Purchase request has been resent to Estimation team for further review!'
+        });
         setRefreshKey(prev => prev + 1);
       } else {
         // If there's an error in the response
@@ -472,6 +635,13 @@ const ProjectManagerHub: React.FC = () => {
       
       toast.error(errorMessage);
       console.error('Error resending to estimation:', error);
+    } finally {
+      // Remove from resending set
+      setProcessingPurchases(prev => {
+        const newResending = new Set(prev.resending);
+        newResending.delete(purchaseId);
+        return { ...prev, resending: newResending };
+      });
     }
   };
 
@@ -497,6 +667,36 @@ const ProjectManagerHub: React.FC = () => {
     toast.success('Data exported successfully');
   };
 
+  // Get unique values for filter dropdowns
+  const getUniqueLocations = () => {
+    const locations = [...new Set([...purchases, ...estimationRejectedPurchases, ...completedPurchases].map(p => p.site_location))].filter(Boolean);
+    return locations;
+  };
+
+  const getUniqueStatuses = () => {
+    const statuses = [...new Set([...purchases, ...estimationRejectedPurchases, ...completedPurchases].map(p => p.pm_status || p.current_workflow_status || 'pending'))];
+    return statuses.filter(Boolean);
+  };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setProjectFilter('all');
+    setLocationFilter('all');
+    setDateFilter('all');
+    setShowFilters(false);
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = () => {
+    return searchTerm !== '' || 
+           statusFilter !== 'all' || 
+           projectFilter !== 'all' || 
+           locationFilter !== 'all' || 
+           dateFilter !== 'all';
+  };
+
   // Calculate tab counts
   const tabCounts = useMemo(() => ({
     pending: purchases.filter(p => !p.pm_status || p.pm_status === 'pending').length,
@@ -517,35 +717,12 @@ const ProjectManagerHub: React.FC = () => {
               Manage purchase approvals and project workflows
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setRefreshKey(prev => prev + 1)}
-              disabled={isLoading}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
-            <Badge variant="secondary" className="px-3 py-1">
-              <Users className="h-3 w-3 mr-1" />
-              Project Manager
-            </Badge>
-          </div>
         </div>
       </div>
 
       {/* Metrics Section */}
       <div className="px-6 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {metrics.map((metric, index) => (
             <MetricCardComponent key={index} metric={metric} />
           ))}
@@ -572,9 +749,111 @@ const ProjectManagerHub: React.FC = () => {
                     className="pl-9 w-64"
                   />
                 </div>
+                <Button
+                  onClick={() => setShowFilters(!showFilters)}
+                  variant={hasActiveFilters() ? "default" : "outline"}
+                  className={hasActiveFilters() ? "bg-blue-600 hover:bg-blue-700" : ""}
+                  size="sm"
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filters
+                  {hasActiveFilters() && (
+                    <Badge variant="secondary" className="ml-2 bg-white text-blue-600">
+                      Active
+                    </Badge>
+                  )}
+                </Button>
               </div>
             </div>
           </CardHeader>
+          
+          {/* Filter Panel */}
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden border-b"
+              >
+                <div className="p-4 bg-gray-50/30">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Status Filter */}
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Status</label>
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="All Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Status</SelectItem>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="approved">Approved</SelectItem>
+                          <SelectItem value="rejected">Rejected</SelectItem>
+                          {getUniqueStatuses().map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {status.charAt(0).toUpperCase() + status.slice(1)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Location Filter */}
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Location</label>
+                      <Select value={locationFilter} onValueChange={setLocationFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="All Locations" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Locations</SelectItem>
+                          {getUniqueLocations().map((location) => (
+                            <SelectItem key={location} value={location}>
+                              {location}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Date Range Filter */}
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Date Range</label>
+                      <Select value={dateFilter} onValueChange={setDateFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="All Time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Time</SelectItem>
+                          <SelectItem value="today">Today</SelectItem>
+                          <SelectItem value="week">Last 7 Days</SelectItem>
+                          <SelectItem value="month">Last 30 Days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Clear Filters Button */}
+                  {hasActiveFilters() && (
+                    <div className="mt-4 flex justify-end">
+                      <Button
+                        onClick={clearFilters}
+                        variant="outline"
+                        size="sm"
+                        className="text-blue-600 hover:text-blue-700 border-blue-200 hover:border-blue-300"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Clear All Filters
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
           <CardContent className="p-0">
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -640,7 +919,7 @@ const ProjectManagerHub: React.FC = () => {
                 )}
                 {isLoading ? (
                   <div className="flex items-center justify-center py-12">
-                    <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
+                    <ModernLoadingSpinners variant="pulse-wave" size="md" />
                   </div>
                 ) : filteredPurchases.length === 0 ? (
                   <div className="text-center py-12">
@@ -659,7 +938,10 @@ const ProjectManagerHub: React.FC = () => {
                         onApprove={() => handleApprove(purchase.purchase_id)}
                         onReject={(reason) => handleReject(purchase.purchase_id, reason)}
                         onSendToEstimation={() => handleSendToEstimation(purchase.purchase_id)}
-                        isLoading={false}
+                        isLoading={processingPurchases.approving.has(purchase.purchase_id) || processingPurchases.rejecting.has(purchase.purchase_id) || processingPurchases.resending.has(purchase.purchase_id)}
+                        isApproving={processingPurchases.approving.has(purchase.purchase_id)}
+                        isRejecting={processingPurchases.rejecting.has(purchase.purchase_id)}
+                        isResending={processingPurchases.resending.has(purchase.purchase_id)}
                         isEstimationRejected={activeTab === 'estimation_rejected'}
                       />
                     ))}
@@ -680,6 +962,16 @@ const ProjectManagerHub: React.FC = () => {
         }}
         purchaseId={selectedPurchaseId}
         mode={modalMode}
+      />
+      
+      {/* Success Dialog */}
+      <ConfirmationDialog
+        isOpen={successDialog.isOpen}
+        onClose={() => setSuccessDialog({ isOpen: false, message: '' })}
+        type="success"
+        message={successDialog.message}
+        confirmText="OK"
+        showCancel={false}
       />
     </div>
   );

@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { 
   Eye, History, Edit, CheckCircle, XCircle, Send,
   Clock, Calendar, MapPin, Package, AlertTriangle,
-  TrendingUp, FileText, DollarSign
+  TrendingUp, FileText, DollarSign, Loader2
 } from 'lucide-react';
 import {
   Dialog,
@@ -35,6 +35,9 @@ interface PurchaseApprovalCardProps {
   onReject?: (reason: string) => void;
   onSendToEstimation?: () => void;
   isLoading?: boolean;
+  isApproving?: boolean;
+  isRejecting?: boolean;
+  isResending?: boolean;
   isEstimationRejected?: boolean;
 }
 
@@ -47,6 +50,9 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
   onReject,
   onSendToEstimation,
   isLoading = false,
+  isApproving = false,
+  isRejecting = false,
+  isResending = false,
   isEstimationRejected = false
 }) => {
   const [showApproveDialog, setShowApproveDialog] = useState(false);
@@ -64,7 +70,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
   const getStatusInfo = () => {
     if (isCompleted) {
       return {
-        color: 'bg-blue-100 text-blue-700',
+        color: 'bg-green-100 text-green-700',
         icon: <CheckCircle className="h-4 w-4" />,
         text: 'Completed'
       };
@@ -280,12 +286,24 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                         ? 'bg-blue-600 hover:bg-blue-700' 
                         : 'bg-green-600 hover:bg-green-700'
                     }`}
-                    disabled={isLoading}
+                    disabled={isApproving || isResending}
                   >
                     {isEstimationRejected ? (
+                      isResending ? (
+                        <>
+                          <Loader2 className="h-2.5 w-2.5 mr-0.5 animate-spin" />
+                          Resending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-2.5 w-2.5 mr-0.5" />
+                          Resend to Est
+                        </>
+                      )
+                    ) : isApproving ? (
                       <>
-                        <Send className="h-2.5 w-2.5 mr-0.5" />
-                        Resend to Est
+                        <Loader2 className="h-2.5 w-2.5 mr-0.5 animate-spin" />
+                        Approving...
                       </>
                     ) : (
                       <>
@@ -301,10 +319,19 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                       size="sm"
                       onClick={() => setShowRejectDialog(true)}
                       className="flex-1 h-6 text-[10px] px-2"
-                      disabled={isLoading}
+                      disabled={isRejecting}
                     >
-                      <XCircle className="h-2.5 w-2.5 mr-0.5" />
-                      Reject
+                      {isRejecting ? (
+                        <>
+                          <Loader2 className="h-2.5 w-2.5 mr-0.5 animate-spin" />
+                          Rejecting...
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="h-2.5 w-2.5 mr-0.5" />
+                          Reject
+                        </>
+                      )}
                     </Button>
                   )}
                 </div>
@@ -337,8 +364,19 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowApproveDialog(false)}>Cancel</Button>
-            <Button onClick={handleApprove} className="bg-green-600 hover:bg-green-700">
-              Approve
+            <Button 
+              onClick={handleApprove} 
+              disabled={isApproving}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isApproving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Approving...
+                </>
+              ) : (
+                'Approve'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -369,10 +407,17 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
             <Button variant="outline" onClick={() => {setRejectionReason(''); setShowRejectDialog(false);}}>Cancel</Button>
             <Button 
               onClick={handleReject}
-              disabled={!rejectionReason.trim()}
+              disabled={!rejectionReason.trim() || isRejecting}
               className="bg-red-600 hover:bg-red-700"
             >
-              Reject
+              {isRejecting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Rejecting...
+                </>
+              ) : (
+                'Reject'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { motion } from 'framer-motion';
 import { projectManagerService, PurchaseStatusDetails } from '../services/projectManagerService';
 import { toast } from 'sonner';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { exportPurchaseDetailsPDF } from '@/utils/exportUtils';
 import { API_ENDPOINTS, API_BASE_URL } from '@/api/config';
 import {
@@ -45,7 +46,8 @@ import {
   Activity,
   Target,
   Paperclip,
-  ExternalLink
+  ExternalLink,
+  X
 } from 'lucide-react';
 
 interface PurchaseDetailsModalProps {
@@ -546,8 +548,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[95vh] h-[95vh] overflow-hidden flex flex-col p-0 bg-gray-50">
-        <DialogHeader className="px-6 py-5 bg-gradient-to-r from-blue-600 to-blue-700 flex-shrink-0 shadow-lg">
+      <DialogContent className="max-w-4xl h-[85vh] w-[90vw] sm:w-full flex flex-col p-0 bg-gray-50 m-auto">
+        <DialogHeader className="px-6 py-4 bg-gradient-to-r from-[#243d8a] to-[#1e3470] flex-shrink-0 shadow-lg">
           <DialogTitle className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-white/10 rounded-lg backdrop-blur">
@@ -569,32 +571,28 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {statusDetails && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleExport}
-                  className="bg-white/10 hover:bg-white/20 text-white border-white/30"
-                >
-                  <FileText className="w-4 h-4 mr-1" />
-                  Export PDF
-                </Button>
-              )}
-            </div>
           </DialogTitle>
         </DialogHeader>
+        
+        {/* Custom Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 z-50 p-1 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur transition-all duration-200 group"
+          aria-label="Close modal"
+        >
+          <X className="w-3.5 h-3.5 text-white group-hover:text-white/80" />
+        </button>
 
         {loading ? (
           <div className="flex items-center justify-center flex-1 bg-white">
             <div className="text-center">
-              <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-              <p className="text-gray-600">Loading purchase details...</p>
+              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+              <p className="text-sm text-gray-600 mt-2">Loading purchase details...</p>
             </div>
           </div>
         ) : statusDetails ? (
-          <div className="flex-1 overflow-hidden flex flex-col">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
               <div className="bg-white border-b px-6 pt-4">
                 <TabsList className={`grid w-full ${mode === 'history' ? 'grid-cols-1' : 'grid-cols-3'} max-w-2xl mx-auto bg-gray-100`}>
                   {mode === 'history' ? (
@@ -623,8 +621,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
               {/* Details Tab */}
               {mode !== 'history' && (
-                <TabsContent value="details" className="flex-1 overflow-hidden mt-0 bg-white">
-                  <div className="h-full overflow-y-auto p-6">
+                <TabsContent value="details" className="mt-0 bg-white">
+                  <div className="p-6">
                     <motion.div 
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -800,7 +798,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                               >
                                 {downloadingFile ? (
                                   <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    <ModernLoadingSpinners variant="pulse-wave" size="sm" />
                                     Downloading...
                                   </>
                                 ) : (
@@ -822,8 +820,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
               {/* Status Tab */}
               {mode !== 'history' && (
-                <TabsContent value="status" className="flex-1 overflow-hidden mt-0 bg-white">
-                  <div className="h-full overflow-y-auto p-6">
+                <TabsContent value="status" className="mt-0 bg-white">
+                  <div className="p-6">
                     <motion.div 
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -1008,8 +1006,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
               {/* Materials Tab */}
               {mode !== 'history' && (
-                <TabsContent value="materials" className="flex-1 overflow-hidden mt-0">
-                  <div className="h-full overflow-y-auto pr-2">
+                <TabsContent value="materials" className="mt-0">
+                  <div className="p-6">
                     {statusDetails.purchase_details?.materials_summary?.materials && 
                      statusDetails.purchase_details?.materials_summary?.materials.length > 0 ? (
                       <div className="space-y-4">
@@ -1104,8 +1102,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
               {/* History Tab - Only shown in history mode */}
               {mode === 'history' && (
-                <TabsContent value="history" className="flex-1 overflow-y-auto mt-0" style={{ maxHeight: 'calc(90vh - 200px)' }}>
-                <div className="pr-2 pb-4">
+                <TabsContent value="history" className="mt-0">
+                <div className="p-6">
                   {/* Combined History */}
                   {((statusDetails.procurement_statuses?.length || 0) > 0 || (statusDetails.project_manager_statuses?.length || 0) > 0) ? (
                     <div className="space-y-4">

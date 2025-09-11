@@ -8,7 +8,7 @@ import {
 import { 
   Briefcase, Users, Calendar, AlertTriangle, CheckCircle2, Clock,
   TrendingUp, Activity, Target, FileText, ArrowUpRight, ArrowDownRight,
-  MoreVertical, Download, Filter, RefreshCw, Layers, GitBranch, Timer
+  MoreVertical, Layers, GitBranch, Timer
 } from 'lucide-react';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { useNavigate } from 'react-router-dom';
@@ -121,10 +121,10 @@ const ProjectManagerDashboard: React.FC = () => {
   // Add loading state check
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-500">Loading dashboard...</p>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-2">
+          <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+          <p className="text-sm text-gray-600">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -246,28 +246,12 @@ const ProjectManagerDashboard: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900">Project Manager Dashboard</h1>
           <p className="text-gray-500 mt-1">Monitor and manage all active projects</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline">
-            <Filter className="h-4 w-4 mr-2" />
-            Filter
-          </Button>
-          <Button onClick={fetchDashboardData} variant="outline" size="icon" disabled={isLoading}>
-            {isLoading ? (
-              <ModernLoadingSpinners variant="pulse-wave" size="sm" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-          </Button>
-          <Button variant="outline" size="icon">
-            <Download className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
 
       {/* Key Metrics - Use PMMetricsCards component */}
       {isLoading ? (
         <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <ModernLoadingSpinners variant="pulse-wave" size="md" />
         </div>
       ) : (
         <PMMetricsCards data={dashboardData} />
@@ -453,7 +437,7 @@ const ProjectManagerDashboard: React.FC = () => {
         <CardContent>
           {isLoading ? (
             <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <ModernLoadingSpinners variant="pulse-wave" size="md" />
             </div>
           ) : pendingPurchases.length > 0 ? (
             <div className="space-y-4">

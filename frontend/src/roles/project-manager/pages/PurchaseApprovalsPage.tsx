@@ -16,6 +16,7 @@ import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
 import { ApprovalModal } from '../components/ApprovalModal';
 import { projectManagerService, PurchaseStatusDetails, ProcurementPurchase } from '../services/projectManagerService';
 import { toast } from 'sonner';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 
 const PurchaseApprovalsPage: React.FC = () => {
   const { purchaseId } = useParams<{ purchaseId: string }>();
@@ -166,12 +167,10 @@ const PurchaseApprovalsPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-500">Loading purchase details...</p>
-          </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-2">
+          <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+          <p className="text-sm text-gray-600">Loading purchase details...</p>
         </div>
       </div>
     );
