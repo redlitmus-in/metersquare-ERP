@@ -188,18 +188,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                 </div>
               </div>
             </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-              onClick={() => {
-                // Export PDF functionality can be added here
-                toast.info('Export PDF feature coming soon');
-              }}
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              Export PDF
-            </Button>
+            {/* Export option removed as requested */}
           </div>
         </div>
 
