@@ -28,7 +28,6 @@ import { EstimationApprovalModal } from '../components/EstimationApprovalModal';
 import { PurchaseDetailsModal } from '../components/PurchaseDetailsModal';
 import { Purchase, estimationService } from '../services/estimationService';
 import { toast } from 'sonner';
-import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 
 const EstimationHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -109,7 +108,6 @@ const EstimationHub: React.FC = () => {
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
                              (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
           
-          
           if (isCompleted) {
             completedPurchases.push(p);
           } else {
@@ -151,7 +149,6 @@ const EstimationHub: React.FC = () => {
                           (p.materials ? p.materials.reduce((matSum, mat) => matSum + mat.quantity, 0) : 0);
           return sum + quantity;
         }, 0);
-
 
         setMetrics({
           pendingCount: pendingPurchases.length,
@@ -226,7 +223,6 @@ const EstimationHub: React.FC = () => {
   // Filter and sort purchases based on tab, filters, and search
   useEffect(() => {
     let filtered = [...purchases];
-
 
     // Tab filter - Check estimation_status field from status_info and completion status
     switch (activeTab) {
@@ -451,62 +447,56 @@ const EstimationHub: React.FC = () => {
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 pb-8">
       {/* Page Header - Responsive */}
-      <div className="mb-6">
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 rounded-xl shadow-xl p-6 border border-[#243d8a]/20"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-[#243d8a] rounded-lg shadow-lg">
-              <Calculator className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-[#243d8a]">Estimation Hub</h1>
-              <p className="text-[#243d8a]/80 mt-1">Review and analyze cost implications</p>
-            </div>
-          </div>
-        </motion.div>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
+            <Calculator className="h-6 w-6 sm:h-8 sm:w-8 text-amber-600" />
+            <span className="truncate">Estimation Hub</span>
+          </h1>
+          <p className="text-sm sm:text-base text-gray-600">
+            Review and analyze cost implications
+          </p>
+        </div>
       </div>
 
-      {/* Metrics Cards - Compact Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3 mb-4">
+      {/* Metrics Cards - Responsive Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 mb-6">
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-1 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
-              <Clock className="h-3 w-3 text-amber-500 flex-shrink-0" />
+          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
+              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500 flex-shrink-0" />
               <span className="truncate">Pending Review</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-lg sm:text-xl font-bold text-amber-600">{metrics.pendingCount}</p>
-            <p className="text-xs text-gray-500 truncate">Awaiting analysis</p>
+          <CardContent className="px-3 sm:px-6">
+            <p className="text-xl sm:text-2xl font-bold text-amber-600">{metrics.pendingCount}</p>
+            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Awaiting analysis</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-1 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
-              <CheckSquare className="h-3 w-3 text-green-500 flex-shrink-0" />
+          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
+              <CheckSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
               <span className="truncate">Approved</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-lg sm:text-xl font-bold text-green-600">{metrics.approvedCount}</p>
-            <p className="text-xs text-gray-500 truncate">Sent to TD</p>
+          <CardContent className="px-3 sm:px-6">
+            <p className="text-xl sm:text-2xl font-bold text-green-600">{metrics.approvedCount}</p>
+            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Sent to TD</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-1 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
-              <XSquare className="h-3 w-3 text-red-500 flex-shrink-0" />
+          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
+              <XSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500 flex-shrink-0" />
               <span className="truncate">Rejected</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-lg sm:text-xl font-bold text-red-600">{metrics.rejectedCount}</p>
-            <div className="text-xs text-gray-500 space-y-0.5">
+          <CardContent className="px-3 sm:px-6">
+            <p className="text-xl sm:text-2xl font-bold text-red-600">{metrics.rejectedCount}</p>
+            <div className="text-xs text-gray-500 mt-0.5 sm:mt-1 space-y-0.5">
               <p className="truncate">Cost: {metrics.costRejections}</p>
               <p className="truncate">PM Flag: {metrics.pmFlagRejections}</p>
             </div>
@@ -514,43 +504,43 @@ const EstimationHub: React.FC = () => {
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-1 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
-              <AlertCircle className="h-3 w-3 text-orange-500 flex-shrink-0" />
+          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
+              <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-500 flex-shrink-0" />
               <span className="truncate">TD Rejected</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-lg sm:text-xl font-bold text-orange-600">{metrics.tdRejectedCount}</p>
-            <p className="text-xs text-gray-500 truncate">Sent back by TD</p>
+          <CardContent className="px-3 sm:px-6">
+            <p className="text-xl sm:text-2xl font-bold text-orange-600">{metrics.tdRejectedCount}</p>
+            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Sent back by TD</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-1 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
-              <DollarSign className="h-3 w-3 text-green-500 flex-shrink-0" />
+          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
+              <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500 flex-shrink-0" />
               <span className="truncate">Total Value</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-sm sm:text-base font-bold text-green-600 truncate">
+          <CardContent className="px-3 sm:px-6">
+            <p className="text-sm sm:text-lg lg:text-xl font-bold text-blue-600 truncate">
               {formatCurrency(metrics.totalValue)}
             </p>
-            <p className="text-xs text-gray-500 truncate">Pending value</p>
+            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Pending value</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow sm:col-span-2 lg:col-span-1">
-          <CardHeader className="pb-1 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
-              <TrendingUp className="h-3 w-3 text-purple-500 flex-shrink-0" />
+          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
+              <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500 flex-shrink-0" />
               <span className="truncate">Total Quantity</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-lg sm:text-xl font-bold text-purple-600">{metrics.totalQuantity}</p>
-            <p className="text-xs text-gray-500 truncate">Pending items</p>
+          <CardContent className="px-3 sm:px-6">
+            <p className="text-xl sm:text-2xl font-bold text-purple-600">{metrics.totalQuantity}</p>
+            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Pending items</p>
           </CardContent>
         </Card>
       </div>
@@ -722,7 +712,7 @@ const EstimationHub: React.FC = () => {
             </TabsTrigger>
             <TabsTrigger 
               value="completed" 
-              className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-green-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
+              className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-blue-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
             >
               <FileText className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
               <span className="hidden xs:inline">Completed</span>
@@ -735,7 +725,7 @@ const EstimationHub: React.FC = () => {
         <TabsContent value="pending" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
-              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+              <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>
@@ -775,7 +765,7 @@ const EstimationHub: React.FC = () => {
         <TabsContent value="approved" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
-              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+              <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>
@@ -810,7 +800,7 @@ const EstimationHub: React.FC = () => {
         <TabsContent value="rejected" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
-              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+              <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>
@@ -845,7 +835,7 @@ const EstimationHub: React.FC = () => {
         <TabsContent value="td-rejected" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
-              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+              <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>
@@ -880,12 +870,12 @@ const EstimationHub: React.FC = () => {
         <TabsContent value="completed" className="space-y-4">
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
-              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+              <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
             </div>
           ) : filteredPurchases.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
-                <FileText className="h-10 w-10 sm:h-12 sm:w-12 text-green-500 mb-3 sm:mb-4" />
+                <FileText className="h-10 w-10 sm:h-12 sm:w-12 text-blue-500 mb-3 sm:mb-4" />
                 <p className="text-base sm:text-lg font-medium text-gray-900">No completed purchases</p>
                 <p className="text-xs sm:text-sm text-gray-500 mt-1 text-center px-4">
                   Completed purchases will appear here
