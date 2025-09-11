@@ -1,7 +1,7 @@
 from flask import g, request, jsonify
 from datetime import datetime
 
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from models.purchase_status import PurchaseStatus
 from models.material import Material
 from utils.email_service import EmailService
@@ -773,7 +773,25 @@ def get_all_estimation_purchase_request():
                     estimation_decisions[purchase_id] = {'status': latest_estimation_status}
                 else:
                     estimation_decisions[purchase_id] = {'status': 'pending'}
-        # Get detailed purchase information for each unique purchase
+        # Get completed status information for purchases where sender and receiver are both 'accounts'
+        completed_purchase_status = {}
+        completed_status_records = (
+            PurchaseStatus.query.filter(
+                and_(
+                    PurchaseStatus.is_active == True,
+                    PurchaseStatus.status == 'completed',
+                    PurchaseStatus.sender == 'accounts',
+                    PurchaseStatus.receiver == 'accounts'
+                )
+            )
+            .order_by(PurchaseStatus.created_at.desc())
+            .all()
+        )
+
+        # Track which purchases are completed with full details
+        for complete_status in completed_status_records:
+            completed_purchase_status[complete_status.purchase_id] = complete_status
+            
         purchase_details = []
         for purchase_id, status in latest_overall_status.items():
             # Get purchase details
@@ -815,6 +833,21 @@ def get_all_estimation_purchase_request():
                     })
             est_decision = estimation_decisions.get(purchase_id, {}).get('status', 'pending')
             pm_decision = pm_decisions.get(purchase_id, {}).get('status', 'pending')
+            
+            # Determine completed_status based on your requirements
+            # Check if there's a completed status record where sender='accounts', receiver='accounts', is_active=True, status='completed'
+            if purchase_id in completed_purchase_status:
+                completed_record = completed_purchase_status[purchase_id]
+                if (completed_record.sender == 'accounts' and 
+                    completed_record.receiver == 'accounts' and 
+                    completed_record.is_active and 
+                    completed_record.status == 'completed'):
+                    completed_status_value = 'completed'
+                else:
+                    completed_status_value = 'pending'
+            else:
+                completed_status_value = 'pending'
+            
             # Create detailed purchase information
             purchase_detail = {
                 'purchase_id': purchase.purchase_id,
@@ -846,7 +879,8 @@ def get_all_estimation_purchase_request():
                     'comments': status.comments,
                     'created_at': status.created_at.isoformat() if status.created_at else None,
                     'last_modified_at': status.last_modified_at.isoformat() if status.last_modified_at else None,
-                    'last_modified_by': status.last_modified_by
+                    'last_modified_by': status.last_modified_by,
+                    'completed_status': completed_status_value
                 }
             }
             
