@@ -71,6 +71,16 @@ export interface ProcurementPurchase {
     comments: string;
     status_id: number;
   };
+  // Latest status tracking
+  latest_status?: {
+    status: string;
+    sender?: string;
+    receiver?: string;
+    date?: string;
+  };
+  latest_status_date?: string;
+  // Accounts acknowledgement
+  accounts_acknowledgement?: boolean;
 }
 
 export interface PurchaseStatusDetails {

@@ -48,8 +48,16 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
   // Check if needs TD review (estimation approved and TD pending)
   const needsReview = estimationStatus === 'approved' && (!tdStatus || tdStatus === 'pending');
   
+  // Check if the purchase is completed (accounts has acknowledged)
+  const isCompleted = purchase.latest_status?.status === 'completed' || 
+                     purchase.latest_status?.status === 'complete' ||
+                     purchase.accounts_acknowledgement === true;
+  
   // Get status badge color
   const getStatusColor = () => {
+    if (isCompleted) {
+      return 'bg-blue-100 text-blue-800 border-blue-200';
+    }
     switch (tdStatus) {
       case 'approved':
         return 'bg-green-100 text-green-800 border-green-200';
@@ -82,66 +90,69 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
       exit={{ opacity: 0, y: -20 }}
       whileHover={{ y: -2 }}
       transition={{ duration: 0.2 }}
+      className="h-full"
     >
-      <Card className="h-full hover:shadow-lg transition-shadow">
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between">
-            <div>
-              <CardTitle className="text-lg font-semibold">
+      <Card className="h-full hover:shadow-lg transition-shadow max-w-sm mx-auto">
+        <CardHeader className="pb-2 px-4 pt-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-base font-semibold truncate">
                 PR #{purchase.purchase_id}
               </CardTitle>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-0.5 truncate">
                 Project: {purchase.project_id}
               </p>
             </div>
-            <div className="flex flex-col gap-1 items-end">
-              <Badge className={getStatusColor()} variant="outline">
-                {tdStatus === 'pending' ? 'Pending' : 
-                 tdStatus === 'approved' ? 'Approved' : 'Rejected'}
+            <div className="flex flex-col gap-1 items-end flex-shrink-0">
+              <Badge className={`${getStatusColor()} text-xs`} variant="outline">
+                {isCompleted ? 'Completed' :
+                 tdStatus === 'pending' ? 'Pending' : 
+                 tdStatus === 'approved' ? 'Approved' : 
+                 tdStatus === 'rejected' ? 'Rejected' : 'Pending'}
               </Badge>
-              <Badge className={getPriorityColor()} variant="outline" size="sm">
-                {priority} priority
+              <Badge className={`${getPriorityColor()} text-xs`} variant="outline">
+                {priority?.charAt(0).toUpperCase() + priority?.slice(1)} priority
               </Badge>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 px-4 pb-4">
           {/* Key Information */}
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center gap-2 text-gray-600">
-              <MapPin className="h-3.5 w-3.5" />
+          <div className="space-y-1.5 text-xs">
+            <div className="flex items-center gap-1.5 text-gray-600">
+              <MapPin className="h-3 w-3 flex-shrink-0" />
               <span className="truncate">{purchase.site_location}</span>
             </div>
-            <div className="flex items-center gap-2 text-gray-600">
-              <User className="h-3.5 w-3.5" />
+            <div className="flex items-center gap-1.5 text-gray-600">
+              <User className="h-3 w-3 flex-shrink-0" />
               <span className="truncate">{purchase.requested_by}</span>
             </div>
-            <div className="flex items-center gap-2 text-gray-600">
-              <Calendar className="h-3.5 w-3.5" />
-              <span>{new Date(purchase.date).toLocaleDateString()}</span>
+            <div className="flex items-center gap-1.5 text-gray-600">
+              <Calendar className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate">{new Date(purchase.date).toLocaleDateString()}</span>
             </div>
           </div>
 
           <Separator />
 
           {/* Materials & Cost Summary */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Package className="h-3.5 w-3.5" />
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-gray-600">
+                <Package className="h-3 w-3" />
                 <span>{purchase.material_count || 0} items</span>
               </div>
-              <span className="text-sm text-gray-600">
+              <span className="text-gray-600">
                 Qty: {purchase.total_quantity || 0}
               </span>
             </div>
-            <div className="flex items-center justify-between bg-indigo-50 rounded-lg p-2">
-              <div className="flex items-center gap-1.5">
-                <DollarSign className="h-4 w-4 text-indigo-600" />
-                <span className="text-sm font-medium text-indigo-900">Total Cost</span>
+            <div className="flex items-center justify-between bg-indigo-50 rounded-md px-2 py-1.5">
+              <div className="flex items-center gap-1">
+                <DollarSign className="h-3 w-3 text-indigo-600" />
+                <span className="text-xs font-medium text-indigo-900">Total</span>
               </div>
-              <span className="text-sm font-bold text-indigo-600">
+              <span className="text-xs font-bold text-indigo-600 truncate">
                 {technicalDirectorService.formatCurrency(purchase.total_cost || 0)}
               </span>
             </div>
@@ -149,16 +160,14 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
 
           {/* Previous Approvals */}
           {estimationStatus && (
-            <div className="bg-gray-50 rounded-lg p-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Estimation Status:</span>
+            <div className="bg-gray-50 rounded-md px-2 py-1.5 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-gray-600 truncate">Estimation Status:</span>
                 <Badge 
-                  className={estimationStatus === 'approved' ? 
+                  className={`${estimationStatus === 'approved' ? 
                     'bg-green-100 text-green-700' : 
-                    'bg-yellow-100 text-yellow-700'
-                  }
+                    'bg-yellow-100 text-yellow-700'} text-xs`}
                   variant="outline"
-                  size="sm"
                 >
                   {estimationStatus}
                 </Badge>
@@ -168,9 +177,9 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
 
           {/* Comments if rejected */}
           {tdStatus === 'rejected' && purchase.technical_director_rejection_reason && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-2">
-              <p className="text-xs text-red-700">
-                <span className="font-medium">Rejection Reason:</span> {purchase.technical_director_rejection_reason}
+            <div className="bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
+              <p className="text-xs text-red-700 line-clamp-2">
+                <span className="font-medium">Reason:</span> {purchase.technical_director_rejection_reason}
               </p>
             </div>
           )}
@@ -178,67 +187,69 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
           <Separator />
 
           {/* Action Buttons */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {needsReview ? (
               <>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-1.5">
                   <Button
                     onClick={() => onApprove(purchase.purchase_id)}
                     disabled={isLoading}
-                    className="bg-green-600 hover:bg-green-700 text-white"
+                    className="bg-green-600 hover:bg-green-700 text-white h-8 text-xs"
                     size="sm"
                   >
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
                     Approve
                   </Button>
                   <Button
                     onClick={() => onReject(purchase.purchase_id)}
                     disabled={isLoading}
                     variant="outline"
-                    className="border-red-200 text-red-600 hover:bg-red-50"
+                    className="border-red-200 text-red-600 hover:bg-red-50 h-8 text-xs"
                     size="sm"
                   >
-                    <XCircle className="h-3.5 w-3.5 mr-1" />
+                    <XCircle className="h-3 w-3 mr-1" />
                     Reject
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-1.5">
                   <Button
                     onClick={() => onViewDetails(purchase.purchase_id)}
                     variant="outline"
+                    className="h-8 text-xs"
                     size="sm"
                   >
-                    <Eye className="h-3.5 w-3.5 mr-1" />
+                    <Eye className="h-3 w-3 mr-1" />
                     Details
                   </Button>
                   <Button
                     onClick={() => onViewHistory(purchase.purchase_id)}
                     variant="outline"
+                    className="h-8 text-xs"
                     size="sm"
                   >
-                    <History className="h-3.5 w-3.5 mr-1" />
+                    <History className="h-3 w-3 mr-1" />
                     History
                   </Button>
                 </div>
               </>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5">
                 <Button
                   onClick={() => onViewDetails(purchase.purchase_id)}
                   variant="outline"
-                  className="w-full"
+                  className="w-full h-8 text-xs"
                   size="sm"
                 >
-                  <Eye className="h-3.5 w-3.5 mr-1" />
+                  <Eye className="h-3 w-3 mr-1" />
                   View Details
                 </Button>
                 <Button
                   onClick={() => onViewHistory(purchase.purchase_id)}
                   variant="outline"
-                  className="w-full"
+                  className="w-full h-8 text-xs"
                   size="sm"
                 >
-                  <History className="h-3.5 w-3.5 mr-1" />
+                  <History className="h-3 w-3 mr-1" />
                   View History
                 </Button>
               </div>

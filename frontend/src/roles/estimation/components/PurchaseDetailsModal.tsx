@@ -364,25 +364,23 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden p-0 bg-white">
-        <DialogHeader className="px-6 py-5 bg-gradient-to-r from-red-400 to-red-500 shadow-lg">
+        <DialogHeader className="px-6 py-4 bg-gradient-to-r from-blue-500 to-blue-600 shadow-lg">
           <DialogTitle className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-white/20 backdrop-blur rounded-lg">
-                <FileText className="w-6 h-6 text-white" />
+                <FileText className="w-5 h-5 text-white" />
               </div>
-              <div>
-                <h2 className="text-white text-xl font-semibold">Purchase Request Details</h2>
-                {purchaseDetails && (
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge className="bg-white/20 text-white border-white/30 hover:bg-white/30">
-                      <Hash className="w-3 h-3 mr-1" />
-                      PR-{purchaseDetails.purchase_id}
-                    </Badge>
-                    <Badge className={`${getStatusColor(currentStatus)} border`}>
-                      {getStatusIcon(currentStatus)}
-                      <span className="ml-1 uppercase">{currentStatus}</span>
-                    </Badge>
-                  </div>
+              <div className="flex items-center gap-3">
+                <h2 className="text-white text-lg font-semibold">Purchase Request Details</h2>
+                <Badge className="bg-white/90 text-blue-600 px-3 py-1">
+                  <Hash className="w-3 h-3 mr-1" />
+                  PR-{purchaseDetails?.purchase_id || purchaseId}
+                </Badge>
+                {purchaseDetails && currentStatus === 'completed' && (
+                  <Badge className="bg-white/90 text-blue-600 px-3 py-1">
+                    <Clock className="w-3 h-3 mr-1" />
+                    COMPLETED
+                  </Badge>
                 )}
               </div>
             </div>
@@ -392,7 +390,7 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                   variant="secondary" 
                   size="sm" 
                   onClick={handleExport} 
-                  className="bg-white/10 hover:bg-white/20 text-white border-white/30"
+                  className="bg-white text-blue-600 hover:bg-white/90"
                 >
                   <Download className="w-4 h-4 mr-1" />
                   Export PDF
@@ -412,156 +410,196 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
             <>
               {!showHistoryOnly ? (
                 // Details View with Tabs
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <div className="bg-white border-b">
-                    <TabsList className="flex justify-center gap-8 bg-transparent p-0 h-auto">
-                      <TabsTrigger 
-                        value="overview" 
-                        className="data-[state=active]:border-b-3 data-[state=active]:border-red-500 data-[state=active]:text-red-600 border-b-2 border-transparent rounded-none pb-4 pt-4 font-medium transition-all hover:text-red-500"
-                      >
-                        <Info className="w-4 h-4 mr-2" />
-                        Overview
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="materials"
-                        className="data-[state=active]:border-b-3 data-[state=active]:border-red-500 data-[state=active]:text-red-600 border-b-2 border-transparent rounded-none pb-4 pt-4 font-medium transition-all hover:text-red-500"
-                      >
-                        <Package className="w-4 h-4 mr-2" />
-                        Materials
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="latest"
-                        className="data-[state=active]:border-b-3 data-[state=active]:border-red-500 data-[state=active]:text-red-600 border-b-2 border-transparent rounded-none pb-4 pt-4 font-medium transition-all hover:text-red-500"
-                      >
-                        <Activity className="w-4 h-4 mr-2" />
-                        Latest Info
-                      </TabsTrigger>
-                    </TabsList>
+                <div className="w-full">
+                  {/* Summary Cards */}
+                  <div className="px-6 py-4 bg-gray-50">
+                    <div className="grid grid-cols-3 gap-4">
+                      {/* Total Amount Card */}
+                      <div className="bg-white rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Total Amount</p>
+                            <p className="text-2xl font-bold text-gray-900">
+                              {formatCurrency(purchaseDetails?.purchase_details?.materials_summary?.total_cost || 0)}
+                            </p>
+                          </div>
+                          <div className="p-2 bg-blue-100 rounded-lg">
+                            <DollarSign className="w-5 h-5 text-blue-600" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Materials Card */}
+                      <div className="bg-white rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Materials</p>
+                            <p className="text-2xl font-bold text-gray-900">
+                              {purchaseDetails?.purchase_details?.materials_summary?.total_materials || 0} Items
+                            </p>
+                          </div>
+                          <div className="p-2 bg-purple-100 rounded-lg">
+                            <Package className="w-5 h-5 text-purple-600" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Email Status Card */}
+                      <div className="bg-white rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Email Status</p>
+                            <Badge className={purchaseDetails?.purchase_details?.email_sent 
+                              ? "bg-green-100 text-green-700 border-green-200 px-3 py-1" 
+                              : "bg-gray-100 text-gray-700 border-gray-200 px-3 py-1"}>
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              {purchaseDetails?.purchase_details?.email_sent ? 'Sent' : 'Not Sent'}
+                            </Badge>
+                          </div>
+                          <div className="p-2 bg-green-100 rounded-lg">
+                            <Mail className="w-5 h-5 text-green-600" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
+
+                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <div className="bg-white border-b">
+                      <TabsList className="flex justify-start gap-8 bg-transparent p-0 h-auto px-6">
+                        <TabsTrigger 
+                          value="overview" 
+                          className="data-[state=active]:border-b-2 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 border-b-2 border-transparent rounded-none pb-3 pt-3 font-medium transition-all hover:text-blue-500"
+                        >
+                          <Info className="w-4 h-4 mr-2" />
+                          Details
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="materials"
+                          className="data-[state=active]:border-b-2 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 border-b-2 border-transparent rounded-none pb-3 pt-3 font-medium transition-all hover:text-blue-500"
+                        >
+                          <Package className="w-4 h-4 mr-2" />
+                          Materials
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="latest"
+                          className="data-[state=active]:border-b-2 data-[state=active]:border-blue-500 data-[state=active]:text-blue-600 border-b-2 border-transparent rounded-none pb-3 pt-3 font-medium transition-all hover:text-blue-500"
+                        >
+                          <Activity className="w-4 h-4 mr-2" />
+                          Latest Status
+                        </TabsTrigger>
+                      </TabsList>
+                    </div>
 
                   <div className="p-6 max-h-[calc(90vh-200px)] overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     <TabsContent value="overview" className="mt-0 space-y-6">
-                      {/* Basic Information Card */}
-                      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-                        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-3 border-b">
-                          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                            <Info className="w-5 h-5 text-gray-600" />
-                            Basic Information
-                          </h3>
+                      {/* Basic Information Section */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-4">
+                          <Info className="w-5 h-5 text-gray-600" />
+                          <h3 className="text-lg font-semibold text-gray-800">Basic Information</h3>
                         </div>
-                        <div className="p-6">
-                          <div className="grid grid-cols-2 gap-6">
-                            <div className="space-y-4">
-                              <div className="group hover:bg-gray-50 p-3 rounded-lg transition-colors">
-                                <div className="flex items-start gap-3">
-                                  <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
-                                    <MapPin className="w-4 h-4 text-blue-600" />
-                                  </div>
-                                  <div className="flex-1">
-                                    <p className="text-xs text-gray-500 uppercase font-medium">Site Location</p>
-                                    <p className="text-base font-semibold text-gray-900 mt-1">
-                                      {purchaseDetails.purchase_details?.site_location}
-                                    </p>
-                                  </div>
+                        
+                        <div className="bg-white rounded-lg p-6">
+                          <div className="grid grid-cols-2 gap-x-12 gap-y-6">
+                            {/* Left Column */}
+                            <div className="space-y-6">
+                              <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Building2 className="w-4 h-4 text-gray-400" />
+                                  <p className="text-xs text-gray-500 uppercase tracking-wider">PROJECT ID</p>
                                 </div>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {purchaseDetails.purchase_details?.project_id || 'N/A'}
+                                </p>
                               </div>
                               
-                              <div className="group hover:bg-gray-50 p-3 rounded-lg transition-colors">
-                                <div className="flex items-start gap-3">
-                                  <div className="p-2 bg-red-100 rounded-lg group-hover:bg-red-200 transition-colors">
-                                    <Target className="w-4 h-4 text-red-600" />
-                                  </div>
-                                  <div className="flex-1">
-                                    <p className="text-xs text-gray-500 uppercase font-medium">Purpose</p>
-                                    <p className="text-base font-semibold text-gray-900 mt-1">
-                                      {purchaseDetails.purchase_details?.purpose}
-                                    </p>
-                                  </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <User className="w-4 h-4 text-gray-400" />
+                                  <p className="text-xs text-gray-500 uppercase tracking-wider">REQUESTED BY</p>
                                 </div>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {purchaseDetails.purchase_details?.requested_by}
+                                </p>
                               </div>
                               
-                              <div className="group hover:bg-gray-50 p-3 rounded-lg transition-colors">
-                                <div className="flex items-start gap-3">
-                                  <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
-                                    <UserCheck className="w-4 h-4 text-green-600" />
-                                  </div>
-                                  <div className="flex-1">
-                                    <p className="text-xs text-gray-500 uppercase font-medium">Requested By</p>
-                                    <p className="text-base font-semibold text-gray-900 mt-1">
-                                      {purchaseDetails.purchase_details?.requested_by}
-                                    </p>
-                                  </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <MapPin className="w-4 h-4 text-gray-400" />
+                                  <p className="text-xs text-gray-500 uppercase tracking-wider">SITE LOCATION</p>
                                 </div>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {purchaseDetails.purchase_details?.site_location}
+                                </p>
                               </div>
                             </div>
 
-                            <div className="space-y-4">
-                              <div className="group hover:bg-gray-50 p-3 rounded-lg transition-colors">
-                                <div className="flex items-start gap-3">
-                                  <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
-                                    <Calendar className="w-4 h-4 text-purple-600" />
-                                  </div>
-                                  <div className="flex-1">
-                                    <p className="text-xs text-gray-500 uppercase font-medium">Created Date</p>
-                                    <p className="text-base font-semibold text-gray-900 mt-1">
-                                      {formatDate(purchaseDetails.purchase_details?.created_at)}
-                                    </p>
-                                  </div>
+                            {/* Right Column */}
+                            <div className="space-y-6">
+                              <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Calendar className="w-4 h-4 text-gray-400" />
+                                  <p className="text-xs text-gray-500 uppercase tracking-wider">REQUEST DATE</p>
                                 </div>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {formatDate(purchaseDetails.purchase_details?.date || purchaseDetails.purchase_details?.created_at)}
+                                </p>
                               </div>
                               
-                              <div className="group hover:bg-gray-50 p-3 rounded-lg transition-colors">
-                                <div className="flex items-start gap-3">
-                                  <div className="p-2 bg-indigo-100 rounded-lg group-hover:bg-indigo-200 transition-colors">
-                                    <Building2 className="w-4 h-4 text-indigo-600" />
-                                  </div>
-                                  <div className="flex-1">
-                                    <p className="text-xs text-gray-500 uppercase font-medium">Project ID</p>
-                                    <p className="text-base font-semibold text-gray-900 mt-1">
-                                      #{purchaseDetails.purchase_details?.project_id || 'N/A'}
-                                    </p>
-                                  </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <UserCheck className="w-4 h-4 text-gray-400" />
+                                  <p className="text-xs text-gray-500 uppercase tracking-wider">CREATED BY</p>
                                 </div>
+                                <p className="text-base font-semibold text-gray-900">
+                                  {purchaseDetails.purchase_details?.created_by || purchaseDetails.purchase_details?.requested_by}
+                                </p>
                               </div>
                               
-                              <div className="group hover:bg-gray-50 p-3 rounded-lg transition-colors">
-                                <div className="flex items-start gap-3">
-                                  <div className="p-2 bg-cyan-100 rounded-lg group-hover:bg-cyan-200 transition-colors">
-                                    <Mail className="w-4 h-4 text-cyan-600" />
-                                  </div>
-                                  <div className="flex-1">
-                                    <p className="text-xs text-gray-500 uppercase font-medium">Email Status</p>
-                                    <div className="mt-1">
-                                      <Badge 
-                                        className={purchaseDetails.purchase_details?.email_sent 
-                                          ? "bg-green-100 text-green-700 border-green-200" 
-                                          : "bg-gray-100 text-gray-700 border-gray-200"}
-                                      >
-                                        {purchaseDetails.purchase_details?.email_sent ? '✓ Sent' : '✗ Not Sent'}
-                                      </Badge>
-                                    </div>
-                                  </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Mail className="w-4 h-4 text-gray-400" />
+                                  <p className="text-xs text-gray-500 uppercase tracking-wider">EMAIL STATUS</p>
                                 </div>
+                                <Badge 
+                                  className={purchaseDetails.purchase_details?.email_sent 
+                                    ? "bg-green-100 text-green-700 border-green-200 px-3 py-1" 
+                                    : "bg-gray-100 text-gray-700 border-gray-200 px-3 py-1"}
+                                >
+                                  <CheckCircle className="w-4 h-4 mr-1" />
+                                  {purchaseDetails.purchase_details?.email_sent ? 'Sent' : 'Not Sent'}
+                                </Badge>
                               </div>
                             </div>
+                          </div>
+                          
+                          {/* Purpose Section - Full Width */}
+                          <div className="mt-6 pt-6 border-t border-gray-200">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Target className="w-4 h-4 text-gray-400" />
+                              <p className="text-xs text-gray-500 uppercase tracking-wider">PURPOSE</p>
+                            </div>
+                            <p className="text-base font-semibold text-gray-900">
+                              {purchaseDetails.purchase_details?.purpose}
+                            </p>
                           </div>
                         </div>
                       </div>
 
                       {/* Attachment Section - Show only if file_path exists */}
                       {purchaseDetails.purchase_details?.file_path && (
-                        <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-                          <div className="bg-gradient-to-r from-red-50 to-red-100 px-6 py-3 border-b">
-                            <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                              <Paperclip className="w-5 h-5 text-red-600" />
-                              Attachment
-                            </h3>
+                        <div>
+                          <div className="flex items-center gap-2 mb-4">
+                            <Paperclip className="w-5 h-5 text-gray-600" />
+                            <h3 className="text-lg font-semibold text-gray-800">Attachment</h3>
                           </div>
-                          <div className="p-6">
+                          
+                          <div className="bg-white rounded-lg p-6">
                             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                               <div className="flex items-center gap-3">
-                                <div className="p-2 bg-red-100 rounded-lg">
-                                  <FileText className="w-5 h-5 text-red-600" />
+                                <div className="p-2 bg-blue-100 rounded-lg">
+                                  <FileText className="w-5 h-5 text-blue-600" />
                                 </div>
                                 <div>
                                   <p className="text-sm font-medium text-gray-900">{purchaseDetails.purchase_details.file_path.split('/').pop() || 'Purchase Document'}</p>
@@ -573,7 +611,7 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                 variant="outline"
                                 size="sm"
                                 disabled={downloadingFile}
-                                className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300"
                               >
                                 {downloadingFile ? (
                                   <>
@@ -591,33 +629,6 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                           </div>
                         </div>
                       )}
-
-                      {/* Current Status Card */}
-                      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-                        <div className="bg-gradient-to-r from-red-50 to-red-100 px-6 py-3 border-b">
-                          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                            <Activity className="w-5 h-5 text-red-600" />
-                            Current Workflow Status
-                          </h3>
-                        </div>
-                        <div className="p-6">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              {getStatusIcon(currentStatus)}
-                              <div>
-                                <p className="text-sm text-gray-600">Current Status</p>
-                                <p className="text-lg font-semibold text-gray-900 uppercase">{currentStatus}</p>
-                              </div>
-                            </div>
-                            <Badge className={`${getStatusColor(currentStatus)} px-4 py-2 text-sm`}>
-                              {currentStatus === 'approved' ? 'APPROVED' :
-                               currentStatus === 'rejected' ? 'REJECTED' :
-                               currentStatus === 'completed' ? 'COMPLETED' :
-                               'PENDING REVIEW'}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
                     </TabsContent>
 
                     <TabsContent value="materials" className="mt-0 space-y-4">
@@ -882,6 +893,7 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                     </TabsContent>
                   </div>
                 </Tabs>
+                </div>
               ) : (
                 // History View
                 <div className="p-6 max-h-[calc(90vh-200px)] overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">

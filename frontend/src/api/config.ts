@@ -78,9 +78,20 @@ apiClient.interceptors.response.use(
     
     // Handle other error codes and navigate to error pages
     if (error.response?.status === 403) {
-      // Navigate to 403 error page
-      if (!window.location.pathname.includes('/403')) {
-        window.location.replace('/403');
+      // Log the 403 error for debugging
+      console.error('403 Forbidden error:', {
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.response?.data,
+        message: error.response?.data?.message || 'Access denied'
+      });
+      
+      // Don't redirect for API calls, let the service handle it
+      // Only redirect for page loads
+      if (!error.config?.url?.includes('/api/')) {
+        if (!window.location.pathname.includes('/403')) {
+          window.location.replace('/403');
+        }
       }
     } else if (error.response?.status === 404) {
       // Navigate to 404 error page
@@ -176,6 +187,8 @@ export const API_ENDPOINTS = {
     APPROVAL: '/tech_approval',
     DASHBOARD: '/tech_dashboard',
     PURCHASES: '/technical_purchase',
+    PURCHASE_DETAILS: (id: string | number) => `/purchase/${id}`,
+    PURCHASE_HISTORY: (id: string | number) => `/purchase_history/${id}`,
   },
   
   ACCOUNTS: {

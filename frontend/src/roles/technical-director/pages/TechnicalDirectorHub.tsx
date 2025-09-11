@@ -40,6 +40,7 @@ const TechnicalDirectorHub: React.FC = () => {
     pendingCount: 0,
     approvedCount: 0,
     rejectedCount: 0,
+    completedCount: 0,
     totalValue: 0,
     avgProcessingTime: 0,
     totalQuantity: 0
@@ -62,20 +63,30 @@ const TechnicalDirectorHub: React.FC = () => {
         let pendingPurchases: Purchase[] = [];
         let approvedPurchases: Purchase[] = [];
         let rejectedPurchases: Purchase[] = [];
+        let completedPurchases: Purchase[] = [];
         
         allPurchases.forEach(p => {
-          // Check technical_director_status field directly
-          const tdStatus = p.technical_director_status?.toLowerCase();
+          // Check if purchase is completed (accounts has acknowledged)
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true;
           
-          if (tdStatus === 'pending' || !tdStatus) {
-            // Also check if estimation approved (TD is next)
-            if (p.estimation_status === 'approved') {
-              pendingPurchases.push(p);
+          if (isCompleted) {
+            completedPurchases.push(p);
+          } else {
+            // Check technical_director_status field directly
+            const tdStatus = p.technical_director_status?.toLowerCase();
+            
+            if (tdStatus === 'pending' || !tdStatus) {
+              // Also check if estimation approved (TD is next)
+              if (p.estimation_status === 'approved') {
+                pendingPurchases.push(p);
+              }
+            } else if (tdStatus === 'approved') {
+              approvedPurchases.push(p);
+            } else if (tdStatus === 'rejected') {
+              rejectedPurchases.push(p);
             }
-          } else if (tdStatus === 'approved') {
-            approvedPurchases.push(p);
-          } else if (tdStatus === 'rejected') {
-            rejectedPurchases.push(p);
           }
         });
         
@@ -91,6 +102,7 @@ const TechnicalDirectorHub: React.FC = () => {
           pendingCount: pendingPurchases.length,
           approvedCount: approvedPurchases.length,
           rejectedCount: rejectedPurchases.length,
+          completedCount: completedPurchases.length,
           totalValue: pendingValue,
           avgProcessingTime: 0,
           totalQuantity: totalQuantity
@@ -113,6 +125,7 @@ const TechnicalDirectorHub: React.FC = () => {
         pendingCount: 0,
         approvedCount: 0,
         rejectedCount: 0,
+        completedCount: 0,
         totalValue: 0,
         avgProcessingTime: 0,
         totalQuantity: 0
@@ -130,11 +143,16 @@ const TechnicalDirectorHub: React.FC = () => {
   useEffect(() => {
     let filtered = [...purchases];
 
-    // Tab filter - Check technical_director_status field
+    // Tab filter - Check technical_director_status field and completion status
     switch (activeTab) {
       case 'pending':
-        // Show purchases where TD hasn't acted yet and estimation approved
+        // Show purchases where TD hasn't acted yet and estimation approved (exclude completed)
         filtered = purchases.filter(p => {
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true;
+          if (isCompleted) return false;
+          
           const tdStatus = p.technical_director_status?.toLowerCase();
           const estimationStatus = p.estimation_status?.toLowerCase();
           return (!tdStatus || tdStatus === 'pending') && estimationStatus === 'approved';
@@ -142,18 +160,38 @@ const TechnicalDirectorHub: React.FC = () => {
         break;
         
       case 'approved':
-        // Show purchases where technical_director_status is approved
+        // Show purchases where technical_director_status is approved (exclude completed)
         filtered = purchases.filter(p => {
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true;
+          if (isCompleted) return false;
+          
           const tdStatus = p.technical_director_status?.toLowerCase();
           return tdStatus === 'approved';
         });
         break;
         
       case 'rejected':
-        // Show purchases where technical_director_status is rejected
+        // Show purchases where technical_director_status is rejected (exclude completed)
         filtered = purchases.filter(p => {
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true;
+          if (isCompleted) return false;
+          
           const tdStatus = p.technical_director_status?.toLowerCase();
           return tdStatus === 'rejected';
+        });
+        break;
+        
+      case 'completed':
+        // Show completed purchases only
+        filtered = purchases.filter(p => {
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true;
+          return isCompleted;
         });
         break;
     }
@@ -340,7 +378,7 @@ const TechnicalDirectorHub: React.FC = () => {
       {/* Tabs - Responsive */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <TabsList className="grid w-full min-w-[280px] max-w-none lg:max-w-2xl grid-cols-3 bg-gray-100 h-auto">
+          <TabsList className="grid w-full min-w-[360px] max-w-none lg:max-w-3xl grid-cols-4 bg-gray-100 h-auto">
             <TabsTrigger 
               value="pending" 
               className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-indigo-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
@@ -365,6 +403,14 @@ const TechnicalDirectorHub: React.FC = () => {
               <span className="hidden xs:inline">Rejected</span>
               <span className="text-[10px] xs:text-xs sm:text-sm">({metrics.rejectedCount})</span>
             </TabsTrigger>
+            <TabsTrigger 
+              value="completed" 
+              className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-blue-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
+            >
+              <FileText className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="hidden xs:inline">Completed</span>
+              <span className="text-[10px] xs:text-xs sm:text-sm">({metrics.completedCount})</span>
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -388,7 +434,7 @@ const TechnicalDirectorHub: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               <AnimatePresence mode="popLayout">
                 {filteredPurchases.map((purchase) => (
                   <TechnicalDirectorApprovalCard
@@ -423,7 +469,7 @@ const TechnicalDirectorHub: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               <AnimatePresence mode="popLayout">
                 {filteredPurchases.map((purchase) => (
                   <TechnicalDirectorApprovalCard
@@ -458,7 +504,42 @@ const TechnicalDirectorHub: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <AnimatePresence mode="popLayout">
+                {filteredPurchases.map((purchase) => (
+                  <TechnicalDirectorApprovalCard
+                    key={purchase.purchase_id}
+                    purchase={purchase}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                    onViewDetails={handleViewDetails}
+                    onViewHistory={handleViewHistory}
+                    isLoading={isLoading}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Completed Tab */}
+        <TabsContent value="completed" className="space-y-4">
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <RefreshCw className="h-8 w-8 animate-spin text-indigo-600" />
+            </div>
+          ) : filteredPurchases.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
+                <FileText className="h-10 w-10 sm:h-12 sm:w-12 text-blue-500 mb-3 sm:mb-4" />
+                <p className="text-base sm:text-lg font-medium text-gray-900">No completed purchases</p>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1 text-center px-4">
+                  Completed purchases will appear here
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               <AnimatePresence mode="popLayout">
                 {filteredPurchases.map((purchase) => (
                   <TechnicalDirectorApprovalCard

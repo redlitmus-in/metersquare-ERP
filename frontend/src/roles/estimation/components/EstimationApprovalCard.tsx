@@ -70,12 +70,26 @@ const EstimationApprovalCard = React.forwardRef<HTMLDivElement, EstimationApprov
                    purchase.materials_summary?.total_cost || 
                    estimationService.calculateTotalCost(purchase.materials);
   
+  // Get the current workflow status for display
+  const currentWorkflowStatus = estimationService.getCurrentWorkflowStatus(purchase);
+  
+  // Check if the purchase is completed (accounts has acknowledged or status is complete)
+  const isCompleted = currentWorkflowStatus.status === 'completed' ||
+                     purchase.latest_status?.status === 'completed' || 
+                     purchase.latest_status?.status === 'complete' ||
+                     purchase.accounts_acknowledgement === true ||
+                     purchase.status_info?.accounts_acknowledgement === true ||
+                     (purchase.status_info?.receiver === 'accounts' && purchase.status_info?.accounts_status === 'acknowledged') ||
+                     (purchase.status_info?.sender === 'accounts' && purchase.status_info?.accounts_status === 'acknowledged') ||
+                     (purchase.status_info?.td_status === 'approved' && purchase.status_info?.receiver === 'accounts' && purchase.status_info?.accounts_status === 'approved') ||
+                     (purchase.status_info?.sender === 'accounts' && purchase.status_info?.status === 'approved');
+  
   // Check if this is a TD rejection sent back to estimation
   const isTDRejected = purchase.status_info?.receiver === 'estimation' && 
                        purchase.status_info?.sender === 'technicalDirector';
   
-  // A purchase needs review if estimation_status is pending OR if it's rejected by TD
-  const needsReview = estimationStatus === 'pending' || isTDRejected;
+  // A purchase needs review if estimation_status is pending OR if it's rejected by TD (and not completed)
+  const needsReview = !isCompleted && (estimationStatus === 'pending' || isTDRejected);
   
   const isResubmission = estimationService.hasResubmission(purchase);
   
@@ -92,6 +106,7 @@ const EstimationApprovalCard = React.forwardRef<HTMLDivElement, EstimationApprov
       layout
     >
       <Card className={`hover:shadow-lg transition-all duration-300 h-full flex flex-col ${
+        isCompleted || currentWorkflowStatus.status === 'completed' ? 'ring-2 ring-blue-200 border-blue-300 bg-blue-50/30' :
         estimationStatus === 'approved' ? 'ring-2 ring-green-200 border-green-300' :
         estimationStatus === 'rejected' ? 'ring-2 ring-red-200 border-red-300' :
         needsReview ? 'ring-2 ring-amber-200 border-amber-300' :
@@ -118,22 +133,44 @@ const EstimationApprovalCard = React.forwardRef<HTMLDivElement, EstimationApprov
               </div>
             </div>
             <div className="flex flex-col items-end gap-1">
-              {pmStatus === 'approved' && (
+              {isCompleted || currentWorkflowStatus.status === 'completed' ? (
                 <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5">
                   <CheckCircle className="h-3 w-3 mr-1" />
-                  PM Approved
+                  Completed
                 </Badge>
-              )}
-              {isTDRejected && (
-                <Badge className="bg-orange-100 text-orange-800 text-xs px-2 py-0.5">
-                  <AlertCircle className="h-3 w-3 mr-1" />
-                  TD Rejected - Review Required
-                </Badge>
-              )}
-              {needsReview && !isTDRejected && (
-                <Badge className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5">
-                  Awaiting Cost Analysis
-                </Badge>
+              ) : (
+                <>
+                  {/* Show actual current workflow status instead of hardcoded "PM Approved" */}
+                  {!needsReview && currentWorkflowStatus.status === 'pending' && (
+                    <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5">
+                      <Clock className="h-3 w-3 mr-1" />
+                      {currentWorkflowStatus.label}
+                    </Badge>
+                  )}
+                  {!needsReview && currentWorkflowStatus.status === 'approved' && (
+                    <Badge className="bg-green-100 text-green-800 text-xs px-2 py-0.5">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      {currentWorkflowStatus.label}
+                    </Badge>
+                  )}
+                  {!needsReview && currentWorkflowStatus.status === 'rejected' && (
+                    <Badge className="bg-red-100 text-red-800 text-xs px-2 py-0.5">
+                      <XCircle className="h-3 w-3 mr-1" />
+                      {currentWorkflowStatus.label}
+                    </Badge>
+                  )}
+                  {isTDRejected && (
+                    <Badge className="bg-orange-100 text-orange-800 text-xs px-2 py-0.5">
+                      <AlertCircle className="h-3 w-3 mr-1" />
+                      TD Rejected - Review Required
+                    </Badge>
+                  )}
+                  {needsReview && !isTDRejected && (
+                    <Badge className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5">
+                      Awaiting Cost Analysis
+                    </Badge>
+                  )}
+                </>
               )}
             </div>
           </div>

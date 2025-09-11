@@ -41,6 +41,7 @@ const EstimationHub: React.FC = () => {
     approvedCount: 0,
     rejectedCount: 0,
     tdRejectedCount: 0,
+    completedCount: 0,
     totalValue: 0,
     avgProcessingTime: 0,
     totalQuantity: 0,
@@ -66,28 +67,40 @@ const EstimationHub: React.FC = () => {
         let approvedPurchases: Purchase[] = [];
         let rejectedPurchases: Purchase[] = [];
         let tdRejectedPurchases: Purchase[] = [];
+        let completedPurchases: Purchase[] = [];
         
         allPurchases.forEach(p => {
-          // Check estimation_status field directly from status_info
-          const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
+          // Check if purchase is completed (accounts has acknowledged or status is complete)
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true ||
+                             (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
+                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
           
-          // Check for TD rejection - when receiver is estimation and sender is technicalDirector
-          // This happens when TD rejects and sends back to estimation
-          const isTDRejected = p.status_info?.receiver === 'estimation' && 
-                              p.status_info?.sender === 'technicalDirector';
-          
-          // Check if estimation itself rejected (not TD rejection)
-          const isEstimationRejected = estimationStatus === 'rejected' && 
-                                       p.status_info?.sender === 'estimation';
-          
-          if (isTDRejected) {
-            tdRejectedPurchases.push(p);
-          } else if (estimationStatus === 'pending') {
-            pendingPurchases.push(p);
-          } else if (estimationStatus === 'approved') {
-            approvedPurchases.push(p);
-          } else if (isEstimationRejected) {
-            rejectedPurchases.push(p);
+          if (isCompleted) {
+            completedPurchases.push(p);
+          } else {
+            // Check estimation_status field directly from status_info
+            const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
+            
+            // Check for TD rejection - when receiver is estimation and sender is technicalDirector
+            // This happens when TD rejects and sends back to estimation
+            const isTDRejected = p.status_info?.receiver === 'estimation' && 
+                                p.status_info?.sender === 'technicalDirector';
+            
+            // Check if estimation itself rejected (not TD rejection)
+            const isEstimationRejected = estimationStatus === 'rejected' && 
+                                         p.status_info?.sender === 'estimation';
+            
+            if (isTDRejected) {
+              tdRejectedPurchases.push(p);
+            } else if (estimationStatus === 'pending') {
+              pendingPurchases.push(p);
+            } else if (estimationStatus === 'approved') {
+              approvedPurchases.push(p);
+            } else if (isEstimationRejected) {
+              rejectedPurchases.push(p);
+            }
           }
         });
         
@@ -111,6 +124,7 @@ const EstimationHub: React.FC = () => {
           approvedCount: approvedPurchases.length,
           rejectedCount: rejectedPurchases.length,
           tdRejectedCount: tdRejectedPurchases.length,
+          completedCount: completedPurchases.length,
           totalValue: totalValue,
           avgProcessingTime: 0,
           totalQuantity: totalQuantity,
@@ -124,6 +138,7 @@ const EstimationHub: React.FC = () => {
           approvedCount: 0,
           rejectedCount: 0,
           tdRejectedCount: 0,
+          completedCount: 0,
           totalValue: 0,
           avgProcessingTime: 0,
           totalQuantity: 0,
@@ -159,27 +174,48 @@ const EstimationHub: React.FC = () => {
   useEffect(() => {
     let filtered = [...purchases];
 
-    // Tab filter - Check estimation_status field from status_info
+    // Tab filter - Check estimation_status field from status_info and completion status
     switch (activeTab) {
       case 'pending':
-        // Show purchases where estimation_status is pending
+        // Show purchases where estimation_status is pending (exclude completed)
         filtered = purchases.filter(p => {
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true ||
+                             (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
+                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
+          if (isCompleted) return false;
+          
           const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
           return estimationStatus === 'pending';
         });
         break;
         
       case 'approved':
-        // Show purchases where estimation_status is approved
+        // Show purchases where estimation_status is approved (exclude completed)
         filtered = purchases.filter(p => {
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true ||
+                             (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
+                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
+          if (isCompleted) return false;
+          
           const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
           return estimationStatus === 'approved';
         });
         break;
         
       case 'rejected':
-        // Show purchases where estimation_status is rejected BY ESTIMATION (not TD rejections)
+        // Show purchases where estimation_status is rejected BY ESTIMATION (not TD rejections, exclude completed)
         filtered = purchases.filter(p => {
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true ||
+                             (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
+                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
+          if (isCompleted) return false;
+          
           const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
           // Check that it's rejected AND sender is estimation (meaning estimation rejected it)
           const isEstimationRejected = estimationStatus === 'rejected' && 
@@ -189,10 +225,29 @@ const EstimationHub: React.FC = () => {
         break;
         
       case 'td-rejected':
-        // Show purchases rejected by Technical Director - sent back to estimation
+        // Show purchases rejected by Technical Director - sent back to estimation (exclude completed)
         filtered = purchases.filter(p => {
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true ||
+                             (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
+                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
+          if (isCompleted) return false;
+          
           return p.status_info?.receiver === 'estimation' && 
                  p.status_info?.sender === 'technicalDirector';
+        });
+        break;
+        
+      case 'completed':
+        // Show completed purchases only
+        filtered = purchases.filter(p => {
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true ||
+                             (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
+                             (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
+          return isCompleted;
         });
         break;
     }
@@ -395,7 +450,7 @@ const EstimationHub: React.FC = () => {
       {/* Tabs - Responsive */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <TabsList className="grid w-full min-w-[320px] max-w-none lg:max-w-3xl grid-cols-4 bg-gray-100 h-auto">
+          <TabsList className="grid w-full min-w-[400px] max-w-none lg:max-w-4xl grid-cols-5 bg-gray-100 h-auto">
             <TabsTrigger 
               value="pending" 
               className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-amber-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
@@ -427,6 +482,14 @@ const EstimationHub: React.FC = () => {
               <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
               <span className="hidden xs:inline">TD Rejected</span>
               <span className="text-[10px] xs:text-xs sm:text-sm">({metrics.tdRejectedCount})</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="completed" 
+              className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-blue-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
+            >
+              <FileText className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="hidden xs:inline">Completed</span>
+              <span className="text-[10px] xs:text-xs sm:text-sm">({metrics.completedCount})</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -554,6 +617,41 @@ const EstimationHub: React.FC = () => {
                 <p className="text-base sm:text-lg font-medium text-gray-900">No TD rejected purchases</p>
                 <p className="text-xs sm:text-sm text-gray-500 mt-1 text-center px-4">
                   Purchases rejected by Technical Director will appear here
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <AnimatePresence mode="popLayout">
+                {filteredPurchases.map((purchase) => (
+                  <EstimationApprovalCard
+                  key={purchase.purchase_id}
+                  purchase={purchase}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                  onViewDetails={handleViewDetails}
+                  onViewHistory={handleViewHistory}
+                  isLoading={isLoading}
+                />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Completed Tab */}
+        <TabsContent value="completed" className="space-y-4">
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <RefreshCw className="h-8 w-8 animate-spin text-amber-600" />
+            </div>
+          ) : filteredPurchases.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
+                <FileText className="h-10 w-10 sm:h-12 sm:w-12 text-blue-500 mb-3 sm:mb-4" />
+                <p className="text-base sm:text-lg font-medium text-gray-900">No completed purchases</p>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1 text-center px-4">
+                  Completed purchases will appear here
                 </p>
               </CardContent>
             </Card>

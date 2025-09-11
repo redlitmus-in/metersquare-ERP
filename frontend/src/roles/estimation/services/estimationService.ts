@@ -53,6 +53,15 @@ export interface Purchase extends PurchaseDetail {
     decision_by_user_id: number;
     comments: string;
   };
+  latest_status?: {
+    status: string;
+    sender?: string;
+    receiver?: string;
+    date?: string;
+    decision_by?: string;
+    comments?: string;
+  };
+  accounts_acknowledgement?: boolean;
 }
 
 class EstimationService {
@@ -345,6 +354,171 @@ class EstimationService {
     }
     
     return 'pending';
+  }
+
+  /**
+   * Get current workflow status with role context
+   */
+  getCurrentWorkflowStatus(purchase: Purchase): { status: string; role: string; label: string } {
+    // Check if purchase is completed first - accounts acknowledged means workflow is complete
+    if (purchase.latest_status?.status === 'completed' || 
+        purchase.latest_status?.status === 'complete' ||
+        purchase.accounts_acknowledgement === true ||
+        purchase.status_info?.accounts_acknowledgement === true ||
+        (purchase.status_info?.receiver === 'accounts' && purchase.status_info?.accounts_status === 'acknowledged') ||
+        (purchase.status_info?.sender === 'accounts' && purchase.status_info?.accounts_status === 'acknowledged') ||
+        (purchase.status_info?.td_status === 'approved' && purchase.status_info?.receiver === 'accounts' && purchase.status_info?.accounts_status === 'approved') ||
+        (purchase.status_info?.sender === 'accounts' && purchase.status_info?.status === 'approved')) {
+      return { status: 'completed', role: 'accounts', label: 'Completed' };
+    }
+
+    // Map sender roles to display names
+    const roleMapping: { [key: string]: string } = {
+      'projectManager': 'PM',
+      'ProjectManager': 'PM',
+      'estimation': 'Estimation',
+      'Estimation': 'Estimation', 
+      'technicalDirector': 'TD',
+      'TechnicalDirector': 'TD',
+      'accounts': 'Accounts',
+      'Accounts': 'Accounts',
+      'procurement': 'Procurement',
+      'Procurement': 'Procurement',
+      'design': 'Design',
+      'Design': 'Design',
+      'siteSupervisor': 'Site Supervisor',
+      'SiteSupervisor': 'Site Supervisor'
+    };
+
+    // Check the current active status from status_info (most recent action)
+    if (purchase.status_info) {
+      const { pm_status, estimation_status, td_status, accounts_status, sender, receiver } = purchase.status_info;
+      
+      const senderLabel = roleMapping[sender] || sender;
+      const receiverLabel = roleMapping[receiver] || receiver;
+
+      // Determine the current status based on the workflow state
+      // Check each role's status in workflow order
+      
+      // If TD has approved and sent to accounts
+      if (td_status === 'approved' && receiver === 'accounts') {
+        return { 
+          status: 'pending', 
+          role: 'accounts', 
+          label: 'TD Approved - Pending Accounts' 
+        };
+      }
+      
+      // If TD has rejected
+      if (td_status === 'rejected' && sender === 'technicalDirector') {
+        return { 
+          status: 'rejected', 
+          role: 'technicalDirector', 
+          label: 'TD Rejected' 
+        };
+      }
+      
+      // If estimation has approved and sent to TD
+      if (estimation_status === 'approved' && receiver === 'technicalDirector') {
+        return { 
+          status: 'pending', 
+          role: 'technicalDirector', 
+          label: 'Estimation Approved - Pending TD' 
+        };
+      }
+      
+      // If estimation has rejected
+      if (estimation_status === 'rejected' && sender === 'estimation') {
+        return { 
+          status: 'rejected', 
+          role: 'estimation', 
+          label: 'Estimation Rejected' 
+        };
+      }
+      
+      // If PM has approved and sent to estimation
+      if (pm_status === 'approved' && receiver === 'estimation') {
+        return { 
+          status: 'pending', 
+          role: 'estimation', 
+          label: 'PM Approved - Pending Estimation' 
+        };
+      }
+      
+      // If PM has rejected
+      if (pm_status === 'rejected' && sender === 'projectManager') {
+        return { 
+          status: 'rejected', 
+          role: 'projectManager', 
+          label: 'PM Rejected' 
+        };
+      }
+      
+      // If waiting for PM approval
+      if (receiver === 'projectManager' && pm_status === 'pending') {
+        return { 
+          status: 'pending', 
+          role: 'projectManager', 
+          label: 'Pending PM Approval' 
+        };
+      }
+
+      // Generic handling based on sender and receiver
+      if (sender && receiver) {
+        // Determine the overall status
+        const overallStatus = purchase.status_info.status || 'pending';
+        
+        if (overallStatus === 'approved' && receiver && receiver !== 'null' && receiver !== '') {
+          return { 
+            status: 'pending', 
+            role: receiver, 
+            label: `${senderLabel} Approved - Pending ${receiverLabel}` 
+          };
+        } else if (overallStatus === 'rejected') {
+          return { 
+            status: 'rejected', 
+            role: sender, 
+            label: `${senderLabel} Rejected` 
+          };
+        } else if (overallStatus === 'approved') {
+          return { 
+            status: 'approved', 
+            role: sender, 
+            label: `${senderLabel} Approved` 
+          };
+        } else {
+          return { 
+            status: 'pending', 
+            role: receiver, 
+            label: `Pending ${receiverLabel}` 
+          };
+        }
+      }
+    }
+
+    // Fallback to latest_status if available
+    if (purchase.latest_status) {
+      const statusLabel = purchase.latest_status.status.charAt(0).toUpperCase() + 
+                         purchase.latest_status.status.slice(1);
+      return { 
+        status: purchase.latest_status.status, 
+        role: 'system', 
+        label: statusLabel
+      };
+    }
+
+    // If we have minimal info but know it's pending somewhere
+    if (purchase.status_info?.receiver) {
+      const receiverLabel = roleMapping[purchase.status_info.receiver] || purchase.status_info.receiver;
+      return { 
+        status: 'pending', 
+        role: purchase.status_info.receiver, 
+        label: `Pending ${receiverLabel}` 
+      };
+    }
+
+    // Default fallback - show as pending if we have no status info
+    return { status: 'pending', role: 'procurement', label: 'In Progress' };
   }
 
   /**

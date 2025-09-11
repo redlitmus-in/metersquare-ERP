@@ -76,6 +76,7 @@ const ProjectManagerHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState('pending');
   const [purchases, setPurchases] = useState<ProcurementPurchase[]>([]);
   const [estimationRejectedPurchases, setEstimationRejectedPurchases] = useState<ProcurementPurchase[]>([]);
+  const [completedPurchases, setCompletedPurchases] = useState<ProcurementPurchase[]>([]);
   const [filteredPurchases, setFilteredPurchases] = useState<ProcurementPurchase[]>([]);
   const [metrics, setMetrics] = useState<MetricCard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -98,12 +99,74 @@ const ProjectManagerHub: React.FC = () => {
       const response = await projectManagerService.getProcurementApprovedPurchases();
       
       if (response.success) {
-        setPurchases(response.approved_procurement_purchases || []);
+        const allPurchases = response.approved_procurement_purchases || [];
+        
+        // Map purchases to include latest_status from status_history
+        const mappedPurchases = allPurchases.map((p: any) => {
+          // Get the latest status from status_history
+          const latestStatusEntry = p.status_history && p.status_history.length > 0 
+            ? p.status_history[p.status_history.length - 1]
+            : null;
+          
+          return {
+            ...p,
+            latest_status: latestStatusEntry ? {
+              status: latestStatusEntry.status,
+              sender: latestStatusEntry.sender,
+              receiver: latestStatusEntry.receiver,
+              date: latestStatusEntry.date
+            } : undefined
+          };
+        });
+        
+        // Separate completed purchases from active ones
+        const completed = mappedPurchases.filter((p: ProcurementPurchase) => {
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true ||
+                             p.current_workflow_status === 'completed';
+          return isCompleted;
+        });
+        
+        const active = mappedPurchases.filter((p: ProcurementPurchase) => {
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true ||
+                             p.current_workflow_status === 'completed';
+          return !isCompleted;
+        });
+        
+        setPurchases(active);
+        setCompletedPurchases(completed);
         
         // Filter estimation rejected purchases to exclude those rejected by PM
         // Only show purchases that were approved by PM but rejected by Estimation
-        const estimationRejections = (response.estimation_pm_rejections || []).filter(
+        const estimationRejectionsMapped = (response.estimation_pm_rejections || []).map((p: any) => {
+          // Get the latest status from status_history
+          const latestStatusEntry = p.status_history && p.status_history.length > 0 
+            ? p.status_history[p.status_history.length - 1]
+            : null;
+          
+          return {
+            ...p,
+            latest_status: latestStatusEntry ? {
+              status: latestStatusEntry.status,
+              sender: latestStatusEntry.sender,
+              receiver: latestStatusEntry.receiver,
+              date: latestStatusEntry.date
+            } : undefined
+          };
+        });
+        
+        const estimationRejections = estimationRejectionsMapped.filter(
           (purchase: ProcurementPurchase) => {
+            // Exclude completed purchases
+            const isCompleted = purchase.latest_status?.status === 'completed' || 
+                               purchase.latest_status?.status === 'complete' ||
+                               purchase.accounts_acknowledgement === true ||
+                               purchase.current_workflow_status === 'completed';
+            if (isCompleted) return false;
+            
             // Only include purchases where PM approved but Estimation rejected
             // Exclude purchases where PM rejected (pm_status === 'rejected')
             return purchase.pm_status !== 'rejected';
@@ -150,6 +213,15 @@ const ProjectManagerHub: React.FC = () => {
             trendType: 'down'
           },
           {
+            title: 'Completed',
+            value: completed.length || 0,
+            icon: <FileText className="h-5 w-5 text-blue-600" />,
+            bgColor: 'bg-blue-50',
+            iconColor: 'bg-blue-100',
+            trend: '+10%',
+            trendType: 'up'
+          },
+          {
             title: 'Total Value',
             value: `AED ${(response.summary?.financial_summary?.total_value || 0).toLocaleString()}`,
             icon: <TrendingUp className="h-5 w-5 text-indigo-600" />,
@@ -180,6 +252,7 @@ const ProjectManagerHub: React.FC = () => {
       // Provide fallback data when API fails
       setPurchases([]);
       setEstimationRejectedPurchases([]);
+      setCompletedPurchases([]);
       
       // Set default metrics when API fails
       const fallbackMetrics: MetricCard[] = [
@@ -269,6 +342,10 @@ const ProjectManagerHub: React.FC = () => {
         // Use the estimation_pm_rejections data from API
         filtered = [...estimationRejectedPurchases];
         break;
+      case 'completed':
+        // Show completed purchases
+        filtered = [...completedPurchases];
+        break;
       default:
         filtered = [...purchases];
         break;
@@ -284,7 +361,7 @@ const ProjectManagerHub: React.FC = () => {
     }
 
     setFilteredPurchases(filtered);
-  }, [purchases, estimationRejectedPurchases, activeTab, searchTerm]);
+  }, [purchases, estimationRejectedPurchases, completedPurchases, activeTab, searchTerm]);
 
   // Handle approval action
   const handleApprove = async (purchaseId: number) => {
@@ -425,8 +502,9 @@ const ProjectManagerHub: React.FC = () => {
     pending: purchases.filter(p => !p.pm_status || p.pm_status === 'pending').length,
     approved: purchases.filter(p => p.pm_status === 'approved').length,
     rejected: purchases.filter(p => p.pm_status === 'rejected').length,
-    estimation_rejected: estimationRejectedPurchases.length
-  }), [purchases, estimationRejectedPurchases]);
+    estimation_rejected: estimationRejectedPurchases.length,
+    completed: completedPurchases.length
+  }), [purchases, estimationRejectedPurchases, completedPurchases]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -501,7 +579,7 @@ const ProjectManagerHub: React.FC = () => {
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <div className="border-b px-6 pt-4">
-                <TabsList className="grid w-full max-w-lg grid-cols-4 bg-gray-100/50">
+                <TabsList className="grid w-full max-w-2xl grid-cols-5 bg-gray-100/50">
                   <TabsTrigger value="pending" className="relative">
                     <Clock className="h-4 w-4 mr-2" />
                     Pending
@@ -535,6 +613,15 @@ const ProjectManagerHub: React.FC = () => {
                     {tabCounts.estimation_rejected > 0 && (
                       <Badge variant="secondary" className="ml-2 bg-orange-100 text-orange-700">
                         {tabCounts.estimation_rejected}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="completed" className="relative">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Completed
+                    {tabCounts.completed > 0 && (
+                      <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700">
+                        {tabCounts.completed}
                       </Badge>
                     )}
                   </TabsTrigger>

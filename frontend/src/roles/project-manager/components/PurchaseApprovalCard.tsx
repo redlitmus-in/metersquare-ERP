@@ -54,8 +54,22 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
   const [rejectionReason, setRejectionReason] = useState('');
   const [approvalComments, setApprovalComments] = useState('');
 
+  // Check if the purchase is completed (accounts has acknowledged)
+  const isCompleted = purchase.latest_status?.status === 'completed' || 
+                     purchase.latest_status?.status === 'complete' ||
+                     purchase.accounts_acknowledgement === true ||
+                     purchase.current_workflow_status === 'completed';
+
   // Determine status color and icon
   const getStatusInfo = () => {
+    if (isCompleted) {
+      return {
+        color: 'bg-blue-100 text-blue-700',
+        icon: <CheckCircle className="h-4 w-4" />,
+        text: 'Completed'
+      };
+    }
+    
     const status = purchase.pm_status || 'pending';
     switch (status) {
       case 'approved':
@@ -141,55 +155,55 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
         className="h-full"
       >
         <Card className="hover:shadow-lg transition-shadow duration-200 border-gray-200 h-full flex flex-col">
-          <CardHeader className="pb-2">
-            <div className="space-y-2">
+          <CardHeader className="pb-1 pt-3 px-3">
+            <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-base text-gray-900">
+                <h3 className="font-semibold text-sm text-gray-900">
                   PR #{purchase.purchase_id}
                 </h3>
-                <Badge className={`${statusInfo.color} text-xs`}>
+                <Badge className={`${statusInfo.color} text-[10px] px-1.5 py-0`}>
                   {statusInfo.text}
                 </Badge>
               </div>
-              <div className="flex items-center gap-3 text-xs text-gray-600">
-                <div className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3" />
+              <div className="flex items-center gap-2 text-[10px] text-gray-600">
+                <div className="flex items-center gap-0.5">
+                  <MapPin className="h-2.5 w-2.5" />
                   <span className="truncate">{purchase.site_location}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
+                <div className="flex items-center gap-0.5">
+                  <Calendar className="h-2.5 w-2.5" />
                   <span>{formatDate(purchase.created_at || purchase.date)}</span>
                 </div>
               </div>
             </div>
           </CardHeader>
 
-          <CardContent className="flex-1 flex flex-col">
+          <CardContent className="flex-1 flex flex-col px-3 pt-2 pb-3">
             {/* Purpose */}
-            <div className="mb-3">
-              <p className="text-xs text-gray-600 mb-1">Purpose</p>
-              <p className="text-sm font-medium text-gray-900 line-clamp-2">
+            <div className="mb-2">
+              <p className="text-[10px] text-gray-600">Purpose</p>
+              <p className="text-xs font-medium text-gray-900 line-clamp-1">
                 {purchase.purpose}
               </p>
             </div>
 
             {/* Compact Summary */}
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              <div className="bg-gray-50 rounded p-2">
-                <div className="flex items-center gap-1">
-                  <Package className="h-3 w-3 text-gray-500" />
-                  <span className="text-xs text-gray-600">Items</span>
+            <div className="grid grid-cols-2 gap-1.5 mb-2">
+              <div className="bg-gray-50 rounded px-1.5 py-1">
+                <div className="flex items-center gap-0.5">
+                  <Package className="h-2.5 w-2.5 text-gray-500" />
+                  <span className="text-[10px] text-gray-600">Items</span>
                 </div>
-                <p className="text-sm font-semibold text-gray-900">
+                <p className="text-xs font-semibold text-gray-900">
                   {purchase.materials_summary?.total_materials || 0}
                 </p>
               </div>
-              <div className="bg-gray-50 rounded p-2">
-                <div className="flex items-center gap-1">
-                  <DollarSign className="h-3 w-3 text-gray-500" />
-                  <span className="text-xs text-gray-600">Total</span>
+              <div className="bg-gray-50 rounded px-1.5 py-1">
+                <div className="flex items-center gap-0.5">
+                  <DollarSign className="h-2.5 w-2.5 text-gray-500" />
+                  <span className="text-[10px] text-gray-600">Total</span>
                 </div>
-                <p className="text-sm font-semibold text-gray-900">
+                <p className="text-xs font-semibold text-gray-900">
                   AED {((purchase.materials_summary?.total_cost || 0)/1000).toFixed(1)}K
                 </p>
               </div>
@@ -198,13 +212,13 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
 
             {/* Rejection Alert for Estimation Rejected Tab */}
             {rejectedByEstimation && isEstimationRejected && (
-              <div className="mb-3 p-2 bg-orange-50 rounded border border-orange-200">
-                <div className="flex items-start gap-1">
-                  <AlertTriangle className="h-3 w-3 text-orange-600 mt-0.5" />
+              <div className="mb-2 p-1.5 bg-orange-50 rounded border border-orange-200">
+                <div className="flex items-start gap-0.5">
+                  <AlertTriangle className="h-2.5 w-2.5 text-orange-600 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-xs font-medium text-orange-800">Est. Rejected</p>
+                    <p className="text-[10px] font-medium text-orange-800">Est. Rejected</p>
                     {(purchase.rejected_status?.rejection_reason || purchase.estimation_rejection_reason) && (
-                      <p className="text-xs text-orange-700 mt-1 line-clamp-2">
+                      <p className="text-[10px] text-orange-700 mt-0.5 line-clamp-1">
                         {purchase.rejected_status?.rejection_reason || purchase.estimation_rejection_reason}
                       </p>
                     )}
@@ -214,18 +228,18 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
             )}
 
             {/* Action Buttons - Push to bottom */}
-            <div className="space-y-2 mt-auto pt-2">
+            <div className="space-y-1.5 mt-auto pt-1">
               {/* View Buttons Row */}
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 {onViewDetails && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => onViewDetails(purchase.purchase_id)}
-                    className="flex-1 h-8 text-xs"
+                    className="flex-1 h-6 text-[10px] px-2"
                     disabled={isLoading}
                   >
-                    <Eye className="h-3 w-3 mr-1" />
+                    <Eye className="h-2.5 w-2.5 mr-0.5" />
                     Details
                   </Button>
                 )}
@@ -234,10 +248,10 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                     variant="outline"
                     size="sm"
                     onClick={() => onViewHistory(purchase.purchase_id)}
-                    className="flex-1 h-8 text-xs"
+                    className="flex-1 h-6 text-[10px] px-2"
                     disabled={isLoading}
                   >
-                    <History className="h-3 w-3 mr-1" />
+                    <History className="h-2.5 w-2.5 mr-0.5" />
                     History
                   </Button>
                 )}
@@ -245,7 +259,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
               
               {/* Action Buttons Row - Different for each tab */}
               {(isPending || isEstimationRejected) && (
-                <div className="flex gap-2">
+                <div className="flex gap-1">
                   <Button
                     variant="default"
                     size="sm"
@@ -261,7 +275,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                     }}
                     className={`${
                       isEstimationRejected ? 'w-full' : 'flex-1'
-                    } h-8 text-xs ${
+                    } h-6 text-[10px] px-2 ${
                       isEstimationRejected 
                         ? 'bg-blue-600 hover:bg-blue-700' 
                         : 'bg-green-600 hover:bg-green-700'
@@ -270,12 +284,12 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                   >
                     {isEstimationRejected ? (
                       <>
-                        <Send className="h-3 w-3 mr-1" />
+                        <Send className="h-2.5 w-2.5 mr-0.5" />
                         Resend to Est
                       </>
                     ) : (
                       <>
-                        <CheckCircle className="h-3 w-3 mr-1" />
+                        <CheckCircle className="h-2.5 w-2.5 mr-0.5" />
                         Approve
                       </>
                     )}
@@ -286,10 +300,10 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                       variant="destructive"
                       size="sm"
                       onClick={() => setShowRejectDialog(true)}
-                      className="flex-1 h-8 text-xs"
+                      className="flex-1 h-6 text-[10px] px-2"
                       disabled={isLoading}
                     >
-                      <XCircle className="h-3 w-3 mr-1" />
+                      <XCircle className="h-2.5 w-2.5 mr-0.5" />
                       Reject
                     </Button>
                   )}

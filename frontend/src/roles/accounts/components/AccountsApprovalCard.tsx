@@ -137,91 +137,90 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
       exit={{ opacity: 0, y: -20 }}
       whileHover={{ y: -2 }}
       transition={{ duration: 0.2 }}
+      className="h-full"
     >
-      <Card className="h-full hover:shadow-lg transition-shadow">
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between">
-            <div>
-              <CardTitle className="text-lg font-semibold">
+      <Card className="h-full hover:shadow-lg transition-shadow max-w-sm mx-auto">
+        <CardHeader className="pb-2 px-4 pt-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-base font-semibold truncate">
                 PR #{purchase.purchase_id}
               </CardTitle>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-0.5 truncate">
                 Project: {purchase.project_id}
               </p>
             </div>
-            <div className="flex flex-col gap-1 items-end">
-              <Badge className={getStatusColor()} variant="outline">
-                {isProcessed ? 'Payment Completed' :
-                 accountsStatus === 'pending' ? 'Pending Payment' : 
+            <div className="flex flex-col gap-1 items-end flex-shrink-0">
+              <Badge className={`${getStatusColor()} text-xs`} variant="outline">
+                {isProcessed ? 'Completed' :
+                 accountsStatus === 'pending' ? 'Pending' : 
                  accountsStatus === 'payment_processing' ? 'Processing' : 
-                 accountsStatus === 'payment_processed' ? 'Payment Completed' : 
+                 accountsStatus === 'payment_processed' ? 'Completed' : 
                  accountsStatus === 'payment_rejected' ? 'Rejected' : 'Pending'}
               </Badge>
               {hasAcknowledgement && isProcessed && (
-                <Badge className="bg-blue-100 text-blue-800 border-blue-200" variant="outline" size="sm">
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Acknowledged
+                <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs" variant="outline">
+                  <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
+                  Ack'd
                 </Badge>
               )}
-              <Badge className={getPriorityColor()} variant="outline" size="sm">
-                {priority} priority
+              <Badge className={`${getPriorityColor()} text-xs`} variant="outline">
+                {priority?.charAt(0).toUpperCase() + priority?.slice(1)} priority
               </Badge>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 px-4 pb-4">
           {/* Key Information */}
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center gap-2 text-gray-600">
-              <MapPin className="h-3.5 w-3.5" />
+          <div className="space-y-1.5 text-xs">
+            <div className="flex items-center gap-1.5 text-gray-600">
+              <MapPin className="h-3 w-3 flex-shrink-0" />
               <span className="truncate">{purchase.site_location}</span>
             </div>
-            <div className="flex items-center gap-2 text-gray-600">
-              <User className="h-3.5 w-3.5" />
+            <div className="flex items-center gap-1.5 text-gray-600">
+              <User className="h-3 w-3 flex-shrink-0" />
               <span className="truncate">{purchase.requested_by}</span>
             </div>
-            <div className="flex items-center gap-2 text-gray-600">
-              <Calendar className="h-3.5 w-3.5" />
-              <span>{new Date(purchase.date).toLocaleDateString()}</span>
+            <div className="flex items-center gap-1.5 text-gray-600">
+              <Calendar className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate">{new Date(purchase.date).toLocaleDateString()}</span>
             </div>
           </div>
 
           <Separator />
 
           {/* Payment & Cost Summary */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Package className="h-3.5 w-3.5" />
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-gray-600">
+                <Package className="h-3 w-3" />
                 <span>{purchase.material_count || 0} items</span>
               </div>
-              <span className="text-sm text-gray-600">
+              <span className="text-gray-600">
                 Qty: {purchase.total_quantity || 0}
               </span>
             </div>
-            <div className="flex items-center justify-between bg-green-50 rounded-lg p-2">
-              <div className="flex items-center gap-1.5">
-                <DollarSign className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-medium text-green-900">Payment Amount</span>
+            <div className="flex items-center justify-between bg-green-50 rounded-md px-2 py-1.5">
+              <div className="flex items-center gap-1">
+                <DollarSign className="h-3 w-3 text-green-600" />
+                <span className="text-xs font-medium text-green-900">Total</span>
               </div>
-              <span className="text-sm font-bold text-green-600">
+              <span className="text-xs font-bold text-green-600 truncate">
                 {accountsService.formatCurrency(purchase.total_cost || 0)}
               </span>
             </div>
           </div>
 
           {/* Previous Approvals */}
-          <div className="bg-gray-50 rounded-lg p-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Technical Director:</span>
+          <div className="bg-gray-50 rounded-md px-2 py-1.5 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-gray-600 truncate">Technical Director:</span>
               <Badge 
-                className={technicalDirectorStatus === 'approved' || isProcessed ? 
+                className={`${technicalDirectorStatus === 'approved' || isProcessed ? 
                   'bg-green-100 text-green-700' : 
-                  'bg-yellow-100 text-yellow-700'
-                }
+                  'bg-yellow-100 text-yellow-700'} text-xs`}
                 variant="outline"
-                size="sm"
               >
                 {isProcessed ? 'approved' : technicalDirectorStatus}
               </Badge>
@@ -230,17 +229,17 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
 
           {/* Payment Details if processing */}
           {hasPaymentPending && purchase.payment_details && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
-              <div className="flex items-center gap-1 mb-1">
-                <CreditCard className="h-3 w-3 text-blue-600" />
-                <span className="text-xs font-medium text-blue-700">Payment Details</span>
+            <div className="bg-blue-50 border border-blue-200 rounded-md px-2 py-1.5">
+              <div className="flex items-center gap-1 mb-0.5">
+                <CreditCard className="h-2.5 w-2.5 text-blue-600" />
+                <span className="text-xs font-medium text-blue-700">Payment</span>
               </div>
-              <p className="text-xs text-blue-600">
-                Method: {purchase.payment_details.payment_method || 'Bank Transfer'}
+              <p className="text-xs text-blue-600 truncate">
+                {purchase.payment_details.payment_method || 'Bank Transfer'}
               </p>
               {purchase.payment_details.vendor_name && (
-                <p className="text-xs text-blue-600">
-                  Vendor: {purchase.payment_details.vendor_name}
+                <p className="text-xs text-blue-600 truncate">
+                  {purchase.payment_details.vendor_name}
                 </p>
               )}
             </div>
@@ -248,9 +247,9 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
 
           {/* Comments if rejected */}
           {accountsStatus === 'payment_rejected' && purchase.accounts_rejection_reason && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-2">
-              <p className="text-xs text-red-700">
-                <span className="font-medium">Rejection Reason:</span> {purchase.accounts_rejection_reason}
+            <div className="bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
+              <p className="text-xs text-red-700 line-clamp-2">
+                <span className="font-medium">Reason:</span> {purchase.accounts_rejection_reason}
               </p>
             </div>
           )}
@@ -258,36 +257,36 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
           <Separator />
 
           {/* Action Buttons */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {isProcessed ? (
               // For processed items, show View Details, View Payment and View Transaction Details buttons
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
                   <Button
                     onClick={() => onViewDetails(purchase.purchase_id)}
                     variant="outline"
-                    className="w-full"
+                    className="w-full h-8 text-xs"
                     size="sm"
                   >
-                    <Eye className="h-3.5 w-3.5 mr-1" />
-                    View Details
+                    <Eye className="h-3 w-3 mr-1" />
+                    Details
                   </Button>
                   {onViewTransactionDetails && (
                     <Button
                       onClick={() => onViewTransactionDetails(purchase.purchase_id)}
                       variant="outline"
-                      className="w-full border-blue-200 text-blue-600 hover:bg-blue-50"
+                      className="w-full border-blue-200 text-blue-600 hover:bg-blue-50 h-8 text-xs"
                       size="sm"
                     >
-                      <ArrowRightLeft className="h-3.5 w-3.5 mr-1" />
-                      Transaction Info
+                      <ArrowRightLeft className="h-3 w-3 mr-1" />
+                      Transaction
                     </Button>
                   )}
                 </div>
                 {onSendAcknowledgement && (
                   <Button
                     onClick={() => onSendAcknowledgement(purchase.purchase_id)}
-                    className={`w-full ${
+                    className={`w-full h-8 text-xs ${
                       hasAcknowledgement 
                         ? 'bg-gray-300 cursor-not-allowed text-gray-500' 
                         : 'bg-green-600 hover:bg-green-700 text-white'
@@ -297,13 +296,13 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
                   >
                     {hasAcknowledgement ? (
                       <>
-                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                        Acknowledgement Sent
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        Ack Sent
                       </>
                     ) : (
                       <>
-                        <Send className="h-3.5 w-3.5 mr-1" />
-                        Send Acknowledgement
+                        <Send className="h-3 w-3 mr-1" />
+                        Send Ack
                       </>
                     )}
                   </Button>
@@ -314,42 +313,42 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
                 <Button
                   onClick={() => onProcessPayment(purchase.purchase_id)}
                   disabled={isLoading}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white h-8 text-xs"
                   size="sm"
                 >
-                  <CreditCard className="h-3.5 w-3.5 mr-1" />
+                  <CreditCard className="h-3 w-3 mr-1" />
                   Process Payment
                 </Button>
                 <Button
                   onClick={() => onViewDetails(purchase.purchase_id)}
                   variant="outline"
                   size="sm"
-                  className="w-full"
+                  className="w-full h-8 text-xs"
                 >
-                  <Eye className="h-3.5 w-3.5 mr-1" />
+                  <Eye className="h-3 w-3 mr-1" />
                   View Details
                 </Button>
               </>
             ) : hasPaymentPending ? (
               <>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-1.5">
                   <Button
                     onClick={() => onApprovePayment(purchase.purchase_id)}
                     disabled={isLoading}
-                    className="bg-green-600 hover:bg-green-700 text-white"
+                    className="bg-green-600 hover:bg-green-700 text-white h-8 text-xs"
                     size="sm"
                   >
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
                     Approve
                   </Button>
                   <Button
                     onClick={() => onRejectPayment(purchase.purchase_id)}
                     disabled={isLoading}
                     variant="outline"
-                    className="border-red-200 text-red-600 hover:bg-red-50"
+                    className="border-red-200 text-red-600 hover:bg-red-50 h-8 text-xs"
                     size="sm"
                   >
-                    <XCircle className="h-3.5 w-3.5 mr-1" />
+                    <XCircle className="h-3 w-3 mr-1" />
                     Reject
                   </Button>
                 </div>
@@ -357,9 +356,9 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
                   onClick={() => onViewDetails(purchase.purchase_id)}
                   variant="outline"
                   size="sm"
-                  className="w-full"
+                  className="w-full h-8 text-xs"
                 >
-                  <Eye className="h-3.5 w-3.5 mr-1" />
+                  <Eye className="h-3 w-3 mr-1" />
                   View Details
                 </Button>
               </>
@@ -367,10 +366,10 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
               <Button
                 onClick={() => onViewDetails(purchase.purchase_id)}
                 variant="outline"
-                className="w-full"
+                className="w-full h-8 text-xs"
                 size="sm"
               >
-                <Eye className="h-3.5 w-3.5 mr-1" />
+                <Eye className="h-3 w-3 mr-1" />
                 View Details
               </Button>
             )}

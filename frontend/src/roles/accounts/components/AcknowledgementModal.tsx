@@ -173,7 +173,18 @@ const AcknowledgementModal: React.FC<AcknowledgementModalProps> = ({
   // Handle file view/download
   const handleViewFile = (file: UploadedFile) => {
     if (file.url) {
-      window.open(file.url, '_blank');
+      // Create a temporary anchor element for download to prevent untitled tabs
+      const link = document.createElement('a');
+      link.href = file.url;
+      link.download = file.name || 'download';
+      link.style.display = 'none';
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success('Download started');
     } else {
       toast.error('File URL not available');
     }

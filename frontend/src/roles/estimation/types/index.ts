@@ -23,6 +23,7 @@ export interface StatusInfo {
   status?: 'pending' | 'approved' | 'rejected';
   estimation_status?: 'pending' | 'approved' | 'rejected';
   pm_status?: 'pending' | 'approved' | 'rejected';
+  accounts_status?: 'pending' | 'approved' | 'rejected';
   sender: string;
   receiver: string;
   decision_date: string | null;
