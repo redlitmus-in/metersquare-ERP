@@ -67,7 +67,7 @@ def upload_files(key, id):
                 # Create unique filename with index
                 unique_filename = f"{file_name}_{index}{file_extension}"
                 # Store in role-specific folder
-                supabase_path = f"{base_folder}/{id}/{unique_filename}"
+                supabase_path = f"{id}/{unique_filename}"
                 
                 # Read file content
                 file_content = file.read()
