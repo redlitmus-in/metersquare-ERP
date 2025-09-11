@@ -28,6 +28,9 @@ log =  get_logger()
 ENVIRONMENT = os.environ.get("ENVIRONMENT")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 SENDER_EMAIL_PASSWORD = os.getenv("SENDER_EMAIL_PASSWORD")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 otp_storage = {}
@@ -115,8 +118,8 @@ def send_otp(email_id):
         
         sender_email = SENDER_EMAIL
         password = SENDER_EMAIL_PASSWORD
-        smtp_server = "smtp.gmail.com"
-        smtp_port = 465
+        smtp_server = EMAIL_HOST
+        smtp_port = EMAIL_PORT
         subject = "Your OTP Code"
         
         # Create the HTML body
@@ -226,9 +229,18 @@ def send_otp(email_id):
         except Exception as e:
             log.error(f"Error attaching logo: {e}")
 
-        with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
-            server.login(sender_email, password)
-            server.sendmail(sender_email, email_id, message.as_string())
+        # Use appropriate SMTP connection based on configuration
+        if EMAIL_USE_TLS:
+            # For TLS (like Office 365 on port 587)
+            with smtplib.SMTP(smtp_server, smtp_port) as server:
+                server.starttls()
+                server.login(sender_email, password)
+                server.sendmail(sender_email, email_id, message.as_string())
+        else:
+            # For SSL (like Gmail on port 465)
+            with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
+                server.login(sender_email, password)
+                server.sendmail(sender_email, email_id, message.as_string())
 
         log.info(f"OTP email sent successfully to {email_id}")
         return otp
