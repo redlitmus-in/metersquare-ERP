@@ -9,16 +9,26 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { 
   RefreshCw, Search, Shield, 
   CheckSquare, XSquare, Clock, TrendingUp,
-  DollarSign, FileText, BarChart3, AlertCircle
+  DollarSign, FileText, BarChart3, AlertCircle,
+  Filter, X, Building2, MapPin
 } from 'lucide-react';
 import TechnicalDirectorApprovalCard from '../components/TechnicalDirectorApprovalCard';
 import TechnicalDirectorApprovalModal from '../components/TechnicalDirectorApprovalModal';
 import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
 import { Purchase, technicalDirectorService } from '../services/technicalDirectorService';
 import { toast } from 'sonner';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 
 const TechnicalDirectorHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -26,6 +36,13 @@ const TechnicalDirectorHub: React.FC = () => {
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Search and Filter states
+  const [showFilters, setShowFilters] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [projectFilter, setProjectFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
   
   // Modal states
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -206,8 +223,82 @@ const TechnicalDirectorHub: React.FC = () => {
       );
     }
 
+    // Status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(p => {
+        const status = p.technical_director_status?.toLowerCase() || 'pending';
+        return status === statusFilter;
+      });
+    }
+
+    // Project filter
+    if (projectFilter !== 'all') {
+      filtered = filtered.filter(p => p.project_id === projectFilter);
+    }
+
+    // Location filter  
+    if (locationFilter !== 'all') {
+      filtered = filtered.filter(p => p.site_location === locationFilter);
+    }
+
+    // Date filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const filterDate = (date: string) => {
+        const purchaseDate = new Date(date);
+        switch (dateFilter) {
+          case 'today':
+            return purchaseDate.toDateString() === now.toDateString();
+          case 'week':
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            return purchaseDate >= weekAgo;
+          case 'month':
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            return purchaseDate >= monthAgo;
+          case 'quarter':
+            const quarterAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+            return purchaseDate >= quarterAgo;
+          default:
+            return true;
+        }
+      };
+      filtered = filtered.filter(p => filterDate(p.date || p.created_at));
+    }
+
+    // Apply sorting - prioritize most recent activity
+    filtered.sort((a, b) => {
+      // For sorting, use the most recent date available:
+      // 1. latest_status.date (if exists) - shows most recent approval/action
+      // 2. last_modified_at (if exists) - shows recent edits
+      // 3. created_at (if exists)
+      // 4. date (fallback)
+      
+      const getMostRecentDate = (purchase: Purchase) => {
+        // If there's a latest status with date, use it (most recent workflow action)
+        if (purchase.latest_status?.date) {
+          return new Date(purchase.latest_status.date).getTime();
+        }
+        // If last modified, use it (recent edits/updates)
+        if (purchase.last_modified_at) {
+          return new Date(purchase.last_modified_at).getTime();
+        }
+        // If created at, use it
+        if (purchase.created_at) {
+          return new Date(purchase.created_at).getTime();
+        }
+        // Fallback to date field
+        return new Date(purchase.date).getTime();
+      };
+      
+      const dateA = getMostRecentDate(a);
+      const dateB = getMostRecentDate(b);
+      
+      // Sort by most recent first (newest activity at top)
+      return dateB - dateA;
+    });
+
     setFilteredPurchases(filtered);
-  }, [purchases, activeTab, searchTerm]);
+  }, [purchases, activeTab, searchTerm, statusFilter, projectFilter, locationFilter, dateFilter]);
 
   // Handle approve button click
   const handleApprove = (purchaseId: number) => {
@@ -269,6 +360,51 @@ const TechnicalDirectorHub: React.FC = () => {
     return `AED ${amount.toLocaleString()}`;
   };
 
+  // Helper functions for filters
+  const getUniqueProjects = () => {
+    const projects = purchases
+      .map(p => p.project_id)
+      .filter((project, index, self) => 
+        project && self.indexOf(project) === index
+      );
+    return projects;
+  };
+
+  const getUniqueLocations = () => {
+    const locations = purchases
+      .map(p => p.site_location)
+      .filter((location, index, self) => 
+        location && self.indexOf(location) === index
+      );
+    return locations;
+  };
+
+  const hasActiveFilters = () => {
+    return statusFilter !== 'all' || 
+           projectFilter !== 'all' || 
+           locationFilter !== 'all' || 
+           dateFilter !== 'all';
+  };
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setProjectFilter('all');
+    setLocationFilter('all');
+    setDateFilter('all');
+  };
+
+  // Show loading state
+  if (isLoading && purchases.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-2">
+          <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+          <p className="text-sm text-gray-600">Loading purchases...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 pb-8">
       {/* Page Header - Responsive */}
@@ -293,84 +429,210 @@ const TechnicalDirectorHub: React.FC = () => {
       {/* Metrics Cards - Responsive Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 mb-6">
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-500 flex-shrink-0" />
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <Clock className="h-3 w-3 text-indigo-500 flex-shrink-0" />
               <span className="truncate">Pending Review</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-xl sm:text-2xl font-bold text-indigo-600">{metrics.pendingCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Awaiting approval</p>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-indigo-600">{metrics.pendingCount}</p>
+            <p className="text-xs text-gray-500 truncate">Awaiting approval</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <CheckSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <CheckSquare className="h-3 w-3 text-green-500 flex-shrink-0" />
               <span className="truncate">Approved</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-xl sm:text-2xl font-bold text-green-600">{metrics.approvedCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Sent to Accounts</p>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-green-600">{metrics.approvedCount}</p>
+            <p className="text-xs text-gray-500 truncate">Sent to Accounts</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <XSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500 flex-shrink-0" />
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <XSquare className="h-3 w-3 text-red-500 flex-shrink-0" />
               <span className="truncate">Rejected</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-xl sm:text-2xl font-bold text-red-600">{metrics.rejectedCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Sent back</p>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-red-600">{metrics.rejectedCount}</p>
+            <p className="text-xs text-gray-500 truncate">Sent back</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500 flex-shrink-0" />
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <DollarSign className="h-3 w-3 text-green-500 flex-shrink-0" />
               <span className="truncate">Total Value</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-sm sm:text-lg lg:text-xl font-bold text-blue-600 truncate">
+          <CardContent className="px-3 pb-3">
+            <p className="text-sm font-bold text-green-600 truncate">
               {formatCurrency(metrics.totalValue)}
             </p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Pending value</p>
+            <p className="text-xs text-gray-500 truncate">Pending value</p>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-shadow sm:col-span-2 lg:col-span-1">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500 flex-shrink-0" />
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <TrendingUp className="h-3 w-3 text-purple-500 flex-shrink-0" />
               <span className="truncate">Total Quantity</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-xl sm:text-2xl font-bold text-purple-600">{metrics.totalQuantity}</p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Pending items</p>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-purple-600">{metrics.totalQuantity}</p>
+            <p className="text-xs text-gray-500 truncate">Pending items</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Search Bar - Responsive */}
-      <div className="mb-4 sm:mb-6">
-        <div className="relative w-full lg:max-w-2xl">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-          <Input
-            placeholder="Search purchases..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8 sm:pl-10 h-9 sm:h-10 text-sm sm:text-base bg-white border-gray-200 focus:border-indigo-500 focus:ring-indigo-500"
-          />
+      {/* Search Bar with Filters */}
+      <div className="mb-4 sm:mb-6 space-y-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1 lg:max-w-2xl">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <Input
+              placeholder="Search purchases..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 sm:pl-10 h-9 sm:h-10 text-sm sm:text-base bg-white border-gray-200 focus:border-indigo-500 focus:ring-indigo-500"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setShowFilters(!showFilters)}
+              variant="outline"
+              size="sm"
+              className={`flex items-center gap-2 ${showFilters ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : ''}`}
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {hasActiveFilters() && (
+                <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 text-xs px-1.5 py-0.5 ml-1">
+                  {[statusFilter, projectFilter, locationFilter, dateFilter].filter(f => f !== 'all').length}
+                </Badge>
+              )}
+            </Button>
+          </div>
         </div>
+
+        {/* Filter Panel */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <Card className="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Status Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Status</label>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                        <SelectItem value="under_review">Under Review</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Project Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Project</label>
+                    <Select value={projectFilter} onValueChange={setProjectFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Projects" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Projects</SelectItem>
+                        {getUniqueProjects().map(project => (
+                          <SelectItem key={project} value={project}>
+                            <span className="flex items-center gap-2">
+                              <Building2 className="h-3 w-3" />
+                              Project {project}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Location Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Location</label>
+                    <Select value={locationFilter} onValueChange={setLocationFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Locations" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Locations</SelectItem>
+                        {getUniqueLocations().map(location => (
+                          <SelectItem key={location} value={location}>
+                            <span className="flex items-center gap-2">
+                              <MapPin className="h-3 w-3" />
+                              {location}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date Range Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Date Range</label>
+                    <Select value={dateFilter} onValueChange={setDateFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Time</SelectItem>
+                        <SelectItem value="today">Today</SelectItem>
+                        <SelectItem value="week">Last 7 Days</SelectItem>
+                        <SelectItem value="month">Last 30 Days</SelectItem>
+                        <SelectItem value="quarter">Last 90 Days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Clear Filters Button */}
+                {hasActiveFilters() && (
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      onClick={clearFilters}
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Clear All Filters
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Tabs - Responsive */}
@@ -417,13 +679,7 @@ const TechnicalDirectorHub: React.FC = () => {
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center space-x-1">
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2"></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.3s' }}></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.4s' }}></div>
-                </div>
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                 <p className="text-sm text-gray-600">Loading purchases...</p>
               </div>
             </div>
@@ -464,13 +720,7 @@ const TechnicalDirectorHub: React.FC = () => {
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center space-x-1">
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2"></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.3s' }}></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.4s' }}></div>
-                </div>
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                 <p className="text-sm text-gray-600">Loading purchases...</p>
               </div>
             </div>
@@ -508,13 +758,7 @@ const TechnicalDirectorHub: React.FC = () => {
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center space-x-1">
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2"></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.3s' }}></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.4s' }}></div>
-                </div>
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                 <p className="text-sm text-gray-600">Loading purchases...</p>
               </div>
             </div>
@@ -552,13 +796,7 @@ const TechnicalDirectorHub: React.FC = () => {
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center space-x-1">
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2"></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.3s' }}></div>
-                  <div className="animate-pulse bg-indigo-600 rounded-full w-2 h-2" style={{ animationDelay: '0.4s' }}></div>
-                </div>
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                 <p className="text-sm text-gray-600">Loading purchases...</p>
               </div>
             </div>

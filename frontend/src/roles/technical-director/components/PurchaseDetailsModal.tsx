@@ -169,7 +169,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
         {/* Blue Header */}
-        <div className="bg-blue-600 text-white px-6 py-4">
+        <div className="bg-[#243d8a] text-white px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <FileText className="h-6 w-6" />
@@ -204,7 +204,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
             <p className="text-sm text-gray-600 mt-2">{error}</p>
             <Button 
               onClick={fetchPurchaseDetails} 
-              className="mt-4 bg-blue-600 hover:bg-blue-700"
+              className="mt-4 bg-[#243d8a] hover:bg-[#243d8a]/90"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Retry
@@ -425,7 +425,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                               }
                             }}
                             size="sm"
-                            className="bg-blue-600 hover:bg-blue-700"
+                            className="bg-[#243d8a] hover:bg-[#243d8a]/90"
                           >
                             <Download className="h-4 w-4 mr-2" />
                             Download
@@ -471,7 +471,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                 </div>
                                 <div>
                                   <p className="text-sm text-gray-500">Unit Cost</p>
-                                  <p className="font-medium text-gray-900">
+                                  <p className="font-medium text-green-600">
                                     {formatCurrency(material.unit_cost || material.cost || 0)}
                                   </p>
                                 </div>
@@ -490,7 +490,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                             
                             <div className="text-right ml-6">
                               <p className="text-sm text-gray-500">Total Cost</p>
-                              <p className="text-xl font-bold text-blue-600">
+                              <p className="text-xl font-bold text-green-600">
                                 {formatCurrency((material.quantity || 0) * (material.cost || material.unit_cost || 0))}
                               </p>
                             </div>
