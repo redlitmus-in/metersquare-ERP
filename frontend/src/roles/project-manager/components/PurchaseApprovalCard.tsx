@@ -13,8 +13,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { 
   Eye, History, Edit, CheckCircle, XCircle, Send,
   Clock, Calendar, MapPin, Package, AlertTriangle,
-  TrendingUp, FileText, DollarSign, Loader2
+  TrendingUp, FileText, DollarSign
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import {
   Dialog,
   DialogContent,
@@ -291,7 +292,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                     {isEstimationRejected ? (
                       isResending ? (
                         <>
-                          <Loader2 className="h-2.5 w-2.5 mr-0.5 animate-spin" />
+                          < className="h-2.5 w-2.5 mr-0.5 animate-spin" />
                           Resending...
                         </>
                       ) : (
@@ -302,7 +303,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                       )
                     ) : isApproving ? (
                       <>
-                        <Loader2 className="h-2.5 w-2.5 mr-0.5 animate-spin" />
+                        < className="h-2.5 w-2.5 mr-0.5 animate-spin" />
                         Approving...
                       </>
                     ) : (
@@ -323,7 +324,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                     >
                       {isRejecting ? (
                         <>
-                          <Loader2 className="h-2.5 w-2.5 mr-0.5 animate-spin" />
+                          < className="h-2.5 w-2.5 mr-0.5 animate-spin" />
                           Rejecting...
                         </>
                       ) : (
@@ -371,7 +372,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
             >
               {isApproving ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  < className="h-4 w-4 mr-2 animate-spin" />
                   Approving...
                 </>
               ) : (
@@ -412,7 +413,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
             >
               {isRejecting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  < className="h-4 w-4 mr-2 animate-spin" />
                   Rejecting...
                 </>
               ) : (

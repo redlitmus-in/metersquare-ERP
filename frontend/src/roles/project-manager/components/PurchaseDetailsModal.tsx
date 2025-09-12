@@ -31,7 +31,7 @@ import {
   History,
   Download,
   Mail,
-  Loader2,
+  ,
   MessageSquare,
   AlertTriangle,
   Hash,
