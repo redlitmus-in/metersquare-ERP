@@ -10,7 +10,6 @@ from models.approval import Approval
 from models.material import Material
 from models.purchase import Purchase
 from models.role import Role
-from models.purchase_history import PurchaseHistory
 from config.db import db
 from datetime import datetime
 from config.logging import get_logger
@@ -19,54 +18,6 @@ from supabase import create_client, Client
 from utils.email_service import *
 from utils.email_service import EmailService
 log = get_logger()
-
-def _append_purchase_history_action(purchase_id: int, action_payload: dict, actor_name: str):
-    try:
-        existing = PurchaseHistory.query.filter_by(purchase_id=purchase_id, is_active=True).order_by(PurchaseHistory.created_at.asc()).first()
-        if not existing:
-            # Create a single persistent row per purchase_id with action as an array
-            history = PurchaseHistory(
-                purchase_id=purchase_id,
-                is_active=True,
-                action=[action_payload],
-                created_by=actor_name
-            )
-            db.session.add(history)
-        else:
-            # Normalize existing.action to a list and append
-            actions = existing.action
-            if actions is None:
-                actions = []
-            elif isinstance(actions, dict):
-                actions = [actions]
-            elif isinstance(actions, str):
-                # best-effort parse JSON string; if fails, wrap as string entry
-                try:
-                    import json as _json
-                    parsed = _json.loads(actions)
-                    if isinstance(parsed, list):
-                        actions = parsed
-                    elif isinstance(parsed, dict):
-                        actions = [parsed]
-                    else:
-                        actions = [str(actions)]
-                except Exception:
-                    actions = [str(actions)]
-
-            actions.append(action_payload)
-            existing.action = actions
-            try:
-                from sqlalchemy.orm.attributes import flag_modified as _flag_modified
-                _flag_modified(existing, 'action')
-            except Exception:
-                pass
-            existing.last_modified_by = actor_name
-            db.session.add(existing)
-
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        log.error(f"Failed to append purchase history for #{purchase_id}: {str(e)}")
 
 def create_purchase_request():
     try:
@@ -778,69 +729,25 @@ def send_purchase_request_email(purchase_id):
                 'role': role.role
             }
             
-            # Update existing single PurchaseStatus row instead of creating a new one
+            # Create procurement status entry when sending to PM
             try:
                 from models.purchase_status import PurchaseStatus
-                existing_status = PurchaseStatus.get_latest_status(purchase_id)
-                if existing_status:
-                    existing_status.sender = 'procurement'
-                    existing_status.receiver = 'projectManager'
-                    existing_status.role = 'procurement'
-                    existing_status.status = 'approved'
-                    existing_status.decision_by_user_id = user_id
-                    existing_status.rejection_reason = None
-                    existing_status.reject_category = None
-                    existing_status.comments = 'Procurement reviewed and sent to Project Manager for approval'
-                    existing_status.decision_date = datetime.utcnow()
-                    existing_status.is_active = True
-                    existing_status.last_modified_by = user_name
-                    db.session.add(existing_status)
-                    db.session.commit()
-                    log.info(f"Updated PurchaseStatus (single row) for purchase #{purchase_id} -> procurement→projectManager approved")
-                else:
-                    # As a fallback, if no status row exists, create the first (still single-row behavior)
-                    new_status = PurchaseStatus(
-                        purchase_id=purchase_id,
-                        sender='procurement',
-                        receiver='projectManager',
-                        role='procurement',
-                        status='approved',
-                        decision_by_user_id=user_id,
-                        rejection_reason=None,
-                        reject_category=None,
-                        comments='Procurement reviewed and sent to Project Manager for approval',
-                        created_by=user_name,
-                        is_active=True
-                    )
-                    db.session.add(new_status)
-                    db.session.commit()
-                    log.info(f"Created initial PurchaseStatus for purchase #{purchase_id} (procurement→projectManager approved)")
-
-                # Record history for procurement -> projectManager status transition
-                try:
-                    _append_purchase_history_action(
-                        purchase_id,
-                        {
-                            'type': 'status_change',
-                            'status': 'approved',
-                            'sender': 'procurement',
-                            'receiver': 'projectmanager',
-                            'comments': 'Purchase request created and sent to Project team',
-                            'rejection_reason': None,
-                            'reject_category': None,
-                            'decided_by_user_id': user_id,
-                            'decided_by': user_name,
-                            'role': 'procurement',
-                            'timestamp': datetime.utcnow().isoformat()
-                        },
-                        user_name
-                    )
-                except Exception as he:
-                    log.error(f"Failed to record purchase history (procurement->PM): {str(he)}")
+                procurement_status = PurchaseStatus.create_new_status(
+                    purchase_id=purchase_id,
+                    sender_role='procurement',
+                    receiver_role='projectManager',
+                    status='approved',  # Procurement approved and sending to PM
+                    decision_by_user_id=user_id,
+                    comments=f'Procurement reviewed and sent to Project Manager for approval',
+                    created_by=user_name
+                )
+                db.session.add(procurement_status)
+                db.session.commit()  # Commit the status entry immediately
+                log.info(f"Created and committed procurement status entry for purchase #{purchase_id}")
             except Exception as e:
                 db.session.rollback()
-                log.error(f"Error updating procurement status entry: {str(e)}")
-                # Continue with email even if status update fails
+                log.error(f"Error creating procurement status entry: {str(e)}")
+                # Continue with email even if status creation fails
             
             success = email_service.send_procurement_to_project_manager_notification(purchase_data, materials, requester_info, procurement_info)
         else:
@@ -860,28 +767,6 @@ def send_purchase_request_email(purchase_id):
                 db.session.add(initial_status)
                 db.session.commit()  # Commit the status entry immediately
                 log.info(f"Created and committed initial status entry for purchase #{purchase_id}")
-
-                # Record history for requester -> procurement status transition
-                try:
-                    _append_purchase_history_action(
-                        purchase_id,
-                        {
-                            'type': 'status_change',
-                            'status': 'pending',
-                            'sender': role.role,
-                            'receiver': 'procurement',
-                            'comments': 'Purchase request created and sent to Procurement team',
-                            'rejection_reason': None,
-                            'reject_category': None,
-                            'decided_by_user_id': user_id,
-                            'decided_by': user_name,
-                            'role': role.role,
-                            'timestamp': datetime.utcnow().isoformat()
-                        },
-                        user_name
-                    )
-                except Exception as he:
-                    log.error(f"Failed to record purchase history (requester->procurement): {str(he)}")
             except Exception as e:
                 db.session.rollback()
                 log.error(f"Error creating initial status entry: {str(e)}")
@@ -905,8 +790,6 @@ def send_purchase_request_email(purchase_id):
             except Exception as e:
                 log.error(f"Error updating status comments: {str(e)}")
                 # Continue even if status update fails
-
-            # Do not append a separate email_sent action to avoid double entries
             
             return jsonify({'success': True, 'message': f'Email sent for purchase request #{purchase_id}'}), 200
         else:

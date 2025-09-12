@@ -11,7 +11,6 @@ from config.db import db
 from models.role import Role
 from models.purchase import Purchase
 from models.approval import Approval
-from models.purchase_history import PurchaseHistory
 
 log = get_logger()
 
@@ -127,7 +126,7 @@ def estimation_approval_workflow():
             'role': role.role
         }
 
-        # Update single-row status in database (no insert)
+        # Create status entry in database
         try:
             # Determine receiver role based on decision
             if estimation_status == 'approved':
@@ -138,41 +137,22 @@ def estimation_approval_workflow():
                 else:  # pm_flag
                     receiver_role = 'projectManager'
             
-            existing_status = PurchaseStatus.get_latest_status(purchase_id)
-            if existing_status:
-                existing_status.sender = 'estimation'
-                existing_status.receiver = receiver_role
-                existing_status.role = 'estimation'
-                existing_status.status = 'approved' if estimation_status == 'approved' else 'rejected'
-                existing_status.decision_by_user_id = user_id
-                existing_status.rejection_reason = rejection_reason if estimation_status == 'rejected' else None
-                existing_status.reject_category = rejection_type if estimation_status == 'rejected' else None
-                existing_status.comments = comments
-                existing_status.decision_date = datetime.utcnow()
-                existing_status.is_active = True
-                existing_status.last_modified_by = user_name
-                db.session.add(existing_status)
-                updated_status = existing_status
-            else:
-                updated_status = PurchaseStatus(
+            new_status = PurchaseStatus.create_new_status(
                 purchase_id=purchase_id,
-                    sender='estimation',
-                    receiver=receiver_role,
-                    role='estimation',
+                sender_role='estimation',
+                receiver_role=receiver_role,
                 status='approved' if estimation_status == 'approved' else 'rejected',
                 decision_by_user_id=user_id,
+                reject_category=rejection_type,
                 rejection_reason=rejection_reason if estimation_status == 'rejected' else None,
-                    reject_category=rejection_type if estimation_status == 'rejected' else None,
                 comments=comments,
-                    created_by=user_name,
-                    is_active=True
+                created_by=user_name
             )
-                db.session.add(updated_status)
             
             # Update purchase last_modified fields
             purchase.last_modified_at = datetime.utcnow()
             purchase.last_modified_by = user_name
-            db.session.add(purchase)
+            
             db.session.commit()
         except Exception as e:
             db.session.rollback()
@@ -219,92 +199,19 @@ def estimation_approval_workflow():
                 else:
                     message = f'Purchase request #{purchase_id} rejected by Estimation team (PM Flag) and sent back to Project Manager'
 
-        # Append purchase history single-row action (no separate email action)
-        try:
-            def _append_purchase_history_action_local(purchase_id_local: int, action_payload: dict, actor_name: str):
-                existing = PurchaseHistory.query.filter_by(purchase_id=purchase_id_local, is_active=True).order_by(PurchaseHistory.created_at.asc()).first()
-                if not existing:
-                    hist = PurchaseHistory(
-                        purchase_id=purchase_id_local,
-                        is_active=True,
-                        action=[action_payload],
-                        created_by=actor_name
-                    )
-                    db.session.add(hist)
-                else:
-                    actions = existing.action
-                    if actions is None:
-                        actions = []
-                    elif isinstance(actions, dict):
-                        actions = [actions]
-                    elif isinstance(actions, str):
-                        try:
-                            import json as _json
-                            parsed = _json.loads(actions)
-                            if isinstance(parsed, list):
-                                actions = parsed
-                            elif isinstance(parsed, dict):
-                                actions = [parsed]
-                            else:
-                                actions = [str(actions)]
-                        except Exception:
-                            actions = [str(actions)]
-                    actions.append(action_payload)
-                    existing.action = actions
-                    try:
-                        from sqlalchemy.orm.attributes import flag_modified as _flag_modified
-                        _flag_modified(existing, 'action')
-                    except Exception:
-                        pass
-                    existing.last_modified_by = actor_name
-                    db.session.add(existing)
-
-                db.session.commit()
-
-            if estimation_status == 'approved':
-                hist_receiver = 'technicalDirector'
-                hist_comments = 'Purchase request approved by Estimation team and sent to Technical Director'
-            else:
-                if rejection_type == 'cost':
-                    hist_receiver = 'procurement'
-                    hist_comments = 'Purchase request rejected by Estimation team (Cost rejection) and sent back to Procurement team'
-                else:
-                    hist_receiver = 'projectmanager'
-                    hist_comments = 'Purchase request rejected by Estimation team (PM Flag) and sent back to Project Manager'
-
-            _append_purchase_history_action_local(
-                purchase_id,
-                {
-                    'type': 'status_change',
-                    'status': 'approved' if estimation_status == 'approved' else 'rejected',
-                    'sender': 'estimation',
-                    'receiver': hist_receiver,
-                    'comments': hist_comments,
-                    'rejection_reason': rejection_reason if estimation_status == 'rejected' else None,
-                    'reject_category': rejection_type if estimation_status == 'rejected' else None,
-                    'decided_by_user_id': user_id,
-                    'decided_by': user_name,
-                    'role': 'estimation',
-                    'timestamp': datetime.utcnow().isoformat()
-                },
-                user_name
-            )
-        except Exception as he:
-            log.error(f"Failed to append purchase history (Estimation flow): {str(he)}")
-
         # Return response
         response_data = {
             'success': True,
             'message': message,
             'purchase_id': purchase_id,
-            'estimation_status': updated_status.status,
-            'decision_date': updated_status.decision_date.isoformat() if updated_status.decision_date else None,
-            'decision_by': updated_status.created_by,
-            'comments': updated_status.comments
+            'estimation_status': new_status.status,
+            'decision_date': new_status.decision_date.isoformat(),
+            'decision_by': new_status.created_by,
+            'comments': new_status.comments
         }
         
         if estimation_status == 'rejected':
-            response_data['rejection_reason'] = updated_status.rejection_reason
+            response_data['rejection_reason'] = new_status.rejection_reason
             response_data['rejection_type'] = rejection_type
         
         if not email_success:
@@ -312,7 +219,7 @@ def estimation_approval_workflow():
         else:
             # Update the existing status entry to indicate email was sent
             try:
-                updated_status.comments = f"{updated_status.comments} (Email sent to {receiver_role})"
+                new_status.comments = f"{new_status.comments} (Email sent to {receiver_role})"
                 db.session.commit()
             except Exception as e:
                 log.error(f"Error updating status comments: {str(e)}")

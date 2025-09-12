@@ -77,6 +77,37 @@ def get_logo_base64():
         log.error(f"Error reading logo file: {e}")
         return None
 
+def test_logo_loading():
+    """Test function to verify logo loading works correctly"""
+    logo_data = get_logo_base64()
+    if logo_data:
+        print(f"✅ Logo loaded successfully! Base64 length: {len(logo_data)} characters")
+        print(f"First 100 characters: {logo_data[:100]}...")
+        return True
+    else:
+        print("❌ Logo loading failed - will use text-only header")
+        return False
+
+def test_email_template():
+    """Test function to generate a sample email HTML for debugging"""
+    base64_logo = get_logo_base64()
+    if base64_logo:
+        print("✅ Logo found, generating sample HTML...")
+        # Generate a sample HTML snippet
+        sample_html = f'''
+        <div class="header">
+            <div class="logo-container">
+                <img src="data:image/png;base64,{base64_logo}" alt="Meter Square Interiors LLC" class="logo-image" style="display: block; max-width: 140px; max-height: 70px; width: auto; height: auto; border: none; outline: none;">
+                <h1 class="logo-text">Meter Square</h1>
+            </div>
+        </div>
+        '''
+        print("Sample HTML generated successfully!")
+        return sample_html
+    else:
+        print("❌ No logo found, cannot generate sample HTML")
+        return None
+
 def send_otp(email_id):
     try:
         otp = random.randint(100000, 999999)
@@ -99,72 +130,23 @@ def send_otp(email_id):
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>OTP Verification</title>
-                <style>
-                    @media only screen and (max-width: 600px) {{
-                        .email-container {{
-                            width: 100% !important;
-                            min-width: 340px !important;
-                            margin: 0 10px !important;
-                        }}
-                        .content-padding {{
-                            padding: 20px 15px !important;
-                        }}
-                        .header-padding {{
-                            padding: 20px 15px !important;
-                        }}
-                        .otp-code {{
-                            font-size: 24px !important;
-                            padding: 15px 20px !important;
-                        }}
-                        .logo-img {{
-                            max-width: 150px !important;
-                        }}
-                    }}
-                    @media only screen and (max-width: 480px) {{
-                        .email-container {{
-                            min-width: 340px !important;
-                        }}
-                        .content-padding {{
-                            padding: 15px 12px !important;
-                        }}
-                        .otp-code {{
-                            font-size: 22px !important;
-                            padding: 12px 18px !important;
-                        }}
-                        .main-heading {{
-                            font-size: 20px !important;
-                        }}
-                    }}
-                    @media only screen and (max-width: 340px) {{
-                        .email-container {{
-                            min-width: 340px !important;
-                        }}
-                        .content-padding {{
-                            padding: 12px 10px !important;
-                        }}
-                        .otp-code {{
-                            font-size: 20px !important;
-                            padding: 10px 15px !important;
-                        }}
-                    }}
-                </style>
             </head>
             <body style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background-color: #f4f6fb; color: #333;">
                 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f4f6fb; padding: 30px 0;">
                     <tr>
                         <td align="center">
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0" class="email-container" style="background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08); border: 1px solid #e0e6f5; max-width: 600px; min-width: 340px;">
+                            <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08); border: 1px solid #e0e6f5;">
                                 <!-- Header -->
                                 <tr>
-                                    <td class="header-padding" style="background: linear-gradient(to right, rgb(255, 255, 255), rgb(255, 255, 255)); border-bottom: 2px solid rgb(254, 202, 202); padding: 25px; text-align: center;">
+                                    <td style="background: linear-gradient(to right, rgb(255, 255, 255), rgb(255, 255, 255)); border-bottom: 2px solid rgb(254, 202, 202); padding: 25px; text-align: center;">
                                         <!-- Logo Image using CID reference -->
-                                        <img src="cid:logo" alt="Meter Square Logo" class="logo-img" style="display: block; max-width: 200px; height: auto; margin: 0 auto;">
+                                        <img src="cid:logo" alt="Meter Square Logo" style="display: block; max-width: 200px; height: auto; margin: 0 auto;">
                                     </td>
                                 </tr>
                                 <!-- Content -->
                                 <tr>
-                                    <td class="content-padding" style="padding: 35px 25px; text-align: center;">
-                                        <h2 class="main-heading" style="font-size: 22px; font-weight: bold; color: #243d8a; margin: 0 0 18px 0;">Welcome</h2>
+                                    <td style="padding: 35px 25px; text-align: center;">
+                                        <h2 style="font-size: 22px; font-weight: bold; color: #243d8a; margin: 0 0 18px 0;">Welcome</h2>
                                         <p style="font-size: 15px; line-height: 1.6; color: #444; margin: 0 0 28px 0;">
                                             We're excited to have you on board! To secure your account,
                                             please use the verification code below to complete your registration.
@@ -173,7 +155,7 @@ def send_otp(email_id):
                                         <table align="center" cellpadding="0" cellspacing="0" border="0" style="margin: 25px auto;">
                                             <tr>
                                                 <td style="padding: 18px 28px; border: 2px solid #243d8a; border-radius: 8px; background-color: #f0f4ff;">
-                                                    <div class="otp-code" style="font-size: 30px; font-weight: bold; letter-spacing: 6px; color: #243d8a; margin-bottom: 12px;">{otp}</div>
+                                                    <div style="font-size: 30px; font-weight: bold; letter-spacing: 6px; color: #243d8a; margin-bottom: 12px;">{otp}</div>
                                                     <div style="font-size: 13px; color: #555;">
                                                         This code will expire in <strong>5 minutes</strong>
                                                     </div>

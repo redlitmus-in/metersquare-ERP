@@ -10,7 +10,6 @@ from config.logging import get_logger
 from config.db import db
 from models.role import Role
 from models.purchase import Purchase 
-from models.purchase_history import PurchaseHistory
 
 log = get_logger()
 
@@ -27,7 +26,7 @@ def pm_approval_workflow():
         # Check if user is Project Manager
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
         if not role or role.role != 'projectManager':
-            return jsonify({'error': 'Only Project Manager can approved/rejectd purchase requests'}), 403
+            return jsonify({'error': 'Only Project Manager can approve/reject purchase requests'}), 403
 
         data = request.get_json()
         purchase_id = data.get('purchase_id')
@@ -121,7 +120,7 @@ def pm_approval_workflow():
             'role': role.role
         }
 
-        # Update single-row status in database (no insert)
+        # Create status entry in database
         try:
             # Determine receiver role based on decision
             if purchase_status == 'approved':
@@ -129,42 +128,23 @@ def pm_approval_workflow():
             else:  # rejected
                 receiver_role = 'procurement'
             
-            existing_status = PurchaseStatus.get_latest_status(purchase_id)
-            if existing_status:
-                existing_status.sender = 'projectManager'
-                existing_status.receiver = receiver_role
-                existing_status.role = 'projectManager'
-                existing_status.status = 'approved' if purchase_status == 'approved' else 'rejected'
-                existing_status.decision_by_user_id = user_id
-                existing_status.rejection_reason = rejection_reason if purchase_status == 'rejected' else None
-                # No explicit reject_category provided from request; keep as-is/None
-                existing_status.comments = comments
-                existing_status.decision_date = datetime.utcnow()
-                existing_status.is_active = True
-                existing_status.last_modified_by = user_name
-                db.session.add(existing_status)
-                updated_status = existing_status
-            else:
-                updated_status = PurchaseStatus(
+            new_status = PurchaseStatus.create_new_status(
                 purchase_id=purchase_id,
-                    sender='projectManager',
-                    receiver=receiver_role,
-                    role='projectManager',
+                sender_role='projectManager',
+                receiver_role=receiver_role,
                 status='approved' if purchase_status == 'approved' else 'rejected',
                 decision_by_user_id=user_id,
                 rejection_reason=rejection_reason if purchase_status == 'rejected' else None,
                 comments=comments,
-                    created_by=user_name,
-                    is_active=True
+                created_by=user_name
             )
-                db.session.add(updated_status)
             
             # Update purchase last_modified fields
             purchase.last_modified_at = datetime.utcnow()
             purchase.last_modified_by = user_name
-            db.session.add(purchase)
+            
             db.session.commit()
-            log.info(f"Purchase request #{purchase_id} {updated_status.status} by Project Manager {user_name}")
+            log.info(f"Purchase request #{purchase_id} {new_status.status} by Project Manager {user_name}")
         except Exception as e:
             db.session.rollback()
             log.error(f"Error updating purchase status in database: {str(e)}")
@@ -197,90 +177,41 @@ def pm_approval_workflow():
             else:
                 message = f'Purchase request #{purchase_id} rejected by Project Manager and sent back to Procurement team'
 
-        # Append purchase history single-row action (no separate email action)
-        try:
-            def _append_purchase_history_action_local(purchase_id_local: int, action_payload: dict, actor_name: str):
-                existing = PurchaseHistory.query.filter_by(purchase_id=purchase_id_local, is_active=True).order_by(PurchaseHistory.created_at.asc()).first()
-                if not existing:
-                    hist = PurchaseHistory(
-                        purchase_id=purchase_id_local,
-                        is_active=True,
-                        action=[action_payload],
-                        created_by=actor_name
-                    )
-                    db.session.add(hist)
-                else:
-                    actions = existing.action
-                    if actions is None:
-                        actions = []
-                    elif isinstance(actions, dict):
-                        actions = [actions]
-                    elif isinstance(actions, str):
-                        try:
-                            import json as _json
-                            parsed = _json.loads(actions)
-                            if isinstance(parsed, list):
-                                actions = parsed
-                            elif isinstance(parsed, dict):
-                                actions = [parsed]
-                            else:
-                                actions = [str(actions)]
-                        except Exception:
-                            actions = [str(actions)]
-                    actions.append(action_payload)
-                    existing.action = actions
-                    try:
-                        from sqlalchemy.orm.attributes import flag_modified as _flag_modified
-                        _flag_modified(existing, 'action')
-                    except Exception:
-                        pass
-                    existing.last_modified_by = actor_name
-                    db.session.add(existing)
-
-                db.session.commit()
-
-            hist_comments = 'Purchase request approved by Project Manager and sent to Estimation team' if purchase_status == 'approved' else 'Purchase request rejected by Project Manager and sent back to Procurement team'
-            hist_receiver = 'estimation' if purchase_status == 'approved' else 'procurement'
-            _append_purchase_history_action_local(
-                purchase_id,
-                {
-                    'type': 'status_change',
-                    'status': 'approved' if purchase_status == 'approved' else 'rejected',
-                    'sender': 'projectManager',
-                    'receiver': hist_receiver,
-                    'comments': hist_comments,
-                    'rejection_reason': rejection_reason if purchase_status == 'rejected' else None,
-                    'reject_category': None,
-                    'decided_by_user_id': user_id,
-                    'decided_by': user_name,
-                    'role': 'projectManager',
-                    'timestamp': datetime.utcnow().isoformat()
-                },
-                user_name
-            )
-        except Exception as he:
-            log.error(f"Failed to append purchase history (PM flow): {str(he)}")
-
         # Return response
         response_data = {
             'success': True,
             'message': message,
             'purchase_id': purchase_id,
-            'pm_status': updated_status.status,
-            'decision_date': updated_status.decision_date.isoformat() if updated_status.decision_date else None,
-            'decision_by': updated_status.created_by,
-            'comments': updated_status.comments
+            'pm_status': new_status.status,
+            'decision_date': new_status.decision_date.isoformat(),
+            'decision_by': new_status.created_by,
+            'comments': new_status.comments
         }
         
         if purchase_status == 'rejected':
-            response_data['rejection_reason'] = updated_status.rejection_reason
+            response_data['rejection_reason'] = new_status.rejection_reason
         
         if not email_success:
             response_data['email_warning'] = 'Status updated but email notification failed'
             log.warning(f"Purchase status updated but email failed for purchase #{purchase_id}")
         else:
-            # Do not create a second email status to avoid duplicate records
-            pass
+            # Create email notification status entry
+            try:
+                email_status = PurchaseStatus.create_email_notification_status(
+                    purchase_id=purchase_id,
+                    sender_role='projectManager',
+                    receiver_role=receiver_role,
+                    email_type='pm_notification',
+                    decision_by_user_id=user_id,
+                    comments=f'Email notification sent from project manager to {receiver_role}',
+                    created_by=user_name
+                )
+                db.session.add(email_status)
+                db.session.commit()
+                log.info(f"Created email notification status for purchase #{purchase_id}")
+            except Exception as e:
+                db.session.rollback()
+                log.error(f"Error creating email notification status: {str(e)}")
 
         return jsonify(response_data), 200
 

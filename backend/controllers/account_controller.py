@@ -17,7 +17,6 @@ from models.material import Material
 from utils.email_service import EmailService
 from config.logging import get_logger
 from config.db import db
-from models.purchase_history import PurchaseHistory
 
 log = get_logger()
 
@@ -147,98 +146,36 @@ def process_payment_transaction():
 
         # Create payment transaction
         db.session.add(payment_transaction)
+        
+        # Update purchase status to indicate payment processing
+        PurchaseStatus.create_new_status(
+            purchase_id=purchase_id,
+            sender_role='accounts',
+            receiver_role='technicalDirector',
+            status='approved',
+            decision_by_user_id=user_id,
+            comments=f'Payment transaction created by {user_name}',
+            created_by=user_name
+        )
+        
+        # Commit both payment transaction and status creation together
+        db.session.commit()
 
-        # Update single-row purchase status to indicate payment processing (no insert)
-        try:
-            existing_status = PurchaseStatus.get_latest_status(purchase_id)
-            if existing_status:
-                existing_status.sender = 'accounts'
-                existing_status.receiver = 'technicalDirector'
-                existing_status.role = 'accounts'
-                existing_status.status = 'approved'
-                existing_status.decision_by_user_id = user_id
-                existing_status.rejection_reason = None
-                existing_status.reject_category = None
-                existing_status.comments = f'Payment transaction created by {user_name}'
-                existing_status.decision_date = datetime.utcnow()
-                existing_status.is_active = True
-                existing_status.last_modified_by = user_name
-                db.session.add(existing_status)
-            else:
-                new_status = PurchaseStatus(
-                    purchase_id=purchase_id,
-                    sender='accounts',
-                    receiver='technicalDirector',
-                    role='accounts',
-                    status='approved',
-                    decision_by_user_id=user_id,
-                    rejection_reason=None,
-                    reject_category=None,
-                    comments=f'Payment transaction created by {user_name}',
-                    created_by=user_name,
-                    is_active=True
-                )
-                db.session.add(new_status)
-            db.session.commit()
-        except Exception as se:
-            db.session.rollback()
-            log.error(f"Failed to update status for payment transaction create: {str(se)}", exc_info=True)
-            return jsonify({'error': 'Failed to update purchase status', 'details': str(se)}), 500
+        # Send notification email with any account bucket attachments for this purchase
+        # try:
+        #     email_service = EmailService()
+        #     attachments = _get_account_bucket_attachments(purchase_id)
+        #     email_service.send_payment_processing_notification(
+        #         purchase_id=purchase_id,
+        #         amount=amount,
+        #         payment_method=payment_method,
+        #         processed_by=user_name,
+        #         attachments=attachments
+        #     )
+        # except Exception as e:
+        #     log.warning(f"Failed to send payment processing email: {str(e)}")
 
-        # Append purchase history action
-        try:
-            existing_hist = PurchaseHistory.query.filter_by(purchase_id=purchase_id, is_active=True).order_by(PurchaseHistory.created_at.asc()).first()
-            action_payload = {
-                'type': 'status_change',
-                'status': 'approved',
-                'sender': 'accounts',
-                'receiver': 'technicalDirector',
-                'comments': f'Payment transaction created by {user_name}',
-                'rejection_reason': None,
-                'reject_category': None,
-                'decided_by_user_id': user_id,
-                'decided_by': user_name,
-                'role': 'accounts',
-                'timestamp': datetime.utcnow().isoformat()
-            }
-            if not existing_hist:
-                hist = PurchaseHistory(
-                    purchase_id=purchase_id,
-                    is_active=True,
-                    action=[action_payload],
-                    created_by=user_name
-                )
-                db.session.add(hist)
-            else:
-                actions = existing_hist.action
-                if actions is None:
-                    actions = []
-                elif isinstance(actions, dict):
-                    actions = [actions]
-                elif isinstance(actions, str):
-                    try:
-                        parsed = json.loads(actions)
-                        if isinstance(parsed, list):
-                            actions = parsed
-                        elif isinstance(parsed, dict):
-                            actions = [parsed]
-                        else:
-                            actions = [str(actions)]
-                    except Exception:
-                        actions = [str(actions)]
-                actions.append(action_payload)
-                existing_hist.action = actions
-                try:
-                    from sqlalchemy.orm.attributes import flag_modified as _flag_modified
-                    _flag_modified(existing_hist, 'action')
-                except Exception:
-                    pass
-                existing_hist.last_modified_by = user_name
-                db.session.add(existing_hist)
-            db.session.commit()
-        except Exception as he:
-            db.session.rollback()
-            return jsonify({'error': 'Failed to write purchase history', 'details': str(he)}), 500
+        # log.info(f"Payment transaction created for purchase {purchase_id} by {user_name}")
 
         return jsonify({
             'message': 'Payment transaction created successfully',
@@ -248,8 +185,8 @@ def process_payment_transaction():
 
     except Exception as e:
         db.session.rollback()
-        log.error(f"Error processing payment transaction: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        log.error(f"Error processing payment transaction: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 def approve_payment_transaction():
     """
@@ -348,8 +285,8 @@ def approve_payment_transaction():
 
     except Exception as e:
         db.session.rollback()
-        log.error(f"Error approving payment transaction: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        log.error(f"Error approving payment transaction: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 def create_acknowledgement():
     """
@@ -358,159 +295,60 @@ def create_acknowledgement():
     """
     try:
         current_user = g.user
+        user_id = current_user['user_id']
+        user_name = current_user['full_name']
+        
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
-        user_id = current_user['user_id']
-        user_name = current_user['full_name']
-        log.info(f"Processing acknowledgement for user_id: {user_id}, user_name: {user_name}")
-
         data = request.get_json()
-        log.info(f"Request data: {data}")
-        
         purchase_id = data.get('purchase_id')
         transaction_id = data.get('transaction_id')
         acknowledgement_type = data.get('acknowledgement_type', 'payment_received')
         acknowledgement_message = data.get('acknowledgement_message', '')
 
+        # Validate required fields
         if not purchase_id:
-            log.error("Missing purchase_id in request")
             return jsonify({'error': 'purchase_id is required'}), 400
-
         # Get user role
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
         if not role:
-            log.error(f"Role not found for role_id: {current_user['role_id']}")
             return jsonify({'error': 'User role not found'}), 400
-
-        log.info(f"Found role: {role.role}")
-
-        # --- Upsert acknowledgement ---
-        try:
-            acknowledgement = Acknowledgement.query.filter_by(purchase_id=purchase_id).first()
-            if acknowledgement:
-                log.info(f"Updating existing acknowledgement for purchase_id: {purchase_id}")
-                acknowledgement.transaction_id = transaction_id
-                acknowledgement.acknowledgement_type = acknowledgement_type
-                acknowledgement.acknowledged_by = user_name
-                acknowledgement.acknowledged_by_role = role.role
-                acknowledgement.acknowledgement_message = acknowledgement_message
-                acknowledgement.supporting_documents = json.dumps(_list_account_file_paths(purchase_id))
-                acknowledgement.last_modified_by = user_name
-            else:
-                log.info(f"Creating new acknowledgement for purchase_id: {purchase_id}")
-                acknowledgement = Acknowledgement(
-                    transaction_id=transaction_id,
-                    purchase_id=purchase_id,
-                    acknowledgement_type=acknowledgement_type,
-                    acknowledged_by=user_name,
-                    acknowledged_by_role=role.role,
-                    acknowledgement_message=acknowledgement_message,
-                    supporting_documents=json.dumps(_list_account_file_paths(purchase_id)),
-                    created_by=user_name
-                )
-                db.session.add(acknowledgement)
-        except Exception as e:
-            log.error(f"Error in acknowledgement upsert: {str(e)}", exc_info=True)
-            db.session.rollback()
-            return jsonify({'error': 'Failed to process acknowledgement', 'details': str(e)}), 500
-
-        # --- Always update PurchaseStatus (never insert new) ---
-        existing_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id).first()
-        if not existing_status:
-            log.error(f"PurchaseStatus not found for purchase_id: {purchase_id}")
-            return jsonify({'error': 'PurchaseStatus not found for this purchase_id'}), 400
-
-        # Update the existing status
-        existing_status.sender = role.role
-        existing_status.receiver = 'accounts'
-        existing_status.role = role.role
-        existing_status.status = 'completed'
-        existing_status.decision_by_user_id = user_id
-        existing_status.rejection_reason = None
-        existing_status.reject_category = None
-        existing_status.comments = f'Acknowledgement created by {user_name}'
-        existing_status.decision_date = datetime.utcnow()
-        existing_status.is_active = True
-        existing_status.last_modified_by = user_name
-
-        # --- Update PurchaseHistory (append to existing actions) ---
-        existing_hist = PurchaseHistory.query.filter_by(purchase_id=purchase_id).order_by(PurchaseHistory.created_at.desc()).first()
-        if not existing_hist:
-            log.error(f"PurchaseHistory not found for purchase_id: {purchase_id}")
-            return jsonify({'error': 'PurchaseHistory not found for this purchase_id'}), 400
-
-        # Create the new action payload
-        action_payload = {
-            "role": "accounts",
-            "type": "status_change",
-            "sender": "accounts",
-            "status": "completed",
-            "comments": "payment completed and acknowledgement is sent",
-            "receiver": "technicalDirector,projectmanager,procurement",
-            "timestamp": datetime.utcnow().isoformat(),
-            "decided_by": user_name,
-            "reject_category": None,
-            "rejection_reason": None,
-            "decided_by_user_id": user_id
-        }
-
-        # Get existing actions - handle different formats
-        actions = []
-        if existing_hist.action:
-            if isinstance(existing_hist.action, str):
-                try:
-                    actions = json.loads(existing_hist.action)
-                    if not isinstance(actions, list):
-                        actions = [actions]
-                except json.JSONDecodeError:
-                    actions = [{"comments": str(existing_hist.action)}]
-            elif isinstance(existing_hist.action, dict):
-                actions = [existing_hist.action]
-            elif isinstance(existing_hist.action, list):
-                actions = existing_hist.action
-        
-        # Ensure all actions are dictionaries
-        actions = [a if isinstance(a, dict) else {"comments": str(a)} for a in actions]
-        
-        # Append new action
-        actions.append(action_payload)
-        
-        # Update the history record
-        existing_hist.action = actions
-        existing_hist.last_modified_by = user_name
-        existing_hist.last_modified_date = datetime.utcnow()
-        
-        # Mark the action field as modified
-        try:
-            from sqlalchemy.orm.attributes import flag_modified
-            flag_modified(existing_hist, 'action')
-        except Exception as e:
-            log.warning(f"Could not flag action as modified: {str(e)}")
-            db.session.rollback()
-            return jsonify({'error': 'Failed to update action history', 'details': str(e)}), 500
-        
-        # Commit DB changes
-        try:
-            db.session.commit()
-            log.info(f"Successfully updated purchase history for purchase_id: {purchase_id}")
-        except Exception as e:
-            db.session.rollback()
-            log.error(f"Error committing purchase history update for purchase_id {purchase_id}: {str(e)}", exc_info=True)
-            return jsonify({
-                'error': 'Failed to update purchase history',
-                'details': str(e)
-            }), 500
-
-        # --- Send acknowledgement notification ---
+        # Create acknowledgement
+        acknowledgement = Acknowledgement(
+            transaction_id=transaction_id,
+            purchase_id=purchase_id,
+            acknowledgement_type=acknowledgement_type,
+            acknowledged_by=user_name,
+            acknowledged_by_role=role.role,
+            acknowledgement_message=acknowledgement_message,
+            supporting_documents=json.dumps(_list_account_file_paths(purchase_id)),
+            created_by=user_name
+        )
+        # Create acknowledgement
+        db.session.add(acknowledgement)
+        # Update purchase status to indicate acknowledgement received
+        new_status = PurchaseStatus.create_new_status(
+            purchase_id=purchase_id,
+            sender_role=role.role,
+            receiver_role='accounts',
+            status='completed',
+            decision_by_user_id=user_id,
+            comments=f'Acknowledgement created by {user_name}',
+            created_by=user_name
+        )
+        # Commit both acknowledgement and status creation together
+        db.session.commit()
+        # Send acknowledgement notification to stakeholders (TD, Procurement, PM)
         try:
             email_service = EmailService()
+            # Attach the exact files we persisted in Acknowledgement.supporting_documents
             attachment_paths = []
             try:
-                if hasattr(acknowledgement, 'supporting_documents') and acknowledgement.supporting_documents:
+                if acknowledgement.supporting_documents:
                     attachment_paths = json.loads(acknowledgement.supporting_documents) or []
-            except Exception as e:
-                log.warning(f"Error loading supporting documents: {str(e)}")
+            except Exception:
+                attachment_paths = []
             attachments = []
             if supabase and attachment_paths:
                 for path in attachment_paths:
@@ -522,7 +360,6 @@ def create_acknowledgement():
                         log.warning(f"Failed to download attachment {path}: {str(e)}")
             if not attachments:
                 attachments = _get_account_bucket_attachments(purchase_id)
-
             email_service.send_acknowledgement_to_stakeholders(
                 purchase_id=purchase_id,
                 acknowledgement_type=acknowledgement_type,
@@ -534,14 +371,14 @@ def create_acknowledgement():
             log.warning(f"Failed to send acknowledgement email: {str(e)}")
 
         return jsonify({
-            'message': 'Acknowledgement updated successfully',
+            'message': 'Acknowledgement send successfully',
             'acknowledgement_id': acknowledgement.acknowledgement_id
         }), 200
 
     except Exception as e:
         db.session.rollback()
-        log.error(f"Error creating acknowledgement: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        log.error(f"Error creating acknowledgement: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 def get_payment_transactions():
     """
@@ -599,8 +436,8 @@ def get_payment_transactions():
         }), 200
 
     except Exception as e:
-        log.error(f"Error getting payment transactions: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        log.error(f"Error getting payment transactions: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 def get_payment_purchase(purchase_id):
     try:
@@ -609,12 +446,12 @@ def get_payment_purchase(purchase_id):
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
-        # Check if user has Accounts role
+        # ✅ Check if user has Accounts role
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
         if not role or role.role.lower() != 'accounts':
             return jsonify({'error': 'Only Accounts department can view payment transactions'}), 403
 
-        # Fetch all transactions for the given purchase_id
+        # ✅ Fetch all transactions for the given purchase_id
         transactions = (
             PaymentTransaction.query
             .filter_by(purchase_id=purchase_id, is_deleted=False)
@@ -625,12 +462,12 @@ def get_payment_purchase(purchase_id):
         if not transactions:
             return jsonify({'message': 'No transactions found for this purchase_id'}), 404
 
-        # Fetch purchase details
+        # ✅ Fetch purchase details
         purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
         if not purchase:
             return jsonify({'error': 'Purchase not found'}), 404
 
-        # Convert transactions into a list of dicts
+        # ✅ Convert transactions into a list of dicts
         transaction_list = []
         for t in transactions:
             transaction_list.append({
@@ -659,7 +496,7 @@ def get_payment_purchase(purchase_id):
                 "last_modified_by": t.last_modified_by,
             })
 
-        # Return response with purchase + all transactions
+        # ✅ Return response with purchase + all transactions
         return jsonify({
             "purchase_id": purchase_id,
             "purchase_reference": getattr(purchase, "reference_no", None),  # optional field
@@ -671,8 +508,8 @@ def get_payment_purchase(purchase_id):
         }), 200
 
     except Exception as e:
-        log.error(f"Error getting payment purchase details: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        log.error(f"Error getting payment purchase details: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 def get_acknowledgements():
     """
@@ -719,8 +556,8 @@ def get_acknowledgements():
         }), 200
 
     except Exception as e:
-        log.error(f"Error getting acknowledgements: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        log.error(f"Error getting acknowledgements: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 def get_financial_summary():
     """
@@ -808,8 +645,8 @@ def get_financial_summary():
         }), 200
 
     except Exception as e:
-        log.error(f"Error getting financial summary: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        log.error(f"Error getting financial summary: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 def get_pending_approvals():
     """
@@ -849,8 +686,8 @@ def get_pending_approvals():
         }), 200
 
     except Exception as e:
-        log.error(f"Error getting pending approvals: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        log.error(f"Error getting pending approvals: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 def account_dashboard():
     try:
@@ -927,8 +764,8 @@ def account_dashboard():
         return jsonify(response_data), 200
 
     except Exception as e:
-        log.error(f"Error getting account dashboard: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        log.error(f"Error getting account dashboard: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 def account_purchase():
     """
@@ -1092,5 +929,5 @@ def account_purchase():
         }), 200
 
     except Exception as e:
-        log.error(f"Error getting account purchases: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        log.error(f"Error getting account purchases: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
