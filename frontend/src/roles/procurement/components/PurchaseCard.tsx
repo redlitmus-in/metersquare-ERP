@@ -295,8 +295,8 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                 </Button>
               )}
 
-              {/* Edit Action - Show only for pending items */}
-              {onEdit && status === 'pending' && (
+              {/* Edit Action - Show for pending items and rejected items */}
+              {onEdit && (status === 'pending' || rejectedByPM || rejectedByEst) && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -355,7 +355,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
               </div>
             )}
             
-            {/* Resend to Estimation Button for Est-rejected PRs */}
+            {/* Send to PM Button for Est-rejected PRs */}
             {rejectedByEst && onResendToEst && (
               <div className="flex items-center justify-center">
                 <Button
@@ -366,10 +366,10 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   style={{ backgroundColor: '#243d8a', hover: { backgroundColor: '#1a2d66' } }}
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a2d66'}
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#243d8a'}
-                  title="Resend to Estimation after revision"
+                  title="Send to Project Manager after Estimation revision"
                 >
                   <Mail className="w-3 h-3 mr-1" />
-                  Resend to Estimation
+                  Send PM
                 </Button>
               </div>
             )}
