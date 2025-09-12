@@ -154,6 +154,15 @@ const LoginPage: React.FC = () => {
   const handleVerifyOTP = async (otpValue?: string) => {
     const otpToVerify = otpValue || otp;
     
+    // Prevent duplicate verification attempts
+    if (authApi.isAuthenticated()) {
+      // Already authenticated, just redirect
+      const userRole = authApi.getUserRole();
+      const dashboardPath = getRoleDashboardPath(userRole || 'user');
+      navigate(dashboardPath);
+      return;
+    }
+    
     if (otpToVerify.length !== 6) {
       toast.error('Invalid OTP', {
         description: 'Please enter a 6-digit OTP'
@@ -182,6 +191,16 @@ const LoginPage: React.FC = () => {
         navigate(dashboardPath);
       }, 500);
     } catch (error: any) {
+      // Check if it's a duplicate attempt after successful login
+      const errorMessage = error.message?.toLowerCase() || '';
+      if ((errorMessage.includes('not found') || errorMessage.includes('expired')) && authApi.isAuthenticated()) {
+        // Already logged in, just redirect
+        const userRole = authApi.getUserRole();
+        const dashboardPath = getRoleDashboardPath(userRole || 'user');
+        navigate(dashboardPath);
+        return;
+      }
+      
       toast.error('Invalid OTP', {
         description: error.message || 'Please enter the correct OTP'
       });

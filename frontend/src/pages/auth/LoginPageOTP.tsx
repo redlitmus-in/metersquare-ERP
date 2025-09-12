@@ -127,8 +127,8 @@ const LoginPageOTP: React.FC = () => {
   };
 
   const handleVerifyOTP = async () => {
-    // Don't show error if already loading (auto-complete might have triggered)
-    if (isLoading) {
+    // Prevent duplicate verification attempts
+    if (isLoading || step === 'success') {
       return;
     }
     
@@ -157,9 +157,24 @@ const LoginPageOTP: React.FC = () => {
         navigate('/dashboard');
       }, 2000);
     } catch (error: any) {
-      toast.error('Invalid OTP', {
-        description: error.message
-      });
+      // Only show error if we're still on the OTP step (not already successful)
+      if (step === 'otp') {
+        // Check if it's a real error or just a duplicate attempt after success
+        const errorMessage = error.message?.toLowerCase() || '';
+        if (errorMessage.includes('not found') || errorMessage.includes('expired')) {
+          // This might be a duplicate attempt after successful login
+          // Check if we're already authenticated
+          if (authApi.isAuthenticated()) {
+            // Already logged in, just redirect
+            navigate('/dashboard');
+            return;
+          }
+        }
+        
+        toast.error('Invalid OTP', {
+          description: error.message
+        });
+      }
       setIsLoading(false);
     }
   };
