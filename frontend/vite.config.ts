@@ -17,6 +17,18 @@ export default defineConfig({
       '@/lib': resolve(__dirname, './src/lib'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Add hash to filenames for cache busting
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash].[ext]'
+      }
+    },
+    // Clear the output directory before building
+    emptyOutDir: true,
+  },
   server: {
     port: 3000,
     host: true,
