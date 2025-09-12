@@ -326,7 +326,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                 >
                   {sendingEmail ? (
                     <>
-                      <ModernLoadingSpinners variant="dots" size="sm" className="mr-1" />
+                      <ModernLoadingSpinners variant="pulse-wave" size="sm" className="mr-1" />
                       Sending...
                     </>
                   ) : (

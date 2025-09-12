@@ -1092,7 +1092,7 @@ const ProcurementHub: React.FC = () => {
             >
               {confirmDialog.isLoading ? (
                 <>
-                  <ModernLoadingSpinners variant="dots" size="sm" />
+                  <ModernLoadingSpinners variant="pulse-wave" size="sm" />
                   Sending...
                 </>
               ) : (
