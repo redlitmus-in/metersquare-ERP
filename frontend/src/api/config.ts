@@ -54,7 +54,18 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    // Handle 401 Unauthorized
+    // Log error details to console for debugging
+    console.error('API Error:', {
+      message: error.response?.data?.message || error.response?.data?.error || error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      url: error.config?.url,
+      method: error.config?.method,
+      data: error.response?.data,
+      headers: error.response?.headers
+    });
+
+    // Handle 401 Unauthorized - clear auth but don't redirect
     if (error.response?.status === 401) {
       // Clear auth data
       localStorage.removeItem('access_token');
@@ -70,52 +81,40 @@ apiClient.interceptors.response.use(
         error: null
       });
       
-      // Redirect to login
-      if (!window.location.pathname.includes('/login')) {
-        window.location.replace('/login');
-      }
+      // DISABLED: Auto redirect to login for debugging
+      // Uncomment to re-enable redirects
+      // if (!window.location.pathname.includes('/login')) {
+      //   window.location.replace('/login');
+      // }
     }
     
-    // Handle other error codes and navigate to error pages
+    // DISABLED: All automatic error page redirects for debugging
+    // Uncomment this block to re-enable error page redirects
+    /*
     if (error.response?.status === 403) {
-      // Log the 403 error for debugging
-      console.error('403 Forbidden error:', {
-        url: error.config?.url,
-        method: error.config?.method,
-        data: error.response?.data,
-        message: error.response?.data?.message || 'Access denied'
-      });
-      
-      // Don't redirect for API calls, let the service handle it
-      // Only redirect for page loads
-      if (!error.config?.url?.includes('/api/')) {
-        if (!window.location.pathname.includes('/403')) {
-          window.location.replace('/403');
-        }
+      if (!window.location.pathname.includes('/403')) {
+        window.location.replace('/403');
       }
     } else if (error.response?.status === 404) {
-      // Don't redirect to 404 for login/auth endpoints - let the page handle the error
       const isAuthEndpoint = error.config?.url?.includes('/login') || 
                              error.config?.url?.includes('/verification_otp') ||
                              error.config?.url?.includes('/register');
       
       if (!isAuthEndpoint) {
-        // Navigate to 404 error page for non-auth endpoints
         if (!window.location.pathname.includes('/404')) {
           window.location.replace('/404');
         }
       }
     } else if (error.response?.status >= 500) {
-      // Navigate to 500 error page
       if (!window.location.pathname.includes('/500')) {
         window.location.replace('/500');
       }
     } else if (!error.response) {
-      // Network error - navigate to 500 page
       if (!window.location.pathname.includes('/500')) {
         window.location.replace('/500');
       }
     }
+    */
     
     return Promise.reject(error);
   }
