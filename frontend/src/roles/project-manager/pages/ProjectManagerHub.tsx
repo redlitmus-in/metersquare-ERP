@@ -343,10 +343,11 @@ const ProjectManagerHub: React.FC = () => {
     setRefreshKey(prev => prev + 1);
   }, []);
 
-  // Initial data fetch
+  // Initial data fetch - ONLY call once on mount or when refreshKey changes
   useEffect(() => {
     fetchPurchases();
-  }, [fetchPurchases, refreshKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]); // Intentionally exclude fetchPurchases to prevent duplicate calls
 
   // Filter purchases based on active tab and search
   useEffect(() => {

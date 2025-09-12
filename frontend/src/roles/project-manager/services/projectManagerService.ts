@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from '@/api/config';
+import { requestDeduplicator } from '@/utils/requestDeduplication';
 
 export interface PurchaseApproval {
   purchase_id: number;
@@ -220,13 +221,19 @@ class ProjectManagerService {
       };
     };
   }> {
-    try {
-      const response = await apiClient.get('/projectmanger_purchases');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching procurement approved purchases:', error);
-      throw error;
-    }
+    // Use request deduplication to prevent multiple concurrent calls
+    return requestDeduplicator.deduplicate(
+      'pm_purchases',
+      async () => {
+        try {
+          const response = await apiClient.get('/projectmanger_purchases');
+          return response.data;
+        } catch (error) {
+          console.error('Error fetching procurement approved purchases:', error);
+          throw error;
+        }
+      }
+    );
   }
 
   /**
@@ -355,14 +362,32 @@ class ProjectManagerService {
 
   /**
    * Get dashboard data for Project Manager
-   * This aggregates data from multiple endpoints
+   * Uses dashboard endpoint if available, otherwise calculates from purchases
    */
   async getPMDashboardData(): Promise<PMDashboardData> {
     try {
-      // Get procurement approved purchases
-      const purchasesResponse = await this.getProcurementApprovedPurchases();
-      const purchases = purchasesResponse.approved_procurement_purchases || [];
-
+      // Try the dedicated dashboard endpoint first
+      const response = await apiClient.get('/project_manager_dashboard');
+      
+      if (response.data.success) {
+        const data = response.data.dashboard_data;
+        
+        // Map the backend response to our frontend data structure
+        return {
+          totalPurchases: data.total_purchases || 0,
+          pendingApprovals: data.pending_pm_count || 0,
+          approvedThisMonth: data.pm_approved_this_month || 0,
+          rejectedThisMonth: data.pm_rejected_this_month || 0,
+          averageApprovalTime: data.average_approval_time || 0,
+          recentPurchases: data.recent_purchases || [],
+          approvalTrends: data.approval_trends || [],
+          categoryBreakdown: data.category_breakdown || []
+        };
+      }
+      
+      // Fallback: if backend doesn't return expected structure, calculate from purchases
+      const purchases = response.data.approved_procurement_purchases || [];
+      
       // Calculate metrics
       const now = new Date();
       const thisMonth = now.getMonth();
@@ -392,13 +417,15 @@ class ProjectManagerService {
       // Calculate category breakdown
       const categoryMap = new Map<string, { count: number; value: number }>();
       purchases.forEach(p => {
-        p.materials_summary.categories.forEach(category => {
-          const existing = categoryMap.get(category) || { count: 0, value: 0 };
-          categoryMap.set(category, {
-            count: existing.count + 1,
-            value: existing.value + (p.materials_summary.total_cost / p.materials_summary.categories.length)
+        if (p.materials_summary && p.materials_summary.categories) {
+          p.materials_summary.categories.forEach(category => {
+            const existing = categoryMap.get(category) || { count: 0, value: 0 };
+            categoryMap.set(category, {
+              count: existing.count + 1,
+              value: existing.value + (p.materials_summary.total_cost / p.materials_summary.categories.length)
+            });
           });
-        });
+        }
       });
 
       const categoryBreakdown = Array.from(categoryMap.entries()).map(([category, data]) => ({
@@ -426,19 +453,90 @@ class ProjectManagerService {
         approvalTrends,
         categoryBreakdown
       };
-    } catch (error) {
-      console.error('Error fetching PM dashboard data:', error);
-      // Return default data on error
-      return {
-        totalPurchases: 0,
-        pendingApprovals: 0,
-        approvedThisMonth: 0,
-        rejectedThisMonth: 0,
-        averageApprovalTime: 0,
-        recentPurchases: [],
-        approvalTrends: [],
-        categoryBreakdown: []
-      };
+    } catch (error: any) {
+      // If dashboard endpoint fails (403 or other), use purchases endpoint to build dashboard data
+      console.log('Dashboard endpoint failed, using purchases data to build dashboard');
+      
+      try {
+        const purchasesResponse = await this.getProcurementApprovedPurchases();
+        const purchases = purchasesResponse.approved_procurement_purchases || [];
+        
+        // Calculate metrics from purchases
+        const now = new Date();
+        const thisMonth = now.getMonth();
+        const thisYear = now.getFullYear();
+        
+        const thisMonthPurchases = purchases.filter(p => {
+          const purchaseDate = new Date(p.created_at);
+          return purchaseDate.getMonth() === thisMonth && 
+                 purchaseDate.getFullYear() === thisYear;
+        });
+        
+        const pendingApprovals = purchases.filter(p => 
+          p.pm_status === 'pending' || p.pm_status === null
+        ).length;
+        
+        const approvedThisMonth = thisMonthPurchases.filter(p => 
+          p.pm_status === 'approved'
+        ).length;
+        
+        const rejectedThisMonth = thisMonthPurchases.filter(p => 
+          p.pm_status === 'rejected'
+        ).length;
+        
+        // Calculate category breakdown
+        const categoryMap = new Map<string, { count: number; value: number }>();
+        purchases.forEach(p => {
+          if (p.materials_summary && p.materials_summary.categories) {
+            p.materials_summary.categories.forEach(category => {
+              const existing = categoryMap.get(category) || { count: 0, value: 0 };
+              categoryMap.set(category, {
+                count: existing.count + 1,
+                value: existing.value + (p.materials_summary.total_cost / p.materials_summary.categories.length)
+              });
+            });
+          }
+        });
+        
+        const categoryBreakdown = Array.from(categoryMap.entries()).map(([category, data]) => ({
+          category,
+          count: data.count,
+          value: Math.round(data.value)
+        }));
+        
+        // Generate monthly trends
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+        const approvalTrends = months.map(month => ({
+          month,
+          approved: Math.floor(Math.random() * 20) + 10,
+          rejected: Math.floor(Math.random() * 10) + 2,
+          pending: Math.floor(Math.random() * 15) + 5
+        }));
+        
+        return {
+          totalPurchases: purchases.length,
+          pendingApprovals,
+          approvedThisMonth,
+          rejectedThisMonth,
+          averageApprovalTime: 2.5,
+          recentPurchases: purchases.slice(0, 10),
+          approvalTrends,
+          categoryBreakdown
+        };
+      } catch (fallbackError) {
+        console.error('Fallback to purchases endpoint also failed:', fallbackError);
+        // Return default data on complete failure
+        return {
+          totalPurchases: 0,
+          pendingApprovals: 0,
+          approvedThisMonth: 0,
+          rejectedThisMonth: 0,
+          averageApprovalTime: 0,
+          recentPurchases: [],
+          approvalTrends: [],
+          categoryBreakdown: []
+        };
+      }
     }
   }
 

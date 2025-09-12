@@ -50,9 +50,12 @@ const ProjectManagerDashboard: React.FC = () => {
       setIsLoading(true);
       const data = await projectManagerService.getPMDashboardData();
       setDashboardData(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching dashboard data:', error);
-      toast.error('Failed to fetch dashboard data');
+      // Don't show error toast if it's a permission issue - the service will handle it
+      if (error.response?.status !== 403) {
+        toast.error('Failed to fetch dashboard data');
+      }
     } finally {
       setIsLoading(false);
     }
