@@ -3,7 +3,7 @@
  * Shows detailed transaction information and transfer history
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   Dialog,
@@ -23,7 +23,6 @@ import {
   FileText,
   DollarSign,
   AlertCircle,
-
   Hash,
   Clock,
   CheckCircle,
@@ -34,11 +33,16 @@ import {
   TrendingUp,
   Send,
   Download,
-  Eye
+  Eye,
+  Phone,
+  Mail,
+  MapPin,
+  FileDown
 } from 'lucide-react';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { accountsService } from '../services/accountsService';
 import { toast } from 'sonner';
+import jsPDF from 'jspdf';
 
 interface PaymentTransactionModalProps {
   isOpen: boolean;
@@ -86,6 +90,7 @@ const PaymentTransactionModal: React.FC<PaymentTransactionModalProps> = ({
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [transactionData, setTransactionData] = useState<TransactionDetails | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen && purchaseId) {
@@ -142,6 +147,151 @@ const PaymentTransactionModal: React.FC<PaymentTransactionModalProps> = ({
       default:
         return <DollarSign className="h-4 w-4" />;
     }
+  };
+
+  const parseVendorAccountDetails = (details: string) => {
+    try {
+      // Try to parse as JSON
+      const parsed = JSON.parse(details);
+      return parsed;
+    } catch {
+      // If not valid JSON, return as is
+      return details;
+    }
+  };
+
+  const exportToPDF = () => {
+    if (!transactionData) return;
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    let yPosition = 20;
+
+    // Title
+    pdf.setFontSize(18);
+    pdf.setTextColor(30, 64, 175); // Blue color
+    pdf.text('Payment Transaction Details', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 15;
+
+    // Purchase Information
+    pdf.setFontSize(14);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(`Purchase ID: ${transactionData.purchase_id}`, 20, yPosition);
+    yPosition += 8;
+    
+    if (transactionData.purchase_reference) {
+      pdf.setFontSize(11);
+      pdf.text(`Reference: ${transactionData.purchase_reference}`, 20, yPosition);
+      yPosition += 8;
+    }
+
+    if (transactionData.vendor) {
+      pdf.text(`Vendor: ${transactionData.vendor.name}`, 20, yPosition);
+      yPosition += 10;
+    }
+
+    // Transactions
+    transactionData.transactions.forEach((transaction, index) => {
+      // Check if we need a new page
+      if (yPosition > pageHeight - 40) {
+        pdf.addPage();
+        yPosition = 20;
+      }
+
+      // Transaction header
+      pdf.setFillColor(240, 240, 240);
+      pdf.rect(15, yPosition - 5, pageWidth - 30, 10, 'F');
+      pdf.setFontSize(12);
+      pdf.setTextColor(0, 0, 0);
+      pdf.text(`Transaction ID: ${transaction.transaction_id}`, 20, yPosition);
+      yPosition += 10;
+
+      // Status
+      pdf.setFontSize(10);
+      pdf.text(`Status: ${transaction.status}`, 20, yPosition);
+      yPosition += 6;
+
+      // Amount
+      pdf.setTextColor(0, 128, 0);
+      pdf.text(`Amount: ${transaction.currency || 'AED'} ${(transaction.amount || 0).toLocaleString()}`, 20, yPosition);
+      pdf.setTextColor(0, 0, 0);
+      yPosition += 6;
+
+      // Payment Method
+      pdf.text(`Payment Method: ${transaction.payment_method}`, 20, yPosition);
+      yPosition += 6;
+
+      // Payment Reference
+      if (transaction.payment_reference) {
+        pdf.text(`Payment Reference: ${transaction.payment_reference}`, 20, yPosition);
+        yPosition += 6;
+      }
+
+      // Vendor Account Details
+      if (transaction.vendor_account_details) {
+        const vendorDetails = parseVendorAccountDetails(transaction.vendor_account_details);
+        pdf.setFontSize(11);
+        pdf.setTextColor(30, 64, 175);
+        pdf.text('Vendor Account Details:', 20, yPosition);
+        yPosition += 6;
+        pdf.setFontSize(10);
+        pdf.setTextColor(0, 0, 0);
+        
+        if (typeof vendorDetails === 'object') {
+          Object.entries(vendorDetails).forEach(([key, value]) => {
+            if (yPosition > pageHeight - 20) {
+              pdf.addPage();
+              yPosition = 20;
+            }
+            const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            pdf.text(`${displayKey}: ${value}`, 25, yPosition);
+            yPosition += 5;
+          });
+        } else {
+          pdf.text(String(vendorDetails), 25, yPosition);
+          yPosition += 6;
+        }
+      }
+
+      // Notes
+      if (transaction.notes) {
+        pdf.setTextColor(184, 134, 11);
+        pdf.text('Notes:', 20, yPosition);
+        pdf.setTextColor(0, 0, 0);
+        yPosition += 6;
+        
+        // Wrap long text
+        const splitNotes = pdf.splitTextToSize(transaction.notes, pageWidth - 45);
+        splitNotes.forEach((line: string) => {
+          if (yPosition > pageHeight - 20) {
+            pdf.addPage();
+            yPosition = 20;
+          }
+          pdf.text(line, 25, yPosition);
+          yPosition += 5;
+        });
+      }
+
+      // Dates
+      if (transaction.created_at) {
+        pdf.setFontSize(9);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(`Created: ${new Date(transaction.created_at).toLocaleString()}`, 20, yPosition);
+        yPosition += 5;
+      }
+
+      yPosition += 10; // Space between transactions
+    });
+
+    // Footer
+    pdf.setFontSize(8);
+    pdf.setTextColor(150, 150, 150);
+    pdf.text(`Generated on ${new Date().toLocaleString()}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+
+    // Save the PDF
+    pdf.save(`payment_transaction_${transactionData.purchase_id}_${new Date().getTime()}.pdf`);
+    toast.success('PDF exported successfully');
   };
 
   if (!isOpen) return null;
@@ -280,17 +430,65 @@ const PaymentTransactionModal: React.FC<PaymentTransactionModalProps> = ({
                     )}
 
                     {/* Vendor Account Details */}
-                    {transaction.vendor_account_details && (
-                      <div className="bg-blue-50 rounded-lg p-3">
-                        <div className="flex items-start gap-2">
-                          <Building className="h-4 w-4 text-blue-500 mt-0.5" />
-                          <div>
-                            <span className="text-sm text-blue-700 font-medium">Vendor Account Details:</span>
-                            <p className="text-sm text-blue-600 mt-1">{transaction.vendor_account_details}</p>
+                    {transaction.vendor_account_details && (() => {
+                      const vendorDetails = parseVendorAccountDetails(transaction.vendor_account_details);
+                      
+                      if (typeof vendorDetails === 'object' && vendorDetails !== null) {
+                        return (
+                          <div className="bg-blue-50 rounded-lg p-4">
+                            <div className="flex items-start gap-2 mb-3">
+                              <Building className="h-4 w-4 text-blue-500 mt-0.5" />
+                              <span className="text-sm text-blue-700 font-medium">Vendor Account Details:</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {Object.entries(vendorDetails).map(([key, value]) => {
+                                // Format the key for display
+                                const displayKey = key
+                                  .replace(/_/g, ' ')
+                                  .replace(/\b\w/g, l => l.toUpperCase())
+                                  .replace('Account Number', 'Account')
+                                  .replace('Swift Code', 'SWIFT')
+                                  .replace('Iban', 'IBAN');
+                                
+                                // Get appropriate icon for each field
+                                let icon = null;
+                                if (key.includes('account')) icon = <CreditCard className="h-3 w-3" />;
+                                else if (key.includes('bank')) icon = <Building className="h-3 w-3" />;
+                                else if (key.includes('phone')) icon = <Phone className="h-3 w-3" />;
+                                else if (key.includes('email')) icon = <Mail className="h-3 w-3" />;
+                                else if (key.includes('address')) icon = <MapPin className="h-3 w-3" />;
+                                else icon = <FileText className="h-3 w-3" />;
+                                
+                                return (
+                                  <div key={key} className="bg-white rounded-md p-2.5 border border-blue-100">
+                                    <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
+                                      {icon}
+                                      <span>{displayKey}:</span>
+                                    </div>
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {String(value) || '-'}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    )}
+                        );
+                      } else {
+                        // If not an object, display as plain text
+                        return (
+                          <div className="bg-blue-50 rounded-lg p-3">
+                            <div className="flex items-start gap-2">
+                              <Building className="h-4 w-4 text-blue-500 mt-0.5" />
+                              <div>
+                                <span className="text-sm text-blue-700 font-medium">Vendor Account Details:</span>
+                                <p className="text-sm text-blue-600 mt-1">{String(vendorDetails)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                    })()}
 
                     {/* Notes */}
                     {transaction.notes && (
@@ -306,15 +504,95 @@ const PaymentTransactionModal: React.FC<PaymentTransactionModalProps> = ({
                     )}
 
                     {/* Supporting Documents */}
-                    {transaction.supporting_documents && (
-                      <div className="bg-green-50 rounded-lg p-3">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-green-500" />
-                          <span className="text-sm text-green-700 font-medium">Supporting Documents:</span>
-                          <span className="text-sm text-green-600">{transaction.supporting_documents}</span>
-                        </div>
-                      </div>
-                    )}
+                    {transaction.supporting_documents && (() => {
+                      // Check if it's an empty object or array
+                      const docs = transaction.supporting_documents;
+                      const isEmpty = docs === '{}' || docs === '[]' || 
+                                     (typeof docs === 'object' && Object.keys(docs).length === 0);
+                      
+                      if (isEmpty) {
+                        return (
+                          <div className="bg-green-50 rounded-lg p-3">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-green-500" />
+                              <span className="text-sm text-green-700 font-medium">Supporting Documents:</span>
+                              <span className="text-sm text-green-600 italic">No documents attached</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      
+                      // Try to parse if it's a JSON string
+                      let parsedDocs = docs;
+                      if (typeof docs === 'string') {
+                        try {
+                          parsedDocs = JSON.parse(docs);
+                        } catch {
+                          // If not JSON, use as is
+                          parsedDocs = docs;
+                        }
+                      }
+                      
+                      // Display based on type
+                      if (Array.isArray(parsedDocs) && parsedDocs.length > 0) {
+                        return (
+                          <div className="bg-green-50 rounded-lg p-3">
+                            <div className="flex items-start gap-2">
+                              <FileText className="h-4 w-4 text-green-500 mt-0.5" />
+                              <div>
+                                <span className="text-sm text-green-700 font-medium">Supporting Documents:</span>
+                                <ul className="mt-2 space-y-1">
+                                  {parsedDocs.map((doc: any, index: number) => (
+                                    <li key={index} className="text-sm text-green-600 flex items-center gap-1">
+                                      <span>•</span>
+                                      <span>{typeof doc === 'string' ? doc : doc.name || `Document ${index + 1}`}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      } else if (typeof parsedDocs === 'object' && parsedDocs !== null && Object.keys(parsedDocs).length > 0) {
+                        return (
+                          <div className="bg-green-50 rounded-lg p-3">
+                            <div className="flex items-start gap-2">
+                              <FileText className="h-4 w-4 text-green-500 mt-0.5" />
+                              <div>
+                                <span className="text-sm text-green-700 font-medium">Supporting Documents:</span>
+                                <div className="mt-2 space-y-1">
+                                  {Object.entries(parsedDocs).map(([key, value]) => (
+                                    <div key={key} className="text-sm text-green-600">
+                                      <span className="font-medium">{key}:</span> {String(value)}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      } else if (typeof parsedDocs === 'string' && parsedDocs.trim() !== '') {
+                        return (
+                          <div className="bg-green-50 rounded-lg p-3">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-green-500" />
+                              <span className="text-sm text-green-700 font-medium">Supporting Documents:</span>
+                              <span className="text-sm text-green-600">{parsedDocs}</span>
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="bg-green-50 rounded-lg p-3">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-green-500" />
+                              <span className="text-sm text-green-700 font-medium">Supporting Documents:</span>
+                              <span className="text-sm text-green-600 italic">No documents attached</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                    })()}
 
                     {/* Failure Reason */}
                     {transaction.failure_reason && (
@@ -337,19 +615,11 @@ const PaymentTransactionModal: React.FC<PaymentTransactionModalProps> = ({
               <div className="flex justify-end gap-3 pt-4">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    // Export transaction details
-                    const dataStr = JSON.stringify(transactionData, null, 2);
-                    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-                    const exportFileDefaultName = `purchase_${transactionData.purchase_id}_transactions.json`;
-                    const linkElement = document.createElement('a');
-                    linkElement.setAttribute('href', dataUri);
-                    linkElement.setAttribute('download', exportFileDefaultName);
-                    linkElement.click();
-                  }}
+                  onClick={exportToPDF}
+                  className="bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
                 >
-                  <Download className="h-4 w-4 mr-2" />
-                  Export Details
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Export as PDF
                 </Button>
                 <Button onClick={onClose}>Close</Button>
               </div>
