@@ -292,7 +292,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                     {isEstimationRejected ? (
                       isResending ? (
                         <>
-                          < className="h-2.5 w-2.5 mr-0.5 animate-spin" />
+                          <ModernLoadingSpinners variant="pulse-wave" size="sm" />
                           Resending...
                         </>
                       ) : (
@@ -303,7 +303,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                       )
                     ) : isApproving ? (
                       <>
-                        < className="h-2.5 w-2.5 mr-0.5 animate-spin" />
+                        <ModernLoadingSpinners variant="pulse-wave" size="sm" />
                         Approving...
                       </>
                     ) : (
@@ -324,7 +324,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                     >
                       {isRejecting ? (
                         <>
-                          < className="h-2.5 w-2.5 mr-0.5 animate-spin" />
+                          <ModernLoadingSpinners variant="pulse-wave" size="sm" />
                           Rejecting...
                         </>
                       ) : (
@@ -372,7 +372,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
             >
               {isApproving ? (
                 <>
-                  < className="h-4 w-4 mr-2 animate-spin" />
+                  <ModernLoadingSpinners variant="pulse-wave" size="sm" />
                   Approving...
                 </>
               ) : (
@@ -413,7 +413,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
             >
               {isRejecting ? (
                 <>
-                  < className="h-4 w-4 mr-2 animate-spin" />
+                  <ModernLoadingSpinners variant="pulse-wave" size="sm" />
                   Rejecting...
                 </>
               ) : (
