@@ -127,6 +127,11 @@ const LoginPageOTP: React.FC = () => {
   };
 
   const handleVerifyOTP = async () => {
+    // Don't show error if already loading (auto-complete might have triggered)
+    if (isLoading) {
+      return;
+    }
+    
     if (otp.length !== 6) {
       toast.error('Invalid OTP', {
         description: 'Please enter a 6-digit OTP'
