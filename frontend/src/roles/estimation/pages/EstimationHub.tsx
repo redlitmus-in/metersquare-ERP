@@ -22,6 +22,9 @@ import {
   CheckSquare, XSquare, Clock, TrendingUp,
   DollarSign, FileText, BarChart3, AlertCircle,
   ArrowUpDown, ArrowUp, ArrowDown, X
+,
+  Calendar, MapPin, Building2, Eye, History,
+  CheckCircle, XCircle
 } from 'lucide-react';
 import { EstimationApprovalCard } from '../components/EstimationApprovalCard';
 import { EstimationApprovalModal } from '../components/EstimationApprovalModal';
@@ -41,6 +44,14 @@ const EstimationHub: React.FC = () => {
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'priority' | 'id'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filterByAmount, setFilterByAmount] = useState<'all' | 'low' | 'medium' | 'high'>('all');
+  // Additional filters like Site Supervisor has
+  const [showFilters, setShowFilters] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [projectFilter, setProjectFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [availableProjects, setAvailableProjects] = useState<string[]>([]);
+  const [availableLocations, setAvailableLocations] = useState<string[]>([]);
   const [filterByPriority, setFilterByPriority] = useState<'all' | 'low' | 'medium' | 'high'>('all');
   const [filterByCategory, setFilterByCategory] = useState<string>('all');
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
@@ -214,8 +225,6 @@ const EstimationHub: React.FC = () => {
   // Helper function to get purchase priority
   const getPurchasePriority = (purchase: Purchase) => {
     if (!purchase.materials || purchase.materials.length === 0) return 'medium';
-    
-    // Find highest priority material
     const priorities = purchase.materials.map(m => m.priority?.toLowerCase()).filter(Boolean);
     if (priorities.includes('high')) return 'high';
     if (priorities.includes('medium')) return 'medium';
@@ -330,6 +339,73 @@ const EstimationHub: React.FC = () => {
       });
     }
 
+    // Apply search filter
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(p => {
+        const purchaseId = p.purchase_id ? p.purchase_id.toString() : '';
+        const purpose = p.purpose || '';
+        const siteLocation = p.site_location || '';
+        const projectId = p.project_id ? p.project_id.toString() : '';
+        const requestedBy = p.requested_by || '';
+        
+        const matchesBasicFields = 
+          purchaseId.includes(search) ||
+          purpose.toLowerCase().includes(search) ||
+          siteLocation.toLowerCase().includes(search) ||
+          projectId.toLowerCase().includes(search) ||
+          requestedBy.toLowerCase().includes(search);
+        
+        const matchesMaterials = p.materials?.some(m => {
+          const description = m.description || '';
+          const category = m.category || '';
+          return description.toLowerCase().includes(search) || 
+                 category.toLowerCase().includes(search);
+        }) || false;
+        
+        return matchesBasicFields || matchesMaterials;
+      });
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(p => p.status === statusFilter);
+    }
+
+    // Project filter
+    if (projectFilter !== 'all') {
+      filtered = filtered.filter(p => p.project_id?.toString() === projectFilter);
+    }
+
+    // Location filter  
+    if (locationFilter !== 'all') {
+      filtered = filtered.filter(p => p.site_location === locationFilter);
+    }
+
+    // Date filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const filterDate = (date: string) => {
+        const purchaseDate = new Date(date);
+        switch (dateFilter) {
+          case 'today':
+            return purchaseDate.toDateString() === now.toDateString();
+          case 'week':
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            return purchaseDate >= weekAgo;
+          case 'month':
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            return purchaseDate >= monthAgo;
+          case 'quarter':
+            const quarterAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+            return purchaseDate >= quarterAgo;
+          default:
+            return true;
+        }
+      };
+      filtered = filtered.filter(p => filterDate(p.date || p.created_at));
+    }
+
 
     // Sort
     filtered.sort((a, b) => {
@@ -367,7 +443,7 @@ const EstimationHub: React.FC = () => {
     });
 
     setFilteredPurchases(filtered);
-  }, [purchases, activeTab, sortBy, sortOrder, filterByAmount, filterByPriority, filterByCategory]);
+  }, [purchases, activeTab, sortBy, sortOrder, filterByAmount, filterByPriority, filterByCategory, searchTerm, statusFilter, projectFilter, locationFilter, dateFilter]);
 
   // Handle approve button click
   const handleApprove = (purchaseId: number) => {
@@ -441,13 +517,15 @@ const EstimationHub: React.FC = () => {
     setFilterByAmount('all');
     setFilterByPriority('all');
     setFilterByCategory('all');
+    setSearchTerm('');
+    setStatusFilter('all');
+    setProjectFilter('all');
+    setLocationFilter('all');
+    setDateFilter('all');
   };
 
   // Check if any filters are active
-  const hasActiveFilters = sortBy !== 'date' || sortOrder !== 'desc' || 
-                          filterByAmount !== 'all' || filterByPriority !== 'all' || 
-                          filterByCategory !== 'all';
-
+  const hasActiveFilters = sortBy !== 'date' || sortOrder !== 'desc' || filterByAmount !== 'all' || filterByPriority !== 'all' || filterByCategory !== 'all' || searchTerm !== '' || statusFilter !== 'all' || projectFilter !== 'all' || locationFilter !== 'all' || dateFilter !== 'all';
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
       {/* Page Header - Responsive */}
@@ -555,139 +633,192 @@ const EstimationHub: React.FC = () => {
         </Card>
       </div>
 
-      {/* Sort and Filter Controls */}
-      <div className="mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          {/* Sort and Filter Row */}
-          <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
-            {/* Sort Controls */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600 font-medium">Sort:</span>
-              <Select value={sortBy} onValueChange={(value: 'date' | 'amount' | 'priority' | 'id') => setSortBy(value)}>
-                <SelectTrigger className="w-32 h-9 bg-white border-gray-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="date">Date</SelectItem>
-                  <SelectItem value="amount">Amount</SelectItem>
-                  <SelectItem value="priority">Priority</SelectItem>
-                  <SelectItem value="id">ID</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleSortOrder}
-                className="h-9 w-9 p-0 border-gray-200"
+      {/* Search and Filter Bar */}
+      <div className="space-y-4 mb-6">
+        {/* Search Bar and Actions */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Search by PR#, purpose, location, project, or material..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-10"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                aria-label="Clear search"
+                title="Clear search"
               >
-                {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-              </Button>
-            </div>
-
-            {/* Amount Filter */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600 font-medium">Amount:</span>
-              <Select value={filterByAmount} onValueChange={(value: 'all' | 'low' | 'medium' | 'high') => setFilterByAmount(value)}>
-                <SelectTrigger className="w-28 h-9 bg-white border-gray-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="low">&lt; 5K</SelectItem>
-                  <SelectItem value="medium">5K - 25K</SelectItem>
-                  <SelectItem value="high">&gt; 25K</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Priority Filter */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600 font-medium">Priority:</span>
-              <Select value={filterByPriority} onValueChange={(value: 'all' | 'low' | 'medium' | 'high') => setFilterByPriority(value)}>
-                <SelectTrigger className="w-24 h-9 bg-white border-gray-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Category Filter */}
-            {availableCategories.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 font-medium">Category:</span>
-                <Select value={filterByCategory} onValueChange={setFilterByCategory}>
-                  <SelectTrigger className="w-32 h-9 bg-white border-gray-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    {availableCategories.map(category => (
-                      <SelectItem key={category} value={category}>{category}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <X className="h-4 w-4" />
+              </button>
             )}
           </div>
-
-          {/* Clear Filters Button */}
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-            {hasActiveFilters && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={clearAllFilters}
-                className="h-9 text-sm border-gray-200 text-gray-600 hover:text-gray-800"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Clear
-              </Button>
-            )}
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setShowFilters(!showFilters)}
+              variant={hasActiveFilters ? "default" : "outline"}
+              className={hasActiveFilters ? "bg-red-600 hover:bg-red-700" : ""}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filters
+              {hasActiveFilters && (
+                <Badge variant="secondary" className="ml-2 bg-white text-red-600">
+                  Active
+                </Badge>
+              )}
+            </Button>
+            <Select value={sortOrder} onValueChange={(value: 'asc' | 'desc') => setSortOrder(value)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="desc">
+                  <span className="flex items-center gap-2">
+                    <ArrowUpDown className="h-3.5 w-3.5" />
+                    Newest First
+                  </span>
+                </SelectItem>
+                <SelectItem value="asc">
+                  <span className="flex items-center gap-2">
+                    <ArrowUpDown className="h-3.5 w-3.5 rotate-180" />
+                    Oldest First
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={fetchPurchases}
+              disabled={isLoading}
+              variant="outline"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
           </div>
         </div>
 
-        {/* Active Filters Display */}
-        {hasActiveFilters && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            <span className="text-xs text-gray-500 font-medium">Active filters:</span>
-            {sortBy !== 'date' && (
-              <Badge variant="secondary" className="text-xs">
-                Sort: {sortBy} {sortOrder === 'asc' ? '↑' : '↓'}
-              </Badge>
-            )}
-            {sortOrder !== 'desc' && sortBy === 'date' && (
-              <Badge variant="secondary" className="text-xs">
-                Sort: oldest first
-              </Badge>
-            )}
-            {filterByAmount !== 'all' && (
-              <Badge variant="secondary" className="text-xs">
-                Amount: {filterByAmount === 'low' ? '< 5K' : filterByAmount === 'medium' ? '5K-25K' : '> 25K'}
-              </Badge>
-            )}
-            {filterByPriority !== 'all' && (
-              <Badge variant="secondary" className="text-xs">
-                Priority: {filterByPriority}
-              </Badge>
-            )}
-            {filterByCategory !== 'all' && (
-              <Badge variant="secondary" className="text-xs">
-                Category: {filterByCategory}
-              </Badge>
-            )}
-          </div>
-        )}
+        {/* Filter Panel */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <Card className="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Status Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Status</label>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                        <SelectItem value="under_review">Under Review</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Project Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Project</label>
+                    <Select value={projectFilter} onValueChange={setProjectFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Projects" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Projects</SelectItem>
+                        {availableProjects.map(project => (
+                          <SelectItem key={project} value={project}>
+                            <span className="flex items-center gap-2">
+                              <Building2 className="h-3 w-3" />
+                              Project {project}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Location Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Location</label>
+                    <Select value={locationFilter} onValueChange={setLocationFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Locations" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Locations</SelectItem>
+                        {availableLocations.map(location => (
+                          <SelectItem key={location} value={location}>
+                            <span className="flex items-center gap-2">
+                              <MapPin className="h-3 w-3" />
+                              {location}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date Range Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Date Range</label>
+                    <Select value={dateFilter} onValueChange={setDateFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Time</SelectItem>
+                        <SelectItem value="today">Today</SelectItem>
+                        <SelectItem value="week">Last 7 Days</SelectItem>
+                        <SelectItem value="month">Last 30 Days</SelectItem>
+                        <SelectItem value="quarter">Last 90 Days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Clear Filters Button */}
+                {hasActiveFilters && (
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      onClick={() => {
+                        setStatusFilter('all');
+                        setProjectFilter('all');
+                        setLocationFilter('all');
+                        setDateFilter('all');
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Clear All Filters
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
       </div>
 
-      {/* Tabs - Responsive */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
-        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <TabsList className="grid w-full min-w-[400px] max-w-none lg:max-w-4xl grid-cols-5 bg-gray-100 h-auto">
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <div className="w-full overflow-x-auto">
+          <TabsList className="grid w-full grid-cols-5 h-auto max-w-full">
             <TabsTrigger 
               value="pending" 
               className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-amber-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
