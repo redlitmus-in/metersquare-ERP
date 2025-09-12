@@ -11,12 +11,13 @@ import {
   AlertCircle,
   Clock,
   XCircle,
-  Loader2,
+
   RefreshCw,
   Activity,
   Award,
   Target
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -200,7 +201,7 @@ const EstimationDashboard: React.FC = () => {
                 className="border-amber-300 hover:bg-amber-100 hover:border-amber-400 transition-all duration-300"
               >
                 {refreshing ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                 ) : (
                   <RefreshCw className="w-4 h-4" />
                 )}
@@ -222,7 +223,7 @@ const EstimationDashboard: React.FC = () => {
                   animate={{ rotate: 360 }}
                   transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                 >
-                  <Loader2 className="w-8 h-8 text-amber-600" />
+                  <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                 </motion.div>
                 <motion.div
                   initial={{ scale: 0 }}
@@ -552,7 +553,7 @@ const EstimationDashboard: React.FC = () => {
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
               >
-                <Loader2 className="w-8 h-8 text-green-600" />
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
               </motion.div>
             </motion.div>
           ) : (

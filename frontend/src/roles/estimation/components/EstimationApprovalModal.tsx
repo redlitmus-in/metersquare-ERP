@@ -19,8 +19,9 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   CheckCircle, XCircle, AlertCircle, DollarSign, 
-  Flag, Send, Loader2 
+  Flag, Send 
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { estimationService } from '../services/estimationService';
 import { toast } from 'sonner';
 
@@ -295,7 +296,7 @@ export const EstimationApprovalModal: React.FC<EstimationApprovalModalProps> = (
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                 Processing...
               </>
             ) : (

@@ -449,9 +449,9 @@ const EstimationHub: React.FC = () => {
                           filterByCategory !== 'all';
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 pb-8">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
       {/* Page Header - Responsive */}
-      <div className="mb-6">
+      <div className="mb-4">
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}

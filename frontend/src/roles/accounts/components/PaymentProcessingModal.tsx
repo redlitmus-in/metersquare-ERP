@@ -31,7 +31,7 @@ import {
   FileText,
   AlertCircle,
   CheckCircle2,
-  Loader2,
+
   Upload,
   File,
   X,
@@ -39,6 +39,7 @@ import {
   Image as ImageIcon,
   FileCheck
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { accountsService } from '../services/accountsService';
 import { apiClient } from '@/api/config';
 import { toast } from 'sonner';
@@ -443,7 +444,7 @@ const PaymentProcessingModal: React.FC<PaymentProcessingModalProps> = ({
                       >
                         <div className="flex-shrink-0">
                           {isUploading ? (
-                            <Loader2 className="h-4 w-4 text-purple-600 animate-spin" />
+                            <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                           ) : progress === 100 ? (
                             <FileCheck className="h-4 w-4 text-green-600" />
                           ) : (
@@ -534,7 +535,7 @@ const PaymentProcessingModal: React.FC<PaymentProcessingModalProps> = ({
           >
             {isLoading ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                 Processing...
               </>
             ) : (

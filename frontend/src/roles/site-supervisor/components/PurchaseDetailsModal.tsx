@@ -24,7 +24,6 @@ import {
   AlertCircle,
   Download,
   Mail,
-  Loader2,
   History,
   TrendingUp,
   Building2,
@@ -50,6 +49,7 @@ import {
   Activity,
   Shield
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { format } from 'date-fns';
 import { siteSupervisorService, Purchase } from '../services/siteSupervisorService';
 import { toast } from 'sonner';
@@ -301,7 +301,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-red-600" />
+            <ModernLoadingSpinners variant="pulse-wave" size="lg" />
           </div>
         ) : purchase ? (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">

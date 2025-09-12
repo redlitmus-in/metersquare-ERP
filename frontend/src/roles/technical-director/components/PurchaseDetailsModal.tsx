@@ -13,12 +13,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { 
-  Loader2, Package, Calendar, MapPin, User, CheckCircle, 
+ Package, Calendar, MapPin, User, CheckCircle, 
   XCircle, Clock, AlertTriangle, MessageSquare, DollarSign,
   FileText, Building2, Download, Info, RefreshCw,
   Activity, ExternalLink, Users, Mail, Target, Hash,
   Briefcase, UserCheck, Send, Paperclip
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { technicalDirectorService } from '../services/technicalDirectorService';
 import { API_BASE_URL } from '@/api/config';
 import { toast } from 'sonner';
@@ -194,7 +195,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
+            <ModernLoadingSpinners variant="pulse-wave" size="lg" />
             <p className="text-gray-600">Loading purchase details...</p>
           </div>
         ) : error ? (

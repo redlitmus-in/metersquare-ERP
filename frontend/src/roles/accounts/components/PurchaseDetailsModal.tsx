@@ -26,8 +26,9 @@ import {
   CreditCard,
   Building,
   AlertCircle,
-  Loader2
+  
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { accountsService } from '../services/accountsService';
 
 interface PurchaseDetailsModalProps {
@@ -119,7 +120,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
         <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] p-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
             </div>
           ) : !purchaseData ? (
             <div className="flex items-center justify-center py-12">

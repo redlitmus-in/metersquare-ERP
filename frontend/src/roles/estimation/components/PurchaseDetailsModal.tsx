@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { 
-  Loader2, Package, Calendar, MapPin, User, CheckCircle, 
+  Package, Calendar, MapPin, User, CheckCircle, 
   XCircle, Clock, AlertTriangle, MessageSquare, DollarSign,
   FileText, Building2, Mail, Download, Hash, Info, TrendingUp,
   UserCheck, Target, Layers, Shield, Activity, Paperclip, ExternalLink
@@ -24,6 +24,7 @@ import { estimationService } from '../services/estimationService';
 import type { PurchaseStatusDetails } from '../services/estimationService';
 import { toast } from 'sonner';
 import { API_ENDPOINTS, API_BASE_URL } from '@/api/config';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 
 interface PurchaseDetailsModalProps {
   isOpen: boolean;
@@ -393,8 +394,8 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
         <div className="flex-1 overflow-hidden">
           {loading ? (
             <div className="flex flex-col justify-center items-center py-16">
-              <Loader2 className="h-12 w-12 animate-spin text-amber-500 mb-4" />
-              <p className="text-gray-600 font-medium">Loading purchase details...</p>
+              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+              <p className="text-gray-600 font-medium mt-4">Loading purchase details...</p>
             </div>
           ) : purchaseDetails ? (
             <>
@@ -605,7 +606,7 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                               >
                                 {downloadingFile ? (
                                   <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                                     Downloading...
                                   </>
                                 ) : (

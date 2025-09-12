@@ -15,7 +15,7 @@ import {
   XSquare,
   AlertCircle,
   Mail,
-  Loader2,
+
   ArrowLeft,
   Search,
   Filter,

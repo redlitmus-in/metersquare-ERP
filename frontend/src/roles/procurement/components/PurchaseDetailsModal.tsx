@@ -29,7 +29,6 @@ import {
   History,
   Download,
   Mail,
-  Loader2,
   Hash,
   UserCheck,
   CalendarCheck,
@@ -49,6 +48,7 @@ import {
   UserCog,
   PenTool
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 
 interface PurchaseDetailsModalProps {
   isOpen: boolean;
@@ -305,8 +305,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
         {loading ? (
           <div className="flex items-center justify-center flex-1 bg-white">
             <div className="text-center">
-              <Loader2 className="w-12 h-12 animate-spin text-red-600 mx-auto mb-4" />
-              <p className="text-gray-600">Loading purchase details...</p>
+              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+              <p className="text-gray-600 mt-4">Loading purchase details...</p>
             </div>
           </div>
         ) : purchase ? (

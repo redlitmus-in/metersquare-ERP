@@ -20,9 +20,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Send, Upload, FileText, X, CheckCircle, 
-  AlertCircle, File, Loader2, Eye, Download, 
+  AlertCircle, File,  Eye, Download, 
   Trash2, ExternalLink
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { accountsService } from '../services/accountsService';
 import { toast } from 'sonner';
 import type { Purchase } from '../types';
@@ -360,7 +361,7 @@ const AcknowledgementModal: React.FC<AcknowledgementModalProps> = ({
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                   Sending...
                 </>
               ) : (

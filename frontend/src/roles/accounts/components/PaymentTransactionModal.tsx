@@ -23,7 +23,7 @@ import {
   FileText,
   DollarSign,
   AlertCircle,
-  Loader2,
+
   Hash,
   Clock,
   CheckCircle,
@@ -36,6 +36,7 @@ import {
   Download,
   Eye
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { accountsService } from '../services/accountsService';
 import { toast } from 'sonner';
 
@@ -157,7 +158,7 @@ const PaymentTransactionModal: React.FC<PaymentTransactionModalProps> = ({
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <ModernLoadingSpinners variant="pulse-wave" size="lg" />
           </div>
         ) : transactionData ? (
           <div className="max-h-[calc(90vh-80px)] overflow-y-auto">

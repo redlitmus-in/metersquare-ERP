@@ -18,8 +18,9 @@ import {
   CheckCircle2, 
   XCircle, 
   AlertTriangle,
-  Loader2
+  
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { accountsService } from '../services/accountsService';
 import { toast } from 'sonner';
 
@@ -188,7 +189,7 @@ const PaymentApprovalModal: React.FC<PaymentApprovalModalProps> = ({
           >
             {isLoading ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                 Processing...
               </>
             ) : (

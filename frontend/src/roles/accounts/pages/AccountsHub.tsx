@@ -460,12 +460,12 @@ const AccountsHub: React.FC = () => {
   };
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 pb-8">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
       {/* Green Gradient Header */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-green-100 via-green-50 to-emerald-50 p-6 rounded-xl mb-6 shadow-lg border border-green-200"
+        className="bg-gradient-to-r from-green-100 via-green-50 to-emerald-50 p-6 rounded-xl mb-4 shadow-lg border border-green-200"
       >
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <div className="space-y-2">

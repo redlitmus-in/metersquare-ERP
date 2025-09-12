@@ -18,8 +18,9 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   CheckCircle, XCircle, AlertCircle, Shield, 
-  Send, Loader2 
+  Send 
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { technicalDirectorService } from '../services/technicalDirectorService';
 import { toast } from 'sonner';
 
@@ -202,7 +203,7 @@ const TechnicalDirectorApprovalModal: React.FC<TechnicalDirectorApprovalModalPro
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
                 Processing...
               </>
             ) : (

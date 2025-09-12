@@ -20,7 +20,7 @@ import {
   MessageSquare,
   ArrowRight,
   Package,
-  Loader2,
+
   Activity,
   UserCheck,
   Mail,
@@ -29,6 +29,7 @@ import {
   DollarSign,
   Shield
 } from 'lucide-react';
+import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { format } from 'date-fns';
 import { siteSupervisorService } from '../services/siteSupervisorService';
 import { toast } from 'sonner';
@@ -195,7 +196,7 @@ const PurchaseHistoryModal: React.FC<PurchaseHistoryModalProps> = ({
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="flex flex-col items-center gap-3">
-              <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+              <ModernLoadingSpinners variant="pulse-wave" size="lg" />
               <p className="text-sm text-gray-600">Loading purchase history...</p>
             </div>
           </div>
