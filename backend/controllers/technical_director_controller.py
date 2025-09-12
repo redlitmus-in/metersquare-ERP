@@ -10,6 +10,7 @@ from models.purchase import Purchase
 from utils.email_service import EmailService
 from config.logging import get_logger
 from config.db import db
+from models.purchase_history import PurchaseHistory
 
 log = get_logger()
 
@@ -111,7 +112,7 @@ def technical_director_approval_workflow():
             'role': role.role
         }
 
-        # Create status entry in database
+        # Update single-row status in database (no insert)
         try:
             # Determine receiver role based on decision
             if technical_director_status == 'approved':
@@ -119,21 +120,39 @@ def technical_director_approval_workflow():
             else:  # rejected
                 receiver_role = 'estimation'
             
-            new_status = PurchaseStatus.create_new_status(
+            existing_status = PurchaseStatus.get_latest_status(purchase_id)
+            if existing_status:
+                existing_status.sender = 'technicalDirector'
+                existing_status.receiver = receiver_role
+                existing_status.role = 'technicalDirector'
+                existing_status.status = 'approved' if technical_director_status == 'approved' else 'rejected'
+                existing_status.decision_by_user_id = user_id
+                existing_status.rejection_reason = rejection_reason if technical_director_status == 'rejected' else None
+                existing_status.comments = comments
+                existing_status.decision_date = datetime.utcnow()
+                existing_status.is_active = True
+                existing_status.last_modified_by = user_name
+                db.session.add(existing_status)
+                updated_status = existing_status
+            else:
+                updated_status = PurchaseStatus(
                 purchase_id=purchase_id,
-                sender_role='technicalDirector',
-                receiver_role=receiver_role,
+                    sender='technicalDirector',
+                    receiver=receiver_role,
+                    role='technicalDirector',
                 status='approved' if technical_director_status == 'approved' else 'rejected',
                 decision_by_user_id=user_id,
                 rejection_reason=rejection_reason if technical_director_status == 'rejected' else None,
                 comments=comments,
-                created_by=user_name
+                    created_by=user_name,
+                    is_active=True
             )
+                db.session.add(updated_status)
             
             # Update purchase last_modified fields
             purchase.last_modified_at = datetime.utcnow()
             purchase.last_modified_by = user_name
-            
+            db.session.add(purchase)
             db.session.commit()
         except Exception as e:
             db.session.rollback()
@@ -169,26 +188,90 @@ def technical_director_approval_workflow():
             else:
                 message = f'Purchase request #{purchase_id} rejected by Technical Director and sent back to Estimation team'
 
+        # Append purchase history single-row action (no separate email action)
+        try:
+            def _append_purchase_history_action_local(purchase_id_local: int, action_payload: dict, actor_name: str):
+                existing = PurchaseHistory.query.filter_by(purchase_id=purchase_id_local, is_active=True).order_by(PurchaseHistory.created_at.asc()).first()
+                if not existing:
+                    hist = PurchaseHistory(
+                        purchase_id=purchase_id_local,
+                        is_active=True,
+                        action=[action_payload],
+                        created_by=actor_name
+                    )
+                    db.session.add(hist)
+                else:
+                    actions = existing.action
+                    if actions is None:
+                        actions = []
+                    elif isinstance(actions, dict):
+                        actions = [actions]
+                    elif isinstance(actions, str):
+                        try:
+                            import json as _json
+                            parsed = _json.loads(actions)
+                            if isinstance(parsed, list):
+                                actions = parsed
+                            elif isinstance(parsed, dict):
+                                actions = [parsed]
+                            else:
+                                actions = [str(actions)]
+                        except Exception:
+                            actions = [str(actions)]
+                    actions.append(action_payload)
+                    existing.action = actions
+                    try:
+                        from sqlalchemy.orm.attributes import flag_modified as _flag_modified
+                        _flag_modified(existing, 'action')
+                    except Exception:
+                        pass
+                    existing.last_modified_by = actor_name
+                    db.session.add(existing)
+
+                db.session.commit()
+
+            hist_receiver = 'accounts' if technical_director_status == 'approved' else 'estimation'
+            hist_comments = 'Purchase request approved by Technical Director and sent to Accounts' if technical_director_status == 'approved' else 'Purchase request rejected by Technical Director and sent back to Estimation team'
+            _append_purchase_history_action_local(
+                purchase_id,
+                {
+                    'type': 'status_change',
+                    'status': 'approved' if technical_director_status == 'approved' else 'rejected',
+                    'sender': 'technicalDirector',
+                    'receiver': hist_receiver,
+                    'comments': hist_comments,
+                    'rejection_reason': rejection_reason if technical_director_status == 'rejected' else None,
+                    'reject_category': None,
+                    'decided_by_user_id': user_id,
+                    'decided_by': user_name,
+                    'role': 'technicalDirector',
+                    'timestamp': datetime.utcnow().isoformat()
+                },
+                user_name
+            )
+        except Exception as he:
+            log.error(f"Failed to append purchase history (Technical Director flow): {str(he)}")
+
         # Return response
         response_data = {
             'success': True,
             'message': message,
             'purchase_id': purchase_id,
-            'technical_director_status': new_status.status,
-            'decision_date': new_status.decision_date.isoformat(),
-            'decision_by': new_status.created_by,
-            'comments': new_status.comments
+            'technical_director_status': updated_status.status,
+            'decision_date': updated_status.decision_date.isoformat() if updated_status.decision_date else None,
+            'decision_by': updated_status.created_by,
+            'comments': updated_status.comments
         }
         
         if technical_director_status == 'rejected':
-            response_data['rejection_reason'] = new_status.rejection_reason
+            response_data['rejection_reason'] = updated_status.rejection_reason
         
         if not email_success:
             response_data['email_warning'] = 'Status updated but email notification failed'
         else:
             # Update the existing status entry to indicate email was sent
             try:
-                new_status.comments = f"{new_status.comments} (Email sent to {receiver_role})"
+                updated_status.comments = f"{updated_status.comments} (Email sent to {receiver_role})"
                 db.session.commit()
             except Exception as e:
                 log.error(f"Error updating status comments: {str(e)}")

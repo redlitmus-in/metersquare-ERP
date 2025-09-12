@@ -31,8 +31,11 @@ class EmailService:
     def __init__(self):
         self.sender_email = os.getenv("SENDER_EMAIL")
         self.sender_password = os.getenv("SENDER_EMAIL_PASSWORD")
-        self.smtp_server = "smtp.gmail.com"
-        self.smtp_port = 465
+        
+        # Get SMTP configuration from environment variables
+        self.smtp_server = os.getenv("EMAIL_HOST", "smtp.office365.com")
+        self.smtp_port = int(os.getenv("EMAIL_PORT", "587"))
+        self.use_tls = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
 
         if not self.sender_email or not self.sender_password:
             log.error("Email credentials not configured. Set SENDER_EMAIL and SENDER_EMAIL_PASSWORD environment variables.")
@@ -41,14 +44,32 @@ class EmailService:
     def _create_connection(self):
         """Create secure SMTP connection with proper error handling"""
         try:
-            server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
+            if self.use_tls:
+                # Use STARTTLS (for Office365, Gmail with port 587)
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30)
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+            else:
+                # Use direct SSL (for Gmail with port 465)
+                server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=30)
+            
+            # Set debug level for troubleshooting (remove in production)
+            # server.set_debuglevel(1)
+            
             server.login(self.sender_email, self.sender_password)
             return server
         except smtplib.SMTPAuthenticationError as e:
             log.error(f"SMTP Authentication failed: {str(e)}")
+            log.error(f"Server: {self.smtp_server}, Port: {self.smtp_port}, Email: {self.sender_email}")
             raise Exception("Email authentication failed. Check credentials.")
+        except smtplib.SMTPConnectError as e:
+            log.error(f"SMTP Connection failed: {str(e)}")
+            log.error(f"Server: {self.smtp_server}, Port: {self.smtp_port}")
+            raise Exception("Failed to connect to email server. Check server and port settings.")
         except smtplib.SMTPException as e:
-            log.error(f"SMTP connection error: {str(e)}")
+            log.error(f"SMTP error: {str(e)}")
+            log.error(f"Server: {self.smtp_server}, Port: {self.smtp_port}")
             raise Exception("Failed to connect to email server.")
         except Exception as e:
             log.error(f"Unexpected email connection error: {str(e)}")
@@ -115,9 +136,20 @@ class EmailService:
             server = self._create_connection()
             server.send_message(msg)
             server.quit()
+            log.info(f"Email sent successfully to {to_emails}")
             return True
+        except smtplib.SMTPRecipientsRefused as e:
+            log.error(f"Recipients refused: {str(e)}")
+            return False
+        except smtplib.SMTPSenderRefused as e:
+            log.error(f"Sender refused: {str(e)}")
+            return False
+        except smtplib.SMTPDataError as e:
+            log.error(f"SMTP data error: {str(e)}")
+            return False
         except Exception as e:
             log.error(f"Failed to send email to {to_emails}: {str(e)}")
+            log.error(f"Error type: {type(e).__name__}")
             return False
 
     def _prepare_attachments(self, attachments: List) -> List[Dict]:
@@ -206,7 +238,6 @@ class EmailService:
                 <tr>
                     <td>{idx}</td>
                     <td>{m.get('category', 'N/A')}</td>
-                    <td>{m.get('description', 'N/A')}</td>
                     <td>{qty}</td>
                     <td>{m.get('unit', '')}</td>
                     <td>{cost:.2f}</td>
@@ -284,16 +315,43 @@ class EmailService:
                 }}
                 .table-container {{
                     overflow-x: auto !important;
+                    overflow-y: visible !important;
                     margin-top: 10px !important;
+                    margin-bottom: 10px !important;
                     -webkit-overflow-scrolling: touch !important;
+                    border: 1px solid #e0e0e0 !important;
+                    border-radius: 4px !important;
+                    position: relative !important;
+                    max-width: 100% !important;
+                }}
+                .table-scroll-wrapper {{
+                    overflow-x: auto !important;
+                    overflow-y: visible !important;
+                    -webkit-overflow-scrolling: touch !important;
+                    scrollbar-width: thin !important;
+                    scrollbar-color: #d1d5db #f3f4f6 !important;
+                    max-width: 100% !important;
+                }}
+                .table-scroll-wrapper::-webkit-scrollbar {{
+                    height: 6px !important;
+                }}
+                .table-scroll-wrapper::-webkit-scrollbar-track {{
+                    background: #f3f4f6 !important;
+                    border-radius: 3px !important;
+                }}
+                .table-scroll-wrapper::-webkit-scrollbar-thumb {{
+                    background: #d1d5db !important;
+                    border-radius: 3px !important;
+                }}
+                .table-scroll-wrapper::-webkit-scrollbar-thumb:hover {{
+                    background: #9ca3af !important;
                 }}
                 table {{
                     width: 100% !important;
                     border-collapse: collapse !important;
                     min-width: 500px !important;
                     background: #ffffff !important;
-                    border: 1px solid #e0e0e0 !important;
-                    margin-top: 16px !important;
+                    margin: 0 !important;
                 }}
                 table th {{
                     background: #4285f4 !important;
@@ -363,7 +421,8 @@ class EmailService:
                 /* Mobile Responsive - Enhanced */
                 @media only screen and (max-width: 600px) {{
                     body {{
-                        padding: 5px !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
                     }}
                     .email-container {{
                         margin: 0 !important;
@@ -372,46 +431,82 @@ class EmailService:
                         max-width: 100% !important;
                     }}
                     .header {{
-                        padding: 10px !important;
+                        padding: 15px 10px !important;
                     }}
                     .header h2 {{
-                        font-size: 16px !important;
+                        font-size: 18px !important;
                     }}
                     .content {{
-                        padding: 10px !important;
+                        padding: 15px 10px !important;
                     }}
                     .content p {{
-                        font-size: 13px !important;
+                        font-size: 14px !important;
+                        line-height: 1.6 !important;
                     }}
                     h3 {{
-                        font-size: 14px !important;
-                        margin-top: 15px !important;
-                        margin-bottom: 8px !important;
+                        font-size: 15px !important;
+                        margin-top: 20px !important;
+                        margin-bottom: 10px !important;
+                    }}
+                    .table-container {{
+                        margin-left: -10px !important;
+                        margin-right: -10px !important;
+                        padding: 0 !important;
+                        border-radius: 0 !important;
+                        border-left: none !important;
+                        border-right: none !important;
+                        overflow-x: scroll !important;
+                        overflow-y: visible !important;
+                        -webkit-overflow-scrolling: touch !important;
+                        max-width: calc(100vw - 0px) !important;
+                    }}
+                    .table-scroll-wrapper {{
+                        min-width: 100% !important;
+                        overflow-x: visible !important;
+                    }}
+                    .table-container::after {{
+                        content: "← Swipe to see more →" !important;
+                        display: block !important;
+                        text-align: center !important;
+                        font-size: 11px !important;
+                        color: #666666 !important;
+                        padding: 5px !important;
+                        background: #f8f9fa !important;
+                        position: sticky !important;
+                        left: 0 !important;
+                        right: 0 !important;
                     }}
                     table {{
                         min-width: 500px !important;
+                        table-layout: auto !important;
                     }}
-                    table th, table td {{
-                        padding: 6px 4px !important;
-                        font-size: 11px !important;
+                    table th {{
+                        padding: 8px 6px !important;
+                        font-size: 12px !important;
+                        white-space: nowrap !important;
+                    }}
+                    table td {{
+                        padding: 8px 6px !important;
+                        font-size: 12px !important;
                     }}
                     .total-cost {{
-                        font-size: 13px !important;
-                        padding: 8px !important;
+                        font-size: 14px !important;
+                        padding: 10px !important;
+                        margin: 10px !important;
                     }}
                     .signature {{
                         font-size: 13px !important;
-                        margin-top: 15px !important;
+                        margin-top: 20px !important;
                     }}
                     .footer {{
-                        padding: 8px !important;
-                        font-size: 11px !important;
+                        padding: 15px 10px !important;
+                        font-size: 12px !important;
                     }}
                 }}
                 
                 @media only screen and (max-width: 480px) {{
                     body {{
-                        padding: 2px !important;
+                        padding: 0 !important;
                     }}
                     .email-container {{
                         margin: 0 !important;
@@ -420,51 +515,82 @@ class EmailService:
                         max-width: 100% !important;
                     }}
                     .header {{
+                        padding: 12px 8px !important;
+                    }}
+                    .header h2 {{
+                        font-size: 16px !important;
+                    }}
+                    .content {{
+                        padding: 12px 8px !important;
+                    }}
+                    .content p {{
+                        font-size: 13px !important;
+                        line-height: 1.5 !important;
+                    }}
+                    h3 {{
+                        font-size: 14px !important;
+                        margin-top: 16px !important;
+                        margin-bottom: 8px !important;
+                    }}
+                    .table-container {{
+                        margin-left: -8px !important;
+                        margin-right: -8px !important;
+                    }}
+                    table {{
+                        min-width: 450px !important;
+                        font-size: 11px !important;
+                    }}
+                    table th {{
+                        padding: 6px 4px !important;
+                        font-size: 11px !important;
+                    }}
+                    table td {{
+                        padding: 6px 4px !important;
+                        font-size: 11px !important;
+                        word-break: break-word !important;
+                    }}
+                    .total-cost {{
+                        font-size: 13px !important;
                         padding: 8px !important;
+                        margin: 8px !important;
+                    }}
+                    .signature {{
+                        font-size: 12px !important;
+                        margin-top: 16px !important;
+                    }}
+                    .footer {{
+                        padding: 12px 8px !important;
+                        font-size: 11px !important;
+                    }}
+                }}
+                
+                /* Additional mobile fixes for very small screens */
+                @media only screen and (max-width: 320px) {{
+                    .table-container {{
+                        margin-left: -5px !important;
+                        margin-right: -5px !important;
+                        overflow-x: scroll !important;
+                        overflow-y: visible !important;
+                        max-width: calc(100vw - 0px) !important;
+                    }}
+                    table {{
+                        min-width: 400px !important;
+                        table-layout: auto !important;
+                    }}
+                    table th {{
+                        padding: 5px 3px !important;
+                        font-size: 10px !important;
+                        white-space: nowrap !important;
+                    }}
+                    table td {{
+                        padding: 5px 3px !important;
+                        font-size: 10px !important;
                     }}
                     .header h2 {{
                         font-size: 14px !important;
                     }}
-                    .content {{
-                        padding: 8px !important;
-                    }}
                     .content p {{
                         font-size: 12px !important;
-                    }}
-                    h3 {{
-                        font-size: 13px !important;
-                        margin-top: 12px !important;
-                        margin-bottom: 6px !important;
-                    }}
-                    table {{
-                        min-width: 400px !important;
-                    }}
-                    table th, table td {{
-                        padding: 4px 2px !important;
-                        font-size: 10px !important;
-                    }}
-                    .total-cost {{
-                        font-size: 12px !important;
-                        padding: 6px !important;
-                    }}
-                    .signature {{
-                        font-size: 12px !important;
-                        margin-top: 12px !important;
-                    }}
-                    .footer {{
-                        padding: 6px !important;
-                        font-size: 10px !important;
-                    }}
-                }}
-                
-                /* Additional mobile fixes */
-                @media only screen and (max-width: 320px) {{
-                    table {{
-                        min-width: 300px !important;
-                    }}
-                    table th, table td {{
-                        padding: 3px 1px !important;
-                        font-size: 9px !important;
                     }}
                 }}
                 </style>
@@ -482,18 +608,19 @@ class EmailService:
 
                         <h3>Materials Requested</h3>
                         <div class="table-container">
-                        <table>
+                            <div class="table-scroll-wrapper">
+                                <table>
                             <tr>
                                     <th>S.No</th>
                                     <th>Category</th>
-                                <th>Description</th>
                                 <th>Quantity</th>
                                 <th>Unit</th>
                                 <th>Cost</th>
                                     <th>Total Cost</th>
                             </tr>
                             {material_rows}
-                        </table>
+                                </table>
+                            </div>
                         </div>
                         
                         <div class="total-cost">
@@ -530,13 +657,13 @@ class EmailService:
             overall_total += total_cost
 
             table_rows.append(
-                f"{idx:<5} | {m.get('category','N/A'):<12} | {m.get('description','N/A'):<25}"
+                f"{idx:<5} | {m.get('category','N/A'):<12} |"
                 f" | {qty:<8} | {m.get('unit',''):<6} | {cost:<10.2f} | {total_cost:<12.2f}"
             )
 
         # Table header
         header = (
-            f"{'S.No':<5} | {'Category':<12} | {'Description':<25} | "
+            f"{'S.No':<5} | {'Category':<12} | "
             f"{'Quantity':<8} | {'Unit':<6} | {'Cost':<10} | {'Total Cost':<12}\n"
             + "-" * 100
         )
@@ -624,7 +751,6 @@ class EmailService:
                 <tr>
                     <td>{idx}</td>
                     <td>{m.get('category', 'N/A')}</td>
-                    <td>{m.get('description', 'N/A')}</td>
                     <td>{qty}</td>
                     <td>{m.get('unit', '')}</td>
                     <td>{cost:.2f}</td>
@@ -696,8 +822,11 @@ class EmailService:
                 }}
                 .table-container {{
                     overflow-x: auto !important;
+                    overflow-y: visible !important;
                     margin-top: 10px !important;
                     -webkit-overflow-scrolling: touch !important;
+                    max-width: 100% !important;
+                    position: relative !important;
                 }}
                 table {{
                     width: 100% !important;
@@ -782,7 +911,8 @@ class EmailService:
                 /* Mobile Responsive - Enhanced */
                 @media only screen and (max-width: 600px) {{
                     body {{
-                        padding: 5px !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
                     }}
                     .email-container {{
                         margin: 0 !important;
@@ -791,46 +921,82 @@ class EmailService:
                         max-width: 100% !important;
                     }}
                     .header {{
-                        padding: 10px !important;
+                        padding: 15px 10px !important;
                     }}
                     .header h2 {{
-                        font-size: 16px !important;
+                        font-size: 18px !important;
                     }}
                     .content {{
-                        padding: 10px !important;
+                        padding: 15px 10px !important;
                     }}
                     .content p {{
-                        font-size: 13px !important;
+                        font-size: 14px !important;
+                        line-height: 1.6 !important;
                     }}
                     h3 {{
-                        font-size: 14px !important;
-                        margin-top: 15px !important;
-                        margin-bottom: 8px !important;
+                        font-size: 15px !important;
+                        margin-top: 20px !important;
+                        margin-bottom: 10px !important;
+                    }}
+                    .table-container {{
+                        margin-left: -10px !important;
+                        margin-right: -10px !important;
+                        padding: 0 !important;
+                        border-radius: 0 !important;
+                        border-left: none !important;
+                        border-right: none !important;
+                        overflow-x: scroll !important;
+                        overflow-y: visible !important;
+                        -webkit-overflow-scrolling: touch !important;
+                        max-width: calc(100vw - 0px) !important;
+                    }}
+                    .table-scroll-wrapper {{
+                        min-width: 100% !important;
+                        overflow-x: visible !important;
+                    }}
+                    .table-container::after {{
+                        content: "← Swipe to see more →" !important;
+                        display: block !important;
+                        text-align: center !important;
+                        font-size: 11px !important;
+                        color: #666666 !important;
+                        padding: 5px !important;
+                        background: #f8f9fa !important;
+                        position: sticky !important;
+                        left: 0 !important;
+                        right: 0 !important;
                     }}
                     table {{
                         min-width: 500px !important;
+                        table-layout: auto !important;
                     }}
-                    table th, table td {{
-                        padding: 6px 4px !important;
-                        font-size: 11px !important;
+                    table th {{
+                        padding: 8px 6px !important;
+                        font-size: 12px !important;
+                        white-space: nowrap !important;
+                    }}
+                    table td {{
+                        padding: 8px 6px !important;
+                        font-size: 12px !important;
                     }}
                     .total-cost {{
-                        font-size: 13px !important;
-                        padding: 8px !important;
+                        font-size: 14px !important;
+                        padding: 10px !important;
+                        margin: 10px !important;
                     }}
                     .signature {{
                         font-size: 13px !important;
-                        margin-top: 15px !important;
+                        margin-top: 20px !important;
                     }}
                     .footer {{
-                        padding: 8px !important;
-                        font-size: 11px !important;
+                        padding: 15px 10px !important;
+                        font-size: 12px !important;
                     }}
                 }}
                 
                 @media only screen and (max-width: 480px) {{
                     body {{
-                        padding: 2px !important;
+                        padding: 0 !important;
                     }}
                     .email-container {{
                         margin: 0 !important;
@@ -839,51 +1005,82 @@ class EmailService:
                         max-width: 100% !important;
                     }}
                     .header {{
+                        padding: 12px 8px !important;
+                    }}
+                    .header h2 {{
+                        font-size: 16px !important;
+                    }}
+                    .content {{
+                        padding: 12px 8px !important;
+                    }}
+                    .content p {{
+                        font-size: 13px !important;
+                        line-height: 1.5 !important;
+                    }}
+                    h3 {{
+                        font-size: 14px !important;
+                        margin-top: 16px !important;
+                        margin-bottom: 8px !important;
+                    }}
+                    .table-container {{
+                        margin-left: -8px !important;
+                        margin-right: -8px !important;
+                    }}
+                    table {{
+                        min-width: 450px !important;
+                        font-size: 11px !important;
+                    }}
+                    table th {{
+                        padding: 6px 4px !important;
+                        font-size: 11px !important;
+                    }}
+                    table td {{
+                        padding: 6px 4px !important;
+                        font-size: 11px !important;
+                        word-break: break-word !important;
+                    }}
+                    .total-cost {{
+                        font-size: 13px !important;
                         padding: 8px !important;
+                        margin: 8px !important;
+                    }}
+                    .signature {{
+                        font-size: 12px !important;
+                        margin-top: 16px !important;
+                    }}
+                    .footer {{
+                        padding: 12px 8px !important;
+                        font-size: 11px !important;
+                    }}
+                }}
+                
+                /* Additional mobile fixes for very small screens */
+                @media only screen and (max-width: 320px) {{
+                    .table-container {{
+                        margin-left: -5px !important;
+                        margin-right: -5px !important;
+                        overflow-x: scroll !important;
+                        overflow-y: visible !important;
+                        max-width: calc(100vw - 0px) !important;
+                    }}
+                    table {{
+                        min-width: 400px !important;
+                        table-layout: auto !important;
+                    }}
+                    table th {{
+                        padding: 5px 3px !important;
+                        font-size: 10px !important;
+                        white-space: nowrap !important;
+                    }}
+                    table td {{
+                        padding: 5px 3px !important;
+                        font-size: 10px !important;
                     }}
                     .header h2 {{
                         font-size: 14px !important;
                     }}
-                    .content {{
-                        padding: 8px !important;
-                    }}
                     .content p {{
                         font-size: 12px !important;
-                    }}
-                    h3 {{
-                        font-size: 13px !important;
-                        margin-top: 12px !important;
-                        margin-bottom: 6px !important;
-                    }}
-                    table {{
-                        min-width: 400px !important;
-                    }}
-                    table th, table td {{
-                        padding: 4px 2px !important;
-                        font-size: 10px !important;
-                    }}
-                    .total-cost {{
-                        font-size: 12px !important;
-                        padding: 6px !important;
-                    }}
-                    .signature {{
-                        font-size: 12px !important;
-                        margin-top: 12px !important;
-                    }}
-                    .footer {{
-                        padding: 6px !important;
-                        font-size: 10px !important;
-                    }}
-                }}
-                
-                /* Additional mobile fixes */
-                @media only screen and (max-width: 320px) {{
-                    table {{
-                        min-width: 300px !important;
-                    }}
-                    table th, table td {{
-                        padding: 3px 1px !important;
-                        font-size: 9px !important;
                     }}
                 }}
                 </style>
@@ -907,18 +1104,19 @@ class EmailService:
 
                         <h3>Materials Requested</h3>
                         <div class="table-container">
-                            <table>
+                            <div class="table-scroll-wrapper">
+                                <table>
                                 <tr>
                                     <th>S.No</th>
                                     <th>Category</th>
-                                    <th>Description</th>
                                     <th>Quantity</th>
                                     <th>Unit</th>
                                     <th>Cost</th>
                                     <th>Total Cost</th>
                                 </tr>
                                 {material_rows}
-                            </table>
+                                    </table>
+                            </div>
                         </div>
                         
                         <div class="total-cost">
@@ -955,13 +1153,13 @@ class EmailService:
             overall_total += total_cost
 
             table_rows.append(
-                f"{idx:<5} | {m.get('category','N/A'):<12} | {m.get('description','N/A'):<25}"
+                f"{idx:<5} | {m.get('category','N/A'):<12} |"
                 f" | {qty:<8} | {m.get('unit',''):<6} | {cost:<10.2f} | {total_cost:<12.2f}"
             )
 
         # Table header
         header = (
-            f"{'S.No':<5} | {'Category':<12} | {'Description':<25} | "
+            f"{'S.No':<5} | {'Category':<12} | "
             f"{'Quantity':<8} | {'Unit':<6} | {'Cost':<10} | {'Total Cost':<12}\n"
             + "-" * 100
         )
@@ -1012,7 +1210,6 @@ Procurement Team
                 <tr>
                     <td>{idx}</td>
                     <td>{m.get('category', 'N/A')}</td>
-                    <td>{m.get('description', 'N/A')}</td>
                     <td>{qty}</td>
                     <td>{m.get('unit', '')}</td>
                     <td>{cost:.2f}</td>
@@ -1084,8 +1281,11 @@ Procurement Team
                 }}
                 .table-container {{
                     overflow-x: auto !important;
+                    overflow-y: visible !important;
                     margin-top: 10px !important;
                     -webkit-overflow-scrolling: touch !important;
+                    max-width: 100% !important;
+                    position: relative !important;
                 }}
                 table {{
                     width: 100% !important;
@@ -1170,7 +1370,8 @@ Procurement Team
                 /* Mobile Responsive - Enhanced */
                 @media only screen and (max-width: 600px) {{
                     body {{
-                        padding: 5px !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
                     }}
                     .email-container {{
                         margin: 0 !important;
@@ -1179,46 +1380,82 @@ Procurement Team
                         max-width: 100% !important;
                     }}
                     .header {{
-                        padding: 10px !important;
+                        padding: 15px 10px !important;
                     }}
                     .header h2 {{
-                        font-size: 16px !important;
+                        font-size: 18px !important;
                     }}
                     .content {{
-                        padding: 10px !important;
+                        padding: 15px 10px !important;
                     }}
                     .content p {{
-                        font-size: 13px !important;
+                        font-size: 14px !important;
+                        line-height: 1.6 !important;
                     }}
                     h3 {{
-                        font-size: 14px !important;
-                        margin-top: 15px !important;
-                        margin-bottom: 8px !important;
+                        font-size: 15px !important;
+                        margin-top: 20px !important;
+                        margin-bottom: 10px !important;
+                    }}
+                    .table-container {{
+                        margin-left: -10px !important;
+                        margin-right: -10px !important;
+                        padding: 0 !important;
+                        border-radius: 0 !important;
+                        border-left: none !important;
+                        border-right: none !important;
+                        overflow-x: scroll !important;
+                        overflow-y: visible !important;
+                        -webkit-overflow-scrolling: touch !important;
+                        max-width: calc(100vw - 0px) !important;
+                    }}
+                    .table-scroll-wrapper {{
+                        min-width: 100% !important;
+                        overflow-x: visible !important;
+                    }}
+                    .table-container::after {{
+                        content: "← Swipe to see more →" !important;
+                        display: block !important;
+                        text-align: center !important;
+                        font-size: 11px !important;
+                        color: #666666 !important;
+                        padding: 5px !important;
+                        background: #f8f9fa !important;
+                        position: sticky !important;
+                        left: 0 !important;
+                        right: 0 !important;
                     }}
                     table {{
                         min-width: 500px !important;
+                        table-layout: auto !important;
                     }}
-                    table th, table td {{
-                        padding: 6px 4px !important;
-                        font-size: 11px !important;
+                    table th {{
+                        padding: 8px 6px !important;
+                        font-size: 12px !important;
+                        white-space: nowrap !important;
+                    }}
+                    table td {{
+                        padding: 8px 6px !important;
+                        font-size: 12px !important;
                     }}
                     .total-cost {{
-                        font-size: 13px !important;
-                        padding: 8px !important;
+                        font-size: 14px !important;
+                        padding: 10px !important;
+                        margin: 10px !important;
                     }}
                     .signature {{
                         font-size: 13px !important;
-                        margin-top: 15px !important;
+                        margin-top: 20px !important;
                     }}
                     .footer {{
-                        padding: 8px !important;
-                        font-size: 11px !important;
+                        padding: 15px 10px !important;
+                        font-size: 12px !important;
                     }}
                 }}
                 
                 @media only screen and (max-width: 480px) {{
                     body {{
-                        padding: 2px !important;
+                        padding: 0 !important;
                     }}
                     .email-container {{
                         margin: 0 !important;
@@ -1227,51 +1464,82 @@ Procurement Team
                         max-width: 100% !important;
                     }}
                     .header {{
+                        padding: 12px 8px !important;
+                    }}
+                    .header h2 {{
+                        font-size: 16px !important;
+                    }}
+                    .content {{
+                        padding: 12px 8px !important;
+                    }}
+                    .content p {{
+                        font-size: 13px !important;
+                        line-height: 1.5 !important;
+                    }}
+                    h3 {{
+                        font-size: 14px !important;
+                        margin-top: 16px !important;
+                        margin-bottom: 8px !important;
+                    }}
+                    .table-container {{
+                        margin-left: -8px !important;
+                        margin-right: -8px !important;
+                    }}
+                    table {{
+                        min-width: 450px !important;
+                        font-size: 11px !important;
+                    }}
+                    table th {{
+                        padding: 6px 4px !important;
+                        font-size: 11px !important;
+                    }}
+                    table td {{
+                        padding: 6px 4px !important;
+                        font-size: 11px !important;
+                        word-break: break-word !important;
+                    }}
+                    .total-cost {{
+                        font-size: 13px !important;
                         padding: 8px !important;
+                        margin: 8px !important;
+                    }}
+                    .signature {{
+                        font-size: 12px !important;
+                        margin-top: 16px !important;
+                    }}
+                    .footer {{
+                        padding: 12px 8px !important;
+                        font-size: 11px !important;
+                    }}
+                }}
+                
+                /* Additional mobile fixes for very small screens */
+                @media only screen and (max-width: 320px) {{
+                    .table-container {{
+                        margin-left: -5px !important;
+                        margin-right: -5px !important;
+                        overflow-x: scroll !important;
+                        overflow-y: visible !important;
+                        max-width: calc(100vw - 0px) !important;
+                    }}
+                    table {{
+                        min-width: 400px !important;
+                        table-layout: auto !important;
+                    }}
+                    table th {{
+                        padding: 5px 3px !important;
+                        font-size: 10px !important;
+                        white-space: nowrap !important;
+                    }}
+                    table td {{
+                        padding: 5px 3px !important;
+                        font-size: 10px !important;
                     }}
                     .header h2 {{
                         font-size: 14px !important;
                     }}
-                    .content {{
-                        padding: 8px !important;
-                    }}
                     .content p {{
                         font-size: 12px !important;
-                    }}
-                    h3 {{
-                        font-size: 13px !important;
-                        margin-top: 12px !important;
-                        margin-bottom: 6px !important;
-                    }}
-                    table {{
-                        min-width: 400px !important;
-                    }}
-                    table th, table td {{
-                        padding: 4px 2px !important;
-                        font-size: 10px !important;
-                    }}
-                    .total-cost {{
-                        font-size: 12px !important;
-                        padding: 6px !important;
-                    }}
-                    .signature {{
-                        font-size: 12px !important;
-                        margin-top: 12px !important;
-                    }}
-                    .footer {{
-                        padding: 6px !important;
-                        font-size: 10px !important;
-                    }}
-                }}
-                
-                /* Additional mobile fixes */
-                @media only screen and (max-width: 320px) {{
-                    table {{
-                        min-width: 300px !important;
-                    }}
-                    table th, table td {{
-                        padding: 3px 1px !important;
-                        font-size: 9px !important;
                     }}
                 }}
                 </style>
@@ -1295,18 +1563,19 @@ Procurement Team
 
                         <h3>Materials Approved for Estimation</h3>
                         <div class="table-container">
-                            <table>
+                            <div class="table-scroll-wrapper">
+                                <table>
                                 <tr>
                                     <th>S.No</th>
                                     <th>Category</th>
-                                    <th>Description</th>
                                     <th>Quantity</th>
                                     <th>Unit</th>
                                     <th>Cost</th>
                                     <th>Total Cost</th>
                                 </tr>
                                 {material_rows}
-                            </table>
+                                    </table>
+                            </div>
                         </div>
                         
                         <div class="total-cost">
@@ -1343,13 +1612,13 @@ Procurement Team
             overall_total += total_cost
 
             table_rows.append(
-                f"{idx:<5} | {m.get('category','N/A'):<12} | {m.get('description','N/A'):<25}"
+                f"{idx:<5} | {m.get('category','N/A'):<12} |"
                 f" | {qty:<8} | {m.get('unit',''):<6} | {cost:<10.2f} | {total_cost:<12.2f}"
             )
 
         # Table header
         header = (
-            f"{'S.No':<5} | {'Category':<12} | {'Description':<25} | "
+            f"{'S.No':<5} | {'Category':<12} | "
             f"{'Quantity':<8} | {'Unit':<6} | {'Cost':<10} | {'Total Cost':<12}\n"
             + "-" * 100
         )
@@ -1400,7 +1669,6 @@ Project Manager
                 <tr>
                     <td>{idx}</td>
                     <td>{m.get('category', 'N/A')}</td>
-                    <td>{m.get('description', 'N/A')}</td>
                     <td>{qty}</td>
                     <td>{m.get('unit', '')}</td>
                     <td>{cost:.2f}</td>
@@ -1472,8 +1740,11 @@ Project Manager
                 }}
                 .table-container {{
                     overflow-x: auto !important;
+                    overflow-y: visible !important;
                     margin-top: 10px !important;
                     -webkit-overflow-scrolling: touch !important;
+                    max-width: 100% !important;
+                    position: relative !important;
                 }}
                 table {{
                     width: 100% !important;
@@ -1556,7 +1827,8 @@ Project Manager
                 /* Mobile Responsive - Enhanced */
                 @media only screen and (max-width: 600px) {{
                     body {{
-                        padding: 5px !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
                     }}
                     .email-container {{
                         margin: 0 !important;
@@ -1565,46 +1837,82 @@ Project Manager
                         max-width: 100% !important;
                     }}
                     .header {{
-                        padding: 10px !important;
+                        padding: 15px 10px !important;
                     }}
                     .header h2 {{
-                        font-size: 16px !important;
+                        font-size: 18px !important;
                     }}
                     .content {{
-                        padding: 10px !important;
+                        padding: 15px 10px !important;
                     }}
                     .content p {{
-                        font-size: 13px !important;
+                        font-size: 14px !important;
+                        line-height: 1.6 !important;
                     }}
                     h3 {{
-                        font-size: 14px !important;
-                        margin-top: 15px !important;
-                        margin-bottom: 8px !important;
+                        font-size: 15px !important;
+                        margin-top: 20px !important;
+                        margin-bottom: 10px !important;
+                    }}
+                    .table-container {{
+                        margin-left: -10px !important;
+                        margin-right: -10px !important;
+                        padding: 0 !important;
+                        border-radius: 0 !important;
+                        border-left: none !important;
+                        border-right: none !important;
+                        overflow-x: scroll !important;
+                        overflow-y: visible !important;
+                        -webkit-overflow-scrolling: touch !important;
+                        max-width: calc(100vw - 0px) !important;
+                    }}
+                    .table-scroll-wrapper {{
+                        min-width: 100% !important;
+                        overflow-x: visible !important;
+                    }}
+                    .table-container::after {{
+                        content: "← Swipe to see more →" !important;
+                        display: block !important;
+                        text-align: center !important;
+                        font-size: 11px !important;
+                        color: #666666 !important;
+                        padding: 5px !important;
+                        background: #f8f9fa !important;
+                        position: sticky !important;
+                        left: 0 !important;
+                        right: 0 !important;
                     }}
                     table {{
                         min-width: 500px !important;
+                        table-layout: auto !important;
                     }}
-                    table th, table td {{
-                        padding: 6px 4px !important;
-                        font-size: 11px !important;
+                    table th {{
+                        padding: 8px 6px !important;
+                        font-size: 12px !important;
+                        white-space: nowrap !important;
+                    }}
+                    table td {{
+                        padding: 8px 6px !important;
+                        font-size: 12px !important;
                     }}
                     .total-cost {{
-                        font-size: 13px !important;
-                        padding: 8px !important;
+                        font-size: 14px !important;
+                        padding: 10px !important;
+                        margin: 10px !important;
                     }}
                     .signature {{
                         font-size: 13px !important;
-                        margin-top: 15px !important;
+                        margin-top: 20px !important;
                     }}
                     .footer {{
-                        padding: 8px !important;
-                        font-size: 11px !important;
+                        padding: 15px 10px !important;
+                        font-size: 12px !important;
                     }}
                 }}
                 
                 @media only screen and (max-width: 480px) {{
                     body {{
-                        padding: 2px !important;
+                        padding: 0 !important;
                     }}
                     .email-container {{
                         margin: 0 !important;
@@ -1613,51 +1921,82 @@ Project Manager
                         max-width: 100% !important;
                     }}
                     .header {{
+                        padding: 12px 8px !important;
+                    }}
+                    .header h2 {{
+                        font-size: 16px !important;
+                    }}
+                    .content {{
+                        padding: 12px 8px !important;
+                    }}
+                    .content p {{
+                        font-size: 13px !important;
+                        line-height: 1.5 !important;
+                    }}
+                    h3 {{
+                        font-size: 14px !important;
+                        margin-top: 16px !important;
+                        margin-bottom: 8px !important;
+                    }}
+                    .table-container {{
+                        margin-left: -8px !important;
+                        margin-right: -8px !important;
+                    }}
+                    table {{
+                        min-width: 450px !important;
+                        font-size: 11px !important;
+                    }}
+                    table th {{
+                        padding: 6px 4px !important;
+                        font-size: 11px !important;
+                    }}
+                    table td {{
+                        padding: 6px 4px !important;
+                        font-size: 11px !important;
+                        word-break: break-word !important;
+                    }}
+                    .total-cost {{
+                        font-size: 13px !important;
                         padding: 8px !important;
+                        margin: 8px !important;
+                    }}
+                    .signature {{
+                        font-size: 12px !important;
+                        margin-top: 16px !important;
+                    }}
+                    .footer {{
+                        padding: 12px 8px !important;
+                        font-size: 11px !important;
+                    }}
+                }}
+                
+                /* Additional mobile fixes for very small screens */
+                @media only screen and (max-width: 320px) {{
+                    .table-container {{
+                        margin-left: -5px !important;
+                        margin-right: -5px !important;
+                        overflow-x: scroll !important;
+                        overflow-y: visible !important;
+                        max-width: calc(100vw - 0px) !important;
+                    }}
+                    table {{
+                        min-width: 400px !important;
+                        table-layout: auto !important;
+                    }}
+                    table th {{
+                        padding: 5px 3px !important;
+                        font-size: 10px !important;
+                        white-space: nowrap !important;
+                    }}
+                    table td {{
+                        padding: 5px 3px !important;
+                        font-size: 10px !important;
                     }}
                     .header h2 {{
                         font-size: 14px !important;
                     }}
-                    .content {{
-                        padding: 8px !important;
-                    }}
                     .content p {{
                         font-size: 12px !important;
-                    }}
-                    h3 {{
-                        font-size: 13px !important;
-                        margin-top: 12px !important;
-                        margin-bottom: 6px !important;
-                    }}
-                    table {{
-                        min-width: 400px !important;
-                    }}
-                    table th, table td {{
-                        padding: 4px 2px !important;
-                        font-size: 10px !important;
-                    }}
-                    .total-cost {{
-                        font-size: 12px !important;
-                        padding: 6px !important;
-                    }}
-                    .signature {{
-                        font-size: 12px !important;
-                        margin-top: 12px !important;
-                    }}
-                    .footer {{
-                        padding: 6px !important;
-                        font-size: 10px !important;
-                    }}
-                }}
-                
-                /* Additional mobile fixes */
-                @media only screen and (max-width: 320px) {{
-                    table {{
-                        min-width: 300px !important;
-                    }}
-                    table th, table td {{
-                        padding: 3px 1px !important;
-                        font-size: 9px !important;
                     }}
                 }}
                 </style>
@@ -1682,18 +2021,19 @@ Project Manager
 
                         <h3>Materials Requiring Revision</h3>
                         <div class="table-container">
-                            <table>
+                            <div class="table-scroll-wrapper">
+                                <table>
                                 <tr>
                                     <th>S.No</th>
                                     <th>Category</th>
-                                    <th>Description</th>
                                     <th>Quantity</th>
                                     <th>Unit</th>
                                     <th>Cost</th>
                                     <th>Total Cost</th>
                                 </tr>
                                 {material_rows}
-                            </table>
+                                    </table>
+                            </div>
                         </div>
                         
                         <div class="total-cost">
@@ -1730,13 +2070,13 @@ Project Manager
             overall_total += total_cost
 
             table_rows.append(
-                f"{idx:<5} | {m.get('category','N/A'):<12} | {m.get('description','N/A'):<25}"
+                f"{idx:<5} | {m.get('category','N/A'):<12} |"
                 f" | {qty:<8} | {m.get('unit',''):<6} | {cost:<10.2f} | {total_cost:<12.2f}"
             )
 
         # Table header
         header = (
-            f"{'S.No':<5} | {'Category':<12} | {'Description':<25} | "
+            f"{'S.No':<5} | {'Category':<12} | "
             f"{'Quantity':<8} | {'Unit':<6} | {'Cost':<10} | {'Total Cost':<12}\n"
             + "-" * 100
         )
@@ -1937,12 +2277,10 @@ Project Manager
             <tr>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{i}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('category', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('description', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('specification', 'N/A')}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{mat.get('quantity', 0)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('unit', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${mat.get('cost', 0):.2f}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{mat.get('cost', 0):.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}</td>
             </tr>
             """
         
@@ -2102,7 +2440,10 @@ Project Manager
                 }}
                 .table-container {{
                     overflow-x: auto !important;
+                    overflow-y: visible !important;
                     -webkit-overflow-scrolling: touch !important;
+                    max-width: 100% !important;
+                    position: relative !important;
                 }}
                 
                 /* Mobile Responsive - Enhanced */
@@ -2114,7 +2455,7 @@ Project Manager
                     .content {{ padding: 10px !important; }}
                     .content p {{ font-size: 13px !important; }}
                     h3 {{ font-size: 14px !important; margin-top: 15px !important; margin-bottom: 8px !important; }}
-                    table {{ min-width: 500px !important; }}
+                    table {{ min-width: 340px !important; }}
                     table th, table td {{ padding: 6px 4px !important; font-size: 11px !important; }}
                     .total-cost {{ font-size: 13px !important; padding: 8px !important; }}
                     .signature {{ font-size: 13px !important; margin-top: 15px !important; }}
@@ -2125,14 +2466,19 @@ Project Manager
                     .header h2 {{ font-size: 14px !important; }}
                     .content p {{ font-size: 12px !important; }}
                     h3 {{ font-size: 13px !important; }}
-                    table {{ min-width: 400px !important; }}
+                    table {{ min-width: 340px !important; }}
                     table th, table td {{ padding: 4px 2px !important; font-size: 10px !important; }}
                     .total-cost {{ font-size: 12px !important; padding: 6px !important; }}
                 }}
                 
                 @media only screen and (max-width: 320px) {{
-                    table {{ min-width: 300px !important; }}
-                    table th, table td {{ padding: 3px 1px !important; font-size: 9px !important; }}
+                    .table-container {{
+                        overflow-x: scroll !important;
+                        overflow-y: visible !important;
+                        max-width: calc(100vw - 10px) !important;
+                    }}
+                    table {{ min-width: 340px !important; table-layout: auto !important; }}
+                    table th, table td {{ padding: 3px 1px !important; font-size: 9px !important; white-space: nowrap !important; }}
                 }}
             </style>
         </head>
@@ -2162,8 +2508,6 @@ Project Manager
                                 <tr>
                                     <th>S.No</th>
                                     <th>Category</th>
-                                    <th>Description</th>
-                                    <th>Specification</th>
                                     <th>Quantity</th>
                                     <th>Unit</th>
                                     <th>Unit Cost</th>
@@ -2177,7 +2521,7 @@ Project Manager
                     </div>
                     
                     <div class="total-cost">
-                        <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">${total_cost:.2f}</span>
+                        <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{total_cost:.2f}</span>
                     </div>
                     
                     <div class="approval-box" style="background: #e6f3ff; border: 1px solid #4285f4; border-radius: 4px; padding: 16px; margin: 20px 0;">
@@ -2209,11 +2553,10 @@ Project Manager
         project = Project.query.filter_by(project_id=purchase_data['project_id']).first()
         materials_text = ""
         for i, mat in enumerate(materials_data, 1):
-            materials_text += f"{i}. {mat.get('category', 'N/A')} - {mat.get('description', 'N/A')}\n"
-            materials_text += f"   Specification: {mat.get('specification', 'N/A')}\n"
+            materials_text += f"{i}. {mat.get('category', 'N/A')}\n"
             materials_text += f"   Quantity: {mat.get('quantity', 0)} {mat.get('unit', 'N/A')}\n"
-            materials_text += f"   Unit Cost: ${mat.get('cost', 0):.2f}\n"
-            materials_text += f"   Total Cost: ${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}\n\n"
+            materials_text += f"   Unit Cost: {mat.get('cost', 0):.2f}\n"
+            materials_text += f"   Total Cost: {(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}\n\n"
         
         return f"""
 Purchase Request Approved by Estimation Team
@@ -2233,7 +2576,7 @@ Purchase Request Details:
 Materials List:
 {materials_text}
 
-Overall Total Cost: ${total_cost:.2f}
+Overall Total Cost: {total_cost:.2f}
 
 Estimation Team Approval:
 - Approved By: {estimation_info.get('full_name', 'N/A')}
@@ -2256,12 +2599,10 @@ Estimation Team
             <tr>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{i}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('category', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('description', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('specification', 'N/A')}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{mat.get('quantity', 0)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('unit', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${mat.get('cost', 0):.2f}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{mat.get('cost', 0):.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}</td>
             </tr>
             """
         
@@ -2383,7 +2724,10 @@ Estimation Team
                 }}
                 .table-container {{
                     overflow-x: auto !important;
+                    overflow-y: visible !important;
                     -webkit-overflow-scrolling: touch !important;
+                    max-width: 100% !important;
+                    position: relative !important;
                 }}
                 
                 /* Mobile Responsive - Enhanced */
@@ -2395,7 +2739,7 @@ Estimation Team
                     .content {{ padding: 10px !important; }}
                     .content p {{ font-size: 13px !important; }}
                     h3 {{ font-size: 14px !important; margin-top: 15px !important; margin-bottom: 8px !important; }}
-                    table {{ min-width: 500px !important; }}
+                    table {{ min-width: 340px !important; }}
                     table th, table td {{ padding: 6px 4px !important; font-size: 11px !important; }}
                     .total-cost {{ font-size: 13px !important; padding: 8px !important; }}
                     .signature {{ font-size: 13px !important; margin-top: 15px !important; }}
@@ -2406,14 +2750,19 @@ Estimation Team
                     .header h2 {{ font-size: 14px !important; }}
                     .content p {{ font-size: 12px !important; }}
                     h3 {{ font-size: 13px !important; }}
-                    table {{ min-width: 400px !important; }}
+                    table {{ min-width: 340px !important; }}
                     table th, table td {{ padding: 4px 2px !important; font-size: 10px !important; }}
                     .total-cost {{ font-size: 12px !important; padding: 6px !important; }}
                 }}
                 
                 @media only screen and (max-width: 320px) {{
-                    table {{ min-width: 300px !important; }}
-                    table th, table td {{ padding: 3px 1px !important; font-size: 9px !important; }}
+                    .table-container {{
+                        overflow-x: scroll !important;
+                        overflow-y: visible !important;
+                        max-width: calc(100vw - 10px) !important;
+                    }}
+                    table {{ min-width: 340px !important; table-layout: auto !important; }}
+                    table th, table td {{ padding: 3px 1px !important; font-size: 9px !important; white-space: nowrap !important; }}
                 }}
             </style>
         </head>
@@ -2447,8 +2796,6 @@ Estimation Team
                                 <tr>
                                     <th>S.No</th>
                                     <th>Category</th>
-                                    <th>Description</th>
-                                    <th>Specification</th>
                                     <th>Quantity</th>
                                     <th>Unit</th>
                                     <th>Unit Cost</th>
@@ -2462,7 +2809,7 @@ Estimation Team
                     </div>
                     
                     <div class="total-cost">
-                        <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">${total_cost:.2f}</span>
+                        <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{total_cost:.2f}</span>
                     </div>
                     
                     <h3>Estimation Team Decision</h3>
@@ -2492,11 +2839,10 @@ Estimation Team
         
         materials_text = ""
         for i, mat in enumerate(materials_data, 1):
-            materials_text += f"{i}. {mat.get('category', 'N/A')} - {mat.get('description', 'N/A')}\n"
-            materials_text += f"   Specification: {mat.get('specification', 'N/A')}\n"
+            materials_text += f"{i}. {mat.get('category', 'N/A')}\n"
             materials_text += f"   Quantity: {mat.get('quantity', 0)} {mat.get('unit', 'N/A')}\n"
-            materials_text += f"   Unit Cost: ${mat.get('cost', 0):.2f}\n"
-            materials_text += f"   Total Cost: ${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}\n\n"
+            materials_text += f"   Unit Cost: {mat.get('cost', 0):.2f}\n"
+            materials_text += f"   Total Cost: {(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}\n\n"
         
         return f"""
 Purchase Request Rejected by Estimation (Cost)
@@ -2520,7 +2866,7 @@ Cost Rejection Reason:
 Materials List:
 {materials_text}
 
-Overall Total Cost: ${total_cost:.2f}
+Overall Total Cost: {total_cost:.2f}
 
 Estimation Team Decision:
 - Rejected By: {estimation_info.get('full_name', 'N/A')}
@@ -2543,12 +2889,10 @@ Estimation Team
             <tr>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{i}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('category', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('description', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('specification', 'N/A')}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{mat.get('quantity', 0)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('unit', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${mat.get('cost', 0):.2f}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{mat.get('cost', 0):.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}</td>
             </tr>
             """
         
@@ -2670,7 +3014,10 @@ Estimation Team
                 }}
                 .table-container {{
                     overflow-x: auto !important;
+                    overflow-y: visible !important;
                     -webkit-overflow-scrolling: touch !important;
+                    max-width: 100% !important;
+                    position: relative !important;
                 }}
                 
                 /* Mobile Responsive - Enhanced */
@@ -2682,7 +3029,7 @@ Estimation Team
                     .content {{ padding: 10px !important; }}
                     .content p {{ font-size: 13px !important; }}
                     h3 {{ font-size: 14px !important; margin-top: 15px !important; margin-bottom: 8px !important; }}
-                    table {{ min-width: 500px !important; }}
+                    table {{ min-width: 340px !important; }}
                     table th, table td {{ padding: 6px 4px !important; font-size: 11px !important; }}
                     .total-cost {{ font-size: 13px !important; padding: 8px !important; }}
                     .signature {{ font-size: 13px !important; margin-top: 15px !important; }}
@@ -2693,14 +3040,19 @@ Estimation Team
                     .header h2 {{ font-size: 14px !important; }}
                     .content p {{ font-size: 12px !important; }}
                     h3 {{ font-size: 13px !important; }}
-                    table {{ min-width: 400px !important; }}
+                    table {{ min-width: 340px !important; }}
                     table th, table td {{ padding: 4px 2px !important; font-size: 10px !important; }}
                     .total-cost {{ font-size: 12px !important; padding: 6px !important; }}
                 }}
                 
                 @media only screen and (max-width: 320px) {{
-                    table {{ min-width: 300px !important; }}
-                    table th, table td {{ padding: 3px 1px !important; font-size: 9px !important; }}
+                    .table-container {{
+                        overflow-x: scroll !important;
+                        overflow-y: visible !important;
+                        max-width: calc(100vw - 10px) !important;
+                    }}
+                    table {{ min-width: 340px !important; table-layout: auto !important; }}
+                    table th, table td {{ padding: 3px 1px !important; font-size: 9px !important; white-space: nowrap !important; }}
                 }}
             </style>
         </head>
@@ -2734,8 +3086,6 @@ Estimation Team
                                 <tr>
                                     <th>S.No</th>
                                     <th>Category</th>
-                                    <th>Description</th>
-                                    <th>Specification</th>
                                     <th>Quantity</th>
                                     <th>Unit</th>
                                     <th>Unit Cost</th>
@@ -2749,7 +3099,7 @@ Estimation Team
                     </div>
                     
                     <div class="total-cost">
-                        <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">${total_cost:.2f}</span>
+                        <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{total_cost:.2f}</span>
                     </div>
                     
                     <h3>Estimation Team Decision</h3>
@@ -2779,11 +3129,10 @@ Estimation Team
         project = Project.query.filter_by(project_id=purchase_data['project_id']).first()
         materials_text = ""
         for i, mat in enumerate(materials_data, 1):
-            materials_text += f"{i}. {mat.get('category', 'N/A')} - {mat.get('description', 'N/A')}\n"
-            materials_text += f"   Specification: {mat.get('specification', 'N/A')}\n"
+            materials_text += f"{i}. {mat.get('category', 'N/A')}\n"
             materials_text += f"   Quantity: {mat.get('quantity', 0)} {mat.get('unit', 'N/A')}\n"
-            materials_text += f"   Unit Cost: ${mat.get('cost', 0):.2f}\n"
-            materials_text += f"   Total Cost: ${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}\n\n"
+            materials_text += f"   Unit Cost: {mat.get('cost', 0):.2f}\n"
+            materials_text += f"   Total Cost: {(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}\n\n"
         
         return f"""
 Purchase Request Rejected by Estimation (PM Flag)
@@ -2807,7 +3156,7 @@ PM Flag Reason:
 Materials List:
 {materials_text}
 
-Overall Total Cost: ${total_cost:.2f}
+Overall Total Cost: {total_cost:.2f}
 
 Estimation Team Decision:
 - Flagged By: {estimation_info.get('full_name', 'N/A')}
@@ -2898,12 +3247,10 @@ Estimation Team
             <tr>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{i}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('category', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('description', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('specification', 'N/A')}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{mat.get('quantity', 0)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('unit', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${mat.get('cost', 0):.2f}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{mat.get('cost', 0):.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}</td>
             </tr>
             """
         
@@ -2971,8 +3318,11 @@ Estimation Team
                 }}
                 .table-container {{
                     overflow-x: auto !important;
+                    overflow-y: visible !important;
                     margin-top: 10px !important;
                     -webkit-overflow-scrolling: touch !important;
+                    max-width: 100% !important;
+                    position: relative !important;
                 }}
                 table {{
                     width: 100% !important;
@@ -3070,23 +3420,23 @@ Estimation Team
 
                         <h3>Materials List</h3>
                         <div class="table-container">
-                            <table>
+                            <div class="table-scroll-wrapper">
+                                <table>
                                 <tr>
                                     <th>#</th>
                                     <th>Category</th>
-                                    <th>Description</th>
-                                    <th>Specification</th>
                                     <th>Quantity</th>
                                     <th>Unit</th>
                                     <th>Unit Cost</th>
                                     <th>Total Cost</th>
                                 </tr>
                                 {materials_table}
-                            </table>
+                                    </table>
+                            </div>
                         </div>
                         
                         <div class="total-cost">
-                            <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">${total_cost:.2f}</span>
+                            <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{total_cost:.2f}</span>
                         </div>
 
                         <div class="signature">
@@ -3111,11 +3461,10 @@ Estimation Team
         project = Project.query.filter_by(project_id=purchase_data['project_id']).first()
         materials_text = ""
         for i, mat in enumerate(materials_data, 1):
-            materials_text += f"{i}. {mat.get('category', 'N/A')} - {mat.get('description', 'N/A')}\n"
-            materials_text += f"   Specification: {mat.get('specification', 'N/A')}\n"
+            materials_text += f"{i}. {mat.get('category', 'N/A')}\n"
             materials_text += f"   Quantity: {mat.get('quantity', 0)} {mat.get('unit', 'N/A')}\n"
-            materials_text += f"   Unit Cost: ${mat.get('cost', 0):.2f}\n"
-            materials_text += f"   Total Cost: ${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}\n\n"
+            materials_text += f"   Unit Cost: {mat.get('cost', 0):.2f}\n"
+            materials_text += f"   Total Cost: {(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}\n\n"
         
         return f"""
 Purchase Request Approved by Technical Director
@@ -3139,7 +3488,7 @@ Technical Director Approval:
 Materials List:
 {materials_text}
 
-Overall Total Cost: ${total_cost:.2f}
+Overall Total Cost: {total_cost:.2f}
 
 Next Steps:
 Please process the payment for this approved purchase request. All technical requirements have been verified and approved.
@@ -3161,12 +3510,10 @@ Meter Square
             <tr>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{i}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('category', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('description', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('specification', 'N/A')}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{mat.get('quantity', 0)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{mat.get('unit', 'N/A')}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${mat.get('cost', 0):.2f}</td>
-                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{mat.get('cost', 0):.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}</td>
             </tr>
             """
         
@@ -3185,7 +3532,8 @@ Meter Square
             
             <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h2 style="color: #495057; margin-top: 0;">Purchase Request Details</h2>
-                <table style="width: 100%; border-collapse: collapse;">
+                <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+                <table style="width: 100%; border-collapse: collapse; min-width: 300px;">
                     <tr>
                         <td style="padding: 8px; font-weight: bold; width: 30%;">Request ID:</td>
                         <td style="padding: 8px;">#{purchase_data.get('purchase_id')}</td>
@@ -3211,6 +3559,7 @@ Meter Square
                         <td style="padding: 8px;">{purchase_data.get('purpose', 'N/A')}</td>
                     </tr>
                 </table>
+                </div>
             </div>
 
             <div style="background: #f8d7da; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
@@ -3223,13 +3572,12 @@ Meter Square
 
             <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h2 style="color: #495057; margin-top: 0;">Materials List</h2>
-                <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+                <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%;">
+                <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd; min-width: 450px;">
                     <thead>
                         <tr style="background: #dc2626; color: white;">
                             <th style="padding: 12px; border: 1px solid #ddd; text-align: center;">#</th>
                             <th style="padding: 12px; border: 1px solid #ddd;">Category</th>
-                            <th style="padding: 12px; border: 1px solid #ddd;">Description</th>
-                            <th style="padding: 12px; border: 1px solid #ddd;">Specification</th>
                             <th style="padding: 12px; border: 1px solid #ddd; text-align: center;">Quantity</th>
                             <th style="padding: 12px; border: 1px solid #ddd;">Unit</th>
                             <th style="padding: 12px; border: 1px solid #ddd; text-align: right;">Unit Cost</th>
@@ -3246,6 +3594,7 @@ Meter Square
                         </tr>
                     </tfoot>
                 </table>
+                </div>
             </div>
 
             <div style="background: #fff3cd; padding: 20px; border-radius: 8px; border-left: 4px solid #ffc107;">
@@ -3268,11 +3617,10 @@ Meter Square
         project = Project.query.filter_by(project_id=purchase_data['project_id']).first()
         materials_text = ""
         for i, mat in enumerate(materials_data, 1):
-            materials_text += f"{i}. {mat.get('category', 'N/A')} - {mat.get('description', 'N/A')}\n"
-            materials_text += f"   Specification: {mat.get('specification', 'N/A')}\n"
+            materials_text += f"{i}. {mat.get('category', 'N/A')}\n"
             materials_text += f"   Quantity: {mat.get('quantity', 0)} {mat.get('unit', 'N/A')}\n"
-            materials_text += f"   Unit Cost: ${mat.get('cost', 0):.2f}\n"
-            materials_text += f"   Total Cost: ${(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}\n\n"
+            materials_text += f"   Unit Cost: {mat.get('cost', 0):.2f}\n"
+            materials_text += f"   Total Cost: {(mat.get('quantity', 0) * mat.get('cost', 0)):.2f}\n\n"
         
         return f"""
 Purchase Request Rejected by Technical Director
@@ -3297,7 +3645,7 @@ Technical Director Rejection:
 Materials List:
 {materials_text}
 
-Overall Total Cost: ${total_cost:.2f}
+Overall Total Cost: {total_cost:.2f}
 
 Next Steps:
 Please review the rejection reason and make necessary corrections to the purchase request before resubmitting.
