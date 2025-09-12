@@ -132,9 +132,22 @@ const LoginPage: React.FC = () => {
         console.log('Development OTP:', response.otp);
       }
     } catch (error: any) {
-      toast.error('Failed to send OTP', {
-        description: error.message || 'Please try again.'
-      });
+      // Check if it's a 404 error (user not found)
+      if (error.message?.toLowerCase().includes('not found') || error.message?.toLowerCase().includes('no user')) {
+        toast.error('Email not found', {
+          description: 'Please check your email address and try again.',
+          icon: <Mail className="w-5 h-5 text-red-500" />
+        });
+      } else if (error.message?.toLowerCase().includes('invalid role')) {
+        toast.error('Invalid role selection', {
+          description: 'The selected role is not assigned to this email.',
+          icon: <User className="w-5 h-5 text-red-500" />
+        });
+      } else {
+        toast.error('Failed to send OTP', {
+          description: error.message || 'Please check your credentials and try again.'
+        });
+      }
     }
   };
 

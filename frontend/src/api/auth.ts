@@ -59,7 +59,19 @@ export const authApi = {
       return response.data;
     } catch (error: any) {
       console.error('Send OTP error:', error);
-      throw new Error(error.response?.data?.error || 'Failed to send OTP');
+      
+      // Handle specific error cases
+      if (error.response?.status === 404) {
+        throw new Error('No user found with this email address');
+      } else if (error.response?.status === 403) {
+        throw new Error('Invalid role for this user');
+      } else if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      } else if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      } else {
+        throw new Error('Failed to send OTP. Please try again.');
+      }
     }
   },
 

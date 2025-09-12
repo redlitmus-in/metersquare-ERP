@@ -94,9 +94,16 @@ apiClient.interceptors.response.use(
         }
       }
     } else if (error.response?.status === 404) {
-      // Navigate to 404 error page
-      if (!window.location.pathname.includes('/404')) {
-        window.location.replace('/404');
+      // Don't redirect to 404 for login/auth endpoints - let the page handle the error
+      const isAuthEndpoint = error.config?.url?.includes('/login') || 
+                             error.config?.url?.includes('/verification_otp') ||
+                             error.config?.url?.includes('/register');
+      
+      if (!isAuthEndpoint) {
+        // Navigate to 404 error page for non-auth endpoints
+        if (!window.location.pathname.includes('/404')) {
+          window.location.replace('/404');
+        }
       }
     } else if (error.response?.status >= 500) {
       // Navigate to 500 error page

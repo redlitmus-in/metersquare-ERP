@@ -1,5 +1,5 @@
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { Purchase, Material } from '@/roles/procurement/services/procurementService';
@@ -71,7 +71,7 @@ export const exportToPDF = (purchases: Purchase[], title: string = 'Purchase Req
   });
   
   // Add table
-  doc.autoTable({
+  autoTable(doc, {
     startY: 55,
     head: [['PR ID', 'Date', 'Project', 'Requested By', 'Location', 'Purpose', 'Total Amount', 'Status', 'Email Sent']],
     body: tableData,
@@ -79,25 +79,34 @@ export const exportToPDF = (purchases: Purchase[], title: string = 'Purchase Req
     headStyles: {
       fillColor: [220, 53, 69],
       textColor: 255,
-      fontSize: 10,
-      fontStyle: 'bold'
+      fontSize: 9,
+      fontStyle: 'bold',
+      halign: 'center',
+      valign: 'middle'
     },
     bodyStyles: {
-      fontSize: 9
+      fontSize: 8,
+      valign: 'middle'
     },
     columnStyles: {
-      0: { cellWidth: 15 },
-      1: { cellWidth: 25 },
-      2: { cellWidth: 15 },
-      3: { cellWidth: 30 },
-      4: { cellWidth: 25 },
-      5: { cellWidth: 35 },
-      6: { cellWidth: 25 },
-      7: { cellWidth: 20 },
-      8: { cellWidth: 15 }
+      0: { cellWidth: 18, halign: 'center' }, // PR ID
+      1: { cellWidth: 22, halign: 'center' }, // Date
+      2: { cellWidth: 20, halign: 'left' },   // Project
+      3: { cellWidth: 25, halign: 'left' },   // Requested By
+      4: { cellWidth: 22, halign: 'left' },   // Location
+      5: { cellWidth: 30, halign: 'left' },   // Purpose
+      6: { cellWidth: 22, halign: 'right' },  // Total Amount
+      7: { cellWidth: 18, halign: 'center' }, // Status
+      8: { cellWidth: 15, halign: 'center' }  // Email Sent
     },
     alternateRowStyles: {
       fillColor: [245, 245, 245]
+    },
+    margin: { top: 10, left: 10, right: 10 },
+    tableWidth: 'auto',
+    styles: {
+      overflow: 'linebreak',
+      cellPadding: 2
     }
   });
   
@@ -292,7 +301,7 @@ export const exportPurchaseDetailsPDF = (purchase: Purchase, latestStatus?: any)
       formatCurrency(m.quantity * m.cost)
     ]);
     
-    doc.autoTable({
+    autoTable(doc, {
       startY: yPos,
       head: [['#', 'Description', 'Category', 'Specification', 'Quantity', 'Unit Cost', 'Total']],
       body: materialData,
@@ -300,16 +309,34 @@ export const exportPurchaseDetailsPDF = (purchase: Purchase, latestStatus?: any)
       headStyles: {
         fillColor: [220, 53, 69],
         textColor: 255,
-        fontSize: 9
+        fontSize: 9,
+        halign: 'center',
+        valign: 'middle'
       },
       bodyStyles: {
-        fontSize: 8
+        fontSize: 8,
+        valign: 'middle'
+      },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },  // #
+        1: { cellWidth: 40, halign: 'left' },    // Description
+        2: { cellWidth: 25, halign: 'left' },    // Category
+        3: { cellWidth: 35, halign: 'left' },    // Specification
+        4: { cellWidth: 20, halign: 'center' },  // Quantity
+        5: { cellWidth: 25, halign: 'right' },   // Unit Cost
+        6: { cellWidth: 25, halign: 'right' }    // Total
+      },
+      margin: { left: 14, right: 14 },
+      tableWidth: 'auto',
+      styles: {
+        overflow: 'linebreak',
+        cellPadding: 2
       }
     });
     
     // Total
     const total = purchase.materials.reduce((sum, m) => sum + (m.quantity * m.cost), 0);
-    yPos = doc.lastAutoTable.finalY + 10;
+    yPos = (doc as any).lastAutoTable.finalY + 10;
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
     doc.text(`Total Amount: ${formatCurrency(total)}`, 14, yPos);
