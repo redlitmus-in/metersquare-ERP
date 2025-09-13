@@ -63,6 +63,7 @@ interface PurchaseCardProps {
   onDelete?: (purchaseId: number) => void;
   onSendEmail?: (purchaseId: number) => void;
   isLoading?: boolean;
+  isSendingEmail?: boolean;
 }
 
 const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
@@ -72,7 +73,8 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
   onEdit,
   onDelete,
   onSendEmail,
-  isLoading = false
+  isLoading = false,
+  isSendingEmail = false
 }, ref) => {
   const getStatusColor = (status?: string) => {
     switch (status?.toLowerCase()) {
@@ -311,11 +313,20 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                     size="sm"
                     variant="outline"
                     onClick={() => onSendEmail(purchase.purchase_id)}
-                    disabled={isLoading}
-                    className="flex items-center justify-center gap-1 text-green-600 hover:text-green-700 hover:bg-green-50 h-7 text-xs"
+                    disabled={isLoading || isSendingEmail}
+                    className="flex items-center justify-center gap-1 text-green-600 hover:text-green-700 hover:bg-green-50 h-7 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Mail className="h-3 w-3" />
-                    Send Email
+                    {isSendingEmail ? (
+                      <>
+                        <div className="h-3 w-3 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+                        <span className="animate-pulse">Sending...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="h-3 w-3" />
+                        Send Email
+                      </>
+                    )}
                   </Button>
                 )}
               </>
