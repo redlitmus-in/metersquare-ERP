@@ -941,18 +941,32 @@ def account_purchase():
             return jsonify({"error": "Not logged in"}), 401
         
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        if not role or role.role != 'accounts':
-            return jsonify({'error': 'Only Accounts department can view account purchases'}), 403
         
         # Get sort order from query params (default to newest first)
         sort_order = request.args.get('sort', 'newest').lower()
         if sort_order not in ['newest', 'oldest']:
             sort_order = 'newest'
         
-        purchase_ids_query = db.session.query(PurchaseStatus.purchase_id).filter(
-            PurchaseStatus.receiver == 'accounts',
-            PurchaseStatus.is_active == True,
-        ).distinct()
+        # For accounts role, only show purchases where accounts is the receiver
+        # For technicalDirector, show all purchases
+        if role.role == 'accounts':
+            # Get all purchase IDs where accounts is either sender or receiver
+            purchase_ids_query = db.session.query(
+                PurchaseStatus.purchase_id
+            ).filter(
+                or_(
+                    PurchaseStatus.receiver == 'accounts',
+                    PurchaseStatus.sender == 'accounts'
+                ),
+                PurchaseStatus.is_active == True
+            ).distinct()
+        else:
+            # For technicalDirector, get all purchase IDs that have any status
+            purchase_ids_query = db.session.query(
+                PurchaseStatus.purchase_id
+            ).filter(
+                PurchaseStatus.is_active == True
+            ).distinct()
         
         purchase_ids = [row[0] for row in purchase_ids_query.all()]
         purchase_ids = list(set(purchase_ids))
