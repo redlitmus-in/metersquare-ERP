@@ -76,6 +76,9 @@ const SiteSupervisorHub: React.FC = () => {
     isOpen: boolean;
     message: string;
   }>({ isOpen: false, message: '' });
+  
+  // Track which purchase is currently sending email
+  const [sendingEmailFor, setSendingEmailFor] = useState<number | null>(null);
 
   // Metrics state
   const [metrics, setMetrics] = useState({
@@ -411,7 +414,7 @@ const SiteSupervisorHub: React.FC = () => {
     const purchaseId = confirmDialog.purchaseId;
     setConfirmDialog({ isOpen: false, purchaseId: null, type: 'email' });
 
-    setIsLoading(true);
+    setSendingEmailFor(purchaseId); // Set sending state for this specific purchase
     
     try {
       await siteSupervisorService.sendPurchaseEmail(purchaseId);
@@ -443,7 +446,7 @@ const SiteSupervisorHub: React.FC = () => {
       console.error('Send email error:', error);
       toast.error(error.message || 'Failed to send email');
     } finally {
-      setIsLoading(false);
+      setSendingEmailFor(null); // Clear sending state
     }
   };
 
@@ -805,6 +808,7 @@ const SiteSupervisorHub: React.FC = () => {
                   onDelete={handleDelete}
                   onSendEmail={handleSendEmail}
                   isLoading={isLoading}
+                  isSendingEmail={sendingEmailFor === purchase.purchase_id}
                 />
                 ))}
               </AnimatePresence>

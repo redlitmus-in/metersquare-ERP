@@ -98,6 +98,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
   const [materialsCompleted, setMaterialsCompleted] = useState(false);
   const [designReference, setDesignReference] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
 
@@ -365,17 +366,19 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
   };
 
   const onSubmit = async (data: PurchaseRequisitionFormData) => {
+    if (isSubmitting) return; // Prevent double submission
+    
     if (!selectedProjectId) {
       toast.error('Please select a project');
-      setIsUploading(false);
       return;
     }
 
     if (!validateMaterialsTab()) {
       toast.error('Please complete all material information');
-      setIsUploading(false);
       return;
     }
+    
+    setIsSubmitting(true); // Start submission
 
     setIsUploading(true);
 
@@ -513,6 +516,7 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
       toast.error(errorMessage);
     } finally {
       setIsUploading(false);
+      setIsSubmitting(false); // Reset submitting state
     }
   };
 
@@ -1087,10 +1091,20 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
               {activeTab === 'attachments' && (
                 <Button
                   type="submit"
-                  className="bg-red-600 hover:bg-red-700 text-white"
+                  className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isSubmitting}
                 >
-                  Submit Request
-                  <Send className="w-4 h-4 ml-2" />
+                  {isSubmitting ? (
+                    <>
+                      <span className="animate-pulse">Submitting...</span>
+                      <div className="w-4 h-4 ml-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    </>
+                  ) : (
+                    <>
+                      Submit Request
+                      <Send className="w-4 h-4 ml-2" />
+                    </>
+                  )}
                 </Button>
               )}
             </div>
@@ -1224,11 +1238,20 @@ const PurchaseRequisitionForm: React.FC<PurchaseRequisitionFormProps> = ({ onClo
                 setShowPreviewModal(false);
                 handleSubmit(onSubmit)();
               }}
-              className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={!validateDetailsTab() || !validateMaterialsTab()}
+              className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!validateDetailsTab() || !validateMaterialsTab() || isSubmitting}
             >
-              <Send className="w-4 h-4 mr-2" />
-              Submit Now
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span className="animate-pulse">Submitting...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Submit Now
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>
