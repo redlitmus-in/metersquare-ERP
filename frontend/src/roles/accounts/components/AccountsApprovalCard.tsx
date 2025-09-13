@@ -4,7 +4,6 @@
  */
 
 import React from 'react';
-import { motion } from 'framer-motion';
 import { 
   Calendar, 
   MapPin, 
@@ -131,14 +130,7 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      whileHover={{ y: -2 }}
-      transition={{ duration: 0.2 }}
-      className="h-full"
-    >
+    <div className="h-full">
       <Card className="h-full hover:shadow-lg transition-shadow max-w-sm mx-auto">
         <CardHeader className="pb-2 px-4 pt-4">
           <div className="flex items-start justify-between gap-2">
@@ -376,7 +368,7 @@ const AccountsApprovalCard: React.FC<AccountsApprovalCardProps> = ({
           </div>
         </CardContent>
       </Card>
-    </motion.div>
+    </div>
   );
 };
 

@@ -161,8 +161,8 @@ const EstimationDashboard: React.FC = () => {
         whileHover="hover"
         transition={{ duration: 0.3 }}
       >
-        <Card className="p-6 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 border-amber-200 shadow-lg hover:shadow-xl transition-all duration-300 backdrop-blur-sm"
-              style={{ background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 50%, #fde68a 100%)' }}>
+        <Card className="p-6 bg-gradient-to-br from-red-50 via-rose-50 to-pink-50 border-red-200 shadow-lg hover:shadow-xl transition-all duration-300 backdrop-blur-sm"
+              style={{ background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 50%, #fecaca 100%)' }}>
         <motion.div 
           className="flex items-center justify-between mb-6"
           initial={{ opacity: 0, y: -10 }}
@@ -172,13 +172,13 @@ const EstimationDashboard: React.FC = () => {
           <div className="flex items-center gap-3">
             <motion.div
               animate={dashboardMetrics.pending > 0 ? pulseVariants : {}}
-              className="p-2 bg-amber-100 rounded-lg"
+              className="p-2 bg-red-100 rounded-lg"
             >
-              <Calculator className="w-5 h-5 text-amber-600" />
+              <Calculator className="w-5 h-5 text-red-600" />
             </motion.div>
             <div>
-              <h3 className="text-lg font-bold text-amber-800">Pending Cost Reviews</h3>
-              <p className="text-xs text-amber-600">Requiring immediate attention</p>
+              <h3 className="text-lg font-bold text-red-800">Pending Cost Reviews</h3>
+              <p className="text-xs text-red-600">Requiring immediate attention</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -186,7 +186,7 @@ const EstimationDashboard: React.FC = () => {
               <Button
                 size="sm"
                 onClick={handleNavigateToHub}
-                className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                className="bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 <Calculator className="w-4 h-4 mr-1" />
                 Review All
@@ -198,7 +198,7 @@ const EstimationDashboard: React.FC = () => {
                 variant="outline"
                 onClick={refreshData}
                 disabled={refreshing}
-                className="border-amber-300 hover:bg-amber-100 hover:border-amber-400 transition-all duration-300"
+                className="border-red-300 hover:bg-red-100 hover:border-red-400 transition-all duration-300"
               >
                 {refreshing ? (
                   <ModernLoadingSpinners variant="pulse-wave" size="lg" />
@@ -229,7 +229,7 @@ const EstimationDashboard: React.FC = () => {
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ delay: 0.5 }}
-                  className="absolute inset-0 rounded-full border-2 border-amber-200 border-t-amber-500"
+                  className="absolute inset-0 rounded-full border-2 border-red-200 border-t-red-500"
                 />
               </div>
             </motion.div>
@@ -249,14 +249,7 @@ const EstimationDashboard: React.FC = () => {
                 className="mb-6"
               >
                 <div className="relative">
-                  <Clock className="w-16 h-16 mx-auto text-amber-300" />
-                  <motion.div
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ duration: 2, repeat: Infinity, delay: 1 }}
-                    className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full flex items-center justify-center"
-                  >
-                    <CheckCircle className="w-3 h-3 text-white" />
-                  </motion.div>
+                  <Clock className="w-16 h-16 mx-auto text-red-300" />
                 </div>
               </motion.div>
               <motion.div
@@ -266,7 +259,7 @@ const EstimationDashboard: React.FC = () => {
               >
                 <p className="text-lg font-semibold text-gray-700 mb-2">All Caught Up! 🎉</p>
                 <p className="text-sm text-gray-500">No pending cost reviews at this time</p>
-                <p className="text-xs text-amber-600 mt-2 font-medium">All purchase requests are up to date</p>
+                <p className="text-xs text-red-600 mt-2 font-medium">All purchase requests are up to date</p>
               </motion.div>
             </motion.div>
           ) : (
@@ -280,26 +273,26 @@ const EstimationDashboard: React.FC = () => {
             >
               <motion.div 
                 variants={itemVariants}
-                className="relative p-6 bg-white/90 backdrop-blur-sm rounded-xl border border-amber-200 shadow-lg hover:shadow-xl transition-all duration-300"
+                className="relative p-6 bg-white/90 backdrop-blur-sm rounded-xl border border-red-200 shadow-lg hover:shadow-xl transition-all duration-300"
                 whileHover={{ scale: 1.02 }}
               >
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-500 rounded-t-xl" />
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-400 to-rose-500 rounded-t-xl" />
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-start gap-3">
                     <motion.div
                       animate={{ rotate: [0, 10, -10, 0] }}
                       transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                      className="p-3 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg"
+                      className="p-3 bg-gradient-to-br from-red-100 to-rose-100 rounded-lg"
                     >
-                      <AlertCircle className="w-5 h-5 text-amber-600" />
+                      <AlertCircle className="w-5 h-5 text-red-600" />
                     </motion.div>
                     <div>
-                      <p className="text-lg font-bold text-amber-900 flex items-center gap-2">
+                      <p className="text-lg font-bold text-red-900 flex items-center gap-2">
                         {dashboardMetrics.pending} Purchase Request{dashboardMetrics.pending > 1 ? 's' : ''}
                       </p>
                       <p className="text-sm text-gray-600">Awaiting cost analysis review</p>
                       <motion.p 
-                        className="text-sm font-semibold text-amber-700 mt-1"
+                        className="text-sm font-semibold text-red-700 mt-1"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.3 }}
@@ -312,7 +305,7 @@ const EstimationDashboard: React.FC = () => {
                     animate={{ scale: [1, 1.1, 1] }}
                     transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                   >
-                    <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 shadow-md">
+                    <Badge className="bg-gradient-to-r from-red-500 to-rose-500 text-white px-4 py-2 shadow-md">
                       <Target className="w-3 h-3 mr-1" />
                       High Priority
                     </Badge>
@@ -320,14 +313,14 @@ const EstimationDashboard: React.FC = () => {
                 </div>
                 
                 <motion.div 
-                  className="mt-6 pt-4 border-t border-amber-100"
+                  className="mt-6 pt-4 border-t border-red-100"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.5 }}
                 >
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Button 
-                      className="w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:via-orange-600 hover:to-amber-700 text-white font-semibold py-3 shadow-lg hover:shadow-xl transition-all duration-300"
+                      className="w-full bg-gradient-to-r from-red-500 via-rose-500 to-red-600 hover:from-red-600 hover:via-rose-600 hover:to-red-700 text-white font-semibold py-3 shadow-lg hover:shadow-xl transition-all duration-300"
                       onClick={handleNavigateToHub}
                     >
                       <div className="flex items-center justify-center gap-3">
@@ -614,7 +607,7 @@ const EstimationDashboard: React.FC = () => {
                   className="relative p-5 bg-white/90 backdrop-blur-sm rounded-xl border border-amber-200 shadow-lg hover:shadow-xl transition-all duration-300"
                   whileHover={{ y: -4 }}
                 >
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-500 rounded-t-xl" />
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-400 to-rose-500 rounded-t-xl" />
                   <div className="flex items-center gap-3 mb-3">
                     <motion.div
                       animate={{ rotate: [0, 10, -10, 0] }}

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -271,14 +271,14 @@ const AccountsHub: React.FC = () => {
     }
 
     // Location filter
-    if (locationFilter) {
+    if (locationFilter && locationFilter !== 'all') {
       filtered = filtered.filter(p => 
         p.site_location.toLowerCase().includes(locationFilter.toLowerCase())
       );
     }
 
     // Project filter
-    if (projectFilter) {
+    if (projectFilter && projectFilter !== 'all') {
       filtered = filtered.filter(p => 
         p.project_id?.toString().includes(projectFilter)
       );
@@ -453,8 +453,8 @@ const AccountsHub: React.FC = () => {
     return searchTerm || 
            amountFilter.min || 
            amountFilter.max || 
-           locationFilter || 
-           projectFilter || 
+           (locationFilter && locationFilter !== 'all') || 
+           (projectFilter && projectFilter !== 'all') || 
            dateRangeFilter.start || 
            dateRangeFilter.end;
   };
@@ -614,7 +614,7 @@ const AccountsHub: React.FC = () => {
                     <SelectValue placeholder="Select location" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Locations</SelectItem>
+                    <SelectItem value="all">All Locations</SelectItem>
                     {getUniqueLocations().map((location) => (
                       <SelectItem key={location} value={location}>
                         {location}
@@ -632,7 +632,7 @@ const AccountsHub: React.FC = () => {
                     <SelectValue placeholder="Select project" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Projects</SelectItem>
+                    <SelectItem value="all">All Projects</SelectItem>
                     {getUniqueProjects().map((project) => (
                       <SelectItem key={project} value={project}>
                         Project {project}
@@ -736,7 +736,7 @@ const AccountsHub: React.FC = () => {
               </div>
             )}
             
-            {locationFilter && (
+            {locationFilter && locationFilter !== 'all' && (
               <div className="flex items-center gap-1 bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
                 <span>Location: {locationFilter}</span>
                 <button
@@ -749,7 +749,7 @@ const AccountsHub: React.FC = () => {
               </div>
             )}
             
-            {projectFilter && (
+            {projectFilter && projectFilter !== 'all' && (
               <div className="flex items-center gap-1 bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
                 <span>Project: {projectFilter}</span>
                 <button
@@ -834,21 +834,19 @@ const AccountsHub: React.FC = () => {
               </Card>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                <AnimatePresence mode="popLayout">
-                  {filteredPurchases.map((purchase) => (
-                    <AccountsApprovalCard
-                      key={purchase.purchase_id}
-                      purchase={purchase}
-                      onProcessPayment={handleProcessPayment}
-                      onApprovePayment={handleApprovePayment}
-                      onRejectPayment={handleRejectPayment}
-                      onViewDetails={handleViewDetails}
-                      onViewTransactionDetails={handleViewTransactionDetails}
-                      onSendAcknowledgement={handleSendAcknowledgement}
-                      isLoading={isLoading}
-                    />
-                  ))}
-                </AnimatePresence>
+                {filteredPurchases.map((purchase) => (
+                  <AccountsApprovalCard
+                    key={purchase.purchase_id}
+                    purchase={purchase}
+                    onProcessPayment={handleProcessPayment}
+                    onApprovePayment={handleApprovePayment}
+                    onRejectPayment={handleRejectPayment}
+                    onViewDetails={handleViewDetails}
+                    onViewTransactionDetails={handleViewTransactionDetails}
+                    onSendAcknowledgement={handleSendAcknowledgement}
+                    isLoading={isLoading}
+                  />
+                ))}
               </div>
             )}
           </TabsContent>
