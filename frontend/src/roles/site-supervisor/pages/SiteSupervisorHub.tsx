@@ -497,29 +497,28 @@ const SiteSupervisorHub: React.FC = () => {
     <div className="p-4 sm:p-6 bg-gray-50 min-h-screen [&_*:focus]:outline-none [&_*:focus]:ring-0">
       {/* Header */}
       <div className="mb-6 space-y-4">
-        <div className="flex items-center justify-end gap-4">
-          <Button
-            onClick={() => setNewPurchaseModalOpen(true)}
-            className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Purchase Request
-          </Button>
-        </div>
-        
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl shadow-xl p-6 text-gray-800 border border-red-200"
         >
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-white/20 rounded-lg backdrop-blur">
-              <Package className="w-8 h-8" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-white/20 rounded-lg backdrop-blur">
+                <Package className="w-8 h-8" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Purchase Management Hub</h1>
+                <p className="text-gray-600 mt-1">Manage and track all your purchase requests</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold">Purchase Management Hub</h1>
-              <p className="text-gray-600 mt-1">Manage and track all your purchase requests</p>
-            </div>
+            <Button
+              onClick={() => setNewPurchaseModalOpen(true)}
+              className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap shadow-lg"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Purchase Request
+            </Button>
           </div>
         </motion.div>
       </div>
