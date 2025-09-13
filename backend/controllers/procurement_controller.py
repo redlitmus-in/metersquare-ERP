@@ -8,7 +8,7 @@ from models.role import Role
 from models.purchase import Purchase
 from models.material import Material
 from models.purchase_status import PurchaseStatus
-from models.approval import Approval
+from models.purchase_history import PurchaseHistory
 
 log = get_logger()
 
@@ -316,29 +316,20 @@ def get_purchase_id_history(purchase_id):
                     'created_by': mat.created_by
                 })
 
-        # 🔹 Get approvals
         approvals = []
-        purchase_status_objects = PurchaseStatus.query.filter_by(purchase_id=purchase.purchase_id).all()
-        for status in purchase_status_objects:
-            approvals.append({
-                'status_id': status.status_id,
-                'purchase_id': status.purchase_id,
-                'sender': status.sender,
-                'receiver': status.receiver,
-                'role': status.role,
-                'status': status.status,
-                'decision_by_user_id': status.decision_by_user_id,
-                'decision_date': status.decision_date,
-                'rejection_reason': status.rejection_reason,
-                'sender': status.sender,
-                'receiver': status.receiver,
-                'comments': getattr(status, 'comments', None),
-                'created_at': status.created_at,
-                'created_by': status.created_by,
-                'last_modified_at': status.last_modified_at,
-                'last_modified_by': status.last_modified_by
-            })
+        # 🔹 Get approvals
+        purchase_history = PurchaseHistory.query.filter_by(purchase_id=purchase.purchase_id).first()
 
+        if purchase_history:
+            approvals = {
+                "id": purchase_history.purchase_history_id,
+                "purchase_id": purchase_history.purchase_id,
+                "action": purchase_history.action,
+                "created_by": purchase_history.created_by,
+                "created_at": purchase_history.created_at,
+                "last_modified_by": purchase_history.last_modified_by,
+                "last_modified_at": purchase_history.last_modified_at
+            }
         # 🔹 Final purchase response with nested materials & approvals
         purchase_data = {
             'purchase_id': purchase.purchase_id,

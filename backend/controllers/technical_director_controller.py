@@ -7,6 +7,7 @@ from models.purchase_status import PurchaseStatus
 from models.material import Material
 from models.role import Role
 from models.purchase import Purchase
+from models.user import User  # Add this import
 from utils.email_service import EmailService
 from config.logging import get_logger
 from config.db import db
@@ -553,153 +554,78 @@ def get_technical_director_dashboard():
         return jsonify({'error': f'Failed to retrieve dashboard data: {str(e)}'}), 500
 
 def get_all_technical_director_purchase_request():
-    """Fast: Get latest technical director purchase requests with detailed purchase information"""
+    """Get all purchase requests for technical director with status information"""
     try:
         current_user = g.get("user")
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
-        # ✅ Validate role
+        # Get role information
         role = Role.query.filter_by(
             role_id=current_user.get("role_id"),
             is_deleted=False
         ).first()
-        if not role or role.role.replace(" ", "").lower() != "technicaldirector":
-            return jsonify({"error": "Only Technical Director can access this data"}), 403
-
-        # ✅ Get unique purchase IDs that have technical director as receiver
-        unique_purchase_ids = db.session.query(PurchaseStatus.purchase_id).filter(
-            PurchaseStatus.receiver == "technicalDirector",
-            PurchaseStatus.is_active == True
-        ).distinct().all()
         
-        unique_purchase_ids = [pid[0] for pid in unique_purchase_ids]
+        if not role:
+            return jsonify({"error": "Invalid role"}), 400
+            
+        # Get all purchase statuses
+        statuses = PurchaseStatus.query.all()
+        print("statuses:",len(statuses))
         
-        if not unique_purchase_ids:
-            return jsonify({
-                "success": True,
-                "purchases": [],
-                "user_info": {
-                    "user_name": current_user.get("full_name"),
-                    "user_id": current_user.get("user_id"),
-                    "role": role.role,
-                },
-                "last_updated": datetime.utcnow().isoformat(),
-            }), 200
+        # Filter out specific roles
+        excluded_roles = ['siteSupervisor', 'procurement', 'projectManager']
         
-        # ✅ Get purchases for these unique IDs
-        purchases = Purchase.query.filter(
-            and_(
-                Purchase.purchase_id.in_(unique_purchase_ids),
-                Purchase.is_deleted == False
-            )
+        # Get all non-deleted purchases with their creators and roles
+        purchases = PurchaseStatus.query.filter(
+            ~PurchaseStatus.role.in_(excluded_roles)    # ✅ if you also want non-deleted
         ).all()
-
-        # ✅ Collect all material IDs at once
-        all_material_ids = []
-        for purchase in purchases:
-            if purchase.material_ids:
-                all_material_ids.extend(purchase.material_ids)
-
-        material_map = {}
-        if all_material_ids:
-            materials = Material.query.filter(
-                and_(
-                    Material.is_deleted == False,
-                    Material.material_id.in_(all_material_ids)
-                )
-            ).all()
-            material_map = {m.material_id: m for m in materials}
-
+        print("filtered purchases:", len(purchases))
         technical_director_data = []
-
-        for purchase in purchases:
-            materials, total_cost, total_qty = [], 0, 0
-            if purchase.material_ids:
-                for mid in purchase.material_ids:
-                    mat = material_map.get(mid)
-                    if not mat:
-                        continue
-                    unit_cost = float(mat.cost or 0)
-                    m_total = unit_cost * (mat.quantity or 0)
-                    total_cost += m_total
-                    total_qty += mat.quantity or 0
+        
+        for pur in purchases:
+            # First fetch purchase object
+            purchase = Purchase.query.filter_by(purchase_id=pur.purchase_id, is_deleted=False).first()
+            if not purchase:
+                continue  # skip if purchase not found
+            # Get status for this purchase
+            purchase_statuses = [s for s in statuses if s.purchase_id == purchase.purchase_id]
+            # Get latest status for different types
+            latest_overall_status = max(purchase_statuses, key=lambda x: x.created_at) if purchase_statuses else None
+            estimation_status = next((s for s in purchase_statuses if s.sender == 'estimation'), None)
+            technical_director_status = next((s for s in purchase_statuses if s.sender == 'technicalDirector'), None)
+            
+            # Get materials data
+            materials = []
+            total_qty = 0
+            total_cost = 0
+            
+            if hasattr(purchase, 'materials') and purchase.materials:
+                for material in purchase.materials:
                     materials.append({
-                        "material_id": mat.material_id,
-                        "description": mat.description,
-                        "specification": mat.specification,
-                        "unit": mat.unit,
-                        "quantity": mat.quantity,
-                        "category": mat.category,
-                        "unit_cost": unit_cost,
-                        "total_cost": m_total,
-                        "priority": mat.priority,
-                        "design_reference": mat.design_reference,
+                        'material_id': material.material_id,
+                        'name': material.name,
+                        'description': material.description,
+                        'quantity': material.quantity,
+                        'unit': material.unit,
+                        'unit_cost': material.unit_cost,
+                        'total_cost': material.quantity * material.unit_cost if material.quantity and material.unit_cost else 0
                     })
-
-            # Get latest estimation status for this purchase
-            estimation_status = PurchaseStatus.query.filter(
-                and_(
-                    PurchaseStatus.purchase_id == purchase.purchase_id,
-                    PurchaseStatus.sender == 'estimation'
-                )
-            ).order_by(PurchaseStatus.created_at.desc()).first()
-
-            # Get latest technical director status for this purchase
-            technical_director_status = PurchaseStatus.query.filter(
-                and_(
-                    PurchaseStatus.purchase_id == purchase.purchase_id,
-                    PurchaseStatus.sender == 'technicalDirector'
-                )
-            ).order_by(PurchaseStatus.created_at.desc()).first()
+                    total_qty += material.quantity or 0
+                    total_cost += material.quantity * material.unit_cost if material.quantity and material.unit_cost else 0
             
-            # Get the latest status where technical director is receiver (this is what was sent to TD)
-            latest_td_receiver_status = PurchaseStatus.query.filter(
-                and_(
-                    PurchaseStatus.purchase_id == purchase.purchase_id,
-                    PurchaseStatus.receiver == 'technicalDirector'
-                )
-            ).order_by(PurchaseStatus.created_at.desc()).first()
-            
-            # Check if estimation has approved and sent to technical director
-            # If yes and TD hasn't responded yet (or responded before estimation), show status as pending
-            if (latest_td_receiver_status and 
-                latest_td_receiver_status.sender == 'estimation' and 
-                latest_td_receiver_status.receiver == 'technicalDirector' and 
-                latest_td_receiver_status.status == 'approved'):
-                
-                # Check if technical director has responded AFTER estimation's approval
-                if (technical_director_status and 
-                    technical_director_status.created_at and 
-                    latest_td_receiver_status.created_at and
-                    technical_director_status.created_at > latest_td_receiver_status.created_at):
-                    # TD responded after estimation's approval, use TD's status
-                    technical_director_status_value = technical_director_status.status
-                else:
-                    # TD hasn't responded or responded before estimation's approval, show as pending
-                    technical_director_status_value = 'pending'
-            else:
-                technical_director_status_value = technical_director_status.status if technical_director_status else 'pending'
-
-            # Determine current workflow status
+            # Determine workflow status
             current_workflow_status = 'pending_estimation'
             if estimation_status and estimation_status.status == 'approved':
                 if technical_director_status:
-                    if technical_director_status.status == 'approved':
-                        current_workflow_status = 'technical_director_approved'
-                    elif technical_director_status.status == 'rejected':
-                        current_workflow_status = 'technical_director_rejected'
+                    current_workflow_status = f'technical_director_{technical_director_status.status}'
                 else:
                     current_workflow_status = 'pending_technical_director'
             elif estimation_status and estimation_status.status == 'rejected':
                 current_workflow_status = 'estimation_rejected'
-
-            # Get latest overall status for this purchase
-            latest_overall_status = PurchaseStatus.query.filter_by(
-                purchase_id=purchase.purchase_id
-            ).order_by(PurchaseStatus.created_at.desc()).first()
-
-            technical_director_data.append({
+            
+            # Prepare the purchase data
+            purchase_data = {
                 "purchase_id": purchase.purchase_id,
                 "project_id": purchase.project_id,
                 "requested_by": purchase.requested_by,
@@ -720,7 +646,7 @@ def get_all_technical_director_purchase_request():
                 "estimation_status_date": estimation_status.created_at.isoformat() if estimation_status and estimation_status.created_at else None,
                 "estimation_comments": estimation_status.comments if estimation_status else None,
                 "estimation_decision_by": estimation_status.created_by if estimation_status else None,
-                "technical_director_status": technical_director_status_value,
+                "technical_director_status": technical_director_status.status if technical_director_status else 'pending',
                 "technical_director_status_date": technical_director_status.created_at.isoformat() if technical_director_status and technical_director_status.created_at else None,
                 "technical_director_comments": technical_director_status.comments if technical_director_status else None,
                 "technical_director_rejection_reason": technical_director_status.rejection_reason if technical_director_status else None,
@@ -733,9 +659,11 @@ def get_all_technical_director_purchase_request():
                     "decision_by": latest_overall_status.created_by if latest_overall_status else None,
                     "comments": latest_overall_status.comments if latest_overall_status else None
                 }
-            })
+            }
+            
+            technical_director_data.append(purchase_data)
+            
         return jsonify({
-            "success": True,
             "purchases": technical_director_data,
             "user_info": {
                 "user_name": current_user.get("full_name"),
@@ -743,9 +671,13 @@ def get_all_technical_director_purchase_request():
                 "role": role.role,
             },
             "last_updated": datetime.utcnow().isoformat(),
+            'status': 'success',
+            'message': 'Purchase requests retrieved successfully'
         }), 200
 
     except Exception as e:
-        import logging
-        logging.exception("Error fetching technical director purchase requests")
-        return jsonify({"error": "Internal server error"}), 500
+        log.error(f"Error in get_all_technical_director_purchase_request: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to retrieve purchase requests: {str(e)}'
+        }), 500

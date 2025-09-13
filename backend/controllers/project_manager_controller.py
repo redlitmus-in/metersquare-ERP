@@ -79,26 +79,8 @@ def pm_approval_workflow():
                 return jsonify({'error': f'Project Manager has already {existing_pm_status.status} this purchase request'}), 400
 
         # Get materials for email
-        materials = []
-        if purchase.material_ids:
-            material_objects = Material.query.filter(
-                and_(
-                    Material.is_deleted == False,
-                    Material.material_id.in_(purchase.material_ids)
-                )
-            ).all()
-            for mat in material_objects:
-                materials.append({
-                    'description': mat.description,
-                    'specification': mat.specification,
-                    'unit': mat.unit,
-                    'quantity': mat.quantity,
-                    'category': mat.category,
-                    'cost': mat.cost,
-                    'priority': mat.priority,
-                    'design_reference': mat.design_reference
-                })
-
+        materials = _get_purchase_materials(purchase)
+        
         purchase_data = {
             'purchase_id': purchase.purchase_id,
             'site_location': purchase.site_location,
@@ -299,30 +281,57 @@ def _calculate_material_summary(materials):
 
 def _format_status_dict(status):
     """Helper: Format status to dictionary"""
+    if status is None:
+        return None
+        
     return {
-        'status_id': status.status_id,
-        'status': status.status,
-        'sender': status.sender,
-        'receiver': status.receiver,
-        'date': status.created_at.isoformat() if status.created_at else None,
-        'decision_by_user_id': status.decision_by_user_id,
-        'decision_by': status.created_by,
-        'comments': status.comments,
-        'rejection_reason': status.rejection_reason,
-        'reject_category': status.reject_category,
-        'decision_date': status.decision_date.isoformat() if status.decision_date else None
+        'status_id': status.status_id if hasattr(status, 'status_id') else None,
+        'status': status.status if hasattr(status, 'status') else None,
+        'sender': status.sender if hasattr(status, 'sender') else None,
+        'receiver': status.receiver if hasattr(status, 'receiver') else None,
+        'date': status.created_at.isoformat() if hasattr(status, 'created_at') and status.created_at else None,
+        'decision_by_user_id': status.decision_by_user_id if hasattr(status, 'decision_by_user_id') else None,
+        'decision_by': status.created_by if hasattr(status, 'created_by') else None,
+        'comments': status.comments if hasattr(status, 'comments') else None,
+        'rejection_reason': status.rejection_reason if hasattr(status, 'rejection_reason') else None,
+        'reject_category': status.reject_category if hasattr(status, 'reject_category') else None,
+        'decision_date': status.decision_date.isoformat() if hasattr(status, 'decision_date') and status.decision_date else None
     }
 
 def _get_purchase_materials(purchase):
-    """Helper: Get materials for a purchase"""
-    if not purchase.material_ids:
+    """Get materials for a purchase and convert them to serializable dictionaries"""
+    if not purchase or not purchase.material_ids:
         return []
-    return Material.query.filter(
-        and_(Material.is_deleted == False, Material.material_id.in_(purchase.material_ids))
+        
+    materials = Material.query.filter(
+        and_(
+            Material.is_deleted == False,
+            Material.material_id.in_(purchase.material_ids)
+        )
     ).all()
+    
+    # Convert Material objects to dictionaries
+    return [{
+        'material_id': mat.material_id,
+        'description': mat.description,
+        'specification': mat.specification,
+        'unit': mat.unit,
+        'quantity': mat.quantity,
+        'category': mat.category,
+        'cost': float(mat.cost) if mat.cost is not None else None,
+        'priority': mat.priority,
+        'design_reference': mat.design_reference,
+        'created_at': mat.created_at.isoformat() if hasattr(mat, 'created_at') and mat.created_at else None,
+        'updated_at': mat.updated_at.isoformat() if hasattr(mat, 'updated_at') and mat.updated_at else None
+    } for mat in materials]
 
 def _determine_workflow_status(latest_status, pm_status):
     """Helper: Determine current workflow status"""
+    # Handle case where both statuses are None
+    if not latest_status and not pm_status:
+        return 'pending'
+        
+    # Check for estimation rejection
     if latest_status and latest_status.sender == 'estimation' and latest_status.receiver == 'projectManager' and latest_status.status == 'rejected':
         return None  # Skip this item
     
@@ -330,15 +339,21 @@ def _determine_workflow_status(latest_status, pm_status):
     if latest_status and latest_status.sender == 'procurement' and latest_status.receiver == 'projectManager':
         return 'pending_pm_review'
     
+    # Handle PM status if exists
     if pm_status:
         return 'pm_approved' if pm_status.status == 'approved' else 'pm_rejected'
-    elif latest_status and latest_status.sender == 'estimation':
-        return 'estimation_review'
-    elif latest_status and latest_status.sender == 'technicalDirector':
-        return 'technical_director_review'
-    elif latest_status and latest_status.sender == 'accounts':
-        return 'accounts_processing'
-    return 'pending_pm_review'
+    
+    # Handle other statuses if latest_status exists
+    if latest_status:
+        if latest_status.sender == 'estimation':
+            return 'estimation_review'
+        elif latest_status.sender == 'technicalDirector':
+            return 'technical_director_review'
+        elif latest_status.sender == 'accounts':
+            return 'accounts_processing'
+    
+    # Default fallback status
+    return 'pending'
 
 def _build_purchase_item(purchase, material_summary, current_workflow_status, procurement_approved_status, pm_status, status_history, latest_status_dt):
     """Helper: Build purchase item dictionary"""
@@ -346,20 +361,20 @@ def _build_purchase_item(purchase, material_summary, current_workflow_status, pr
         'purchase_id': purchase.purchase_id,
         'site_location': purchase.site_location,
         'purpose': purchase.purpose,
-        'date': purchase.date,
+        'date': purchase.date.isoformat() if hasattr(purchase.date, 'isoformat') else purchase.date,
         'email_sent': purchase.email_sent,
-        'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
+        'created_at': purchase.created_at.isoformat() if hasattr(purchase.created_at, 'isoformat') else purchase.created_at,
         'materials_summary': material_summary,
         'current_workflow_status': current_workflow_status,
-        'procurement_status': procurement_approved_status.status,
-        'procurement_status_date': procurement_approved_status.created_at.isoformat() if procurement_approved_status.created_at else None,
-        'procurement_comments': procurement_approved_status.comments,
+        'procurement_status': procurement_approved_status.status if procurement_approved_status else 'pending',
+        'procurement_status_date': procurement_approved_status.created_at.isoformat() if hasattr(procurement_approved_status, 'created_at') and procurement_approved_status.created_at else None,
+        'procurement_comments': procurement_approved_status.comments if procurement_approved_status else None,
         'pm_status': pm_status.status if pm_status else 'pending',
-        'pm_status_date': pm_status.created_at.isoformat() if pm_status and pm_status.created_at else None,
+        'pm_status_date': pm_status.created_at.isoformat() if hasattr(pm_status, 'created_at') and pm_status.created_at else None,
         'pm_comments': pm_status.comments if pm_status else None,
         'pm_rejection_reason': pm_status.rejection_reason if pm_status else None,
         'status_history': status_history,
-        'latest_status_date': latest_status_dt.isoformat() if latest_status_dt else None
+        'latest_status_date': latest_status_dt.isoformat() if hasattr(latest_status_dt, 'isoformat') and latest_status_dt else None
     }
 
 def _ensure_uniqueness_by_purchase_id(items):
@@ -388,7 +403,7 @@ def _process_estimation_rejections(estimation_pm_rejection_statuses):
     estimation_pm_rejections = []
     pm_status = 'pending'
     for purchase_id in estimation_pm_rejected_purchase_ids:
-        absolute_latest_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id).order_by(PurchaseStatus.created_at.desc()).first()
+        absolute_latest_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id).first()
         rejected_status = next((s for s in estimation_pm_rejection_statuses if s.purchase_id == purchase_id), None)
         
         if not rejected_status:
@@ -417,22 +432,20 @@ def _process_estimation_rejections(estimation_pm_rejection_statuses):
             pm_status = 'pending'
         purchase = Purchase.query.filter(and_(Purchase.purchase_id == purchase_id, Purchase.is_deleted == False)).first()
         if purchase:
-            materials = _get_purchase_materials(purchase)
             estimation_pm_rejections.append({
                 'purchase_id': purchase.purchase_id,
                 'site_location': purchase.site_location,
                 'purpose': purchase.purpose,
-                'date': purchase.date,
-                'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
-                'materials_summary': _calculate_material_summary(materials),
+                'date': purchase.date.isoformat() if hasattr(purchase.date, 'isoformat') else purchase.date,
+                'created_at': purchase.created_at.isoformat() if hasattr(purchase.created_at, 'isoformat') else purchase.created_at,
                 'rejected_status': {
                     'pm_status' : pm_status,
                     'status_id': rejected_status.status_id,
                     'status': rejected_status.status,
                     'sender': rejected_status.sender,
                     'receiver': rejected_status.receiver,
-                    'decision_date': rejected_status.decision_date.isoformat() if rejected_status.decision_date else None,
-                    'created_at': rejected_status.created_at.isoformat() if rejected_status.created_at else None,
+                    'decision_date': rejected_status.decision_date.isoformat() if hasattr(rejected_status, 'decision_date') and rejected_status.decision_date else None,
+                    'created_at': rejected_status.created_at.isoformat() if hasattr(rejected_status, 'created_at') and rejected_status.created_at else None,
                     'created_by': rejected_status.created_by,
                     'comments': rejected_status.comments,
                     'rejection_reason': rejected_status.rejection_reason,
@@ -459,127 +472,142 @@ def _process_estimation_rejections(estimation_pm_rejection_statuses):
     return estimation_pm_rejections
 
 def get_procurement_approved_purchases():
-    """Get purchases where role is procurement and status is approved"""
+    """Get purchase status data for all non-deleted purchases, excluding siteSupervisor role"""
     try:
         if not g.user:
             return jsonify({'error': 'Not logged in'}), 401
 
+        # Get all purchase statuses excluding siteSupervisor role
+        status_query = PurchaseStatus.query.filter(
+            PurchaseStatus.role != 'siteSupervisor'
+        )
+        estimation_pm_rejection_statuses = PurchaseStatus.query.filter_by(sender = 'estimation', receiver = 'projectManager', status = 'rejected').all()
+        estimation_pm_rejections = _process_estimation_rejections(estimation_pm_rejection_statuses)
+        
+        # Create a set of rejected purchase IDs for efficient lookup
+        rejected_purchase_ids = {rej['purchase_id'] for rej in estimation_pm_rejections}
+
         # Handle single purchase request
         purchase_id_filter = request.args.get('purchase_id', type=int)
         if purchase_id_filter:
-            purchase = Purchase.query.filter(and_(Purchase.purchase_id == purchase_id_filter, Purchase.is_deleted == False)).first()
-            if not purchase:
-                return jsonify({'error': 'Purchase not found'}), 404
-
-            latest_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id_filter).order_by(PurchaseStatus.created_at.desc()).first()
-            materials = _get_purchase_materials(purchase)
+            status_query = status_query.filter(
+                PurchaseStatus.purchase_id == purchase_id_filter
+            )
             
-            return jsonify({
-                'success': True,
-                'purchase_id': purchase.purchase_id,
-                'date': purchase.date,
+        # Order by created_at desc to get latest status first
+        statuses = status_query.order_by(
+            PurchaseStatus.created_at.desc()
+        ).all()
+        
+        # Group statuses by purchase_id
+        purchases_status = {}
+        for status in statuses:
+            if status.purchase_id not in purchases_status:
+                purchases_status[status.purchase_id] = []
+            purchases_status[status.purchase_id].append(status)
+        
+        # Get unique purchase IDs
+        purchase_ids = list(purchases_status.keys())
+        
+        # Get basic purchase info for these IDs
+        purchases = {
+            p.purchase_id: p 
+            for p in Purchase.query.filter(
+                and_(
+                    Purchase.purchase_id.in_(purchase_ids),
+                    Purchase.is_deleted == False
+                )
+            ).all()
+        }
+        
+        # Build response
+        result = []
+        for purchase_id, status_list in purchases_status.items():
+            # Skip this purchase if it's already in the rejection list
+            if purchase_id in rejected_purchase_ids:
+                continue
+
+            if purchase_id not in purchases:
+                continue
+                
+            purchase = purchases[purchase_id]
+            latest_status = status_list[0]  # Already ordered by created_at desc
+            
+            # Get PM status if exists
+            pm_status = next(
+                (s for s in status_list if s.role == 'projectManager'),
+                None
+            )
+            
+            # Get current workflow status - use PM status if available, otherwise use latest status
+            if latest_status and latest_status.status == 'completed':
+                current_workflow_status = 'completed'
+                pm_status_value = 'completed'
+            elif pm_status:
+                current_workflow_status = pm_status.status
+                pm_status_value = pm_status.status
+            elif latest_status:
+                current_workflow_status = latest_status.status
+                pm_status_value = 'pending'
+            else:
+                current_workflow_status = 'pending'
+                pm_status_value = 'pending'
+            
+            # Format status history
+            status_history = [
+                _format_status_dict(s) 
+                for s in status_list 
+                if _format_status_dict(s) is not None
+            ]
+            
+            # Build the purchase item
+            purchase_item = {
+                'purchase_id': purchase_id,
+                'date': purchase.date.isoformat() if hasattr(purchase.date, 'isoformat') else purchase.date,
                 'site_location': purchase.site_location,
                 'purpose': purchase.purpose,
-                'materials_summary': _calculate_material_summary(materials),
-                'current_workflow_status': latest_status.status if latest_status else 'pending',
-                'latest_status': {
-                    'status_id': latest_status.status_id,
-                    'status': latest_status.status,
-                    'sender': latest_status.sender,
-                    'receiver': latest_status.receiver,
-                    'decision_date': latest_status.decision_date.isoformat() if latest_status.decision_date else None,
-                    'created_at': latest_status.created_at.isoformat() if latest_status.created_at else None,
-                    'created_by': latest_status.created_by,
-                    'comments': latest_status.comments,
-                    'rejection_reason': latest_status.rejection_reason,
-                    'reject_category': latest_status.reject_category,
-                } if latest_status else None,
+                'current_workflow_status': current_workflow_status,
+                'status_history': status_history,
+                'latest_status': _format_status_dict(latest_status) if latest_status else None,
+                'pm_status': pm_status_value,  # Use the determined pm_status_value
+                'created_at': purchase.created_at.isoformat() if hasattr(purchase.created_at, 'isoformat') else purchase.created_at,
+                'last_modified_at': purchase.last_modified_at.isoformat() if hasattr(purchase.last_modified_at, 'isoformat') else purchase.last_modified_at
+            }
+            
+            result.append(purchase_item)
+        
+        # Sort by last_modified_at desc
+        result.sort(
+            key=lambda x: x.get('last_modified_at') or x.get('created_at') or '',
+            reverse=True
+        )
+        
+        # Handle single purchase response
+        if purchase_id_filter:
+            if not result:
+                return jsonify({'error': 'Purchase not found or no status available'}), 404
+            return jsonify({
+                'success': True,
+                **result[0]
             }), 200
-
-        # Get procurement approved purchase IDs
-        total_purchase = Purchase.query.filter_by(is_deleted = False).count()
-        procurement_approved_statuses = PurchaseStatus.query.filter(and_(PurchaseStatus.sender == 'procurement', PurchaseStatus.status == 'approved')).all()
-        procurement_approved_purchase_ids = list(set([status.purchase_id for status in procurement_approved_statuses]))
-        
-        if not procurement_approved_purchase_ids:
-            pm_involved_purchase_ids = set()
-        else:
-            pm_involved_purchase_ids = set(procurement_approved_purchase_ids)
-        
-        # Process approved purchases
-        approved_procurement_purchases = []
-        for purchase_id in pm_involved_purchase_ids:
-            # Get statuses for this purchase
-            procurement_approved_status = PurchaseStatus.query.filter(and_(PurchaseStatus.purchase_id == purchase_id, PurchaseStatus.sender == 'procurement', PurchaseStatus.status == 'approved')).order_by(PurchaseStatus.created_at.desc()).first()
-            latest_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id).order_by(PurchaseStatus.created_at.desc()).first()
-            
-            # Get the latest PM decision
-            pm_status = PurchaseStatus.query.filter(
-                and_(
-                    PurchaseStatus.purchase_id == purchase_id, 
-                    PurchaseStatus.sender == 'projectManager'
-                )
-            ).order_by(PurchaseStatus.created_at.desc()).first()
-            
-            # Check if procurement has re-sent to PM after PM's decision
-            # If procurement's approval is newer than PM's last action, PM status should be pending
-            if pm_status and procurement_approved_status:
-                if procurement_approved_status.created_at > pm_status.created_at:
-                    # Procurement re-sent after PM's decision, so PM status is now pending
-                    pm_status = None  # This will make it show as pending
-            
-            if procurement_approved_status:
-                purchase = Purchase.query.filter(and_(Purchase.purchase_id == purchase_id, Purchase.is_deleted == False)).first()
-                if purchase:
-                    materials = _get_purchase_materials(purchase)
-                    current_workflow_status = _determine_workflow_status(latest_status, pm_status)
-                    
-                    if current_workflow_status is None:  # Skip rejected items
-                        continue
-                    
-                    # Get the latest status for the purchase
-                    latest_for_purchase = PurchaseStatus.query.filter_by(purchase_id=purchase_id).order_by(PurchaseStatus.created_at.desc()).first()
-                    status_history = [_format_status_dict(latest_for_purchase)] if latest_for_purchase else []
-                    latest_status_dt = latest_for_purchase.created_at if latest_for_purchase else None
-                    
-                    approved_procurement_purchases.append(_build_purchase_item(
-                        purchase, _calculate_material_summary(materials), current_workflow_status,
-                        procurement_approved_status, pm_status, status_history, latest_status_dt
-                    ))
-
-        # Ensure uniqueness
-        approved_procurement_purchases = _ensure_uniqueness_by_purchase_id(approved_procurement_purchases)
-        
-        # Process estimation rejections
-        estimation_pm_rejection_statuses = PurchaseStatus.query.filter(and_(PurchaseStatus.sender == 'estimation', PurchaseStatus.receiver == 'projectManager', PurchaseStatus.status == 'rejected')).order_by(PurchaseStatus.created_at.desc()).all()
-        estimation_pm_rejections = _process_estimation_rejections(estimation_pm_rejection_statuses)
-        
-        # Filter out rejected items
-        estimation_rejected_purchase_ids = {item['purchase_id'] for item in estimation_pm_rejections}
-        approved_procurement_purchases = [item for item in approved_procurement_purchases if item['purchase_id'] not in estimation_rejected_purchase_ids]
-
-        # Handle latest_only filter
-        if request.args.get('latest_only', default=0, type=int):
-            def parse_dt(item):
-                dt = item.get('latest_status_date') or item.get('procurement_status_date') or item.get('created_at')
-                try:
-                    return datetime.fromisoformat(dt) if dt else None
-                except Exception:
-                    return None
-            approved_procurement_purchases = sorted(approved_procurement_purchases, key=lambda x: (parse_dt(x) or datetime.min), reverse=True)[:1]
-
+        # estimation_pm_rejections = 10    
         return jsonify({
+            'total_approved_procurement_purchases': len(result),
+            # len(approved_procurement_purchases),
+            # 'non_approval_project_manager_purchases': 12,
+            # total_purchase - len(approved_procurement_purchases),
+            # 'estimation_pm_rejections_count': 14,
+            # len(estimation_pm_rejections),
+            'approved_procurement_purchases': result,
+            # approved_procurement_purchases,
+            'estimation_pm_rejections': estimation_pm_rejections,
+            # estimation_pm_rejections,
             'success': True,
-            'total_approved_procurement_purchases': len(approved_procurement_purchases),
-            'non_approval_project_manager_purchases': total_purchase - len(approved_procurement_purchases),
-            'estimation_pm_rejections_count': len(estimation_pm_rejections),
-            'approved_procurement_purchases': approved_procurement_purchases,
-            'estimation_pm_rejections': estimation_pm_rejections
         }), 200
 
     except Exception as e:
-        log.error(f"Error getting procurement approved purchases: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        log.error(f"Error getting purchase statuses: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to fetch purchase statuses', 'details': str(e)}), 500
 
 def get_purchase_status_details(purchase_id):
     """Get project manager and procurement status details for a specific purchase"""
@@ -624,14 +652,7 @@ def get_purchase_status_details(purchase_id):
         ).order_by(PurchaseStatus.created_at.desc()).first()
         
         # Get materials for this purchase
-        materials = []
-        if purchase.material_ids:
-            materials = Material.query.filter(
-                and_(
-                    Material.is_deleted == False,
-                    Material.material_id.in_(purchase.material_ids)
-                )
-            ).all()
+        materials = _get_purchase_materials(purchase)
         
         # Calculate material summary
         material_summary = {
@@ -647,7 +668,8 @@ def get_purchase_status_details(purchase_id):
                     'unit': m.unit,
                     'cost': m.cost,
                     'category': m.category,
-                    'priority': m.priority
+                    'priority': m.priority,
+                    'design_reference': m.design_reference
                 } for m in materials
             ]
         }
@@ -665,7 +687,7 @@ def get_purchase_status_details(purchase_id):
             pm_status_list.append({
                 'status': status.status,
                 'sender': 'projectManager',
-                'date': status.created_at.isoformat() if status.created_at else None,
+                'date': status.created_at.isoformat() if hasattr(status, 'created_at') and status.created_at else None,
                 'decision_by': {
                     'user_id': status.decision_by_user_id,
                     'full_name': pm_user.full_name if pm_user else 'Unknown',
@@ -686,7 +708,7 @@ def get_purchase_status_details(purchase_id):
             procurement_status_list.append({
                 'status': status.status,
                 'sender': 'procurement',
-                'date': status.created_at.isoformat() if status.created_at else None,
+                'date': status.created_at.isoformat() if hasattr(status, 'created_at') and status.created_at else None,
                 'decision_by': {
                     'user_id': status.decision_by_user_id,
                     'full_name': procurement_user.full_name if procurement_user else 'Unknown',
@@ -712,8 +734,10 @@ def get_purchase_status_details(purchase_id):
         latest_pm_status = pm_statuses[0] if pm_statuses else None
         
         # Determine current workflow status
-        current_workflow_status = 'pending_procurement'
-        if latest_procurement_status and latest_procurement_status.status == 'approved':
+        if latest_status and latest_status.status == 'completed':
+            current_workflow_status = 'completed'
+            pm_status_value = 'completed'
+        elif latest_procurement_status and latest_procurement_status.status == 'approved':
             if latest_pm_status:
                 if latest_pm_status.status == 'approved':
                     current_workflow_status = 'pm_approved'
@@ -721,6 +745,9 @@ def get_purchase_status_details(purchase_id):
                     current_workflow_status = 'pm_rejected'
             else:
                 current_workflow_status = 'pending_pm_review'
+        else:
+            current_workflow_status = 'pending_procurement'
+            pm_status_value = 'pending'
         
         # Get all statuses for complete history
         all_statuses = PurchaseStatus.query.filter_by(
@@ -735,13 +762,13 @@ def get_purchase_status_details(purchase_id):
                 'status': status.status,
                 'sender': status.sender,
                 'receiver': status.receiver,
-                'date': status.created_at.isoformat() if status.created_at else None,
+                'date': status.created_at.isoformat() if hasattr(status, 'created_at') and status.created_at else None,
                 'decision_by_user_id': status.decision_by_user_id,
                 'decision_by': status.created_by,
                 'comments': status.comments,
                 'rejection_reason': status.rejection_reason,
                 'reject_category': status.reject_category,
-                'decision_date': status.decision_date.isoformat() if status.decision_date else None
+                'decision_date': status.decision_date.isoformat() if hasattr(status, 'decision_date') and status.decision_date else None
             })
         
         return jsonify({
@@ -749,17 +776,17 @@ def get_purchase_status_details(purchase_id):
             'purchase_id': purchase_id,
             'site_location': purchase.site_location,
             'purpose': purchase.purpose,
-            'date': purchase.date,
+            'date': purchase.date.isoformat() if hasattr(purchase.date, 'isoformat') else purchase.date,
             'email_sent': purchase.email_sent,
-            'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
+            'created_at': purchase.created_at.isoformat() if hasattr(purchase.created_at, 'isoformat') else purchase.created_at,
             'materials_summary': material_summary,
             'current_workflow_status': current_workflow_status,
             'procurement_status': latest_procurement_status.status if latest_procurement_status else 'pending',
-            'procurement_status_date': latest_procurement_status.created_at.isoformat() if latest_procurement_status and latest_procurement_status.created_at else None,
+            'procurement_status_date': latest_procurement_status.created_at.isoformat() if hasattr(latest_procurement_status, 'created_at') and latest_procurement_status.created_at else None,
             'procurement_comments': latest_procurement_status.comments if latest_procurement_status else None,
             'procurement_decision_by': latest_procurement_status.created_by if latest_procurement_status else None,
-            'pm_status': latest_pm_status.status if latest_pm_status else 'pending',
-            'pm_status_date': latest_pm_status.created_at.isoformat() if latest_pm_status and latest_pm_status.created_at else None,
+            'pm_status': pm_status_value,  # Use the determined pm_status_value
+            'pm_status_date': latest_pm_status.created_at.isoformat() if hasattr(latest_pm_status, 'created_at') and latest_pm_status.created_at else None,
             'pm_comments': latest_pm_status.comments if latest_pm_status else None,
             'pm_rejection_reason': latest_pm_status.rejection_reason if latest_pm_status else None,
             'pm_decision_by': latest_pm_status.created_by if latest_pm_status else None,
@@ -902,7 +929,7 @@ def get_project_manager_dashboard():
                 'project_id': purchase.project_id,
                 'requested_by': purchase.requested_by,
                 'site_location': purchase.site_location,
-                'date': purchase.date,
+                'date': purchase.date.isoformat() if hasattr(purchase.date, 'isoformat') else purchase.date,
                 'purpose': purchase.purpose,
                 'file_path': purchase.file_path,
                 'materials': materials,
@@ -913,14 +940,14 @@ def get_project_manager_dashboard():
                     'status': status.status,
                     'sender': status.sender,
                     'receiver': status.receiver,
-                    'decision_date': status.decision_date.isoformat() if status.decision_date else None,
+                    'decision_date': status.decision_date.isoformat() if hasattr(status, 'decision_date') and status.decision_date else None,
                     'decision_by_user_id': status.decision_by_user_id,
                     'decision_by': status.created_by,
                     'rejection_reason': status.rejection_reason,
                     'reject_category': status.reject_category,
                     'comments': status.comments,
-                    'created_at': status.created_at.isoformat() if status.created_at else None,
-                    'last_modified_at': status.last_modified_at.isoformat() if status.last_modified_at else None,
+                    'created_at': status.created_at.isoformat() if hasattr(status, 'created_at') and status.created_at else None,
+                    'last_modified_at': status.last_modified_at.isoformat() if hasattr(status, 'last_modified_at') and status.last_modified_at else None,
                     'last_modified_by': status.last_modified_by
                 }
             }
@@ -975,7 +1002,7 @@ def get_project_manager_dashboard():
                 'project_id': purchase.project_id,
                 'requested_by': purchase.requested_by,
                 'site_location': purchase.site_location,
-                'date': purchase.date,
+                'date': purchase.date.isoformat() if hasattr(purchase.date, 'isoformat') else purchase.date,
                 'purpose': purchase.purpose,
                 'file_path': purchase.file_path,
                 'materials': materials,
@@ -992,8 +1019,8 @@ def get_project_manager_dashboard():
                     'rejection_reason': None,
                     'reject_category': None,
                     'comments': None,
-                    'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
-                    'last_modified_at': purchase.last_modified_at.isoformat() if purchase.last_modified_at else None,
+                    'created_at': purchase.created_at.isoformat() if hasattr(purchase.created_at, 'isoformat') and purchase.created_at else None,
+                    'last_modified_at': purchase.last_modified_at.isoformat() if hasattr(purchase.last_modified_at, 'isoformat') and purchase.last_modified_at else None,
                     'last_modified_by': purchase.last_modified_by
                 }
             }
@@ -1057,7 +1084,7 @@ def get_project_manager_dashboard():
                 'project_id': purchase.project_id,
                 'requested_by': purchase.requested_by,
                 'site_location': purchase.site_location,
-                'date': purchase.date,
+                'date': purchase.date.isoformat() if hasattr(purchase.date, 'isoformat') else purchase.date,
                 'purpose': purchase.purpose,
                 'file_path': purchase.file_path,
                 'materials': materials,
@@ -1068,14 +1095,14 @@ def get_project_manager_dashboard():
                     'status': status.status,
                     'sender': status.sender,
                     'receiver': status.receiver,
-                    'decision_date': status.decision_date.isoformat() if status.decision_date else None,
+                    'decision_date': status.decision_date.isoformat() if hasattr(status, 'decision_date') and status.decision_date else None,
                     'decision_by_user_id': status.decision_by_user_id,
                     'decision_by': status.created_by,
                     'rejection_reason': status.rejection_reason,
                     'reject_category': status.reject_category,
                     'comments': status.comments,
-                    'created_at': status.created_at.isoformat() if status.created_at else None,
-                    'last_modified_at': status.last_modified_at.isoformat() if status.last_modified_at else None,
+                    'created_at': status.created_at.isoformat() if hasattr(status, 'created_at') and status.created_at else None,
+                    'last_modified_at': status.last_modified_at.isoformat() if hasattr(status, 'last_modified_at') and status.last_modified_at else None,
                     'last_modified_by': status.last_modified_by
                 }
             }
@@ -1130,7 +1157,7 @@ def get_project_manager_dashboard():
                 'project_id': purchase.project_id,
                 'requested_by': purchase.requested_by,
                 'site_location': purchase.site_location,
-                'date': purchase.date,
+                'date': purchase.date.isoformat() if hasattr(purchase.date, 'isoformat') else purchase.date,
                 'purpose': purchase.purpose,
                 'file_path': purchase.file_path,
                 'materials': materials,
@@ -1147,8 +1174,8 @@ def get_project_manager_dashboard():
                     'rejection_reason': None,
                     'reject_category': None,
                     'comments': None,
-                    'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
-                    'last_modified_at': purchase.last_modified_at.isoformat() if purchase.last_modified_at else None,
+                    'created_at': purchase.created_at.isoformat() if hasattr(purchase.created_at, 'isoformat') and purchase.created_at else None,
+                    'last_modified_at': purchase.last_modified_at.isoformat() if hasattr(purchase.last_modified_at, 'isoformat') and purchase.last_modified_at else None,
                     'last_modified_by': purchase.last_modified_by
                 }
             }
