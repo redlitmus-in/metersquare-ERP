@@ -130,8 +130,8 @@ const ProcurementHub: React.FC = () => {
         // Track emails sent to PM
         const emailedSet = new Set<number>();
         purchaseData.forEach((p: Purchase) => {
-          if (p.latest_status === 'approved' || p.approvals?.some((a: any) => 
-            a.reviewer_role === 'procurement' && a.status === 'approved'
+          if (p.latest_status === 'approved' || p.approvals?.action?.some((a: any) =>
+            a.role === 'procurement' && a.status === 'approved'
           )) {
             emailedSet.add(p.purchase_id);
           }
@@ -251,7 +251,7 @@ const ProcurementHub: React.FC = () => {
           p.status_date,
           p.decision_date,
           p.created_at
-        ].filter(d => d).map(d => new Date(d).getTime());
+        ].filter(d => d).map(d => new Date(d!).getTime());
         
         return Math.max(...dates, new Date(p.created_at).getTime());
       };
@@ -321,20 +321,39 @@ const ProcurementHub: React.FC = () => {
         // Show pending items including those edited by procurement
         filtered = filtered.filter(p => {
           const status = p.sender_latest_status || p.latest_status || p.status || 'pending';
+
+          // Exclude completed items
+          if (status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished') {
+            return false;
+          }
+
           // Include pending items that haven't been sent to PM or were just edited
           return (status === 'pending' || status === 'draft') && !pmEmailedPRs.has(p.purchase_id);
         });
         break;
         
       case 'approved':
-        // Show items that are approved or have been sent to PM
+        // Show items that are approved but NOT completed
         filtered = filtered.filter(p => {
           const status = p.sender_latest_status || p.latest_status || p.status;
-          // Check if approved by procurement and sent to PM, or approved by other roles
-          return status === 'approved' || 
+
+          // Exclude completed items
+          if (status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished') {
+            return false;
+          }
+
+          // Check if it has accounts acknowledgement (which means it's completed)
+          if (p.approvals?.action?.some((a: any) =>
+            a.role === 'accounts' && (a.status === 'completed' || a.status === 'acknowledged')
+          )) {
+            return false;
+          }
+
+          // Include approved items that haven't reached completion
+          return status === 'approved' ||
                  pmEmailedPRs.has(p.purchase_id) ||
                  (p.status_receiver === 'projectManager' && p.status_sender === 'procurement') ||
-                 (p.status_receiver === 'accounts') ||
+                 (p.status_receiver === 'accounts' && status !== 'completed') ||
                  (p.status_receiver === 'technicalDirector' && status === 'approved');
         });
         break;
@@ -342,12 +361,19 @@ const ProcurementHub: React.FC = () => {
       case 'pm_rejected':
         // Filter for purchases rejected by PM that need revision
         filtered = filtered.filter(p => {
+          const status = p.sender_latest_status || p.latest_status || p.status;
+
+          // Exclude completed items
+          if (status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished') {
+            return false;
+          }
+
           // Check if it was rejected by project manager specifically
-          const hasRejection = p.approvals?.some((a: any) => 
-            a.reviewer_role === 'projectManager' && 
+          const hasRejection = p.approvals?.action?.some((a: any) =>
+            a.role === 'projectManager' &&
             a.status === 'rejected'
           );
-          
+
           // Check the latest status fields - looking for PM rejections
           const rejectedByPM = (
             // PM rejected and sent back to procurement
@@ -355,7 +381,7 @@ const ProcurementHub: React.FC = () => {
             (p.status_sender === 'projectManager' && p.sender_latest_status === 'rejected') ||
             (p.status_sender === 'projectManager' && p.latest_status === 'rejected')
           );
-          
+
           return hasRejection || rejectedByPM;
         });
         break;
@@ -363,12 +389,19 @@ const ProcurementHub: React.FC = () => {
       case 'est_rejected':
         // Filter for purchases rejected by Estimation
         filtered = filtered.filter(p => {
+          const status = p.sender_latest_status || p.latest_status || p.status;
+
+          // Exclude completed items
+          if (status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished') {
+            return false;
+          }
+
           // Check if it was rejected by estimation specifically
-          const hasRejection = p.approvals?.some((a: any) => 
-            a.reviewer_role === 'estimation' && 
+          const hasRejection = p.approvals?.action?.some((a: any) =>
+            a.role === 'estimation' &&
             a.status === 'rejected'
           );
-          
+
           // Check the latest status fields - looking for Estimation rejections
           const rejectedByEst = (
             // Estimation rejected and sent back to procurement
@@ -376,16 +409,36 @@ const ProcurementHub: React.FC = () => {
             (p.status_sender === 'estimation' && p.sender_latest_status === 'rejected') ||
             (p.status_sender === 'estimation' && p.latest_status === 'rejected')
           );
-          
+
           return hasRejection || rejectedByEst;
         });
         break;
         
       case 'completed':
-        // Filter for fully completed/delivered purchases
+        // Filter for fully completed purchases (with accounts acknowledgement)
         filtered = filtered.filter(p => {
           const status = p.sender_latest_status || p.latest_status || p.status;
-          return status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished';
+
+          // Check if status is explicitly marked as completed
+          if (status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished') {
+            return true;
+          }
+
+          // Check if it has accounts acknowledgement (final step of completion)
+          if (p.approvals?.action?.some((a: any) =>
+            a.role === 'accounts' && (a.status === 'completed' || a.status === 'acknowledged')
+          )) {
+            return true;
+          }
+
+          // Check if the last approval action is from accounts with completion status
+          const lastApproval = p.approvals?.action?.[p.approvals.action.length - 1];
+          if (lastApproval?.role === 'accounts' &&
+              (lastApproval.status === 'completed' || lastApproval.comments?.includes('completed'))) {
+            return true;
+          }
+
+          return false;
         });
         break;
         
@@ -412,7 +465,7 @@ const ProcurementHub: React.FC = () => {
           bValue = b.materials?.reduce((sum, m) => sum + (m.quantity * m.cost), 0) || 0;
           break;
         case 'priority':
-          const priorityOrder = { 'high': 3, 'medium': 2, 'low': 1 };
+          const priorityOrder: Record<string, number> = { 'high': 3, 'medium': 2, 'low': 1 };
           aValue = priorityOrder[a.materials?.[0]?.priority?.toLowerCase() || 'medium'] || 2;
           bValue = priorityOrder[b.materials?.[0]?.priority?.toLowerCase() || 'medium'] || 2;
           break;
@@ -907,23 +960,42 @@ const ProcurementHub: React.FC = () => {
                 <TabsTrigger value="pending">
                   Pending ({purchases.filter(p => {
                     const status = p.sender_latest_status || p.latest_status || p.status || 'pending';
+                    // Exclude completed items
+                    if (status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished') {
+                      return false;
+                    }
                     return (status === 'pending' || status === 'draft') && !pmEmailedPRs.has(p.purchase_id);
                   }).length})
                 </TabsTrigger>
                 <TabsTrigger value="approved">
                   Approved ({purchases.filter(p => {
                     const status = p.sender_latest_status || p.latest_status || p.status;
-                    return status === 'approved' || 
+                    // Exclude completed items
+                    if (status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished') {
+                      return false;
+                    }
+                    // Check if it has accounts acknowledgement (which means it's completed)
+                    if (p.approvals?.action?.some((a: any) =>
+                      a.role === 'accounts' && (a.status === 'completed' || a.status === 'acknowledged')
+                    )) {
+                      return false;
+                    }
+                    return status === 'approved' ||
                            pmEmailedPRs.has(p.purchase_id) ||
                            (p.status_receiver === 'projectManager' && p.status_sender === 'procurement') ||
-                           (p.status_receiver === 'accounts') ||
+                           (p.status_receiver === 'accounts' && status !== 'completed') ||
                            (p.status_receiver === 'technicalDirector' && status === 'approved');
                   }).length})
                 </TabsTrigger>
                 <TabsTrigger value="pm_rejected" className="text-red-600 data-[state=active]:text-red-700 data-[state=active]:border-red-500">
                   PM Reject ({purchases.filter(p => {
-                    const hasRejection = p.approvals?.some((a: any) => 
-                      a.reviewer_role === 'projectManager' && a.status === 'rejected'
+                    const status = p.sender_latest_status || p.latest_status || p.status;
+                    // Exclude completed items
+                    if (status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished') {
+                      return false;
+                    }
+                    const hasRejection = p.approvals?.action?.some((a: any) =>
+                      a.role === 'projectManager' && a.status === 'rejected'
                     );
                     const rejectedByPM = (
                       (p.status_role === 'projectManager' && p.sender_latest_status === 'rejected') ||
@@ -935,8 +1007,13 @@ const ProcurementHub: React.FC = () => {
                 </TabsTrigger>
                 <TabsTrigger value="est_rejected" className="text-blue-600 data-[state=active]:text-blue-700 data-[state=active]:border-blue-500">
                   Est Reject ({purchases.filter(p => {
-                    const hasRejection = p.approvals?.some((a: any) => 
-                      a.reviewer_role === 'estimation' && a.status === 'rejected'
+                    const status = p.sender_latest_status || p.latest_status || p.status;
+                    // Exclude completed items
+                    if (status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished') {
+                      return false;
+                    }
+                    const hasRejection = p.approvals?.action?.some((a: any) =>
+                      a.role === 'estimation' && a.status === 'rejected'
                     );
                     const rejectedByEst = (
                       (p.status_role === 'estimation' && p.sender_latest_status === 'rejected') ||
@@ -949,7 +1026,23 @@ const ProcurementHub: React.FC = () => {
                 <TabsTrigger value="completed" className="text-green-600 data-[state=active]:text-green-700 data-[state=active]:border-green-500">
                   Completed ({purchases.filter(p => {
                     const status = p.sender_latest_status || p.latest_status || p.status;
-                    return status === 'completed' || status === 'delivered' || status === 'closed';
+                    // Check if status is explicitly marked as completed
+                    if (status === 'completed' || status === 'delivered' || status === 'closed' || status === 'finished') {
+                      return true;
+                    }
+                    // Check if it has accounts acknowledgement (final step of completion)
+                    if (p.approvals?.action?.some((a: any) =>
+                      a.role === 'accounts' && (a.status === 'completed' || a.status === 'acknowledged')
+                    )) {
+                      return true;
+                    }
+                    // Check if the last approval action is from accounts with completion status
+                    const lastApproval = p.approvals?.action?.[p.approvals.action.length - 1];
+                    if (lastApproval?.role === 'accounts' &&
+                        (lastApproval.status === 'completed' || lastApproval.comments?.includes('completed'))) {
+                      return true;
+                    }
+                    return false;
                   }).length})
                 </TabsTrigger>
               </TabsList>

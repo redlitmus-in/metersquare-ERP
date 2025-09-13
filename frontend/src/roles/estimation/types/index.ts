@@ -20,10 +20,12 @@ export interface Material {
 // Status info from purchase_status table
 export interface StatusInfo {
   status_id?: number;
-  status?: 'pending' | 'approved' | 'rejected';
+  status?: 'pending' | 'approved' | 'rejected' | 'acknowledged' | 'completed';
   estimation_status?: 'pending' | 'approved' | 'rejected';
   pm_status?: 'pending' | 'approved' | 'rejected';
-  accounts_status?: 'pending' | 'approved' | 'rejected';
+  td_status?: 'pending' | 'approved' | 'rejected';
+  accounts_status?: 'pending' | 'approved' | 'rejected' | 'acknowledged';
+  accounts_acknowledgement?: boolean;
   sender: string;
   receiver: string;
   decision_date: string | null;

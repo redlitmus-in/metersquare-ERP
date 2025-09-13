@@ -14,11 +14,11 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Package, Calendar, MapPin, User, CheckCircle, 
+import {
+  Package, Calendar, MapPin, User, CheckCircle,
   XCircle, Clock, AlertTriangle, MessageSquare, DollarSign,
   FileText, Building2, Mail, Download, Hash, Info, TrendingUp,
-  UserCheck, Target, Layers, Shield, Activity, Paperclip, ExternalLink
+  UserCheck, Target, Layers, Shield, Activity, Paperclip, ExternalLink, ArrowRight
 } from 'lucide-react';
 import { estimationService } from '../services/estimationService';
 import type { PurchaseStatusDetails } from '../services/estimationService';
@@ -111,16 +111,19 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
       } else {
         // History endpoint response structure
         const purchase = response.purchase || {};
-        const approvals = purchase.approvals || [];
-        
-        // Group approvals by role
-        const procurementStatuses = approvals.filter((a: any) => a.role === 'procurement' || a.sender === 'procurement');
-        const pmStatuses = approvals.filter((a: any) => a.role === 'projectManager' || a.sender === 'projectManager');
-        const estimationStatuses = approvals.filter((a: any) => a.role === 'estimation' || a.sender === 'estimation');
-        
+        // Fix: approvals is an object with 'action' array, not a direct array
+        const approvalsData = purchase.approvals?.action || [];
+
+        // Group approvals by role - include all roles
+        const procurementStatuses = approvalsData.filter((a: any) => a.role === 'procurement' || a.sender === 'procurement');
+        const pmStatuses = approvalsData.filter((a: any) => a.role === 'projectManager' || a.sender === 'projectManager');
+        const estimationStatuses = approvalsData.filter((a: any) => a.role === 'estimation' || a.sender === 'estimation');
+        const technicalDirectorStatuses = approvalsData.filter((a: any) => a.role === 'technicalDirector' || a.sender === 'technicalDirector');
+        const accountsStatuses = approvalsData.filter((a: any) => a.role === 'accounts' || a.sender === 'accounts');
+
         // Get latest status
-        const latestStatus = approvals.length > 0 ? approvals[approvals.length - 1] : {};
-        
+        const latestStatus = approvalsData.length > 0 ? approvalsData[approvalsData.length - 1] : {};
+
         const formattedDetails = {
           purchase_id: purchase.purchase_id,
           purchase_details: {
@@ -150,20 +153,30 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
           },
           procurement_statuses: procurementStatuses.map((s: any) => ({
             ...s,
-            date: s.created_at || s.decision_date
+            date: s.timestamp || s.created_at || s.decision_date
           })),
           project_manager_statuses: pmStatuses.map((s: any) => ({
             ...s,
-            date: s.created_at || s.decision_date
+            date: s.timestamp || s.created_at || s.decision_date
           })),
           estimation_statuses: estimationStatuses.map((s: any) => ({
             ...s,
-            date: s.created_at || s.decision_date
+            date: s.timestamp || s.created_at || s.decision_date
+          })),
+          technical_director_statuses: technicalDirectorStatuses.map((s: any) => ({
+            ...s,
+            date: s.timestamp || s.created_at || s.decision_date
+          })),
+          accounts_statuses: accountsStatuses.map((s: any) => ({
+            ...s,
+            date: s.timestamp || s.created_at || s.decision_date
           })),
           summary: {
             total_procurement_statuses: procurementStatuses.length,
             total_pm_statuses: pmStatuses.length,
             total_estimation_statuses: estimationStatuses.length,
+            total_technical_director_statuses: technicalDirectorStatuses.length,
+            total_accounts_statuses: accountsStatuses.length,
             pm_approved_count: pmStatuses.filter((s: any) => s.status === 'approved').length
           }
         };
@@ -351,10 +364,12 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   const allStatuses = [
     ...(purchaseDetails?.procurement_statuses || []),
     ...(purchaseDetails?.project_manager_statuses || []),
-    ...(purchaseDetails?.estimation_statuses || [])
-  ].sort((a, b) => {
-    const dateA = a?.date ? new Date(a.date).getTime() : 0;
-    const dateB = b?.date ? new Date(b.date).getTime() : 0;
+    ...(purchaseDetails?.estimation_statuses || []),
+    ...(purchaseDetails?.technical_director_statuses || []),
+    ...(purchaseDetails?.accounts_statuses || [])
+  ].sort((a: any, b: any) => {
+    const dateA = a?.timestamp ? new Date(a.timestamp).getTime() : (a?.date ? new Date(a.date).getTime() : 0);
+    const dateB = b?.timestamp ? new Date(b.timestamp).getTime() : (b?.date ? new Date(b.date).getTime() : 0);
     return dateA - dateB; // Chronological order
   });
 
@@ -544,7 +559,7 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   <p className="text-xs text-gray-500 uppercase tracking-wider">CREATED BY</p>
                                 </div>
                                 <p className="text-base font-semibold text-gray-900">
-                                  {purchaseDetails.purchase_details?.created_by || purchaseDetails.purchase_details?.requested_by}
+                                  {purchaseDetails.purchase_details?.requested_by}
                                 </p>
                               </div>
                               
@@ -888,11 +903,96 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               ) : (
                 // History View
                 <div className="p-6 max-h-[calc(90vh-200px)] overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                  {/* Summary Section - New Design matching screenshot */}
+                  <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 mb-6">
+                    <div className="grid grid-cols-3 gap-8">
+                      {/* Purchase Details */}
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                          <Package className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-2">Purchase Details</h3>
+                          <div className="space-y-1.5">
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-gray-500">Purpose:</span>
+                              <span className="text-sm text-gray-900 flex-1">{purchaseDetails?.purchase_details?.purpose || 'Not specified'}</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-gray-500">Location:</span>
+                              <span className="text-sm text-gray-900">{purchaseDetails?.purchase_details?.site_location || 'Not specified'}</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-gray-500">Project:</span>
+                              <span className="text-sm text-gray-900">#{purchaseDetails?.purchase_details?.project_id || 'N/A'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Request Info */}
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-purple-100 rounded-lg">
+                          <User className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-2">Request Info</h3>
+                          <div className="space-y-1.5">
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-gray-500">Requested by:</span>
+                              <span className="text-sm text-gray-900 flex-1">{purchaseDetails?.purchase_details?.requested_by || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-gray-500">Date:</span>
+                              <span className="text-sm text-gray-900">
+                                {purchaseDetails?.purchase_details?.date
+                                  ? new Date(purchaseDetails.purchase_details.date).toLocaleDateString('en-US', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric'
+                                    })
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Timeline Stats */}
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-purple-100 rounded-lg">
+                          <Activity className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-2">Timeline Stats</h3>
+                          <div className="space-y-1.5">
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-gray-500">Total Steps:</span>
+                              <span className="text-sm text-gray-900">{allStatuses.length}</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-gray-500">Approvals:</span>
+                              <span className="text-sm text-green-600 font-medium">
+                                {allStatuses.filter((s: any) => s.status === 'approved' || s.status === 'completed').length}
+                              </span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm text-gray-500">Rejections:</span>
+                              <span className="text-sm text-red-600 font-medium">
+                                {allStatuses.filter((s: any) => s.status === 'rejected').length}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <h2 className="text-xl font-semibold mb-6 text-center">Approval History</h2>
-                  
+
                   {allStatuses.length > 0 ? (
                     <div className="space-y-4">
-                      {allStatuses.map((status, idx) => (
+                      {allStatuses.map((status: any, idx) => (
                         <div key={idx} className="relative">
                           {/* Timeline connector */}
                           {idx < allStatuses.length - 1 && (
@@ -905,23 +1005,63 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                               <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
                                 status.status === 'approved' ? 'bg-green-100' :
                                 status.status === 'rejected' ? 'bg-red-100' :
+                                status.status === 'completed' || status.status === 'complete' ? 'bg-blue-100' :
                                 'bg-yellow-100'
                               }`}>
-                                {getStatusIcon(status.status)}
+                                {status.status === 'completed' || status.status === 'complete' ? (
+                                  <CheckCircle className="h-5 w-5 text-blue-600" />
+                                ) : (
+                                  getStatusIcon(status.status)
+                                )}
                               </div>
                             </div>
-                            
+
                             {/* Content */}
                             <div className="flex-1 bg-white border rounded-lg p-4">
                               <div className="flex items-center justify-between mb-2">
                                 <h4 className="font-semibold text-gray-900">
                                   {getRoleName(status.role)}
                                 </h4>
-                                <Badge className={`${getStatusColor(status.status)} border uppercase`}>
+                                <Badge className={`${
+                                  status.status === 'completed' || status.status === 'complete'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : getStatusColor(status.status)
+                                } border uppercase`}>
                                   {status.status}
                                 </Badge>
                               </div>
-                              
+
+                              <div className="grid grid-cols-2 gap-3 mb-2">
+                                {(status.decided_by || status.decision_by?.full_name) && (
+                                  <div>
+                                    <p className="text-xs text-gray-500 uppercase">Decided By</p>
+                                    <p className="text-sm font-medium text-gray-900">{status.decided_by || status.decision_by?.full_name}</p>
+                                  </div>
+                                )}
+                                {(status.sender || status.receiver) && (
+                                  <div>
+                                    <p className="text-xs text-gray-500 uppercase">Workflow</p>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-sm text-gray-700">
+                                        {status.sender?.replace(/([A-Z])/g, ' $1').trim()
+                                          .replace('project Manager', 'Project Manager')
+                                          .replace('technical Director', 'Technical Director')}
+                                      </span>
+                                      {status.sender && status.receiver && (
+                                        <>
+                                          <ArrowRight className="h-3 w-3 text-gray-400" />
+                                          <span className="text-sm text-gray-700">
+                                            {status.receiver?.replace(/([A-Z])/g, ' $1').trim()
+                                              .replace('project Manager', 'Project Manager')
+                                              .replace('technical Director', 'Technical Director')}
+                                          </span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
                               {status.comments && (
                                 <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded mt-3">
                                   <div className="flex items-start gap-2">
@@ -933,7 +1073,7 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   </div>
                                 </div>
                               )}
-                              
+
                               {status.rejection_reason && (
                                 <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded mt-3">
                                   <div className="flex items-start gap-2">
@@ -941,13 +1081,18 @@ export const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                     <div>
                                       <p className="text-sm font-medium text-red-900">Rejection Reason</p>
                                       <p className="text-sm text-red-800">{status.rejection_reason}</p>
+                                      {status.reject_category && (
+                                        <Badge className="bg-red-100 text-red-700 mt-2">
+                                          {status.reject_category}
+                                        </Badge>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
                               )}
-                              
+
                               <p className="text-xs text-gray-500 mt-2">
-                                {formatDate(status.date)}
+                                {formatDate(status.timestamp || status.date || status.created_at)}
                               </p>
                             </div>
                           </div>

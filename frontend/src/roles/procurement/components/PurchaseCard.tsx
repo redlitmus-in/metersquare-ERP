@@ -42,7 +42,22 @@ interface Purchase {
   email_sent: boolean;
   status?: string;
   latest_status?: string;
-  approvals?: any[];
+  approvals?: {
+    action?: Array<{
+      role: string;
+      status: string;
+      timestamp: string;
+      decided_by?: string;
+      decided_by_user_id?: number;
+      comments?: string;
+      rejection_reason?: string;
+      reject_category?: string;
+      sender?: string;
+      receiver?: string;
+      type?: string;
+    }>;
+    [key: string]: any;
+  };
   created_at: string;
   status_role?: string;
   status_sender?: string;

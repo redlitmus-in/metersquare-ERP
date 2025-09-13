@@ -598,6 +598,9 @@ export interface PurchaseStatusDetails {
     created_at: string;
     date?: string;
     requested_by?: string;
+    created_by?: string;
+    last_modified_at?: string;
+    last_modified_by?: string;
     project_id?: number;
     email_sent?: boolean;
     file_path?: string | null;
@@ -652,6 +655,28 @@ export interface PurchaseStatusDetails {
     rejection_reason?: string;
     reject_category?: string;
   }>;
+  technical_director_statuses?: Array<{
+    role: string;
+    status: string;
+    date: string;
+    decision_by?: {
+      full_name: string;
+    };
+    comments?: string;
+    rejection_reason?: string;
+    reject_category?: string;
+  }>;
+  accounts_statuses?: Array<{
+    role: string;
+    status: string;
+    date: string;
+    decision_by?: {
+      full_name: string;
+    };
+    comments?: string;
+    rejection_reason?: string;
+    reject_category?: string;
+  }>;
   latest_pm_proc_status: {
     status: string;
     sender?: string;
@@ -659,11 +684,14 @@ export interface PurchaseStatusDetails {
     role?: string;
     comments?: string;
     rejection_reason?: string;
+    reject_category?: string;
   };
   summary: {
     total_procurement_statuses: number;
     total_pm_statuses: number;
     total_estimation_statuses?: number;
+    total_technical_director_statuses?: number;
+    total_accounts_statuses?: number;
     pm_approved_count: number;
   };
 }

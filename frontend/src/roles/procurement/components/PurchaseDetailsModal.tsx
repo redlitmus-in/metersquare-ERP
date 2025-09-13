@@ -1040,6 +1040,87 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               {/* History Tab */}
               <TabsContent value="history" className="flex-1 overflow-y-auto mt-0" style={{ maxHeight: 'calc(90vh - 200px)' }}>
                 <div className="pr-2 pb-4">
+                  {/* Summary Cards - Clean Minimal Design */}
+                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                    <div className="grid grid-cols-3 gap-6">
+                      {/* Purchase Details */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Package className="w-5 h-5 text-blue-600" />
+                          <h3 className="font-semibold text-gray-900">Purchase Details</h3>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Purpose:</span>
+                            <span className="text-gray-900">{purchase?.purpose || 'N/A'}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Location:</span>
+                            <span className="text-gray-900">{purchase?.site_location || 'N/A'}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Project:</span>
+                            <span className="text-gray-900">#{purchase?.project_id || 'N/A'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Request Info */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <User className="w-5 h-5 text-green-600" />
+                          <h3 className="font-semibold text-gray-900">Request Info</h3>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Requested by:</span>
+                            <span className="text-gray-900">{purchase?.requested_by || 'N/A'}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Date:</span>
+                            <span className="text-gray-900">
+                              {purchase?.date
+                                ? new Date(purchase.date).toLocaleDateString('en-AE', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })
+                                : 'N/A'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Timeline Stats */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Activity className="w-5 h-5 text-purple-600" />
+                          <h3 className="font-semibold text-gray-900">Timeline Stats</h3>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Total Steps:</span>
+                            <span className="text-gray-900">
+                              {purchase.approvals?.action?.length || 0}
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Approvals:</span>
+                            <span className="text-green-600 font-medium">
+                              {purchase.approvals?.action?.filter((s: any) => s.status === 'approved' || s.status === 'completed').length || 0}
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Rejections:</span>
+                            <span className="text-red-600 font-medium">
+                              {purchase.approvals?.action?.filter((s: any) => s.status === 'rejected').length || 0}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                 {purchase.approvals?.action && purchase.approvals.action.length > 0 ? (
                   <div className="space-y-4">
                     {purchase.approvals.action.map((approval: any, idx: number) => {

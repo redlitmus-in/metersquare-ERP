@@ -1103,6 +1103,89 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               {mode === 'history' && (
                 <TabsContent value="history" className="mt-0">
                 <div className="p-6">
+                  {/* Summary Cards - Clean Minimal Design */}
+                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                    <div className="grid grid-cols-3 gap-6">
+                      {/* Purchase Details */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Package className="w-5 h-5 text-blue-600" />
+                          <h3 className="font-semibold text-gray-900">Purchase Details</h3>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Purpose:</span>
+                            <span className="text-gray-900">{statusDetails?.purchase_details?.purpose || 'N/A'}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Location:</span>
+                            <span className="text-gray-900">{statusDetails?.purchase_details?.site_location || 'N/A'}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Project:</span>
+                            <span className="text-gray-900">#{statusDetails?.purchase_details?.project_id || 'N/A'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Request Info */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <User className="w-5 h-5 text-green-600" />
+                          <h3 className="font-semibold text-gray-900">Request Info</h3>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Requested by:</span>
+                            <span className="text-gray-900">{statusDetails?.purchase_details?.requested_by || 'N/A'}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Date:</span>
+                            <span className="text-gray-900">
+                              {statusDetails?.purchase_details?.date
+                                ? new Date(statusDetails.purchase_details.date).toLocaleDateString('en-AE', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })
+                                : 'N/A'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Timeline Stats */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Activity className="w-5 h-5 text-purple-600" />
+                          <h3 className="font-semibold text-gray-900">Timeline Stats</h3>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Total Steps:</span>
+                            <span className="text-gray-900">
+                              {(statusDetails?.procurement_statuses?.length || 0) + (statusDetails?.project_manager_statuses?.length || 0)}
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Approvals:</span>
+                            <span className="text-green-600 font-medium">
+                              {[...(statusDetails?.procurement_statuses || []), ...(statusDetails?.project_manager_statuses || [])]
+                                .filter(s => s.status === 'approved' || s.status === 'completed').length}
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-gray-500">Rejections:</span>
+                            <span className="text-red-600 font-medium">
+                              {[...(statusDetails?.procurement_statuses || []), ...(statusDetails?.project_manager_statuses || [])]
+                                .filter(s => s.status === 'rejected').length}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Combined History */}
                   {((statusDetails.procurement_statuses?.length || 0) > 0 || (statusDetails.project_manager_statuses?.length || 0) > 0) ? (
                     <div className="space-y-4">

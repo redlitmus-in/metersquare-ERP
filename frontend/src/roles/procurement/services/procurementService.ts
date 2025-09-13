@@ -30,7 +30,27 @@ export interface Purchase {
   email_sent: boolean;
   created_at: string;
   created_by: string;
-  approvals?: any[];
+  approvals?: {
+    action?: Array<{
+      role: string;
+      status: string;
+      timestamp: string;
+      decided_by?: string;
+      decided_by_user_id?: number;
+      comments?: string;
+      rejection_reason?: string;
+      reject_category?: string;
+      sender?: string;
+      receiver?: string;
+      type?: string;
+    }>;
+    created_at?: string;
+    created_by?: string;
+    id?: number;
+    last_modified_at?: string;
+    last_modified_by?: string;
+    purchase_id?: number;
+  };
   status?: string;
   latest_status?: any;
   // Additional fields from API response
