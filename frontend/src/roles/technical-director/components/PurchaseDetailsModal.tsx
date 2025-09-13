@@ -51,31 +51,35 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
   const fetchPurchaseDetails = async () => {
     if (!purchaseId) return;
-    
+
     try {
       setLoading(true);
       setError(null);
-      
-      const response = showHistoryOnly 
+
+      const response = showHistoryOnly
         ? await technicalDirectorService.getPurchaseHistory(purchaseId)
         : await technicalDirectorService.getPurchaseDetails(purchaseId);
-      
+
+      console.log('API Response:', response); // Debug log
+
       if (response && response.success === false) {
         setError(response.message || 'Failed to load purchase details');
         setPurchaseDetails(null);
       } else {
         if (showHistoryOnly && response.purchase) {
+          const approvals = response.purchase.approvals || {};
+          console.log('Approvals data:', approvals); // Debug log
           setPurchaseDetails({
             purchase: response.purchase,
             materials: response.purchase.materials || [],
-            history: response.purchase.approvals || [],
+            history: approvals, // Pass the entire approvals object
             latest_status: response.latest_status
           });
         } else if (!showHistoryOnly && response.purchase) {
           setPurchaseDetails({
             purchase: response.purchase,
             materials: response.purchase.materials || [],
-            history: response.purchase.approvals || [],
+            history: response.purchase.approvals || {},
             latest_status: response.latest_status
           });
         } else {
@@ -158,7 +162,10 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
   const purchase = purchaseDetails?.purchase || purchaseDetails || {};
   const materials = purchaseDetails?.materials || purchase?.materials || [];
-  const history = purchaseDetails?.history || purchaseDetails?.purchase?.approvals || [];
+  // Handle both old and new history formats
+  const history = purchaseDetails?.history ||
+                  purchaseDetails?.purchase?.approvals ||
+                  (purchase?.approvals ? purchase.approvals : []);
   const latestStatus = purchaseDetails?.latest_status;
 
   // Calculate total cost
@@ -584,74 +591,129 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                 {/* History Tab (for history mode) */}
                 {showHistoryOnly && (
                   <TabsContent value="history" className="mt-0 space-y-4">
-                    {history.length > 0 ? (
-                      history.map((entry: any, index: number) => (
-                        <div key={index} className="bg-white rounded-lg border border-gray-200 p-6">
-                          <div className="flex items-start gap-4">
-                            <div className={`p-3 rounded-full ${
-                              entry.status === 'approved' ? 'bg-green-100' :
-                              entry.status === 'rejected' ? 'bg-red-100' : 'bg-yellow-100'
-                            }`}>
-                              {entry.status === 'approved' ? (
-                                <CheckCircle className="h-5 w-5 text-green-600" />
-                              ) : entry.status === 'rejected' ? (
-                                <XCircle className="h-5 w-5 text-red-600" />
-                              ) : (
-                                <Clock className="h-5 w-5 text-yellow-600" />
-                              )}
-                            </div>
-                            
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <span className="font-semibold text-gray-900 capitalize">
-                                  {entry.role || entry.sender || 'Unknown Role'}
-                                </span>
-                                {getStatusBadge(entry.status)}
+                    {(() => {
+                      // Debug logging
+                      console.log('History data in render:', history);
+
+                      // Extract the action array from history (handle both formats)
+                      const historyActions = history?.action || (Array.isArray(history) ? history : []);
+                      console.log('History actions extracted:', historyActions);
+
+                      if (historyActions && historyActions.length > 0) {
+                        return (
+                          <div className="relative">
+                            {/* Timeline line */}
+                            <div className="absolute left-8 top-8 bottom-8 w-0.5 bg-gray-200"></div>
+
+                            {/* Timeline entries */}
+                            <div className="space-y-6">
+                              {historyActions.map((entry: any, index: number) => (
+                            <div key={index} className="relative flex items-start gap-4">
+                              {/* Timeline dot */}
+                              <div className={`relative z-10 p-3 rounded-full ${
+                                entry.status === 'approved' ? 'bg-green-100' :
+                                entry.status === 'rejected' ? 'bg-red-100' :
+                                entry.status === 'completed' || entry.status === 'complete' ? 'bg-blue-100' :
+                                'bg-yellow-100'
+                              }`}>
+                                {entry.status === 'approved' ? (
+                                  <CheckCircle className="h-5 w-5 text-green-600" />
+                                ) : entry.status === 'rejected' ? (
+                                  <XCircle className="h-5 w-5 text-red-600" />
+                                ) : entry.status === 'completed' || entry.status === 'complete' ? (
+                                  <CheckCircle className="h-5 w-5 text-blue-600" />
+                                ) : (
+                                  <Clock className="h-5 w-5 text-yellow-600" />
+                                )}
                               </div>
-                              
-                              <div className="grid grid-cols-2 gap-4 mt-3">
-                                <div>
-                                  <p className="text-sm text-gray-500">Date & Time</p>
-                                  <p className="text-gray-900">
-                                    {formatDate(entry.decision_date || entry.created_at || entry.date)}
-                                  </p>
+
+                              {/* Content card */}
+                              <div className="flex-1 bg-white rounded-lg border border-gray-200 p-5">
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-semibold text-gray-900">
+                                      {entry.role ? entry.role.replace(/([A-Z])/g, ' $1').trim()
+                                        .replace(/^./, (str: string) => str.toUpperCase())
+                                        .replace('project Manager', 'Project Manager')
+                                        .replace('technical Director', 'Technical Director')
+                                        : 'Unknown Role'}
+                                    </span>
+                                    {getStatusBadge(entry.status)}
+                                  </div>
+                                  <span className="text-sm text-gray-500">
+                                    {formatDate(entry.timestamp)}
+                                  </span>
                                 </div>
-                                {entry.created_by && (
-                                  <div>
-                                    <p className="text-sm text-gray-500">Decision By</p>
-                                    <p className="text-gray-900">{entry.created_by}</p>
+
+                                <div className="grid grid-cols-2 gap-4 mb-3">
+                                  {entry.decided_by && (
+                                    <div>
+                                      <p className="text-xs text-gray-500 uppercase tracking-wider">Decided By</p>
+                                      <p className="text-sm font-medium text-gray-900 mt-1">{entry.decided_by}</p>
+                                    </div>
+                                  )}
+
+                                  {(entry.sender || entry.receiver) && (
+                                    <div>
+                                      <p className="text-xs text-gray-500 uppercase tracking-wider">Workflow</p>
+                                      <div className="flex items-center gap-1 mt-1">
+                                        <span className="text-sm font-medium capitalize">
+                                          {entry.sender?.replace(/([A-Z])/g, ' $1').trim() || ''}
+                                        </span>
+                                        {entry.sender && entry.receiver && (
+                                          <>
+                                            <Send className="h-3 w-3 text-gray-400" />
+                                            <span className="text-sm font-medium capitalize">
+                                              {entry.receiver?.replace(/([A-Z])/g, ' $1').trim() || ''}
+                                            </span>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {entry.comments && (
+                                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                                    <div className="flex items-start gap-2">
+                                      <MessageSquare className="h-4 w-4 text-blue-600 mt-0.5" />
+                                      <p className="text-sm text-blue-900 flex-1">{entry.comments}</p>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {entry.rejection_reason && (
+                                  <div className="mt-3 bg-red-50 rounded-lg p-3 border border-red-100">
+                                    <div className="flex items-start gap-2">
+                                      <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
+                                      <div className="flex-1">
+                                        <p className="text-sm font-medium text-red-900">Rejection Reason</p>
+                                        <p className="text-sm text-red-700 mt-1">{entry.rejection_reason}</p>
+                                        {entry.reject_category && (
+                                          <Badge className="bg-red-100 text-red-700 mt-2">
+                                            {entry.reject_category}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
                                 )}
                               </div>
-                              
-                              {entry.comments && (
-                                <div className="mt-4 bg-blue-50 rounded-lg p-3">
-                                  <p className="text-sm text-blue-700">
-                                    <MessageSquare className="h-4 w-4 inline mr-2" />
-                                    {entry.comments}
-                                  </p>
-                                </div>
-                              )}
-                              
-                              {entry.rejection_reason && (
-                                <div className="mt-4 bg-red-50 rounded-lg p-3">
-                                  <p className="text-sm text-red-700">
-                                    <AlertTriangle className="h-4 w-4 inline mr-2" />
-                                    {entry.rejection_reason}
-                                  </p>
-                                </div>
-                              )}
+                            </div>
+                              ))}
                             </div>
                           </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-12">
-                        <Clock className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900">No History Available</h3>
-                        <p className="text-gray-600 mt-2">No approval history has been recorded.</p>
-                      </div>
-                    )}
+                        );
+                      } else {
+                        return (
+                          <div className="text-center py-12">
+                            <Clock className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-medium text-gray-900">No History Available</h3>
+                            <p className="text-gray-600 mt-2">No approval history has been recorded.</p>
+                          </div>
+                        );
+                      }
+                    })()}
                   </TabsContent>
                 )}
               </div>
