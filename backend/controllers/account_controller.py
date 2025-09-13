@@ -933,7 +933,6 @@ def account_dashboard():
 def account_purchase():
     """
     Get all purchases where accounts is the receiver with their latest status and material details
-    Supports sorting by date (newest/oldest)
     """
     try:
         current_user = g.user
@@ -941,11 +940,6 @@ def account_purchase():
             return jsonify({"error": "Not logged in"}), 401
         
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        
-        # Get sort order from query params (default to newest first)
-        sort_order = request.args.get('sort', 'newest').lower()
-        if sort_order not in ['newest', 'oldest']:
-            sort_order = 'newest'
         
         # For accounts role, only show purchases where accounts is the receiver
         # For technicalDirector, show all purchases
@@ -974,11 +968,6 @@ def account_purchase():
         processed_purchase_ids = set()  # Track processed purchase IDs to avoid duplicates
         
         for purchase_id in purchase_ids:
-            # Skip if we've already processed this purchase ID
-            if purchase_id in processed_purchase_ids:
-                log.warning(f"Purchase {purchase_id} already processed, skipping duplicate")
-                continue
-            
             processed_purchase_ids.add(purchase_id)
             # Get purchase details
             purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
@@ -1091,18 +1080,11 @@ def account_purchase():
                 purchase_data['receiver_latest_status'] = latest_status_info.get('status', 'pending')
 
             purchase_details.append(purchase_data)
-        
-        # Sort purchase details by created_at date
-        purchase_details.sort(
-            key=lambda x: x.get('created_at', ''),
-            reverse=(sort_order == 'newest')
-        )
-        
+                
         return jsonify({
             'success': True,
             'message': 'Account purchase details fetched successfully',
-            'purchase_details': purchase_details,
-            'sort_order': sort_order
+            'purchase_details': purchase_details
         }), 200
 
     except Exception as e:

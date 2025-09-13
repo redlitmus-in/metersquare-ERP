@@ -270,34 +270,6 @@ def pm_approval_workflow():
         log.error(f"Error in pm_approval_workflow: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-def _calculate_material_summary(materials):
-    """Helper: Calculate material summary from materials list"""
-    return {
-        'total_materials': len(materials),
-        'total_quantity': sum(m.quantity or 0 for m in materials),
-        'total_cost': round(sum((m.cost or 0) * (m.quantity or 0) for m in materials), 2),
-        'categories': list({m.category for m in materials if m.category})
-    }
-
-def _format_status_dict(status):
-    """Helper: Format status to dictionary"""
-    if status is None:
-        return None
-        
-    return {
-        'status_id': status.status_id if hasattr(status, 'status_id') else None,
-        'status': status.status if hasattr(status, 'status') else None,
-        'sender': status.sender if hasattr(status, 'sender') else None,
-        'receiver': status.receiver if hasattr(status, 'receiver') else None,
-        'date': status.created_at.isoformat() if hasattr(status, 'created_at') and status.created_at else None,
-        'decision_by_user_id': status.decision_by_user_id if hasattr(status, 'decision_by_user_id') else None,
-        'decision_by': status.created_by if hasattr(status, 'created_by') else None,
-        'comments': status.comments if hasattr(status, 'comments') else None,
-        'rejection_reason': status.rejection_reason if hasattr(status, 'rejection_reason') else None,
-        'reject_category': status.reject_category if hasattr(status, 'reject_category') else None,
-        'decision_date': status.decision_date.isoformat() if hasattr(status, 'decision_date') and status.decision_date else None
-    }
-
 def _get_purchase_materials(purchase):
     """Get materials for a purchase and convert them to serializable dictionaries"""
     if not purchase or not purchase.material_ids:
@@ -324,78 +296,6 @@ def _get_purchase_materials(purchase):
         'created_at': mat.created_at.isoformat() if hasattr(mat, 'created_at') and mat.created_at else None,
         'updated_at': mat.updated_at.isoformat() if hasattr(mat, 'updated_at') and mat.updated_at else None
     } for mat in materials]
-
-def _determine_workflow_status(latest_status, pm_status):
-    """Helper: Determine current workflow status"""
-    # Handle case where both statuses are None
-    if not latest_status and not pm_status:
-        return 'pending'
-        
-    # Check for estimation rejection
-    if latest_status and latest_status.sender == 'estimation' and latest_status.receiver == 'projectManager' and latest_status.status == 'rejected':
-        return None  # Skip this item
-    
-    # If the latest status is procurement sending to PM, it's pending PM review
-    if latest_status and latest_status.sender == 'procurement' and latest_status.receiver == 'projectManager':
-        return 'pending_pm_review'
-    
-    # Handle PM status if exists
-    if pm_status:
-        return 'pm_approved' if pm_status.status == 'approved' else 'pm_rejected'
-    
-    # Handle other statuses if latest_status exists
-    if latest_status:
-        if latest_status.sender == 'estimation':
-            return 'estimation_review'
-        elif latest_status.sender == 'technicalDirector':
-            return 'technical_director_review'
-        elif latest_status.sender == 'accounts':
-            return 'accounts_processing'
-    
-    # Default fallback status
-    return 'pending'
-
-def _build_purchase_item(purchase, material_summary, current_workflow_status, procurement_approved_status, pm_status, status_history, latest_status_dt):
-    """Helper: Build purchase item dictionary"""
-    return {
-        'purchase_id': purchase.purchase_id,
-        'site_location': purchase.site_location,
-        'purpose': purchase.purpose,
-        'date': purchase.date.isoformat() if hasattr(purchase.date, 'isoformat') else purchase.date,
-        'email_sent': purchase.email_sent,
-        'created_at': purchase.created_at.isoformat() if hasattr(purchase.created_at, 'isoformat') else purchase.created_at,
-        'materials_summary': material_summary,
-        'current_workflow_status': current_workflow_status,
-        'procurement_status': procurement_approved_status.status if procurement_approved_status else 'pending',
-        'procurement_status_date': procurement_approved_status.created_at.isoformat() if hasattr(procurement_approved_status, 'created_at') and procurement_approved_status.created_at else None,
-        'procurement_comments': procurement_approved_status.comments if procurement_approved_status else None,
-        'pm_status': pm_status.status if pm_status else 'pending',
-        'pm_status_date': pm_status.created_at.isoformat() if hasattr(pm_status, 'created_at') and pm_status.created_at else None,
-        'pm_comments': pm_status.comments if pm_status else None,
-        'pm_rejection_reason': pm_status.rejection_reason if pm_status else None,
-        'status_history': status_history,
-        'latest_status_date': latest_status_dt.isoformat() if hasattr(latest_status_dt, 'isoformat') and latest_status_dt else None
-    }
-
-def _ensure_uniqueness_by_purchase_id(items):
-    """Helper: Ensure uniqueness by purchase_id, keep most recent"""
-    if not items:
-        return items
-    
-    def _parse_dt_for_item(item):
-        dt = item.get('latest_status_date') or item.get('procurement_status_date') or item.get('created_at')
-        try:
-            return datetime.fromisoformat(dt) if dt else datetime.min
-        except Exception:
-            return datetime.min
-
-    unique_by_purchase = {}
-    for item in items:
-        pid = item.get('purchase_id')
-        if pid not in unique_by_purchase or _parse_dt_for_item(item) > _parse_dt_for_item(unique_by_purchase[pid]):
-            unique_by_purchase[pid] = item
-    
-    return [item for item in unique_by_purchase.values() if item.get('current_workflow_status') != 'estimation_rejected_to_pm']
 
 def _process_estimation_rejections(estimation_pm_rejection_statuses):
     """Helper: Process estimation PM rejections"""
@@ -553,13 +453,6 @@ def get_procurement_approved_purchases():
                 current_workflow_status = 'pending'
                 pm_status_value = 'pending'
             
-            # Format status history
-            status_history = [
-                _format_status_dict(s) 
-                for s in status_list 
-                if _format_status_dict(s) is not None
-            ]
-            
             # Build the purchase item
             purchase_item = {
                 'purchase_id': purchase_id,
@@ -567,8 +460,6 @@ def get_procurement_approved_purchases():
                 'site_location': purchase.site_location,
                 'purpose': purchase.purpose,
                 'current_workflow_status': current_workflow_status,
-                'status_history': status_history,
-                'latest_status': _format_status_dict(latest_status) if latest_status else None,
                 'pm_status': pm_status_value,  # Use the determined pm_status_value
                 'created_at': purchase.created_at.isoformat() if hasattr(purchase.created_at, 'isoformat') else purchase.created_at,
                 'last_modified_at': purchase.last_modified_at.isoformat() if hasattr(purchase.last_modified_at, 'isoformat') else purchase.last_modified_at
@@ -590,18 +481,10 @@ def get_procurement_approved_purchases():
                 'success': True,
                 **result[0]
             }), 200
-        # estimation_pm_rejections = 10    
         return jsonify({
             'total_approved_procurement_purchases': len(result),
-            # len(approved_procurement_purchases),
-            # 'non_approval_project_manager_purchases': 12,
-            # total_purchase - len(approved_procurement_purchases),
-            # 'estimation_pm_rejections_count': 14,
-            # len(estimation_pm_rejections),
             'approved_procurement_purchases': result,
-            # approved_procurement_purchases,
             'estimation_pm_rejections': estimation_pm_rejections,
-            # estimation_pm_rejections,
             'success': True,
         }), 200
 

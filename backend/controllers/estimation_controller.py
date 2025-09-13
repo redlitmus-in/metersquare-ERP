@@ -791,14 +791,7 @@ def get_all_estimation_purchase_request():
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
         if not role or role.role != 'estimation':
             return jsonify({'error': 'Only Estimation team can access purchase requests'}), 403
-        # Debug: Check all statuses first
-        debug_all_statuses = PurchaseStatus.query.all()
-        print(f"Total statuses in DB: {len(debug_all_statuses)}")
-        for status in debug_all_statuses:
-            print(f"ID: {status.status_id}, Role: {status.role}, Sender: {status.sender}, Receiver: {status.receiver}, Active: {status.is_active}")
-        
-        # Get all status records excluding 'siteSupervisor' and 'procurement' roles
-        # and include any records where estimation is involved or where the role is not in excluded roles
+
         all_statuses = PurchaseStatus.query.filter(
             and_(
                 PurchaseStatus.is_active == True,
@@ -806,12 +799,6 @@ def get_all_estimation_purchase_request():
             )
         ).order_by(PurchaseStatus.created_at.desc()).all()
         
-        print(f"Filtered statuses count: {len(all_statuses)}")
-        for status in all_statuses:
-            print(f"Filtered - ID: {status.status_id}, Role: {status.role}, Sender: {status.sender}, Receiver: {status.receiver}")
-        
-        # Track unique purchase_ids and their statuses
-        unique_purchase_ids = set()
         latest_overall_status = {}  # Latest status record for display
         estimation_decisions = {}  # Track estimation team's actual decisions
         pm_decisions = {}  # Track PM's decisions
