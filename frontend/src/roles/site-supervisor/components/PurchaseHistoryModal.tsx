@@ -40,17 +40,28 @@ interface PurchaseHistoryModalProps {
   purchaseId: number | null;
 }
 
-interface ApprovalStep {
-  status_id: number;
+interface ApprovalAction {
   status: string;
   role: string;
   sender: string;
   receiver: string;
-  created_by: string;
+  decided_by: string;
+  decided_by_user_id: number;
   comments: string;
+  timestamp: string;
+  rejection_reason?: string | null;
+  reject_category?: string | null;
+  type: string;
+}
+
+interface Approvals {
+  id: number;
+  purchase_id: number;
+  created_by: string;
   created_at: string;
-  decision_date: string;
-  rejection_reason?: string;
+  last_modified_by: string;
+  last_modified_at: string;
+  action: ApprovalAction[];
 }
 
 interface Purchase {
@@ -60,7 +71,7 @@ interface Purchase {
   site_location: string;
   project_id: number;
   date: string;
-  approvals: ApprovalStep[];
+  approvals?: Approvals;
 }
 
 const PurchaseHistoryModal: React.FC<PurchaseHistoryModalProps> = ({
@@ -234,9 +245,9 @@ const PurchaseHistoryModal: React.FC<PurchaseHistoryModalProps> = ({
                         Timeline Stats
                       </h3>
                       <div className="space-y-2 text-sm">
-                        <p><span className="text-gray-500 font-medium">Total Steps:</span> <span className="text-gray-900 font-semibold">{purchase.approvals?.length || 0}</span></p>
-                        <p><span className="text-gray-500 font-medium">Approvals:</span> <span className="text-green-600 font-semibold">{purchase.approvals?.filter(a => a.status === 'approved').length || 0}</span></p>
-                        <p><span className="text-gray-500 font-medium">Rejections:</span> <span className="text-red-600 font-semibold">{purchase.approvals?.filter(a => a.status === 'rejected').length || 0}</span></p>
+                        <p><span className="text-gray-500 font-medium">Total Steps:</span> <span className="text-gray-900 font-semibold">{purchase.approvals?.action?.length || 0}</span></p>
+                        <p><span className="text-gray-500 font-medium">Approvals:</span> <span className="text-green-600 font-semibold">{purchase.approvals?.action?.filter(a => a.status === 'approved').length || 0}</span></p>
+                        <p><span className="text-gray-500 font-medium">Rejections:</span> <span className="text-red-600 font-semibold">{purchase.approvals?.action?.filter(a => a.status === 'rejected').length || 0}</span></p>
                       </div>
                     </div>
                   </div>
@@ -251,24 +262,24 @@ const PurchaseHistoryModal: React.FC<PurchaseHistoryModalProps> = ({
                   </div>
                   Approval Timeline
                   <Badge className="bg-blue-100 text-blue-800">
-                    {purchase.approvals?.length || 0} Steps
+                    {purchase.approvals?.action?.length || 0} Steps
                   </Badge>
                 </h3>
 
-                {purchase.approvals && purchase.approvals.length > 0 ? (
+                {purchase.approvals?.action && purchase.approvals.action.length > 0 ? (
                   <div className="space-y-4">
-                    {purchase.approvals
-                      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                    {purchase.approvals.action
+                      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
                       .map((approval, idx) => (
                         <motion.div
-                          key={approval.status_id}
+                          key={`${idx}-${approval.timestamp}`}
                           initial={{ opacity: 0, x: -30 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: idx * 0.1 }}
                           className="relative"
                         >
                           {/* Timeline connector */}
-                          {idx < purchase.approvals!.length - 1 && (
+                          {idx < purchase.approvals!.action.length - 1 && (
                             <div className="absolute left-6 top-16 w-0.5 h-16 bg-gray-200 z-0"></div>
                           )}
                           
@@ -283,8 +294,8 @@ const PurchaseHistoryModal: React.FC<PurchaseHistoryModalProps> = ({
                                     <h4 className="font-bold text-gray-900 text-lg">
                                       {formatRole(approval.role)}
                                     </h4>
-                                    <p className="text-sm text-gray-600 font-medium">{approval.created_by}</p>
-                                    <p className="text-xs text-gray-500 mt-1">Step #{idx + 1} • ID: {approval.status_id}</p>
+                                    <p className="text-sm text-gray-600 font-medium">{approval.decided_by}</p>
+                                    <p className="text-xs text-gray-500 mt-1">Step #{idx + 1}</p>
                                   </div>
                                 </div>
                                 <Badge className={`${getStatusColor(approval.status)} border text-sm py-1 px-3`}>
@@ -335,6 +346,11 @@ const PurchaseHistoryModal: React.FC<PurchaseHistoryModalProps> = ({
                                       <div>
                                         <p className="text-sm font-semibold text-red-800 mb-1">Rejection Reason:</p>
                                         <p className="text-sm text-red-700 leading-relaxed">{approval.rejection_reason}</p>
+                                        {approval.reject_category && (
+                                          <Badge className="mt-2 bg-red-100 text-red-800 border-red-200">
+                                            Category: {approval.reject_category.toUpperCase()}
+                                          </Badge>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -345,12 +361,14 @@ const PurchaseHistoryModal: React.FC<PurchaseHistoryModalProps> = ({
                               <div className="flex items-center justify-between text-xs text-gray-500 pt-3 border-t border-gray-100">
                                 <div className="flex items-center gap-1">
                                   <Calendar className="h-3 w-3" />
-                                  <span>Created: {format(new Date(approval.created_at), 'MMM dd, yyyy HH:mm:ss')}</span>
+                                  <span>Action Time: {format(new Date(approval.timestamp), 'MMM dd, yyyy HH:mm:ss')}</span>
                                 </div>
-                                <div className="flex items-center gap-1">
-                                  <Clock className="h-3 w-3" />
-                                  <span>Decision: {format(new Date(approval.decision_date), 'MMM dd, yyyy HH:mm:ss')}</span>
-                                </div>
+                                {approval.type && (
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    <span>Type: {approval.type.replace(/_/g, ' ')}</span>
+                                  </div>
+                                )}
                               </div>
                             </CardContent>
                           </Card>

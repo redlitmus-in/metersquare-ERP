@@ -585,7 +585,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                       </Card>
 
                       {/* Approval Status */}
-                      {purchase.approvals && purchase.approvals.length > 0 && (
+                      {purchase.approvals?.action && purchase.approvals.action.length > 0 && (
                         <Card className="border-0 shadow-sm">
                           <CardContent className="p-6">
                             <div className="flex items-center gap-2 mb-4">
@@ -595,7 +595,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                               <h3 className="text-lg font-semibold text-gray-900">Current Approval Status</h3>
                             </div>
                             <div className="space-y-3">
-                              {purchase.approvals.slice(-1).map((approval: any, idx: number) => (
+                              {purchase.approvals.action.slice(-1).map((approval: any, idx: number) => (
                                 <motion.div 
                                   key={idx} 
                                   initial={{ opacity: 0, x: -20 }}
@@ -610,14 +610,14 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                       <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-3">
                                           <span className="font-semibold text-gray-900">
-                                            {approval.reviewer_role?.replace(/([A-Z])/g, ' $1').trim()}
+                                            {approval.role?.replace(/([A-Z])/g, ' $1').trim()}
                                           </span>
                                           <Badge className={`${getStatusColor(approval.status)} border`}>
                                             {formatStatusText(approval.status)}
                                           </Badge>
                                         </div>
                                         <span className="text-xs text-gray-500">
-                                          {new Date(approval.created_at).toLocaleString()}
+                                          {new Date(approval.timestamp).toLocaleString()}
                                         </span>
                                       </div>
                                       {approval.comments && (
@@ -1040,12 +1040,12 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               {/* History Tab */}
               <TabsContent value="history" className="flex-1 overflow-y-auto mt-0" style={{ maxHeight: 'calc(90vh - 200px)' }}>
                 <div className="pr-2 pb-4">
-                {purchase.approvals && purchase.approvals.length > 0 ? (
+                {purchase.approvals?.action && purchase.approvals.action.length > 0 ? (
                   <div className="space-y-4">
-                    {purchase.approvals.map((approval: any, idx: number) => {
+                    {purchase.approvals.action.map((approval: any, idx: number) => {
                       // Format role name properly from the role field
                       const getRoleName = (approval: any) => {
-                        const role = approval.role || approval.reviewer_role;
+                        const role = approval.role;
                         if (!role) return 'System';
                         
                         // Map role codes to display names
@@ -1102,7 +1102,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
                       return (
                         <div key={idx} className="relative">
-                          {purchase.approvals && idx < purchase.approvals.length - 1 && (
+                          {purchase.approvals?.action && idx < purchase.approvals.action.length - 1 && (
                             <div className="absolute left-5 top-10 bottom-0 w-0.5 bg-gray-200" />
                           )}
                           <div className="flex gap-4">
@@ -1122,7 +1122,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                     {getRoleName(approval)}
                                   </h4>
                                   <p className="text-sm text-gray-500">
-                                    {approval.created_by || approval.reviewer_name || 'System'}
+                                    {approval.decided_by || 'System'}
                                   </p>
                                 </div>
                                 <Badge className={`${getStatusColor(approval.status)} border`}>
@@ -1133,7 +1133,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                 {getMessage(approval)}
                               </p>
                               <p className="text-xs text-gray-500 mt-2">
-                                {new Date(approval.created_at).toLocaleString()}
+                                {new Date(approval.timestamp).toLocaleString()}
                               </p>
                             </div>
                           </div>

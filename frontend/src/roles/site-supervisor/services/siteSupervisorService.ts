@@ -83,13 +83,12 @@ class SiteSupervisorService {
   }
 
   // Get purchase history with status tracking
-  async getPurchaseHistory(purchaseId: number): Promise<{purchase: Purchase, statuses: PurchaseStatus[]}> {
+  async getPurchaseHistory(purchaseId: number): Promise<{purchase: Purchase}> {
     try {
       const response = await apiClient.get(`/purchase_history/${purchaseId}`);
       if (response.data.success) {
         return {
-          purchase: response.data.purchase,
-          statuses: response.data.purchase.approvals || []
+          purchase: response.data.purchase
         };
       }
       throw new Error(response.data.message || 'Failed to fetch purchase history');

@@ -113,13 +113,12 @@ class ProcurementService {
   }
 
   // Get purchase history with status tracking
-  async getPurchaseHistory(purchaseId: number): Promise<{purchase: Purchase, statuses: any[], latest_status?: any}> {
+  async getPurchaseHistory(purchaseId: number): Promise<{purchase: Purchase, latest_status?: any}> {
     try {
       const response = await apiClient.get(`/purchase_history/${purchaseId}`);
       if (response.data.success) {
         return {
           purchase: response.data.purchase,
-          statuses: response.data.purchase.approvals || [],
           latest_status: response.data.latest_status
         };
       }

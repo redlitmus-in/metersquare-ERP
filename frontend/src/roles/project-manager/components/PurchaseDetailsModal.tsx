@@ -108,13 +108,13 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               total_materials: purchase.materials?.length || 0,
               total_quantity: purchase.materials?.reduce((sum: number, m: any) => sum + (m.quantity || 0), 0) || 0,
               total_cost: purchase.materials?.reduce((sum: number, m: any) => sum + ((m.quantity || 0) * (m.cost || 0)), 0) || 0,
-              categories: [...new Set(purchase.materials?.map((m: any) => m.category).filter(Boolean) || [])],
+              categories: [...new Set(purchase.materials?.map((m: any) => m.category).filter(Boolean) || [])] as string[],
               materials: purchase.materials || []
             }
           },
-          procurement_statuses: purchase.approvals?.filter((a: any) => a.role === 'procurement') || [],
-          project_manager_statuses: purchase.approvals?.filter((a: any) => a.role === 'projectManager') || [],
-          latest_pm_proc_status: purchase.latest_status || purchase.approvals?.[purchase.approvals.length - 1] || {
+          procurement_statuses: purchase.approvals?.action?.filter((a: any) => a.role === 'procurement') || [],
+          project_manager_statuses: purchase.approvals?.action?.filter((a: any) => a.role === 'projectManager') || [],
+          latest_pm_proc_status: purchase.latest_status || purchase.approvals?.action?.[purchase.approvals?.action?.length - 1] || {
             status: purchase.status || 'pending',
             role: null,
             date: null,
@@ -126,13 +126,13 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
             last_modified_at: null
           },
           summary: {
-            total_procurement_statuses: purchase.approvals?.filter((a: any) => a.role === 'procurement').length || 0,
-            total_pm_statuses: purchase.approvals?.filter((a: any) => a.role === 'projectManager').length || 0,
-            pm_approved_count: purchase.approvals?.filter((a: any) => a.role === 'projectManager' && a.status === 'approved').length || 0,
-            pm_rejected_count: purchase.approvals?.filter((a: any) => a.role === 'projectManager' && a.status === 'rejected').length || 0,
+            total_procurement_statuses: purchase.approvals?.action?.filter((a: any) => a.role === 'procurement').length || 0,
+            total_pm_statuses: purchase.approvals?.action?.filter((a: any) => a.role === 'projectManager').length || 0,
+            pm_approved_count: purchase.approvals?.action?.filter((a: any) => a.role === 'projectManager' && a.status === 'approved').length || 0,
+            pm_rejected_count: purchase.approvals?.action?.filter((a: any) => a.role === 'projectManager' && a.status === 'rejected').length || 0,
             pm_pending_count: 0,
-            procurement_approved_count: purchase.approvals?.filter((a: any) => a.role === 'procurement' && a.status === 'approved').length || 0,
-            procurement_rejected_count: purchase.approvals?.filter((a: any) => a.role === 'procurement' && a.status === 'rejected').length || 0,
+            procurement_approved_count: purchase.approvals?.action?.filter((a: any) => a.role === 'procurement' && a.status === 'approved').length || 0,
+            procurement_rejected_count: purchase.approvals?.action?.filter((a: any) => a.role === 'procurement' && a.status === 'rejected').length || 0,
             procurement_pending_count: 0
           }
         };
@@ -161,7 +161,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               total_materials: purchase.materials?.length || 0,
               total_quantity: purchase.materials?.reduce((sum: number, m: any) => sum + (m.quantity || 0), 0) || 0,
               total_cost: purchase.materials?.reduce((sum: number, m: any) => sum + ((m.quantity || 0) * (m.cost || 0)), 0) || 0,
-              categories: [...new Set(purchase.materials?.map((m: any) => m.category).filter(Boolean) || [])],
+              categories: [...new Set(purchase.materials?.map((m: any) => m.category).filter(Boolean) || [])] as string[],
               materials: purchase.materials || []
             }
           },
@@ -900,7 +900,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                       {(statusDetails.latest_pm_proc_status.date || statusDetails.latest_pm_proc_status.decision_date || statusDetails.latest_pm_proc_status.created_at) && (
                                         <div>
                                           <p className="text-xs text-blue-600">Decision Date</p>
-                                          <p className="font-semibold text-blue-900">{formatDate(statusDetails.latest_pm_proc_status.date || statusDetails.latest_pm_proc_status.decision_date || statusDetails.latest_pm_proc_status.created_at)}</p>
+                                          <p className="font-semibold text-blue-900">{formatDate(statusDetails.latest_pm_proc_status.date || statusDetails.latest_pm_proc_status.decision_date || statusDetails.latest_pm_proc_status.created_at || null)}</p>
                                         </div>
                                       )}
                                     </div>
@@ -1107,7 +1107,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                   {((statusDetails.procurement_statuses?.length || 0) > 0 || (statusDetails.project_manager_statuses?.length || 0) > 0) ? (
                     <div className="space-y-4">
                       {[...(statusDetails.procurement_statuses || []), ...(statusDetails.project_manager_statuses || [])]
-                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                        .sort((a, b) => new Date(b.timestamp || b.date).getTime() - new Date(a.timestamp || a.date).getTime())
                         .map((status, idx) => {
                           const getRoleName = (role: string) => {
                             const roleMap: { [key: string]: string } = {
@@ -1153,9 +1153,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                       <h4 className="font-medium text-gray-900">
                                         {getRoleName(status.role)}
                                       </h4>
-                                      {status.decision_by && (
+                                      {(status.decided_by || status.decision_by) && (
                                         <p className="text-sm text-gray-500">
-                                          {status.decision_by.full_name}
+                                          {status.decided_by || (typeof status.decision_by === 'object' ? status.decision_by.full_name : status.decision_by)}
                                         </p>
                                       )}
                                     </div>
@@ -1185,7 +1185,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   )}
                                   
                                   <p className="text-xs text-gray-500 mt-2">
-                                    {formatDate(status.date)}
+                                    {formatDate(status.timestamp || status.date)}
                                   </p>
                                 </div>
                               </div>

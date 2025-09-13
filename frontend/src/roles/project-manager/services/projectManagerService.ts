@@ -117,6 +117,8 @@ export interface PurchaseStatusDetails {
     status: string;
     role: string;
     date: string;
+    timestamp?: string;
+    decided_by?: string;
     decision_by: {
       user_id: number;
       full_name: string;
@@ -130,6 +132,8 @@ export interface PurchaseStatusDetails {
     status: string;
     role: string;
     date: string;
+    timestamp?: string;
+    decided_by?: string;
     decision_by: {
       user_id: number;
       full_name: string;
@@ -344,13 +348,12 @@ class ProjectManagerService {
   /**
    * Get purchase history with status tracking
    */
-  async getPurchaseHistory(purchaseId: number): Promise<{purchase: any, statuses: any[]}> {
+  async getPurchaseHistory(purchaseId: number): Promise<{purchase: any}> {
     try {
       const response = await apiClient.get(`/purchase_history/${purchaseId}`);
       if (response.data.success) {
         return {
-          purchase: response.data.purchase,
-          statuses: response.data.purchase.approvals || []
+          purchase: response.data.purchase
         };
       }
       throw new Error(response.data.message || 'Failed to fetch purchase history');
@@ -394,31 +397,31 @@ class ProjectManagerService {
       const thisYear = now.getFullYear();
 
       // Filter purchases by current month
-      const thisMonthPurchases = purchases.filter(p => {
+      const thisMonthPurchases = purchases.filter((p: any) => {
         const purchaseDate = new Date(p.created_at);
         return purchaseDate.getMonth() === thisMonth && 
                purchaseDate.getFullYear() === thisYear;
       });
 
       // Count pending approvals (where pm_status is pending or null)
-      const pendingApprovals = purchases.filter(p => 
+      const pendingApprovals = purchases.filter((p: any) => 
         p.pm_status === 'pending' || p.pm_status === null
       ).length;
 
       // Count approved/rejected this month
-      const approvedThisMonth = thisMonthPurchases.filter(p => 
+      const approvedThisMonth = thisMonthPurchases.filter((p: any) => 
         p.pm_status === 'approved'
       ).length;
 
-      const rejectedThisMonth = thisMonthPurchases.filter(p => 
+      const rejectedThisMonth = thisMonthPurchases.filter((p: any) => 
         p.pm_status === 'rejected'
       ).length;
 
       // Calculate category breakdown
       const categoryMap = new Map<string, { count: number; value: number }>();
-      purchases.forEach(p => {
+      purchases.forEach((p: any) => {
         if (p.materials_summary && p.materials_summary.categories) {
-          p.materials_summary.categories.forEach(category => {
+          p.materials_summary.categories.forEach((category: any) => {
             const existing = categoryMap.get(category) || { count: 0, value: 0 };
             categoryMap.set(category, {
               count: existing.count + 1,
@@ -466,29 +469,29 @@ class ProjectManagerService {
         const thisMonth = now.getMonth();
         const thisYear = now.getFullYear();
         
-        const thisMonthPurchases = purchases.filter(p => {
+        const thisMonthPurchases = purchases.filter((p: any) => {
           const purchaseDate = new Date(p.created_at);
           return purchaseDate.getMonth() === thisMonth && 
                  purchaseDate.getFullYear() === thisYear;
         });
         
-        const pendingApprovals = purchases.filter(p => 
+        const pendingApprovals = purchases.filter((p: any) => 
           p.pm_status === 'pending' || p.pm_status === null
         ).length;
         
-        const approvedThisMonth = thisMonthPurchases.filter(p => 
+        const approvedThisMonth = thisMonthPurchases.filter((p: any) => 
           p.pm_status === 'approved'
         ).length;
         
-        const rejectedThisMonth = thisMonthPurchases.filter(p => 
+        const rejectedThisMonth = thisMonthPurchases.filter((p: any) => 
           p.pm_status === 'rejected'
         ).length;
         
         // Calculate category breakdown
         const categoryMap = new Map<string, { count: number; value: number }>();
-        purchases.forEach(p => {
+        purchases.forEach((p: any) => {
           if (p.materials_summary && p.materials_summary.categories) {
-            p.materials_summary.categories.forEach(category => {
+            p.materials_summary.categories.forEach((category: any) => {
               const existing = categoryMap.get(category) || { count: 0, value: 0 };
               categoryMap.set(category, {
                 count: existing.count + 1,

@@ -13,8 +13,7 @@ import {
   Mail,
   CheckCircle,
   Clock,
-  XCircle,
-  Info
+  XCircle
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,10 +48,10 @@ interface Purchase {
     status: string;
     sender_latest_status: string;
     receiver_latest_status: string;
-    comments?: string;
     created_by?: string;
     sender?: string;
     receiver?: string;
+    decision_date?: string;
   };
 }
 
@@ -323,29 +322,6 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
             )}
           </div>
 
-          {/* Status Details */}
-          {purchase.latest_status && (purchase.latest_status.rejection_reason || purchase.latest_status.comments) && (
-            <div className="mt-2 p-2 rounded-lg bg-gray-50 border border-gray-100">
-              {purchase.latest_status.rejection_reason && (
-                <div className="flex items-start gap-2 mb-1">
-                  <XCircle className="w-3 h-3 text-red-500 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs text-red-600 font-medium">Rejection Reason:</p>
-                    <p className="text-xs text-red-700">{purchase.latest_status.rejection_reason}</p>
-                  </div>
-                </div>
-              )}
-              {purchase.latest_status.comments && !purchase.latest_status.rejection_reason && (
-                <div className="flex items-start gap-2">
-                  <Info className="w-3 h-3 text-blue-500 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs text-blue-600 font-medium">Latest Comment:</p>
-                    <p className="text-xs text-blue-700">{purchase.latest_status.comments}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Footer */}
           <div className="mt-2 pt-2 border-t border-gray-100">

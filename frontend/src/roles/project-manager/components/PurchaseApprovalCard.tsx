@@ -217,22 +217,6 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
             </div>
 
 
-            {/* Rejection Alert for Estimation Rejected Tab */}
-            {rejectedByEstimation && isEstimationRejected && (
-              <div className="mb-2 p-1.5 bg-orange-50 rounded border border-orange-200">
-                <div className="flex items-start gap-0.5">
-                  <AlertTriangle className="h-2.5 w-2.5 text-orange-600 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-[10px] font-medium text-orange-800">Est. Rejected</p>
-                    {(purchase.rejected_status?.rejection_reason || purchase.estimation_rejection_reason) && (
-                      <p className="text-[10px] text-orange-700 mt-0.5 line-clamp-1">
-                        {purchase.rejected_status?.rejection_reason || purchase.estimation_rejection_reason}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Action Buttons - Push to bottom */}
             <div className="space-y-1.5 mt-auto pt-1">
