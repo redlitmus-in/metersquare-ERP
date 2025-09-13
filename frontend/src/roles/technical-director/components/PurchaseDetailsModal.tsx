@@ -220,61 +220,63 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
           </div>
         ) : purchaseDetails ? (
           <div className="flex-1 overflow-hidden">
-            {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-3 p-4">
-              <Card className="bg-blue-50 border-blue-200 p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-blue-600 font-medium">Total Amount</p>
-                    <p className="text-lg font-bold text-blue-900 mt-0.5">
-                      {formatCurrency(totalCost)}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <DollarSign className="h-5 w-5 text-blue-600" />
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="bg-purple-50 border-purple-200 p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-purple-600 font-medium">Materials</p>
-                    <p className="text-lg font-bold text-purple-900 mt-0.5">
-                      {materials.length} Items
-                    </p>
-                  </div>
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <Package className="h-5 w-5 text-purple-600" />
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="bg-green-50 border-green-200 p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-green-600 font-medium">Email Status</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {purchase.email_sent ? (
-                        <>
-                          <Badge className="bg-green-100 text-green-700 border-green-300 text-xs">
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Sent
-                          </Badge>
-                        </>
-                      ) : (
-                        <Badge className="bg-gray-100 text-gray-700 border-gray-300 text-xs">
-                          Not Sent
-                        </Badge>
-                      )}
+            {/* Summary Cards - Only show when not in history mode */}
+            {!showHistoryOnly && (
+              <div className="grid grid-cols-3 gap-3 p-4">
+                <Card className="bg-blue-50 border-blue-200 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-blue-600 font-medium">Total Amount</p>
+                      <p className="text-lg font-bold text-blue-900 mt-0.5">
+                        {formatCurrency(totalCost)}
+                      </p>
+                    </div>
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <DollarSign className="h-5 w-5 text-blue-600" />
                     </div>
                   </div>
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <Mail className="h-5 w-5 text-green-600" />
+                </Card>
+
+                <Card className="bg-purple-50 border-purple-200 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-purple-600 font-medium">Materials</p>
+                      <p className="text-lg font-bold text-purple-900 mt-0.5">
+                        {materials.length} Items
+                      </p>
+                    </div>
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <Package className="h-5 w-5 text-purple-600" />
+                    </div>
                   </div>
-                </div>
-              </Card>
-            </div>
+                </Card>
+
+                <Card className="bg-green-50 border-green-200 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-green-600 font-medium">Email Status</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {purchase.email_sent ? (
+                          <>
+                            <Badge className="bg-green-100 text-green-700 border-green-300 text-xs">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Sent
+                            </Badge>
+                          </>
+                        ) : (
+                          <Badge className="bg-gray-100 text-gray-700 border-gray-300 text-xs">
+                            Not Sent
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <Mail className="h-5 w-5 text-green-600" />
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
@@ -591,6 +593,101 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                 {/* History Tab (for history mode) */}
                 {showHistoryOnly && (
                   <TabsContent value="history" className="mt-0 space-y-4">
+                    {/* Simple Details Section */}
+                    <div className="bg-gray-50 rounded-lg p-6 mb-6">
+                      <div className="grid grid-cols-3 gap-8">
+                        {/* Purchase Details */}
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Package className="h-5 w-5 text-blue-600" />
+                            <h3 className="font-semibold text-gray-900">Purchase Details</h3>
+                          </div>
+                          <div className="space-y-2">
+                            <div>
+                              <span className="text-sm text-gray-500">Purpose: </span>
+                              <span className="text-sm font-medium text-gray-900">{purchase.purpose || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-sm text-gray-500">Location: </span>
+                              <span className="text-sm font-medium text-gray-900">{purchase.site_location || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-sm text-gray-500">Project: </span>
+                              <span className="text-sm font-medium text-gray-900">#{purchase.project_id || 'N/A'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Request Info */}
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 mb-3">
+                            <User className="h-5 w-5 text-green-600" />
+                            <h3 className="font-semibold text-gray-900">Request Info</h3>
+                          </div>
+                          <div className="space-y-2">
+                            <div>
+                              <span className="text-sm text-gray-500">Requested by: </span>
+                              <span className="text-sm font-medium text-gray-900">{purchase.requested_by || purchase.created_by || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-sm text-gray-500">Date: </span>
+                              <span className="text-sm font-medium text-gray-900">
+                                {purchase.date || purchase.created_at ?
+                                  new Date(purchase.date || purchase.created_at).toLocaleDateString('en-US', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric'
+                                  }) : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-sm text-gray-500">TD Status: </span>
+                              <span className="text-sm font-medium text-gray-900 capitalize">
+                                {purchase.technical_director_status || purchase.td_status || 'Pending'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Timeline Stats */}
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Activity className="h-5 w-5 text-purple-600" />
+                            <h3 className="font-semibold text-gray-900">Timeline Stats</h3>
+                          </div>
+                          <div className="space-y-2">
+                            <div>
+                              <span className="text-sm text-gray-500">Total Steps: </span>
+                              <span className="text-sm font-medium text-gray-900">
+                                {(() => {
+                                  const historyActions = history?.action || (Array.isArray(history) ? history : []);
+                                  return historyActions.length || 0;
+                                })()}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-sm text-gray-500">Approvals: </span>
+                              <span className="text-sm font-medium text-green-600">
+                                {(() => {
+                                  const historyActions = history?.action || (Array.isArray(history) ? history : []);
+                                  return historyActions.filter((h: any) => h.status === 'approved').length || 0;
+                                })()}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-sm text-gray-500">Rejections: </span>
+                              <span className="text-sm font-medium text-red-600">
+                                {(() => {
+                                  const historyActions = history?.action || (Array.isArray(history) ? history : []);
+                                  return historyActions.filter((h: any) => h.status === 'rejected').length || 0;
+                                })()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     {(() => {
                       // Debug logging
                       console.log('History data in render:', history);
