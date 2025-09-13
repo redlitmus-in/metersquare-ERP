@@ -159,6 +159,13 @@
     </style>
   </head>
   <body>
+    <script>
+      // Immediately hide loader if user is already authenticated
+      // This runs before React loads, preventing flash of loader on authenticated pages
+      if (localStorage.getItem('access_token')) {
+        document.write('<style>#initial-loader { display: none !important; }</style>');
+      }
+    </script>
     <div id="initial-loader">
       <!-- Background pattern - same as login page -->
       <div class="background-pattern"></div>

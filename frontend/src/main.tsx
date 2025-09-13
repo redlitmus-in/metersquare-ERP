@@ -16,6 +16,17 @@ const hideInitialLoader = () => {
   }
 };
 
+// Check if user is already authenticated (has token)
+const isAuthenticated = !!localStorage.getItem('access_token');
+
+// If authenticated, hide loader immediately (don't show on page refresh)
+if (isAuthenticated) {
+  const loader = document.getElementById('initial-loader');
+  if (loader) {
+    loader.style.display = 'none';
+  }
+}
+
 // StrictMode removed to prevent duplicate API calls in development
 const root = ReactDOM.createRoot(document.getElementById('root')!);
 root.render(
@@ -26,5 +37,7 @@ root.render(
   </ErrorBoundary>,
 );
 
-// Hide loader after React renders
-hideInitialLoader();
+// Hide loader after React renders (only if not already hidden)
+if (!isAuthenticated) {
+  hideInitialLoader();
+}
