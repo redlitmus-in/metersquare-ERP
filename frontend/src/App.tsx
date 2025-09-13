@@ -223,7 +223,16 @@ function App() {
 
   return (
     <div className="App">
-      <Toaster position="top-right" richColors />
+      <Toaster 
+        position="top-right" 
+        richColors 
+        toastOptions={{
+          style: {
+            marginTop: '80px',
+            marginRight: '16px'
+          }
+        }}
+      />
       <Suspense fallback={<PageLoader />}>
         <Routes>
         {/* Public Routes */}
