@@ -108,6 +108,9 @@ const PurchaseHistoryModal: React.FC<PurchaseHistoryModalProps> = ({
     switch (status?.toLowerCase()) {
       case 'approved':
         return 'bg-green-100 text-green-800 border-green-200';
+      case 'completed':
+      case 'complete':
+        return 'bg-green-100 text-green-800 border-green-200';
       case 'rejected':
         return 'bg-red-100 text-red-800 border-red-200';
       case 'pending':
@@ -120,6 +123,9 @@ const PurchaseHistoryModal: React.FC<PurchaseHistoryModalProps> = ({
   const getStatusIcon = (status?: string) => {
     switch (status?.toLowerCase()) {
       case 'approved':
+        return <CheckCircle className="h-4 w-4" />;
+      case 'completed':
+      case 'complete':
         return <CheckCircle className="h-4 w-4" />;
       case 'rejected':
         return <XCircle className="h-4 w-4" />;

@@ -15,8 +15,6 @@ import {
   XSquare,
   AlertCircle,
   Mail,
-
-  ArrowLeft,
   Search,
   Filter,
   X,
@@ -499,25 +497,14 @@ const SiteSupervisorHub: React.FC = () => {
     <div className="p-4 sm:p-6 bg-gray-50 min-h-screen [&_*:focus]:outline-none [&_*:focus]:ring-0">
       {/* Header */}
       <div className="mb-6 space-y-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-end gap-4">
           <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/dashboards/site-supervisor')}
-            className="flex items-center gap-2"
+            onClick={() => setNewPurchaseModalOpen(true)}
+            className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
+            <Plus className="h-4 w-4 mr-2" />
+            New Purchase Request
           </Button>
-          <div className="mr-12">
-            <Button
-              onClick={() => setNewPurchaseModalOpen(true)}
-              className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              New Purchase Request
-            </Button>
-          </div>
         </div>
         
         <motion.div 

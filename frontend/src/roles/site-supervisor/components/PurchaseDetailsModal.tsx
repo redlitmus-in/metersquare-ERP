@@ -53,7 +53,7 @@ import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { format } from 'date-fns';
 import { siteSupervisorService, Purchase } from '../services/siteSupervisorService';
 import { toast } from 'sonner';
-import { API_BASE_URL } from '@/api/config';
+import { API_BASE_URL, apiClient } from '@/api/config';
 
 interface Material {
   material_id: number;
@@ -105,30 +105,57 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
     setLoading(true);
     try {
-      if (mode === 'history') {
-        // Make specific API call for history which includes approval timeline
-        const data = await siteSupervisorService.getPurchaseHistory(purchaseId);
-        setPurchase(data.purchase);
-        // Set latest status if available
-        if (data.latest_status) {
-          setLatestStatus(data.latest_status);
+      // Try to use the /purchase/{id} endpoint first (like procurement does)
+      try {
+        const response = await apiClient.get(`/purchase/${purchaseId}`);
+        console.log('Purchase Details Response:', response.data); // Debug log
+        
+        if (response.data) {
+          // Handle different response structures
+          if (response.data.success !== undefined) {
+            if (response.data.success) {
+              setPurchase(response.data.purchase || response.data);
+              setLatestStatus(response.data.latest_status || response.data.status_info);
+              
+              // Check for approvals
+              if (response.data.purchase?.approvals) {
+                setPurchase(prev => ({ ...prev, approvals: response.data.purchase.approvals }));
+              }
+            }
+          } else {
+            // Direct purchase object
+            setPurchase(response.data);
+            setLatestStatus(response.data.latest_status || response.data.status_info);
+          }
         }
-        // Ensure approvals are properly set from the history response
-        if (data.statuses) {
-          setPurchase(prev => ({ ...data.purchase, approvals: data.statuses }));
+      } catch (detailsError) {
+        // Fallback to /purchase_history/{id} if details endpoint fails
+        console.log('Falling back to purchase_history endpoint');
+        const response = await apiClient.get(`/purchase_history/${purchaseId}`);
+        console.log('Purchase History Response:', response.data); // Debug log
+        
+        if (response.data.success) {
+          const purchaseData = response.data.purchase || response.data;
+          setPurchase(purchaseData);
+          
+          // Set latest status from various possible locations
+          setLatestStatus(response.data.latest_status || response.data.status_info || purchaseData.latest_status);
+          
+          // Check for approvals in different possible locations
+          if (response.data.approvals) {
+            setPurchase(prev => ({ ...prev, approvals: response.data.approvals }));
+          } else if (response.data.purchase?.approvals) {
+            // Already included in purchase object
+          } else if (response.data.statuses) {
+            setPurchase(prev => ({ ...prev, approvals: response.data.statuses }));
+          }
         }
-        setActiveTab('status');
-      } else {
-        // Make API call for purchase details only
-        const data = await siteSupervisorService.getPurchaseDetails(purchaseId);
-        setPurchase(data);
-        // Set latest status if available
-        if (data.latest_status) {
-          setLatestStatus(data.latest_status);
-        }
-        setActiveTab('details');
       }
+      
+      // Set active tab based on mode
+      setActiveTab(mode === 'history' ? 'status' : 'details');
     } catch (error: any) {
+      console.error('Error fetching purchase data:', error);
       toast.error(error.message || 'Failed to load purchase data');
     } finally {
       setLoading(false);
@@ -275,7 +302,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl h-[85vh] p-0 flex flex-col overflow-hidden">
         {/* Header with gradient */}
-        <DialogHeader className="bg-gradient-to-r from-red-50 to-red-100 px-4 py-3 border-b flex-shrink-0">
+        <DialogHeader className="bg-gradient-to-r from-red-50 to-red-100 px-4 pr-12 py-3 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-white rounded-lg shadow-sm">
@@ -291,7 +318,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               </div>
             </div>
             {purchase && (
-              <Badge className={`${getStatusColor(purchase.status)} border px-3 py-1`}>
+              <Badge className={`${getStatusColor(purchase.status)} border px-3 py-1 mr-2`}>
                 {getStatusIcon(purchase.status)}
                 <span className="ml-1.5">{purchase.status?.toUpperCase() || 'PENDING'}</span>
               </Badge>
@@ -699,7 +726,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
             {/* Latest Status Tab */}
             <TabsContent value="status" className="flex-1 overflow-hidden mt-0 bg-white">
               <div className="h-full overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-                {purchase && purchase.approvals && purchase.approvals.length > 0 ? (
+                {latestStatus || (purchase && (purchase.approvals?.length > 0 || purchase.latest_status || purchase.status_info)) ? (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -717,7 +744,10 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                         
                         {/* Get the latest approval status */}
                         {(() => {
-                          const latestApproval = purchase.approvals[purchase.approvals.length - 1];
+                          // First try to get from approvals array, then from latest_status, then from status_info
+                          const latestApproval = purchase.approvals?.length > 0 
+                            ? purchase.approvals[purchase.approvals.length - 1] 
+                            : purchase.latest_status || purchase.status_info || {};
                           return (
                             <div className="p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg">
                               <div className="flex items-center justify-between">
@@ -770,21 +800,22 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                       </CardContent>
                     </Card>
 
-                    {/* Complete Approval Timeline */}
-                    <Card className="border-0 shadow-sm">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-2 mb-4">
-                          <div className="p-1.5 bg-green-100 rounded-lg">
-                            <Workflow className="w-4 h-4 text-green-600" />
+                    {/* Complete Approval Timeline - Only show if we have approvals array */}
+                    {purchase.approvals && purchase.approvals.length > 0 && (
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="p-1.5 bg-green-100 rounded-lg">
+                              <Workflow className="w-4 h-4 text-green-600" />
+                            </div>
+                            <h3 className="text-base font-semibold text-gray-900">Complete Approval Timeline</h3>
+                            <Badge className="bg-gray-100 text-gray-600 text-xs ml-auto">
+                              {purchase.approvals.length} Steps
+                            </Badge>
                           </div>
-                          <h3 className="text-base font-semibold text-gray-900">Complete Approval Timeline</h3>
-                          <Badge className="bg-gray-100 text-gray-600 text-xs ml-auto">
-                            {purchase.approvals.length} Steps
-                          </Badge>
-                        </div>
-                        
-                        <div className="space-y-3">
-                          {purchase.approvals.map((approval: any, idx: number) => (
+                          
+                          <div className="space-y-3">
+                            {purchase.approvals.map((approval: any, idx: number) => (
                             <motion.div
                               key={approval.status_id}
                               initial={{ opacity: 0, x: -20 }}
@@ -860,16 +891,18 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                         </div>
                       </CardContent>
                     </Card>
+                    )}
 
-                    {/* Summary Statistics */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100">
-                        <CardContent className="p-3">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-blue-600" />
-                            <div>
-                              <p className="text-xs text-blue-600 font-medium">Total Steps</p>
-                              <p className="text-lg font-bold text-blue-900">{purchase.approvals.length}</p>
+                    {/* Summary Statistics - Only show if we have approvals */}
+                    {purchase.approvals && purchase.approvals.length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100">
+                          <CardContent className="p-3">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-blue-600" />
+                              <div>
+                                <p className="text-xs text-blue-600 font-medium">Total Steps</p>
+                                <p className="text-lg font-bold text-blue-900">{purchase.approvals.length}</p>
                             </div>
                           </div>
                         </CardContent>
@@ -903,6 +936,66 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                         </CardContent>
                       </Card>
                     </div>
+                    )}
+                    {/* Show simple status if no approvals array but have latest_status or basic status */}
+                    {!purchase.approvals?.length && (latestStatus || purchase.latest_status || purchase.status) && (
+                      <Card className="border-0 shadow-sm">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="p-1.5 bg-purple-100 rounded-lg">
+                              <Info className="w-4 h-4 text-purple-600" />
+                            </div>
+                            <h3 className="text-base font-semibold text-gray-900">Status Information</h3>
+                          </div>
+                          <div className="space-y-2">
+                            {(() => {
+                              const statusData = latestStatus || purchase.latest_status || {};
+                              return (
+                                <>
+                                  {(statusData.status || purchase.status) && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm text-gray-600">Status:</span>
+                                      <Badge className={`${getStatusColor(statusData.status || purchase.status)} border`}>
+                                        {(statusData.status || purchase.status || 'PENDING').toUpperCase()}
+                                      </Badge>
+                                    </div>
+                                  )}
+                                  {statusData.role && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm text-gray-600">Role:</span>
+                                      <span className="text-sm font-medium text-gray-900">{formatRole(statusData.role)}</span>
+                                    </div>
+                                  )}
+                                  {statusData.sender && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm text-gray-600">From:</span>
+                                      <span className="text-sm font-medium text-gray-900">{formatRole(statusData.sender)}</span>
+                                    </div>
+                                  )}
+                                  {statusData.receiver && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm text-gray-600">To:</span>
+                                      <span className="text-sm font-medium text-gray-900">{formatRole(statusData.receiver)}</span>
+                                    </div>
+                                  )}
+                                  {statusData.comments && (
+                                    <div className="mt-2 p-2 bg-gray-50 rounded">
+                                      <p className="text-sm text-gray-700">{statusData.comments}</p>
+                                    </div>
+                                  )}
+                                  {purchase.purpose && !statusData.comments && (
+                                    <div className="mt-2 p-2 bg-yellow-50 rounded">
+                                      <p className="text-xs text-gray-600 font-medium">Purpose:</p>
+                                      <p className="text-sm text-gray-700">{purchase.purpose}</p>
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
                   </motion.div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full">

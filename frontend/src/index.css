@@ -242,10 +242,33 @@ html {
   }
 }
 
-/* Focus styles for accessibility */
+/* Remove default focus outline */
 *:focus {
-  outline: 2px solid #007bff;
-  outline-offset: 2px;
+  outline: none !important;
+}
+
+/* Remove focus outline from all interactive elements */
+button:focus,
+a:focus,
+input:focus,
+textarea:focus,
+select:focus,
+[role="button"]:focus,
+[tabindex]:focus,
+[contenteditable]:focus,
+div:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Remove tap highlight on mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Optional: Add subtle focus indication for keyboard navigation only */
+*:focus-visible {
+  outline: none !important;
 }
 
 /* Custom animations for form elements */
