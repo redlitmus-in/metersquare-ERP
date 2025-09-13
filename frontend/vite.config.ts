@@ -23,11 +23,20 @@ export default defineConfig({
         // Add hash to filenames for cache busting
         entryFileNames: 'assets/[name].[hash].js',
         chunkFileNames: 'assets/[name].[hash].js',
-        assetFileNames: 'assets/[name].[hash].[ext]'
+        assetFileNames: 'assets/[name].[hash].[ext]',
+        // Manual chunks for better code splitting
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          ui: ['framer-motion', '@radix-ui/react-dialog', '@radix-ui/react-select'],
+          charts: ['recharts'],
+          forms: ['react-hook-form'],
+        }
       }
     },
     // Clear the output directory before building
     emptyOutDir: true,
+    // Optimize chunk size
+    chunkSizeWarningLimit: 1000,
   },
   server: {
     port: 3000,

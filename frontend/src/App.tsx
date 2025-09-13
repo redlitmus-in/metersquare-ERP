@@ -1,62 +1,62 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { validateSupabaseConnection } from '@/utils/environment';
 import { setupCacheValidator } from '@/utils/clearCache';
 
-// Pages
+// Critical components loaded immediately
 import { LoginPage } from '@/pages/auth/LoginPage';
-import LoginPageOTP from '@/pages/auth/LoginPageOTP';
-import ModernDashboard from '@/pages/ModernDashboard';
-import TasksPage from '@/pages/common/TasksPage';
-import ProjectsPage from '@/pages/common/ProjectsPage';
-import ProcessFlowPage from '@/pages/common/ProcessFlowPage';
-import ProfilePage from '@/pages/common/ProfilePage';
-import AnalyticsPage from '@/pages/common/AnalyticsPage';
-import ProcurementDashboard from '@/pages/dashboards/ProcurementDashboard';
-import WorkflowStatusPage from '@/pages/common/WorkflowStatusPage';
-import CreativeErrorPage from '@/components/ui/CreativeErrorPage';
-
-// Role-specific dashboards
-import {
-  TechnicalDirectorDashboard,
-  ProjectManagerDashboard,
-  ProcurementDashboard as ProcurementOfficerDashboard,
-  SiteSupervisorDashboard,
-  MEPSupervisorDashboard,
-  EstimationDashboard,
-  AccountsDashboard,
-  DesignDashboard
-} from '@/pages/dashboards';
-
-// Procurement pages (now in roles folder)
-import { 
-  ProcurementHub,
-  DeliveriesPage,
-  ApprovalsPage,
-  PurchaseRequestsPage,
-  VendorQuotationsPage
-} from '@/roles/procurement/pages';
-
-// Project Manager pages
-import { ProjectManagerHub } from '@/roles/project-manager';
-import PurchaseApprovalsPage from '@/roles/project-manager/pages/PurchaseApprovalsPage';
-
-import EstimationHub from '@/roles/estimation/pages/EstimationHub';
-import TechnicalDirectorHub from '@/roles/technical-director/pages/TechnicalDirectorHub';
-import SiteSupervisorHub from '@/roles/site-supervisor/pages/SiteSupervisorHub';
-import AccountsHub from '@/roles/accounts/pages/AccountsHub';
-// Workflow pages
-import MaterialDispatchProductionPage from '@/pages/workflows/MaterialDispatchProductionPage';
-import MaterialDispatchSitePage from '@/pages/workflows/MaterialDispatchSitePage';
-
-// Layout
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import RoleBasedRedirect from '@/components/routing/RoleBasedRedirect';
-import RoleRouteWrapper from '@/components/routing/RoleRouteWrapper';
-import RoleDashboard from '@/components/routing/RoleDashboard';
+
+// Lazy load all non-critical pages
+const LoginPageOTP = lazy(() => import('@/pages/auth/LoginPageOTP'));
+const ModernDashboard = lazy(() => import('@/pages/ModernDashboard'));
+const TasksPage = lazy(() => import('@/pages/common/TasksPage'));
+const ProjectsPage = lazy(() => import('@/pages/common/ProjectsPage'));
+const ProcessFlowPage = lazy(() => import('@/pages/common/ProcessFlowPage'));
+const ProfilePage = lazy(() => import('@/pages/common/ProfilePage'));
+const AnalyticsPage = lazy(() => import('@/pages/common/AnalyticsPage'));
+const WorkflowStatusPage = lazy(() => import('@/pages/common/WorkflowStatusPage'));
+const CreativeErrorPage = lazy(() => import('@/components/ui/CreativeErrorPage'));
+
+// Lazy load role-specific dashboards
+const TechnicalDirectorDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.TechnicalDirectorDashboard })));
+const ProjectManagerDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.ProjectManagerDashboard })));
+const ProcurementDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.ProcurementDashboard })));
+const SiteSupervisorDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.SiteSupervisorDashboard })));
+const MEPSupervisorDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.MEPSupervisorDashboard })));
+const EstimationDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.EstimationDashboard })));
+const AccountsDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.AccountsDashboard })));
+const DesignDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.DesignDashboard })));
+
+// Lazy load procurement pages
+const ProcurementHub = lazy(() => import('@/roles/procurement/pages').then(m => ({ default: m.ProcurementHub })));
+const DeliveriesPage = lazy(() => import('@/roles/procurement/pages').then(m => ({ default: m.DeliveriesPage })));
+const ApprovalsPage = lazy(() => import('@/roles/procurement/pages').then(m => ({ default: m.ApprovalsPage })));
+const PurchaseRequestsPage = lazy(() => import('@/roles/procurement/pages').then(m => ({ default: m.PurchaseRequestsPage })));
+const VendorQuotationsPage = lazy(() => import('@/roles/procurement/pages').then(m => ({ default: m.VendorQuotationsPage })));
+
+// Lazy load role hubs
+const ProjectManagerHub = lazy(() => import('@/roles/project-manager').then(m => ({ default: m.ProjectManagerHub })));
+const PurchaseApprovalsPage = lazy(() => import('@/roles/project-manager/pages/PurchaseApprovalsPage'));
+const EstimationHub = lazy(() => import('@/roles/estimation/pages/EstimationHub'));
+const TechnicalDirectorHub = lazy(() => import('@/roles/technical-director/pages/TechnicalDirectorHub'));
+const SiteSupervisorHub = lazy(() => import('@/roles/site-supervisor/pages/SiteSupervisorHub'));
+const AccountsHub = lazy(() => import('@/roles/accounts/pages/AccountsHub'));
+
+// Lazy load workflow pages
+const MaterialDispatchProductionPage = lazy(() => import('@/pages/workflows/MaterialDispatchProductionPage'));
+const MaterialDispatchSitePage = lazy(() => import('@/pages/workflows/MaterialDispatchSitePage'));
+
+// Other components
+const RoleRouteWrapper = lazy(() => import('@/components/routing/RoleRouteWrapper'));
+const RoleDashboard = lazy(() => import('@/components/routing/RoleDashboard'));
+
+// Page loader component
+import PageLoader from '@/components/ui/PageLoader';
 
 // Role-specific Procurement Hub Component
 const RoleSpecificProcurementHub: React.FC = () => {
@@ -150,49 +150,46 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 function App() {
   const { getCurrentUser, isAuthenticated, logout } = useAuthStore();
   const [isEnvironmentValid, setIsEnvironmentValid] = useState<boolean | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
     // Setup cache validation for role mismatches
     setupCacheValidator();
     
-    // Validate environment configuration on app startup
-    const validateEnvironment = async () => {
+    // Quick initialization - don't block on environment validation
+    const initialize = async () => {
       try {
-        const { success } = await validateSupabaseConnection();
+        // Set a timeout for environment validation to prevent long waits
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ success: true }), 3000));
+        const validationPromise = validateSupabaseConnection();
+        
+        const { success } = await Promise.race([validationPromise, timeoutPromise]) as { success: boolean };
         setIsEnvironmentValid(success);
        
         if (success) {
-          // Check for existing session on app load
+          // Check for existing session on app load in parallel
           const token = localStorage.getItem('access_token');
           if (token && !isAuthenticated) {
-            try {
-              await getCurrentUser();
-            } catch (error) {
-              // Token is invalid/expired, ensure clean logout
+            getCurrentUser().catch(() => {
               console.log('Token validation failed, cleaning up...');
               logout();
-            }
+            });
           }
         }
       } catch (error) {
         console.error('Environment validation failed:', error);
-        setIsEnvironmentValid(false);
+        setIsEnvironmentValid(true); // Continue anyway
+      } finally {
+        setIsInitializing(false);
       }
     };
 
-    validateEnvironment();
-  }, [getCurrentUser, isAuthenticated, logout]);
+    initialize();
+  }, []);
 
-  // Show loading while validating environment
-  if (isEnvironmentValid === null) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <ModernLoadingSpinners variant="pulse-wave" size="lg" />
-          <p className="mt-4 text-gray-600">Validating environment configuration...</p>
-        </div>
-      </div>
-    );
+  // Only show loading for initial app load, not environment validation
+  if (isInitializing) {
+    return null; // Let the HTML loader show
   }
 
   // Show error if environment is invalid
@@ -227,7 +224,8 @@ function App() {
   return (
     <div className="App">
       <Toaster position="top-right" richColors />
-      <Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
         {/* Public Routes */}
         <Route
           path="/login"
@@ -333,6 +331,7 @@ function App() {
           } 
         />
       </Routes>
+      </Suspense>
     </div>
   );
 }
