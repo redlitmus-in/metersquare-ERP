@@ -359,11 +359,14 @@ const LoginPageOTP: React.FC = () => {
                   type="submit"
                   disabled={isLoading || !email || !selectedRole}
                   className="w-full bg-gradient-to-r from-[#243d8a] to-indigo-600 hover:from-[#1d3270] hover:to-indigo-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
+                  whileHover={{ scale: isLoading ? 1 : 1.01 }}
+                  whileTap={{ scale: isLoading ? 1 : 0.99 }}
                 >
                   {isLoading ? (
-                    <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+                    <div className="flex items-center justify-center gap-2">
+                      <ModernLoadingSpinners variant="pulse-wave" size="sm" />
+                      <span>Sending OTP...</span>
+                    </div>
                   ) : (
                     <>
                       <span>Send OTP</span>
@@ -426,11 +429,14 @@ const LoginPageOTP: React.FC = () => {
                   onClick={handleVerifyOTP}
                   disabled={isLoading || otp.length !== 6}
                   className="w-full bg-gradient-to-r from-[#243d8a] to-indigo-600 hover:from-[#1d3270] hover:to-indigo-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
+                  whileHover={{ scale: isLoading ? 1 : 1.01 }}
+                  whileTap={{ scale: isLoading ? 1 : 0.99 }}
                 >
                   {isLoading ? (
-                    <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+                    <div className="flex items-center justify-center gap-2">
+                      <ModernLoadingSpinners variant="pulse-wave" size="sm" />
+                      <span>Verifying...</span>
+                    </div>
                   ) : (
                     <>
                       <span>Verify & Login</span>

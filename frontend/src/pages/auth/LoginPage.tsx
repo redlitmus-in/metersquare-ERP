@@ -79,6 +79,8 @@ const LoginPage: React.FC = () => {
   const [resendTimer, setResendTimer] = useState(0);
   const [userEmail, setUserEmail] = useState('');
   const [userRole, setUserRole] = useState('');
+  const [isSendingOTP, setIsSendingOTP] = useState(false);
+  const [isVerifyingOTP, setIsVerifyingOTP] = useState(false);
   
   // Timer for resend OTP
   useEffect(() => {
@@ -108,6 +110,8 @@ const LoginPage: React.FC = () => {
         });
         return;
       }
+      
+      setIsSendingOTP(true);
       
       // Clear any stale cached data before login
       clearAllCachedData();
@@ -148,6 +152,8 @@ const LoginPage: React.FC = () => {
           description: error.message || 'Please check your credentials and try again.'
         });
       }
+    } finally {
+      setIsSendingOTP(false);
     }
   };
 
@@ -170,6 +176,8 @@ const LoginPage: React.FC = () => {
       return;
     }
 
+    setIsVerifyingOTP(true);
+    
     try {
       // Verify OTP via backend API
       const response = await authApi.verifyOTP(userEmail, otpToVerify);
@@ -204,6 +212,8 @@ const LoginPage: React.FC = () => {
       toast.error('Invalid OTP', {
         description: error.message || 'Please enter the correct OTP'
       });
+    } finally {
+      setIsVerifyingOTP(false);
     }
   };
 
@@ -677,13 +687,16 @@ const LoginPage: React.FC = () => {
                   {/* Submit Button */}
                   <motion.button
                     type="submit"
-                    disabled={isLoading}
-                    className="w-full bg-[#243d8a] hover:bg-[#243d8a]/90 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
+                    disabled={isSendingOTP}
+                    className="w-full bg-[#243d8a] hover:bg-[#243d8a]/90 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    whileHover={{ scale: isSendingOTP ? 1 : 1.01 }}
+                    whileTap={{ scale: isSendingOTP ? 1 : 0.99 }}
                   >
-                    {isLoading ? (
-                      <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+                    {isSendingOTP ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <ModernLoadingSpinners variant="pulse-wave" size="sm" />
+                        <span>Sending OTP...</span>
+                      </div>
                     ) : (
                       <>
                         <span>Send OTP</span>
@@ -744,13 +757,16 @@ const LoginPage: React.FC = () => {
 
                   <motion.button
                     onClick={handleVerifyOTP}
-                    disabled={isLoading || otp.length !== 6}
+                    disabled={isVerifyingOTP || otp.length !== 6}
                     className="w-full bg-[#243d8a] hover:bg-[#243d8a]/90 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
+                    whileHover={{ scale: isVerifyingOTP ? 1 : 1.01 }}
+                    whileTap={{ scale: isVerifyingOTP ? 1 : 0.99 }}
                   >
-                    {isLoading ? (
-                      <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+                    {isVerifyingOTP ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <ModernLoadingSpinners variant="pulse-wave" size="sm" />
+                        <span>Verifying...</span>
+                      </div>
                     ) : (
                       <>
                         <span>Verify & Login</span>
