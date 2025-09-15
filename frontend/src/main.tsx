@@ -5,6 +5,15 @@ import App from './App.tsx'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 import './index.css'
 
+// Register service worker for aggressive caching (production only)
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(registration => console.log('Service Worker registered'))
+      .catch(error => console.log('Service Worker registration failed'));
+  });
+}
+
 // Hide initial loader once React starts
 const hideInitialLoader = () => {
   const loader = document.getElementById('initial-loader');

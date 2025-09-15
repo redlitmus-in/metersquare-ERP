@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { formatDateTimeLocal, getUserTimezone } from '@/utils/dateFormatter';
 import {
   Dialog,
   DialogContent,
@@ -526,7 +527,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   <div>
                                     <p className="text-xs text-gray-500">Last edited on</p>
                                     <p className="text-sm font-semibold text-gray-900">
-                                      {new Date(purchase.last_modified_at).toLocaleString()}
+                                      {formatDateTimeLocal(purchase.last_modified_at)}
                                     </p>
                                   </div>
                                 </div>
@@ -760,7 +761,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                     <span className="text-sm text-gray-600">by {formatRole(latestApproval.role)}</span>
                                   </div>
                                   <p className="text-xs text-gray-500 mt-1">
-                                    {latestApproval.decision_date && new Date(latestApproval.decision_date).toLocaleString()}
+                                    {latestApproval.decision_date && formatDateTimeLocal(latestApproval.decision_date)}
                                   </p>
                                 </div>
                                 <div className="text-right">
@@ -854,7 +855,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                         </Badge>
                                       </div>
                                       <p className="text-xs text-gray-600 mt-1">
-                                        {approval.created_by} • {new Date(approval.decision_date).toLocaleString()}
+                                        {approval.created_by} • {formatDateTimeLocal(approval.decision_date)}
                                       </p>
                                     </div>
                                     <div className="text-right">

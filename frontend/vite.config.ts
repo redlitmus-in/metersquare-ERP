@@ -24,19 +24,67 @@ export default defineConfig({
         entryFileNames: 'assets/[name].[hash].js',
         chunkFileNames: 'assets/[name].[hash].js',
         assetFileNames: 'assets/[name].[hash].[ext]',
-        // Manual chunks for better code splitting
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['framer-motion', '@radix-ui/react-dialog', '@radix-ui/react-select'],
-          charts: ['recharts'],
-          forms: ['react-hook-form'],
+        // Optimized manual chunks for better code splitting
+        manualChunks: (id) => {
+          // Core React libraries - always needed
+          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+            return 'vendor';
+          }
+          // UI libraries - loaded when UI components are used
+          if (id.includes('framer-motion') || id.includes('@radix-ui')) {
+            return 'ui';
+          }
+          // Heavy charting library - only for analytics pages
+          if (id.includes('recharts')) {
+            return 'charts';
+          }
+          // Form handling
+          if (id.includes('react-hook-form') || id.includes('zod')) {
+            return 'forms';
+          }
+          // PDF generation - lazy loaded
+          if (id.includes('jspdf') || id.includes('html2canvas')) {
+            return 'pdf';
+          }
+          // Excel handling - lazy loaded
+          if (id.includes('xlsx')) {
+            return 'excel';
+          }
+          // Supabase auth - loaded for authenticated routes
+          if (id.includes('@supabase')) {
+            return 'auth';
+          }
+          // Date utilities
+          if (id.includes('date-fns')) {
+            return 'dates';
+          }
         }
       }
     },
     // Clear the output directory before building
     emptyOutDir: true,
     // Optimize chunk size
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 500,
+    // Terser for better minification
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true
+      }
+    },
+    // Better source maps for production
+    sourcemap: false,
+    // Aggressive code splitting
+    cssCodeSplit: true,
+    // Preload critical chunks
+    modulePreload: {
+      polyfill: true
+    },
+    // Optimize dependencies
+    commonjsOptions: {
+      transformMixedEsModules: true
+    }
   },
   server: {
     port: 3000,

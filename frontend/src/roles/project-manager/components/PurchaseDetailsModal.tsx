@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { exportPurchaseDetailsPDF } from '@/utils/exportUtils';
 import { API_ENDPOINTS, API_BASE_URL } from '@/api/config';
+import { formatDateTimeLocal } from '@/utils/dateFormatter';
 import {
   FileText,
   Building2,
@@ -402,13 +403,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-AE', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return formatDateTimeLocal(dateString);
   };
 
   const formatCurrency = (amount: number) => {
@@ -1143,11 +1138,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                             <span className="text-gray-500">Date:</span>
                             <span className="text-gray-900">
                               {statusDetails?.purchase_details?.date
-                                ? new Date(statusDetails.purchase_details.date).toLocaleDateString('en-AE', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric'
-                                  })
+                                ? formatDateTimeLocal(statusDetails.purchase_details.date)
                                 : 'N/A'}
                             </span>
                           </div>

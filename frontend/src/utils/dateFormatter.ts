@@ -92,14 +92,99 @@ export const getTodayFormatted = (): string => {
  */
 export const formatDateTime = (date: Date | string | null | undefined): string => {
   if (!date) return '';
-  
+
   const dateObj = typeof date === 'string' ? new Date(date) : date;
-  
+
   if (isNaN(dateObj.getTime())) return '';
-  
+
   const dateStr = formatDate(dateObj);
   const hours = dateObj.getHours().toString().padStart(2, '0');
   const minutes = dateObj.getMinutes().toString().padStart(2, '0');
-  
+
   return `${dateStr} ${hours}:${minutes}`;
+};
+
+/**
+ * Format date with time in user's local timezone
+ * @param date - Date object or string
+ * @returns Formatted date-time string in local timezone with DD/MM/YYYY, HH:MM:SS AM/PM format
+ */
+export const formatDateTimeLocal = (date: Date | string | null | undefined): string => {
+  if (!date) return '';
+
+  let dateObj: Date;
+
+  if (typeof date === 'string') {
+    // Check if the string contains timezone info (Z or +/-offset)
+    if (date.includes('Z') || date.includes('+') || date.match(/[+-]\d{2}:\d{2}$/)) {
+      // Already has timezone info, parse directly
+      dateObj = new Date(date);
+    } else if (date.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+      // ISO format without timezone - assume it's UTC
+      dateObj = new Date(date + 'Z');
+    } else {
+      // Other formats
+      dateObj = new Date(date);
+    }
+  } else {
+    dateObj = date;
+  }
+
+  if (isNaN(dateObj.getTime())) return '';
+
+  // Format components individually for consistency
+  const day = dateObj.getDate().toString().padStart(2, '0');
+  const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+  const year = dateObj.getFullYear();
+
+  // Format time in 12-hour format with AM/PM
+  let hours = dateObj.getHours();
+  const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+  const seconds = dateObj.getSeconds().toString().padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+
+  // Convert to 12-hour format
+  hours = hours % 12 || 12;
+  const hoursStr = hours.toString().padStart(2, '0');
+
+  return `${day}/${month}/${year}, ${hoursStr}:${minutes}:${seconds} ${ampm}`;
+};
+
+/**
+ * Get user's timezone abbreviation
+ * @returns Timezone abbreviation (e.g., "EST", "PST", "IST")
+ */
+export const getUserTimezone = (): string => {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const now = new Date();
+  const short = now.toLocaleTimeString('en-US', { timeZoneName: 'short' });
+  const match = short.match(/[A-Z]{2,}/g);
+  return match ? match[0] : timezone;
+};
+
+/**
+ * Format date with relative time (e.g., "2 hours ago")
+ * @param date - Date object or string
+ * @returns Relative time string with local timezone context
+ */
+export const formatRelativeTime = (date: Date | string | null | undefined): string => {
+  if (!date) return '';
+
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+  if (isNaN(dateObj.getTime())) return '';
+
+  const now = new Date();
+  const diffMs = now.getTime() - dateObj.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSecs < 60) return 'just now';
+  if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+
+  return formatDateTimeLocal(dateObj);
 };

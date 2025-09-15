@@ -594,18 +594,18 @@ const ProcurementHub: React.FC = () => {
     }
   };
 
-  const handleExport = (format: 'pdf' | 'excel') => {
+  const handleExport = async (format: 'pdf' | 'excel') => {
     try {
       const dataToExport = filteredPurchases.length > 0 ? filteredPurchases : purchases;
       const exportTitle = `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Purchase Requests`;
       
       switch (format) {
         case 'pdf':
-          exportToPDF(dataToExport, exportTitle);
+          await exportToPDF(dataToExport, exportTitle);
           toast.success('PDF exported successfully');
           break;
         case 'excel':
-          exportToExcel(dataToExport, exportTitle);
+          await exportToExcel(dataToExport, exportTitle);
           toast.success('Excel file exported successfully');
           break;
       }

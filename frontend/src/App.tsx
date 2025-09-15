@@ -22,25 +22,25 @@ const AnalyticsPage = lazy(() => import('@/pages/common/AnalyticsPage'));
 const WorkflowStatusPage = lazy(() => import('@/pages/common/WorkflowStatusPage'));
 const CreativeErrorPage = lazy(() => import('@/components/ui/CreativeErrorPage'));
 
-// Lazy load role-specific dashboards
-const TechnicalDirectorDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.TechnicalDirectorDashboard })));
-const ProjectManagerDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.ProjectManagerDashboard })));
-const ProcurementDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.ProcurementDashboard })));
-const SiteSupervisorDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.SiteSupervisorDashboard })));
-const MEPSupervisorDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.MEPSupervisorDashboard })));
-const EstimationDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.EstimationDashboard })));
-const AccountsDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.AccountsDashboard })));
-const DesignDashboard = lazy(() => import('@/pages/dashboards').then(m => ({ default: m.DesignDashboard })));
+// Lazy load role-specific dashboards - Direct imports for proper code splitting
+const TechnicalDirectorDashboard = lazy(() => import('@/pages/dashboards/TechnicalDirectorDashboard'));
+const ProjectManagerDashboard = lazy(() => import('@/pages/dashboards/ProjectManagerDashboard'));
+const ProcurementDashboard = lazy(() => import('@/pages/dashboards/ProcurementDashboard'));
+const SiteSupervisorDashboard = lazy(() => import('@/pages/dashboards/SiteSupervisorDashboard'));
+const MEPSupervisorDashboard = lazy(() => import('@/pages/dashboards/MEPSupervisorDashboard'));
+const EstimationDashboard = lazy(() => import('@/pages/dashboards/EstimationDashboard'));
+const AccountsDashboard = lazy(() => import('@/pages/dashboards/AccountsDashboard'));
+const DesignDashboard = lazy(() => import('@/pages/dashboards/DesignDashboard'));
 
-// Lazy load procurement pages
-const ProcurementHub = lazy(() => import('@/roles/procurement/pages').then(m => ({ default: m.ProcurementHub })));
-const DeliveriesPage = lazy(() => import('@/roles/procurement/pages').then(m => ({ default: m.DeliveriesPage })));
-const ApprovalsPage = lazy(() => import('@/roles/procurement/pages').then(m => ({ default: m.ApprovalsPage })));
-const PurchaseRequestsPage = lazy(() => import('@/roles/procurement/pages').then(m => ({ default: m.PurchaseRequestsPage })));
-const VendorQuotationsPage = lazy(() => import('@/roles/procurement/pages').then(m => ({ default: m.VendorQuotationsPage })));
+// Lazy load procurement pages - Direct imports for proper code splitting
+const ProcurementHub = lazy(() => import('@/roles/procurement/pages/ProcurementHub'));
+const DeliveriesPage = lazy(() => import('@/roles/procurement/pages/DeliveriesPage'));
+const ApprovalsPage = lazy(() => import('@/roles/procurement/pages/ApprovalsPage'));
+const PurchaseRequestsPage = lazy(() => import('@/roles/procurement/pages/PurchaseRequestsPage'));
+const VendorQuotationsPage = lazy(() => import('@/roles/procurement/pages/VendorQuotationsPage'));
 
-// Lazy load role hubs
-const ProjectManagerHub = lazy(() => import('@/roles/project-manager').then(m => ({ default: m.ProjectManagerHub })));
+// Lazy load role hubs - Direct import for better code splitting
+const ProjectManagerHub = lazy(() => import('@/roles/project-manager/pages/ProjectManagerHub'));
 const PurchaseApprovalsPage = lazy(() => import('@/roles/project-manager/pages/PurchaseApprovalsPage'));
 const EstimationHub = lazy(() => import('@/roles/estimation/pages/EstimationHub'));
 const TechnicalDirectorHub = lazy(() => import('@/roles/technical-director/pages/TechnicalDirectorHub'));

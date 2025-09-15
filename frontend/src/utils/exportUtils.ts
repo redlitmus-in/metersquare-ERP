@@ -1,6 +1,4 @@
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+// Lazy load heavy libraries only when needed
 import { saveAs } from 'file-saver';
 import { Purchase, Material } from '@/roles/procurement/services/procurementService';
 
@@ -28,8 +26,12 @@ const formatCurrency = (amount: number) => {
   return `AED ${amount.toLocaleString()}`;
 };
 
-// Export as PDF
-export const exportToPDF = (purchases: Purchase[], title: string = 'Purchase Requisitions Report') => {
+// Export as PDF - Load jsPDF only when needed
+export const exportToPDF = async (purchases: Purchase[], title: string = 'Purchase Requisitions Report') => {
+  // Dynamically import jsPDF to reduce initial bundle size
+  const { jsPDF } = await import('jspdf');
+  const autoTable = (await import('jspdf-autotable')).default;
+
   const doc = new jsPDF();
   
   // Add header
@@ -128,8 +130,10 @@ export const exportToPDF = (purchases: Purchase[], title: string = 'Purchase Req
   doc.save(`procurement_report_${new Date().toISOString().split('T')[0]}.pdf`);
 };
 
-// Export as Excel
-export const exportToExcel = (purchases: Purchase[], title: string = 'Purchase Requisitions') => {
+// Export as Excel - Load XLSX only when needed
+export const exportToExcel = async (purchases: Purchase[], title: string = 'Purchase Requisitions') => {
+  // Dynamically import XLSX to reduce initial bundle size
+  const XLSX = await import('xlsx');
   // Prepare main sheet data
   const mainData = purchases.map(purchase => {
     const total = purchase.materials?.reduce((sum, m) => sum + (m.quantity * m.cost), 0) || 0;
@@ -235,8 +239,12 @@ export const exportToCSV = (purchases: Purchase[]) => {
   saveAs(blob, `procurement_report_${new Date().toISOString().split('T')[0]}.csv`);
 };
 
-// Export single purchase details as PDF
-export const exportPurchaseDetailsPDF = (purchase: Purchase, latestStatus?: any) => {
+// Export single purchase details as PDF - Load jsPDF only when needed
+export const exportPurchaseDetailsPDF = async (purchase: Purchase, latestStatus?: any) => {
+  // Dynamically import jsPDF to reduce initial bundle size
+  const { jsPDF } = await import('jspdf');
+  await import('jspdf-autotable');
+
   const doc = new jsPDF();
   
   // Header

@@ -14,6 +14,7 @@ import { procurementService, Purchase, Material } from '../services/procurementS
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { API_BASE_URL } from '@/api/config';
+import { formatDateTimeLocal, getUserTimezone } from '@/utils/dateFormatter';
 import {
   FileText,
   Building2,
@@ -101,9 +102,6 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
         console.log('Details mode - Purchase response:', response);
         
         if (response.purchase) {
-          console.log('Purchase file_path:', response.purchase.file_path);
-          console.log('Purchase last_modified_by:', response.purchase.last_modified_by);
-          console.log('Purchase last_modified_at:', response.purchase.last_modified_at);
           setPurchase(response.purchase);
           setLatestStatus(response.latest_status);
         } else {
@@ -514,7 +512,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                     <div>
                                       <p className="text-xs text-gray-500">Last edited on</p>
                                       <p className="text-sm font-semibold text-gray-900">
-                                        {new Date(purchase.last_modified_at).toLocaleString()}
+                                        {formatDateTimeLocal(purchase.last_modified_at)}
                                       </p>
                                     </div>
                                   </div>

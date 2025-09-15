@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { accountsService } from '../services/accountsService';
+import { formatDateTimeLocal } from '@/utils/dateFormatter';
 
 interface PurchaseDetailsModalProps {
   isOpen: boolean;
@@ -161,7 +162,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                             <Calendar className="h-4 w-4 text-gray-500" />
                             <span className="text-sm text-gray-600">Date:</span>
                             <span className="text-sm font-medium">
-                              {new Date(purchaseData.purchase.date).toLocaleDateString()}
+                              {formatDateTimeLocal(purchaseData.purchase.date)}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">

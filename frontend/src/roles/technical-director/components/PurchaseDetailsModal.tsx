@@ -23,6 +23,7 @@ import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { technicalDirectorService } from '../services/technicalDirectorService';
 import { API_BASE_URL } from '@/api/config';
 import { toast } from 'sonner';
+import { formatDateTimeLocal } from '@/utils/dateFormatter';
 
 interface PurchaseDetailsModalProps {
   isOpen: boolean;
@@ -146,16 +147,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
   const formatDate = (date: string | Date | undefined) => {
     if (!date) return 'N/A';
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    }) + ', ' + d.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
+    return formatDateTimeLocal(date);
   };
 
   if (!isOpen) return null;
@@ -633,11 +625,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                               <span className="text-sm text-gray-500">Date: </span>
                               <span className="text-sm font-medium text-gray-900">
                                 {purchase.date || purchase.created_at ?
-                                  new Date(purchase.date || purchase.created_at).toLocaleDateString('en-US', {
-                                    day: 'numeric',
-                                    month: 'short',
-                                    year: 'numeric'
-                                  }) : 'N/A'}
+                                  formatDateTimeLocal(purchase.date || purchase.created_at) : 'N/A'}
                               </span>
                             </div>
                             <div>

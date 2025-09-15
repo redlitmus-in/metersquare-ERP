@@ -340,11 +340,6 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
               <p className="text-xs text-gray-500">
                 Created {formatDistanceToNow(new Date(purchase.created_at), { addSuffix: true })} by {purchase.requested_by}
               </p>
-              {purchase.latest_status && purchase.latest_status.decision_date && (
-                <p className="text-xs text-gray-400">
-                  Updated {formatDistanceToNow(new Date(purchase.latest_status.decision_date), { addSuffix: true })}
-                </p>
-              )}
             </div>
           </div>
         </CardContent>
