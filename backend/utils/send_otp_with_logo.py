@@ -7,11 +7,14 @@ import os
 import smtplib
 import random
 import base64
+from email.header import Header
+from email.utils import formataddr
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
 from datetime import datetime, timedelta
-
+# Prefer EMAIL_SENDER_NAME, fallback to SENDER_NAME, then default to 'Meter Square'
+sender_name = os.getenv("EMAIL_SENDER_NAME") or os.getenv("SENDER_NAME") or "Meter Square"
 def send_otp_with_logo(email_id, sender_email, sender_password):
     """
     Send OTP email with logo - guaranteed to work
@@ -124,7 +127,8 @@ def send_otp_with_logo(email_id, sender_email, sender_password):
     
     # Create message
     message = MIMEMultipart('alternative')
-    message["From"] = sender_email
+    # Include display name in From header (robust encoding)
+    message["From"] = formataddr((str(Header(sender_name, 'utf-8')), sender_email))
     message["To"] = email_id
     message["Subject"] = subject
     
@@ -183,7 +187,8 @@ def send_otp_with_attached_logo(email_id, sender_email, sender_password, logo_pa
     
     # Create message with related type for embedded images
     message = MIMEMultipart('related')
-    message["From"] = sender_email
+    # Include display name in From header (robust encoding)
+    message["From"] = formataddr((str(Header(sender_name, 'utf-8')), sender_email))
     message["To"] = email_id
     message["Subject"] = subject
     

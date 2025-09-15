@@ -155,8 +155,8 @@ def get_email_styles():
             margin: 25px 0 !important;
             padding: 20px !important;
             background: linear-gradient(135deg, #f0f9ff 0%, #dbeafe 100%) !important;
-            border: 2px solid #3b82f6 !important;
-            border-radius: 8px !important;
+            border: 1px solid #bfdbfe !important;
+            border-radius: 10px !important;
             text-align: right !important;
         }
         
@@ -167,7 +167,7 @@ def get_email_styles():
         }
         
         .total-cost .amount {
-            color: #3b82f6 !important;
+            color: rgb(22 163 74) !important;
             font-size: 24px !important;
             font-weight: bold !important;
             margin-left: 10px !important;

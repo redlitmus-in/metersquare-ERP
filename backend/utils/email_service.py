@@ -5,6 +5,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email import encoders
+from email.header import Header
+from email.utils import formataddr
 from datetime import datetime
 from typing import List, Dict
 from flask import jsonify, g
@@ -31,6 +33,8 @@ class EmailService:
     def __init__(self):
         self.sender_email = os.getenv("SENDER_EMAIL")
         self.sender_password = os.getenv("SENDER_EMAIL_PASSWORD")
+        # Prefer EMAIL_SENDER_NAME, fallback to SENDER_NAME, then default
+        self.sender_name = os.getenv("EMAIL_SENDER_NAME") or os.getenv("SENDER_NAME") or "Meter Square"
         
         # Get SMTP configuration from environment variables
         self.smtp_server = os.getenv("EMAIL_HOST", "smtp.office365.com")
@@ -81,7 +85,8 @@ class EmailService:
         try:
             # Use 'related' type to support embedded images
             msg = MIMEMultipart('related')
-            msg['From'] = self.sender_email
+            # Include display name "Meter Square" in From header with proper formatting
+            msg['From'] = formataddr((str(Header(self.sender_name, 'utf-8')), self.sender_email))
             msg['To'] = ', '.join(to_emails)
             msg['Subject'] = subject
             msg['Date'] = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S +0000')
@@ -623,8 +628,9 @@ class EmailService:
                             </div>
                         </div>
                         
-                        <div class="total-cost">
-                            <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{overall_total:.2f}</span>
+                        <div class="total-cost" style="margin: 20px 0; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                            <span style="color: #000000; font-weight: 600; font-size: 16px;">Overall Total Cost: </span>
+                            <span style="color: rgb(22, 163, 74) !important; font-size: 18px; font-weight: 700;">{overall_total:.2f}</span>
                         </div>
 
                         <div class="signature">
@@ -1119,8 +1125,9 @@ class EmailService:
                             </div>
                         </div>
                         
-                        <div class="total-cost">
-                            <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{overall_total:.2f}</span>
+                        <div class="total-cost" style="margin: 20px 0; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                            <span class="label" style="color: #000000; font-weight: 600; font-size: 16px;">Overall Total Cost: </span>
+                            <span class="amount" style="color: rgb(22, 163, 74) !important; font-size: 18px; font-weight: 700;">{overall_total:.2f}</span>
                         </div>
 
                         <div class="signature">
@@ -1578,8 +1585,9 @@ Procurement Team
                             </div>
                         </div>
                         
-                        <div class="total-cost">
-                            <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{overall_total:.2f}</span>
+                        <div class="total-cost" style="margin: 20px 0; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                            <span class="label" style="color: #000000; font-weight: 600; font-size: 16px;">Overall Total Cost: </span>
+                            <span class="amount" style="color: rgb(22, 163, 74) !important; font-size: 18px; font-weight: 700;">{overall_total:.2f}</span>
                         </div>
 
                         <div class="signature">
@@ -1753,7 +1761,7 @@ Project Manager
                 }}
                 table th {{
                     background: #dc2626 !important;
-                    color: #fff !important;
+                    color: white !important;
                     padding: 8px 6px !important;
                     text-align: left !important;
                     font-size: 12px !important;
@@ -2036,8 +2044,9 @@ Project Manager
                             </div>
                         </div>
                         
-                        <div class="total-cost">
-                            <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{overall_total:.2f}</span>
+                        <div class="total-cost" style="margin: 20px 0; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                            <span class="label" style="color: #000000; font-weight: 600; font-size: 16px;">Overall Total Cost: </span>
+                            <span class="amount" style="color: rgb(255, 0, 0) !important; font-size: 18px; font-weight: 700;">{overall_total:.2f}</span>
                         </div>
 
                         <div class="signature">
@@ -2113,12 +2122,12 @@ Project Manager
     def get_estimation_team_emails(self) -> List[str]:
         """Fetch estimation team emails from DB"""
         try:
-            estimation_role = Role.query.filter_by(role='estimation', is_deleted=False).first()
-            if not estimation_role:
+            pm_role = Role.query.filter_by(role='estimation', is_deleted=False).first()
+            if not pm_role:
                 return None
             
             users = User.query.filter_by(
-                role_id=estimation_role.role_id,
+                role_id=pm_role.role_id,
                 is_deleted=False,
                 is_active=True
             ).all()
@@ -2128,6 +2137,8 @@ Project Manager
         except Exception as e:
             log.error(f"Error fetching estimation team emails: {str(e)}")
             return None
+
+
 
     def send_pm_to_estimation_notification(self, purchase_data: Dict, materials_data: List[Dict],
                                           requester_info: Dict, pm_info: Dict) -> bool:
@@ -2343,7 +2354,8 @@ Project Manager
                     margin-bottom: 16px !important;
                     font-weight: 600 !important;
                     border-bottom: 2px solid #4285f4 !important;
-                    padding-bottom: 8px !important;
+                    display: inline-block !important;
+                    padding-bottom: 4px !important;
                 }}
                 .info-section {{
                     background: #ffffff !important;
@@ -2397,8 +2409,8 @@ Project Manager
                     margin: 20px 0 !important;
                     color: #333333 !important;
                 }}
-                .total-cost span {{
-                    color: #4285f4 !important;
+                .total-cost .label {{
+                    color: #000000 !important;
                     font-size: 18px !important;
                 }}
                 .approval-box {{
@@ -2424,9 +2436,9 @@ Project Manager
                     font-weight: 600 !important;
                 }}
                 .footer {{
-                    background-color: #f8f9fa !important;
-                    padding: 20px !important;
                     text-align: center !important;
+                    background: #f8f9fa !important;
+                    padding: 20px !important;
                     font-size: 13px !important;
                     color: #666666 !important;
                     border-top: 1px solid #e0e0e0 !important;
@@ -2437,6 +2449,11 @@ Project Manager
                     margin: 12px auto !important;
                     max-width: 150px !important;
                     height: auto !important;
+                }}
+                .company {{
+                    color: #333333 !important;
+                    font-weight: bold !important;
+                    margin-top: 5px !important;
                 }}
                 .table-container {{
                     overflow-x: auto !important;
@@ -2520,8 +2537,9 @@ Project Manager
                         </table>
                     </div>
                     
-                    <div class="total-cost">
-                        <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{total_cost:.2f}</span>
+                    <div class="total-cost" style="margin: 20px 0; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                        <span class="label" style="color: #000000; font-weight: 600; font-size: 16px;">Overall Total Cost: </span>
+                        <span class="amount" style="color: rgb(22, 163, 74) !important; font-size: 18px; font-weight: 700;">{total_cost:.2f}</span>
                     </div>
                     
                     <div class="approval-box" style="background: #e6f3ff; border: 1px solid #4285f4; border-radius: 4px; padding: 16px; margin: 20px 0;">
@@ -2808,8 +2826,9 @@ Estimation Team
                         </table>
                     </div>
                     
-                    <div class="total-cost">
-                        <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{total_cost:.2f}</span>
+                    <div class="total-cost" style="margin: 20px 0; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                        <span class="label" style="color: #000000; font-weight: 600; font-size: 16px;">Overall Total Cost: </span>
+                        <span class="amount" style="color: rgb(255, 0, 0) !important; font-size: 18px; font-weight: 700;">{total_cost:.2f}</span>
                     </div>
                     
                     <h3>Estimation Team Decision</h3>
@@ -3098,8 +3117,9 @@ Estimation Team
                         </table>
                     </div>
                     
-                    <div class="total-cost">
-                        <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{total_cost:.2f}</span>
+                    <div class="total-cost" style="margin: 20px 0; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                        <span class="label" style="color: #000000; font-weight: 600; font-size: 16px;">Overall Total Cost: </span>
+                        <span class="amount" style="color: rgb(255, 0, 0) !important; font-size: 18px; font-weight: 700;">{total_cost:.2f}</span>
                     </div>
                     
                     <h3>Estimation Team Decision</h3>
@@ -3436,7 +3456,8 @@ Estimation Team
                         </div>
                         
                         <div class="total-cost">
-                            <span style="color: #333333; font-weight: 600;">Overall Total Cost:</span> <span style="color: #4285f4; font-size: 18px; font-weight: 600;">{total_cost:.2f}</span>
+                            <span style="color: #000000; font-weight: 600; font-size: 16px;">Overall Total Cost: </span>
+                            <span style="color: rgb(22, 163, 74) !important; font-size: 18px; font-weight: 700;">{total_cost:.2f}</span>
                         </div>
 
                         <div class="signature">
@@ -3587,14 +3608,13 @@ Meter Square
                     <tbody>
                         {materials_table}
                     </tbody>
-                    <tfoot>
-                        <tr style="background: #f8f9fa; font-weight: bold;">
-                            <td colspan="7" style="padding: 12px; border: 1px solid #ddd; text-align: right;">Total Cost:</td>
-                            <td style="padding: 12px; border: 1px solid #ddd; text-align: right;">${total_cost:.2f}</td>
-                        </tr>
-                    </tfoot>
                 </table>
                 </div>
+            </div>
+
+            <div class="total-cost" style="margin: 20px 0; padding: 10px; background-color: #f8f9fa; border-radius: 4px; border: 1px solid #d1d5db;">
+                <span class="label" style="color: #000000; font-weight: 600; font-size: 16px;">Overall Total Cost: </span>
+                <span class="amount" style="color: rgb(255, 0, 0) !important; font-size: 18px; font-weight: 700;">{total_cost:.2f}</span>
             </div>
 
             <div style="background: #fff3cd; padding: 20px; border-radius: 8px; border-left: 4px solid #ffc107;">
@@ -3661,6 +3681,11 @@ Meter Square
         """Send purchase request email to procurement team"""
         try:
             recipients = self.get_procurement_team_emails()
+
+            if not recipients:
+                log.error("No procurement team emails found - cannot send purchase request notification")
+                return False
+
             subject = f"New Purchase Request"
             html_content = self._generate_purchase_request_email_html(purchase_data, materials_data, requester_info)
             text_content = self._generate_purchase_request_email_text(purchase_data, materials_data, requester_info)

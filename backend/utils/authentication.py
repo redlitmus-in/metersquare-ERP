@@ -7,6 +7,8 @@ import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
+from email.header import Header
+from email.utils import formataddr
 from datetime import datetime
 from datetime import datetime, timedelta
 from sqlalchemy import func
@@ -188,7 +190,7 @@ def send_otp(email_id):
                                         
                                         <div style="text-align: left; margin-top: 35px; font-size: 14px; color: #444;">
                                             Best regards,<br>
-                                            <strong style="color: #243d8a;">Redlitmus Team</strong>
+                                            <strong style="color: #243d8a;">Meter Square Team</strong>
                                         </div>
                                     </td>
                                 </tr>
@@ -208,7 +210,9 @@ def send_otp(email_id):
 
         # Create message with related type for embedded images
         message = MIMEMultipart('related')
-        message["From"] = sender_email
+        # Include display name "Meter Square" in From header
+        sender_name = os.getenv("EMAIL_SENDER_NAME") or os.getenv("SENDER_NAME") or "Meter Square"
+        message["From"] = formataddr((str(Header(sender_name, 'utf-8')), sender_email))
         message["To"] = email_id
         message["Subject"] = subject
         
