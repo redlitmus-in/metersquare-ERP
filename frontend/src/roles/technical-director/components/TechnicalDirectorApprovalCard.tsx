@@ -158,22 +158,6 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
             </div>
           </div>
 
-          {/* Previous Approvals */}
-          {estimationStatus && (
-            <div className="bg-gray-50 rounded-md px-2 py-1.5 text-xs">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-gray-600 truncate">Estimation Status:</span>
-                <Badge 
-                  className={`${estimationStatus === 'approved' ? 
-                    'bg-green-100 text-green-700' : 
-                    'bg-yellow-100 text-yellow-700'} text-xs`}
-                  variant="outline"
-                >
-                  {estimationStatus}
-                </Badge>
-              </div>
-            </div>
-          )}
 
           {/* Comments if rejected */}
           {tdStatus === 'rejected' && purchase.technical_director_rejection_reason && (

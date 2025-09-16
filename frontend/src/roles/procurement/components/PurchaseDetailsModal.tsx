@@ -45,8 +45,6 @@ import {
   File,
   FileImage,
   FileSpreadsheet,
-  Edit,
-  UserCog,
   PenTool
 } from 'lucide-react';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
@@ -556,47 +554,6 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                         </CardContent>
                       </Card>
 
-                      {/* Edit History */}
-                      {(purchase.last_modified_by || purchase.last_modified_at) && (
-                        <Card className="border-0 shadow-sm">
-                          <CardContent className="p-6">
-                            <div className="flex items-center gap-2 mb-4">
-                              <div className="p-2 bg-blue-100 rounded-lg">
-                                <Edit className="w-5 h-5 text-blue-600" />
-                              </div>
-                              <h3 className="text-lg font-semibold text-gray-900">Edit History</h3>
-                            </div>
-                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
-                              <div className="space-y-3">
-                                <div className="flex items-center gap-3">
-                                  <UserCog className="w-5 h-5 text-blue-600" />
-                                  <div>
-                                    <p className="text-xs text-gray-500">Last edited by</p>
-                                    <p className="text-sm font-semibold text-gray-900">{purchase.last_modified_by || 'Procurement Team'}</p>
-                                  </div>
-                                </div>
-                                {purchase.last_modified_at && (
-                                  <div className="flex items-center gap-3">
-                                    <Clock className="w-5 h-5 text-blue-600" />
-                                    <div>
-                                      <p className="text-xs text-gray-500">Last edited on</p>
-                                      <p className="text-sm font-semibold text-gray-900">
-                                        {formatDateTimeLocal(purchase.last_modified_at)}
-                                      </p>
-                                    </div>
-                                  </div>
-                                )}
-                                <div className="mt-2 p-2 bg-white rounded">
-                                  <p className="text-xs text-amber-600">
-                                    <AlertCircle className="w-3 h-3 inline mr-1" />
-                                    Edited purchase requests require re-approval from Project Manager
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
 
                       {/* Document Attachments */}
                       <Card className="border-0 shadow-sm">

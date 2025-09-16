@@ -362,93 +362,6 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
               </div>
             )}
 
-            {/* History Timeline Toggle Button - Always show */}
-            <div className="mt-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleToggleHistory}
-                disabled={loadingHistory}
-                className="w-full h-8 text-xs flex items-center justify-between hover:bg-gray-50"
-              >
-                <div className="flex items-center gap-2">
-                  {loadingHistory ? (
-                    <ModernLoadingSpinners variant="pulse-dots" size="sm" className="h-3" />
-                  ) : (
-                    <History className="w-3 h-3" />
-                  )}
-                  <span className="font-medium">
-                    Approval History {historyData.length > 0 && `(${historyData.length})`}
-                  </span>
-                </div>
-                {showHistory ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              </Button>
-            </div>
-
-            {/* History Timeline */}
-            <AnimatePresence>
-              {showHistory && historyData.length > 0 && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="mt-3 overflow-hidden"
-                >
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <div className="space-y-3">
-                      {historyData.map((item, index) => (
-                        <div key={index} className="relative">
-                          {/* Connection Line */}
-                          {index < historyData.length - 1 && (
-                            <div className="absolute left-2 top-6 bottom-0 w-0.5 bg-gray-300" />
-                          )}
-
-                          <div className="flex items-start gap-3">
-                            {/* Status Icon */}
-                            <div className={`p-1.5 rounded-full ${getHistoryStatusColor(item.status)}`}>
-                              {getHistoryStatusIcon(item.status)}
-                            </div>
-
-                            {/* History Details */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="font-medium text-xs text-gray-900">
-                                  {item.role?.charAt(0).toUpperCase() + item.role?.slice(1)}
-                                </span>
-                                {item.user && (
-                                  <span className="text-xs text-gray-500">
-                                    by {item.user}
-                                  </span>
-                                )}
-                                <Badge className={`text-xs px-1.5 py-0.5 ${getStatusColor(item.status)}`}>
-                                  {item.status?.toUpperCase()}
-                                </Badge>
-                              </div>
-
-                              {/* Comments or Rejection Reason */}
-                              {(item.comments || item.rejection_reason || item.action) && (
-                                <div className="flex items-start gap-1 mb-1">
-                                  <MessageSquare className="w-3 h-3 text-gray-400 mt-0.5" />
-                                  <p className="text-xs text-gray-600">
-                                    {item.rejection_reason || item.comments || item.action}
-                                  </p>
-                                </div>
-                              )}
-
-                              {/* Timestamp */}
-                              <p className="text-xs text-gray-400">
-                                {formatTimestamp(item.timestamp)}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
 
           <Separator className="my-3" />
@@ -552,7 +465,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   onClick={() => onResendToEst(purchase.purchase_id)}
                   disabled={isLoading}
                   className="text-white w-full h-7 text-xs flex items-center justify-center"
-                  style={{ backgroundColor: '#243d8a', hover: { backgroundColor: '#1a2d66' } }}
+                  style={{ backgroundColor: '#243d8a' }}
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a2d66'}
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#243d8a'}
                   title="Send to Project Manager after Estimation revision"

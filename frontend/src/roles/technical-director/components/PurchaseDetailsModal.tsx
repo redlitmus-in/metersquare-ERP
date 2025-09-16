@@ -12,8 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { 
- Package, Calendar, MapPin, User, CheckCircle, 
+import {
+  Package, Calendar, MapPin, User, CheckCircle,
   XCircle, Clock, AlertTriangle, MessageSquare, DollarSign,
   FileText, Building2, Download, Info, RefreshCw,
   Activity, ExternalLink, Users, Mail, Target, Hash,
@@ -424,7 +424,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                     'Content-Type': 'application/json'
                                   }
                                 });
-                                
+
                                 if (response.ok) {
                                   const data = await response.json();
                                   if (data.purchase_files && data.purchase_files.length > 0) {
