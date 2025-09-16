@@ -784,7 +784,7 @@ def get_all_estimation_purchase_request():
         current_user = g.user
         user_id = current_user['user_id']
         user_name = current_user['full_name']
-        
+
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
         # Check if user is Estimation team
@@ -792,22 +792,22 @@ def get_all_estimation_purchase_request():
         if not role or role.role != 'estimation':
             return jsonify({'error': 'Only Estimation team can access purchase requests'}), 403
 
+        # Optimized query without ordering (will sort later)
         all_statuses = PurchaseStatus.query.filter(
             and_(
                 PurchaseStatus.is_active == True,
                 ~PurchaseStatus.role.in_(['siteSupervisor', 'procurement'])
             )
-        ).order_by(PurchaseStatus.created_at.desc()).all()
-        
+        ).all()
+
         latest_overall_status = {}  # Latest status record for display
         estimation_decisions = {}  # Track estimation team's actual decisions
         pm_decisions = {}  # Track PM's decisions
-        
-        # Group statuses by purchase_id
-        purchase_status_map = {}
+
+        # Group statuses by purchase_id using defaultdict for efficiency
+        from collections import defaultdict
+        purchase_status_map = defaultdict(list)
         for status in all_statuses:
-            if status.purchase_id not in purchase_status_map:
-                purchase_status_map[status.purchase_id] = []
             purchase_status_map[status.purchase_id].append(status)
         
         # Process each purchase to find relevant statuses
@@ -852,80 +852,90 @@ def get_all_estimation_purchase_request():
                 estimation_decisions[purchase_id] = {'status': latest_estimation_status}
             else:
                 estimation_decisions[purchase_id] = {'status': 'pending'}
-        # Get completed status information for purchases where sender and receiver are both 'accounts'
-        completed_purchase_status = {}
-        completed_status_records = (
-            PurchaseStatus.query.filter(
-                and_(
-                    PurchaseStatus.is_active == True,
-                    PurchaseStatus.status == 'completed',
-                    PurchaseStatus.sender == 'accounts',
-                    PurchaseStatus.receiver == 'accounts'
-                )
+        # Get completed status information - optimized with set for O(1) lookups
+        completed_status_records = PurchaseStatus.query.filter(
+            and_(
+                PurchaseStatus.is_active == True,
+                PurchaseStatus.status == 'completed',
+                PurchaseStatus.sender == 'accounts',
+                PurchaseStatus.receiver == 'accounts'
             )
-            .order_by(PurchaseStatus.created_at.desc())
-            .all()
-        )
+        ).all()
 
-        # Track which purchases are completed with full details
-        for complete_status in completed_status_records:
-            completed_purchase_status[complete_status.purchase_id] = complete_status
-            
+        # Use set for O(1) lookup performance
+        completed_purchase_ids = {cs.purchase_id for cs in completed_status_records}
+        completed_purchase_status = {cs.purchase_id: cs for cs in completed_status_records}
+
+        # Batch load all purchases at once to avoid N+1 queries
+        purchase_ids = list(latest_overall_status.keys())
+        all_purchases = {p.purchase_id: p for p in
+                        Purchase.query.filter(
+                            and_(Purchase.purchase_id.in_(purchase_ids),
+                                Purchase.is_deleted == False)
+                        ).all()}
+
+        # Collect all material IDs for batch loading
+        all_material_ids = set()
+        for p in all_purchases.values():
+            if p.material_ids:
+                all_material_ids.update(p.material_ids)
+
+        # Batch load all materials at once
+        all_materials = {}
+        if all_material_ids:
+            all_materials = {m.material_id: m for m in
+                           Material.query.filter(
+                               and_(Material.material_id.in_(list(all_material_ids)),
+                                   Material.is_deleted == False)
+                           ).all()}
+
+        # Initialize statistics tracking for single-pass calculation
+        stats = {'approved': {'count': 0, 'value': 0, 'quantity': 0},
+                'rejected': {'count': 0, 'value': 0, 'quantity': 0},
+                'pending': {'count': 0, 'value': 0, 'quantity': 0}}
+        total_value = 0
+        total_quantity_sum = 0
+
         purchase_details = []
         for purchase_id, status in latest_overall_status.items():
-            # Get purchase details
-            purchase = Purchase.query.filter_by(
-                purchase_id=purchase_id, 
-                is_deleted=False
-            ).first()
+            # Use cached purchase data
+            purchase = all_purchases.get(purchase_id)
             if not purchase:
                 continue
-            # Get materials for this purchase
+
+            # Process materials using cached data
             materials = []
             total_material_cost = 0
             total_quantity = 0
             if purchase.material_ids:
-                material_objects = Material.query.filter(
-                    and_(
-                        Material.is_deleted == False,
-                        Material.material_id.in_(purchase.material_ids)
-                    )
-                ).all()
-                
+                # Get materials from cache
+                material_objects = [all_materials.get(mid) for mid in purchase.material_ids
+                                  if mid in all_materials]
+
                 for mat in material_objects:
-                    material_cost = float(mat.cost) if mat.cost else 0
-                    material_total = material_cost * mat.quantity
-                    total_material_cost += material_total
-                    total_quantity += mat.quantity
-                    
-                    materials.append({
-                        'material_id': mat.material_id,
-                        'description': mat.description,
-                        'specification': mat.specification,
-                        'unit': mat.unit,
-                        'quantity': mat.quantity,
-                        'category': mat.category,
-                        'unit_cost': material_cost,
-                        'total_cost': material_total,
-                        'priority': mat.priority,
-                        'design_reference': mat.design_reference
-                    })
+                    if mat:  # Check if material exists in cache
+                        material_cost = float(mat.cost or 0)  # Simplified null check
+                        material_total = material_cost * mat.quantity
+                        total_material_cost += material_total
+                        total_quantity += mat.quantity
+
+                        materials.append({
+                            'material_id': mat.material_id,
+                            'description': mat.description,
+                            'specification': mat.specification,
+                            'unit': mat.unit,
+                            'quantity': mat.quantity,
+                            'category': mat.category,
+                            'unit_cost': material_cost,
+                            'total_cost': material_total,
+                            'priority': mat.priority,
+                            'design_reference': mat.design_reference
+                        })
             est_decision = estimation_decisions.get(purchase_id, {}).get('status', 'pending')
             pm_decision = pm_decisions.get(purchase_id, {}).get('status', 'pending')
             
-            # Determine completed_status based on your requirements
-            # Check if there's a completed status record where sender='accounts', receiver='accounts', is_active=True, status='completed'
-            if purchase_id in completed_purchase_status:
-                completed_record = completed_purchase_status[purchase_id]
-                if (completed_record.sender == 'accounts' and 
-                    completed_record.receiver == 'accounts' and 
-                    completed_record.is_active and 
-                    completed_record.status == 'completed'):
-                    completed_status_value = 'completed'
-                else:
-                    completed_status_value = 'pending'
-            else:
-                completed_status_value = 'pending'
+            # Simplified completed status check using set for O(1) lookup
+            completed_status_value = 'completed' if purchase_id in completed_purchase_ids else 'pending'
             
             # Create detailed purchase information
             purchase_detail = {
@@ -965,6 +975,13 @@ def get_all_estimation_purchase_request():
             
             purchase_details.append(purchase_detail)
 
+            # Update statistics in single pass (avoiding multiple iterations)
+            stats[est_decision]['count'] += 1
+            stats[est_decision]['value'] += total_material_cost
+            stats[est_decision]['quantity'] += total_quantity
+            total_value += total_material_cost
+            total_quantity_sum += total_quantity
+
         # Sort by latest status creation date (newest first)
         purchase_details.sort(key=lambda x: x['status_info']['created_at'], reverse=True)
 
@@ -990,17 +1007,17 @@ def get_all_estimation_purchase_request():
             'success': True,
             'summary': {
                 'total_count': total_count,
-                'approved_count': approved_count,
-                'rejected_count': rejected_count,
-                'pending_count': pending_count,
+                'approved_count': stats['approved']['count'],
+                'rejected_count': stats['rejected']['count'],
+                'pending_count': stats['pending']['count'],
                 'total_value': round(total_value, 2),
-                'approved_value': round(approved_value, 2),
-                'rejected_value': round(rejected_value, 2),
-                'pending_value': round(pending_value, 2),
-                'total_quantity': total_quantity,
-                'approved_quantity': approved_quantity,
-                'rejected_quantity': rejected_quantity,
-                'pending_quantity': pending_quantity
+                'approved_value': round(stats['approved']['value'], 2),
+                'rejected_value': round(stats['rejected']['value'], 2),
+                'pending_value': round(stats['pending']['value'], 2),
+                'total_quantity': total_quantity_sum,
+                'approved_quantity': stats['approved']['quantity'],
+                'rejected_quantity': stats['rejected']['quantity'],
+                'pending_quantity': stats['pending']['quantity']
             },
             'purchases': purchase_details,
             'user_info': {
