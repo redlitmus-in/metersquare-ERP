@@ -1,5 +1,6 @@
 from flask import g, request, jsonify
 from datetime import datetime
+import threading
 
 from sqlalchemy import and_, or_
 from models.purchase_status import PurchaseStatus
@@ -179,21 +180,13 @@ def estimation_approval_workflow():
             log.error(f"Error updating purchase status in database: {str(e)}")
             return jsonify({'error': 'Failed to update purchase status in database'}), 500
 
-        # Send appropriate email based on decision
-        email_service = EmailService()
-        email_success = False
-        message = ""
-        
         # Check if this is a resubmission
-        is_resubmission = (existing_estimation_status and 
-                          existing_estimation_status.status == 'rejected' and 
+        is_resubmission = (existing_estimation_status and
+                          existing_estimation_status.status == 'rejected' and
                           (pm_approved_after_estimation or procurement_resubmitted_after_estimation or purchase_modified_after_estimation))
-        
+
+        # Prepare message based on decision
         if estimation_status == 'approved':
-            # Estimation approves - send to Technical Director
-            email_success = email_service.send_estimation_to_technical_director_notification(
-                purchase_data, materials, requester_info, estimation_info
-            )
             if is_resubmission:
                 message = f'Purchase request #{purchase_id} approved by Estimation team (resubmission) and sent to Technical Director'
             else:
@@ -201,23 +194,56 @@ def estimation_approval_workflow():
         else:
             # Estimation rejects - send based on rejection type
             if rejection_type == 'cost':
-                # Cost rejection - send back to Procurement team
-                email_success = email_service.send_estimation_cost_rejection_to_procurement(
-                    purchase_data, materials, requester_info, estimation_info, rejection_reason
-                )
                 if is_resubmission:
                     message = f'Purchase request #{purchase_id} rejected by Estimation team (Cost rejection - resubmission) and sent back to Procurement team'
                 else:
                     message = f'Purchase request #{purchase_id} rejected by Estimation team (Cost rejection) and sent back to Procurement team'
             else:  # pm_flag
-                # PM flag rejection - send back to Project Manager
-                email_success = email_service.send_estimation_pm_flag_rejection_to_pm(
-                    purchase_data, materials, requester_info, estimation_info, rejection_reason
-                )
                 if is_resubmission:
                     message = f'Purchase request #{purchase_id} rejected by Estimation team (PM Flag - resubmission) and sent back to Project Manager'
                 else:
                     message = f'Purchase request #{purchase_id} rejected by Estimation team (PM Flag) and sent back to Project Manager'
+
+        # Send email asynchronously in background thread
+        def send_email_async():
+            try:
+                email_service = EmailService()
+                if estimation_status == 'approved':
+                    # Estimation approves - send to Technical Director
+                    success = email_service.send_estimation_to_technical_director_notification(
+                        purchase_data, materials, requester_info, estimation_info
+                    )
+                    if success:
+                        log.info(f"Email sent successfully for approved purchase #{purchase_id} to Technical Director")
+                    else:
+                        log.warning(f"Failed to send email for approved purchase #{purchase_id}")
+                else:
+                    # Estimation rejects - send based on rejection type
+                    if rejection_type == 'cost':
+                        # Cost rejection - send back to Procurement team
+                        success = email_service.send_estimation_cost_rejection_to_procurement(
+                            purchase_data, materials, requester_info, estimation_info, rejection_reason
+                        )
+                        if success:
+                            log.info(f"Email sent successfully for cost-rejected purchase #{purchase_id} to Procurement")
+                        else:
+                            log.warning(f"Failed to send email for cost-rejected purchase #{purchase_id}")
+                    else:  # pm_flag
+                        # PM flag rejection - send back to Project Manager
+                        success = email_service.send_estimation_pm_flag_rejection_to_pm(
+                            purchase_data, materials, requester_info, estimation_info, rejection_reason
+                        )
+                        if success:
+                            log.info(f"Email sent successfully for PM-flag-rejected purchase #{purchase_id} to Project Manager")
+                        else:
+                            log.warning(f"Failed to send email for PM-flag-rejected purchase #{purchase_id}")
+            except Exception as e:
+                log.error(f"Error sending email for purchase #{purchase_id}: {str(e)}")
+
+        # Start email thread
+        email_thread = threading.Thread(target=send_email_async)
+        email_thread.daemon = True  # Daemon thread will not block app shutdown
+        email_thread.start()
 
         # Append purchase history single-row action (no separate email action)
         try:
@@ -292,7 +318,7 @@ def estimation_approval_workflow():
         except Exception as he:
             log.error(f"Failed to append purchase history (Estimation flow): {str(he)}")
 
-        # Return response
+        # Return response immediately (email is being sent in background)
         response_data = {
             'success': True,
             'message': message,
@@ -300,22 +326,13 @@ def estimation_approval_workflow():
             'estimation_status': updated_status.status,
             'decision_date': updated_status.decision_date.isoformat() if updated_status.decision_date else None,
             'decision_by': updated_status.created_by,
-            'comments': updated_status.comments
+            'comments': updated_status.comments,
+            'email_status': 'Email notification is being sent in background'
         }
-        
+
         if estimation_status == 'rejected':
             response_data['rejection_reason'] = updated_status.rejection_reason
             response_data['rejection_type'] = rejection_type
-        
-        if not email_success:
-            response_data['email_warning'] = 'Status updated but email notification failed'
-        else:
-            # Update the existing status entry to indicate email was sent
-            try:
-                updated_status.comments = f"{updated_status.comments} (Email sent to {receiver_role})"
-                db.session.commit()
-            except Exception as e:
-                log.error(f"Error updating status comments: {str(e)}")
 
         return jsonify(response_data), 200
 

@@ -1,5 +1,6 @@
 from flask import g, request, jsonify
 from datetime import datetime
+import threading
 
 from sqlalchemy import and_
 from models.purchase_status import PurchaseStatus
@@ -9,71 +10,73 @@ from config.logging import get_logger
 
 from config.db import db
 from models.role import Role
-from models.purchase import Purchase 
+from models.purchase import Purchase
 from models.purchase_history import PurchaseHistory
 
 log = get_logger()
 
 def pm_approval_workflow():
-    """Project Manager approval workflow - approve/reject with email notifications"""
+    """Optimized Project Manager approval workflow with fast email"""
     try:
         current_user = g.user
         user_id = current_user['user_id']
         user_name = current_user['full_name']
-        
+
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
         # Check if user is Project Manager
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
         if not role or role.role != 'projectManager':
-            return jsonify({'error': 'Only Project Manager can approved/rejectd purchase requests'}), 403
+            return jsonify({'error': 'Only Project Manager can approved/rejected purchase requests'}), 403
 
+        # Parse request data
         data = request.get_json()
         purchase_id = data.get('purchase_id')
         purchase_status = data.get('purchase_status', '').lower()
         rejection_reason = data.get('rejection_reason', '')
         comments = data.get('comments', '')
-        
+        reject_category = data.get('reject_category', 'pm_flag')  # Default reject category
+
         # Validate purchase_status
         if purchase_status not in ['approved', 'rejected']:
             return jsonify({'error': 'purchase_status must be either "approved" or "rejected"'}), 400
-        
+
         # If rejecting, require rejection reason
         if purchase_status == 'rejected' and (not rejection_reason or rejection_reason.strip() == ''):
             return jsonify({'error': 'rejection_reason is required when purchase_status is "rejected"'}), 400
 
-        # Get purchase request
+        # Get purchase request with optimized query
         purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
         if not purchase:
             return jsonify({'error': 'Purchase request not found'}), 404
 
-        # Check if PM already made a decision, but allow resubmission
-        existing_pm_status = PurchaseStatus.get_absolute_latest_status_by_role(purchase_id, 'projectManager')
-        log.info(f"Existing PM status for purchase #{purchase_id}: {existing_pm_status.status if existing_pm_status else 'None'}")
-        
+        # Check if PM already made a decision
+        existing_pm_status = PurchaseStatus.query.filter_by(
+            purchase_id=purchase_id,
+            role='projectManager'
+        ).order_by(PurchaseStatus.created_at.desc()).first()
+
+        latest_procurement_status = None
+        purchase_modified_after_pm = False
+        is_resubmission = False
+
         if existing_pm_status and existing_pm_status.status in ['approved', 'rejected']:
-            # Check if there's a more recent procurement status that indicates resubmission
-            latest_procurement_status = PurchaseStatus.get_absolute_latest_status_by_role(purchase_id, 'procurement')
-            log.info(f"Latest procurement status for purchase #{purchase_id}: {latest_procurement_status.status if latest_procurement_status else 'None'}")
-            
-            # Also check if the purchase was modified after the PM's last decision
-            purchase_modified_after_pm = purchase.last_modified_at and existing_pm_status.created_at and purchase.last_modified_at > existing_pm_status.created_at
-            
-            if latest_procurement_status:
-                log.info(f"PM status created at: {existing_pm_status.created_at}")
-                log.info(f"Procurement status created at: {latest_procurement_status.created_at}")
-                log.info(f"Procurement is newer: {latest_procurement_status.created_at > existing_pm_status.created_at}")
-            
-            log.info(f"Purchase modified after PM decision: {purchase_modified_after_pm}")
-            if purchase.last_modified_at and existing_pm_status.created_at:
-                log.info(f"Purchase last modified at: {purchase.last_modified_at}")
-                log.info(f"PM status created at: {existing_pm_status.created_at}")
-            
-            # 2. The purchase was modified after the PM's last decision
-            if (latest_procurement_status and latest_procurement_status.created_at > existing_pm_status.created_at) or purchase_modified_after_pm:
-                # Allow PM to make a new decision since procurement has resubmitted or purchase was modified
+            # Check for resubmission
+            latest_procurement_status = PurchaseStatus.query.filter_by(
+                purchase_id=purchase_id,
+                role='procurement'
+            ).order_by(PurchaseStatus.created_at.desc()).first()
+
+            purchase_modified_after_pm = purchase.last_modified_at and existing_pm_status.created_at and \
+                                       purchase.last_modified_at > existing_pm_status.created_at
+
+            if latest_procurement_status and latest_procurement_status.created_at > existing_pm_status.created_at:
+                is_resubmission = True
                 log.info(f"Allowing PM to make new decision for purchase #{purchase_id} - resubmission detected")
+            elif purchase_modified_after_pm:
+                is_resubmission = True
+                log.info(f"Allowing PM to make new decision for purchase #{purchase_id} - purchase modified after PM decision")
             else:
                 log.warning(f"Blocking PM decision for purchase #{purchase_id} - no resubmission detected")
                 return jsonify({'error': f'Project Manager has already {existing_pm_status.status} this purchase request'}), 400
@@ -152,32 +155,47 @@ def pm_approval_workflow():
             log.error(f"Error updating purchase status in database: {str(e)}")
             return jsonify({'error': 'Failed to update purchase status in database'}), 500
 
-        # Send appropriate email based on decision
-        email_service = EmailService()
-        email_success = False
-        message = ""
-        
-        # Check if this is a resubmission
-        is_resubmission = existing_pm_status and existing_pm_status.status == 'rejected' and ((latest_procurement_status and latest_procurement_status.created_at > existing_pm_status.created_at) or purchase_modified_after_pm)
-        
+        # Prepare message
         if purchase_status == 'approved':
-            # PM approves - send to Estimation team
-            email_success = email_service.send_pm_to_estimation_notification(
-                purchase_data, materials, requester_info, pm_info
-            )
             if is_resubmission:
                 message = f'Purchase request #{purchase_id} approved by Project Manager (resubmission) and sent to Estimation team'
             else:
                 message = f'Purchase request #{purchase_id} approved by Project Manager and sent to Estimation team'
         else:
-            # PM rejects - send back to Procurement team
-            email_success = email_service.send_pm_rejection_to_procurement(
-                purchase_data, materials, requester_info, pm_info, rejection_reason
-            )
             if is_resubmission:
                 message = f'Purchase request #{purchase_id} rejected by Project Manager (resubmission) and sent back to Procurement team'
             else:
                 message = f'Purchase request #{purchase_id} rejected by Project Manager and sent back to Procurement team'
+
+        # Send email asynchronously in background thread
+        def send_email_async():
+            try:
+                email_service = EmailService()
+                if purchase_status == 'approved':
+                    # PM approves - send to Estimation team
+                    success = email_service.send_pm_to_estimation_notification(
+                        purchase_data, materials, requester_info, pm_info
+                    )
+                    if success:
+                        log.info(f"Email sent successfully for approved purchase #{purchase_id}")
+                    else:
+                        log.warning(f"Failed to send email for approved purchase #{purchase_id}")
+                else:
+                    # PM rejects - send back to Procurement team
+                    success = email_service.send_pm_rejection_to_procurement(
+                        purchase_data, materials, requester_info, pm_info, rejection_reason
+                    )
+                    if success:
+                        log.info(f"Email sent successfully for rejected purchase #{purchase_id}")
+                    else:
+                        log.warning(f"Failed to send email for rejected purchase #{purchase_id}")
+            except Exception as e:
+                log.error(f"Error sending email for purchase #{purchase_id}: {str(e)}")
+
+        # Start email thread
+        email_thread = threading.Thread(target=send_email_async)
+        email_thread.daemon = True  # Daemon thread will not block app shutdown
+        email_thread.start()
 
         # Append purchase history single-row action (no separate email action)
         try:
@@ -243,7 +261,7 @@ def pm_approval_workflow():
         except Exception as he:
             log.error(f"Failed to append purchase history (PM flow): {str(he)}")
 
-        # Return response
+        # Return response immediately (email is being sent in background)
         response_data = {
             'success': True,
             'message': message,
@@ -251,18 +269,12 @@ def pm_approval_workflow():
             'pm_status': updated_status.status,
             'decision_date': updated_status.decision_date.isoformat() if updated_status.decision_date else None,
             'decision_by': updated_status.created_by,
-            'comments': updated_status.comments
+            'comments': updated_status.comments,
+            'email_status': 'Email notification is being sent in background'
         }
-        
+
         if purchase_status == 'rejected':
             response_data['rejection_reason'] = updated_status.rejection_reason
-        
-        if not email_success:
-            response_data['email_warning'] = 'Status updated but email notification failed'
-            log.warning(f"Purchase status updated but email failed for purchase #{purchase_id}")
-        else:
-            # Do not create a second email status to avoid duplicate records
-            pass
 
         return jsonify(response_data), 200
 
@@ -296,80 +308,6 @@ def _get_purchase_materials(purchase):
         'created_at': mat.created_at.isoformat() if hasattr(mat, 'created_at') and mat.created_at else None,
         'updated_at': mat.updated_at.isoformat() if hasattr(mat, 'updated_at') and mat.updated_at else None
     } for mat in materials]
-
-def _process_estimation_rejections(estimation_pm_rejection_statuses):
-    """Helper: Process estimation PM rejections"""
-    estimation_pm_rejected_purchase_ids = list({s.purchase_id for s in estimation_pm_rejection_statuses})
-    estimation_pm_rejections = []
-    pm_status = 'pending'
-    for purchase_id in estimation_pm_rejected_purchase_ids:
-        absolute_latest_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id).first()
-        rejected_status = next((s for s in estimation_pm_rejection_statuses if s.purchase_id == purchase_id), None)
-        
-        if not rejected_status:
-            continue
-        
-        # Skip this rejection if there exists ANY PM approval after the rejection timestamp
-        pm_approval_after_rejection = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.purchase_id == purchase_id,
-                PurchaseStatus.sender == 'projectManager',
-                PurchaseStatus.status == 'approved',
-                PurchaseStatus.created_at > rejected_status.created_at
-            )
-        ).first()
-        if pm_approval_after_rejection:
-            continue
-
-        # Also skip if the absolute latest status is an approval that clearly supersedes the rejection
-        if absolute_latest_status and absolute_latest_status.status_id != rejected_status.status_id:
-            if absolute_latest_status.status == 'approved' and (
-                absolute_latest_status.sender in ['projectManager', 'technicalDirector', 'accounts'] or
-                absolute_latest_status.receiver in ['technicalDirector', 'accounts', 'design']
-            ) and absolute_latest_status.created_at > rejected_status.created_at:
-                continue
-        if absolute_latest_status.sender == 'estimation' and absolute_latest_status.receiver == 'projectManager' and absolute_latest_status.status == 'rejected':
-            pm_status = 'pending'
-        purchase = Purchase.query.filter(and_(Purchase.purchase_id == purchase_id, Purchase.is_deleted == False)).first()
-        if purchase:
-            estimation_pm_rejections.append({
-                'purchase_id': purchase.purchase_id,
-                'site_location': purchase.site_location,
-                'purpose': purchase.purpose,
-                'date': purchase.date.isoformat() if hasattr(purchase.date, 'isoformat') else purchase.date,
-                'created_at': purchase.created_at.isoformat() if hasattr(purchase.created_at, 'isoformat') else purchase.created_at,
-                'rejected_status': {
-                    'pm_status' : pm_status,
-                    'status_id': rejected_status.status_id,
-                    'status': rejected_status.status,
-                    'sender': rejected_status.sender,
-                    'receiver': rejected_status.receiver,
-                    'decision_date': rejected_status.decision_date.isoformat() if hasattr(rejected_status, 'decision_date') and rejected_status.decision_date else None,
-                    'created_at': rejected_status.created_at.isoformat() if hasattr(rejected_status, 'created_at') and rejected_status.created_at else None,
-                    'created_by': rejected_status.created_by,
-                    'comments': rejected_status.comments,
-                    'rejection_reason': rejected_status.rejection_reason,
-                    'reject_category': rejected_status.reject_category,
-                }
-            })
-    
-    # Ensure uniqueness in rejections
-    if estimation_pm_rejections:
-        def _parse_rej_dt(item):
-            try:
-                dt = item.get('rejected_status', {}).get('created_at')
-                return datetime.fromisoformat(dt) if dt else datetime.min
-            except Exception:
-                return datetime.min
-
-        unique_rejections = {}
-        for item in estimation_pm_rejections:
-            pid = item.get('purchase_id')
-            if pid not in unique_rejections or _parse_rej_dt(item) > _parse_rej_dt(unique_rejections[pid]):
-                unique_rejections[pid] = item
-        estimation_pm_rejections = list(unique_rejections.values())
-    
-    return estimation_pm_rejections
 
 def get_procurement_approved_purchases():
     """Ultra-fast optimized purchase retrieval with parallel processing"""
