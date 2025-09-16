@@ -126,7 +126,7 @@ const ProcurementHub: React.FC = () => {
       try {
         purchaseData = await procurementService.getPurchases();
         setPurchases(purchaseData);
-        
+
         // Track emails sent to PM
         const emailedSet = new Set<number>();
         purchaseData.forEach((p: Purchase) => {
@@ -142,22 +142,17 @@ const ProcurementHub: React.FC = () => {
         setPurchases([]);
         toast.error(error.message || 'Failed to fetch purchase requests');
       }
-      
-      try {
-        metricsData = await procurementService.getDashboardMetrics();
-      } catch (error: any) {
-        console.error('Error fetching metrics:', error);
-        // Use default/calculated metrics if dashboard endpoint fails
-        metricsData = {
-          totalPurchaseValue: purchaseData.reduce((sum, p) => {
-            const amount = p.materials?.reduce((s, m) => s + (m.quantity * m.cost), 0) || 0;
-            return sum + amount;
-          }, 0),
-          totalRequisitions: purchaseData.length,
-          pendingRequisitions: purchaseData.filter(p => !p.latest_status || p.latest_status === 'pending').length,
-          vendorPerformance: 92
-        };
-      }
+
+      // Calculate metrics from purchase data without calling dashboard API
+      metricsData = {
+        totalPurchaseValue: purchaseData.reduce((sum, p) => {
+          const amount = p.materials?.reduce((s, m) => s + (m.quantity * m.cost), 0) || 0;
+          return sum + amount;
+        }, 0),
+        totalRequisitions: purchaseData.length,
+        pendingRequisitions: purchaseData.filter(p => !p.latest_status || p.latest_status === 'pending').length,
+        vendorPerformance: 95 // Default vendor performance
+      };
 
       // Set metrics with safe access
       setMetrics([
@@ -1154,6 +1149,7 @@ const ProcurementHub: React.FC = () => {
         }}
         purchaseId={selectedPurchaseId}
         mode={modalMode}
+        activeTab={activeTab}
       />
 
       {/* Confirmation Dialog */}

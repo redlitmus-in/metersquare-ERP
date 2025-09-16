@@ -51,6 +51,16 @@ export interface Purchase {
     last_modified_by?: string;
     purchase_id?: number;
   };
+  history?: Array<{
+    role: string;
+    user?: string;
+    status: string;
+    timestamp: string;
+    comments?: string;
+    action?: string;
+    rejection_reason?: string;
+    reject_category?: string;
+  }>;
   status?: string;
   latest_status?: any;
   // Additional fields from API response

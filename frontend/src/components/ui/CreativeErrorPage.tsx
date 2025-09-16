@@ -6,12 +6,16 @@ import ModernLoadingSpinners from './ModernLoadingSpinners';
 interface CreativeErrorPageProps {
   variant?: 'floating-shapes' | 'liquid-motion' | 'particle-field' | 'geometric-maze' | 'wave-distortion';
   errorCode?: string;
+  errorTitle?: string;
+  errorMessage?: string;
   onRefresh?: () => void;
 }
 
 const CreativeErrorPage: React.FC<CreativeErrorPageProps> = ({
   variant = 'floating-shapes',
   errorCode = '404',
+  errorTitle,
+  errorMessage,
   onRefresh
 }) => {
   const navigate = useNavigate();
@@ -78,6 +82,12 @@ const CreativeErrorPage: React.FC<CreativeErrorPageProps> = ({
               transition={{ delay: 0.3 }}
               className="mt-8 space-y-4"
             >
+              {(errorTitle || errorMessage) && (
+                <div className="mb-6">
+                  {errorTitle && <h2 className="text-2xl font-semibold text-white mb-2">{errorTitle}</h2>}
+                  {errorMessage && <p className="text-white/70">{errorMessage}</p>}
+                </div>
+              )}
               <div className="flex justify-center gap-2">
                 {[...Array(3)].map((_, i) => (
                   <motion.div
@@ -191,7 +201,8 @@ const CreativeErrorPage: React.FC<CreativeErrorPageProps> = ({
           transition={{ delay: 0.5 }}
           className="mt-8"
         >
-          <p className="text-gray-600 mb-8 text-lg">The page you're looking for seems to be missing</p>
+          {errorTitle && <h2 className="text-2xl font-semibold text-gray-800 mb-3">{errorTitle}</h2>}
+          <p className="text-gray-600 mb-8 text-lg">{errorMessage || "The page you're looking for seems to be missing"}</p>
           <motion.button
             onClick={() => navigate('/')}
             className="px-8 py-3 bg-gradient-to-r from-gray-800 to-gray-700 text-white rounded-lg shadow-lg hover:from-gray-700 hover:to-gray-600 hover:shadow-xl transition-all"
@@ -274,7 +285,14 @@ const CreativeErrorPage: React.FC<CreativeErrorPageProps> = ({
               transition={{ duration: 3, repeat: Infinity }}
             />
           </div>
-          
+
+          {(errorTitle || errorMessage) && (
+            <div className="mt-8">
+              {errorTitle && <h2 className="text-2xl font-medium text-white mb-2">{errorTitle}</h2>}
+              {errorMessage && <p className="text-white/60">{errorMessage}</p>}
+            </div>
+          )}
+
           <div className="mt-12 flex justify-center gap-4">
             <motion.button
               onClick={() => navigate(-1)}
@@ -344,7 +362,14 @@ const CreativeErrorPage: React.FC<CreativeErrorPageProps> = ({
             <motion.div className="w-8 h-1 bg-blue-500" animate={{ scaleX: [1, 0, 1] }} transition={{ duration: 2, repeat: Infinity, delay: 0.2 }} />
             <motion.div className="w-8 h-1 bg-green-500" animate={{ scaleX: [1, 0, 1] }} transition={{ duration: 2, repeat: Infinity, delay: 0.4 }} />
           </div>
-          
+
+          {(errorTitle || errorMessage) && (
+            <div className="mb-6 text-center">
+              {errorTitle && <h2 className="text-xl font-semibold text-gray-800 mb-2">{errorTitle}</h2>}
+              {errorMessage && <p className="text-gray-600">{errorMessage}</p>}
+            </div>
+          )}
+
           <button
             onClick={() => navigate('/')}
             className="w-full py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
@@ -405,7 +430,19 @@ const CreativeErrorPage: React.FC<CreativeErrorPageProps> = ({
             </h2>
           </div>
         </motion.div>
-        
+
+        {(errorTitle || errorMessage) && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mt-8 text-center"
+          >
+            {errorTitle && <h2 className="text-2xl font-semibold text-white mb-2">{errorTitle}</h2>}
+            {errorMessage && <p className="text-white/70">{errorMessage}</p>}
+          </motion.div>
+        )}
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

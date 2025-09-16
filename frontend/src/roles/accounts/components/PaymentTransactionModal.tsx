@@ -42,7 +42,7 @@ import {
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { accountsService } from '../services/accountsService';
 import { toast } from 'sonner';
-import jsPDF from 'jspdf';
+// jsPDF will be dynamically imported when needed
 
 interface PaymentTransactionModalProps {
   isOpen: boolean;
@@ -160,9 +160,11 @@ const PaymentTransactionModal: React.FC<PaymentTransactionModalProps> = ({
     }
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     if (!transactionData) return;
 
+    // Dynamically import jsPDF to reduce initial bundle size
+    const { default: jsPDF } = await import('jspdf');
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();

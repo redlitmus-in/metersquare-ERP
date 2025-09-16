@@ -1,25 +1,31 @@
-import React, { forwardRef } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  FileText, 
-  Building2, 
-  Calendar, 
-  DollarSign, 
-  Package, 
-  Eye, 
-  Edit, 
-  Mail, 
+import React, { forwardRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  FileText,
+  Building2,
+  Calendar,
+  DollarSign,
+  Package,
+  Eye,
+  Edit,
+  Mail,
   MailCheck,
   AlertCircle,
   CheckCircle,
   Clock,
-  History
+  History,
+  ChevronDown,
+  ChevronUp,
+  User,
+  XCircle,
+  MessageSquare
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
+import { procurementService } from '@/roles/procurement/services/procurementService';
 
 interface Material {
   material_id: number;
@@ -58,6 +64,16 @@ interface Purchase {
     }>;
     [key: string]: any;
   };
+  history?: Array<{
+    role: string;
+    user?: string;
+    status: string;
+    timestamp: string;
+    comments?: string;
+    action?: string;
+    rejection_reason?: string;
+    reject_category?: string;
+  }>;
   created_at: string;
   status_role?: string;
   status_sender?: string;
@@ -91,8 +107,12 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
   emailSent = false,
   sendingEmail = false
 }, ref) => {
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
   // Calculate total amount from materials
-  const totalAmount = purchase.materials?.reduce((sum, m) => 
+  const totalAmount = purchase.materials?.reduce((sum, m) =>
     sum + (m.quantity * m.cost), 0
   ) || 0;
 
@@ -181,6 +201,72 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
+  };
+
+  // Helper function to get status icon for history
+  const getHistoryStatusIcon = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'approved':
+        return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'rejected':
+        return <XCircle className="w-4 h-4 text-red-600" />;
+      case 'completed':
+      case 'complete':
+        return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'pending':
+        return <Clock className="w-4 h-4 text-yellow-600" />;
+      default:
+        return <AlertCircle className="w-4 h-4 text-blue-600" />;
+    }
+  };
+
+  // Helper function to get status color for history
+  const getHistoryStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'approved':
+        return 'text-green-600 bg-green-50';
+      case 'rejected':
+        return 'text-red-600 bg-red-50';
+      case 'completed':
+      case 'complete':
+        return 'text-green-600 bg-green-50';
+      case 'pending':
+        return 'text-yellow-600 bg-yellow-50';
+      default:
+        return 'text-blue-600 bg-blue-50';
+    }
+  };
+
+  // Format timestamp for display
+  const formatTimestamp = (timestamp: string) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Fetch history data when expanding
+  const handleToggleHistory = async () => {
+    if (!showHistory && historyData.length === 0) {
+      // Only fetch if we're opening and haven't fetched yet
+      setLoadingHistory(true);
+      try {
+        const response = await procurementService.getPurchaseHistory(purchase.purchase_id);
+        if (response.purchase?.history) {
+          setHistoryData(response.purchase.history);
+        }
+      } catch (error) {
+        console.error('Failed to fetch history:', error);
+      } finally {
+        setLoadingHistory(false);
+      }
+    }
+    setShowHistory(!showHistory);
   };
 
   return (
@@ -275,6 +361,94 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                 </div>
               </div>
             )}
+
+            {/* History Timeline Toggle Button - Always show */}
+            <div className="mt-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleToggleHistory}
+                disabled={loadingHistory}
+                className="w-full h-8 text-xs flex items-center justify-between hover:bg-gray-50"
+              >
+                <div className="flex items-center gap-2">
+                  {loadingHistory ? (
+                    <ModernLoadingSpinners variant="pulse-dots" size="sm" className="h-3" />
+                  ) : (
+                    <History className="w-3 h-3" />
+                  )}
+                  <span className="font-medium">
+                    Approval History {historyData.length > 0 && `(${historyData.length})`}
+                  </span>
+                </div>
+                {showHistory ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </Button>
+            </div>
+
+            {/* History Timeline */}
+            <AnimatePresence>
+              {showHistory && historyData.length > 0 && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="mt-3 overflow-hidden"
+                >
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="space-y-3">
+                      {historyData.map((item, index) => (
+                        <div key={index} className="relative">
+                          {/* Connection Line */}
+                          {index < historyData.length - 1 && (
+                            <div className="absolute left-2 top-6 bottom-0 w-0.5 bg-gray-300" />
+                          )}
+
+                          <div className="flex items-start gap-3">
+                            {/* Status Icon */}
+                            <div className={`p-1.5 rounded-full ${getHistoryStatusColor(item.status)}`}>
+                              {getHistoryStatusIcon(item.status)}
+                            </div>
+
+                            {/* History Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-medium text-xs text-gray-900">
+                                  {item.role?.charAt(0).toUpperCase() + item.role?.slice(1)}
+                                </span>
+                                {item.user && (
+                                  <span className="text-xs text-gray-500">
+                                    by {item.user}
+                                  </span>
+                                )}
+                                <Badge className={`text-xs px-1.5 py-0.5 ${getStatusColor(item.status)}`}>
+                                  {item.status?.toUpperCase()}
+                                </Badge>
+                              </div>
+
+                              {/* Comments or Rejection Reason */}
+                              {(item.comments || item.rejection_reason || item.action) && (
+                                <div className="flex items-start gap-1 mb-1">
+                                  <MessageSquare className="w-3 h-3 text-gray-400 mt-0.5" />
+                                  <p className="text-xs text-gray-600">
+                                    {item.rejection_reason || item.comments || item.action}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Timestamp */}
+                              <p className="text-xs text-gray-400">
+                                {formatTimestamp(item.timestamp)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <Separator className="my-3" />

@@ -167,7 +167,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+      <DialogContent className="max-w-5xl max-h-[95vh] p-0 overflow-hidden">
         {/* Blue Header */}
         <div className="bg-[#243d8a] text-white px-6 py-4">
           <div className="flex items-center justify-between">
@@ -179,12 +179,31 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                 </h2>
                 <div className="flex items-center gap-3 mt-1">
                   <span className="text-blue-100 text-sm"># PR-{purchaseId}</span>
-                  {(latestStatus?.status === 'completed' || latestStatus?.status === 'complete') 
-                    ? getStatusBadge('completed')
-                    : purchase?.technical_director_status 
-                    ? getStatusBadge(purchase.technical_director_status)
-                    : null
-                  }
+                  {(() => {
+                    // Check if purchase is completed by accounts
+                    const hasAccountsCompleted =
+                      purchase?.approvals?.action?.some((a: any) =>
+                        a.role === 'accounts' && (a.status === 'completed' || a.status === 'complete' || a.status === 'approved')
+                      );
+
+                    const isCompleted =
+                      latestStatus?.status === 'completed' ||
+                      latestStatus?.status === 'complete' ||
+                      purchase?.accounts_acknowledgement === true ||
+                      purchase?.accounts_status?.toLowerCase() === 'completed' ||
+                      purchase?.accounts_status?.toLowerCase() === 'approved' ||
+                      hasAccountsCompleted;
+
+                    if (isCompleted) {
+                      return getStatusBadge('completed');
+                    } else if (purchase?.technical_director_status) {
+                      return getStatusBadge(purchase.technical_director_status);
+                    } else if (purchase?.estimation_status === 'approved') {
+                      return getStatusBadge('pending');
+                    } else {
+                      return getStatusBadge('pending');
+                    }
+                  })()}
                 </div>
               </div>
             </div>
@@ -296,7 +315,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                 )}
               </TabsList>
 
-              <div className="p-4 overflow-y-auto max-h-[calc(90vh-300px)]">
+              <div className="p-4 overflow-y-auto max-h-[calc(95vh-250px)]">
                 {/* Details Tab */}
                 {!showHistoryOnly && (
                   <TabsContent value="details" className="mt-0 space-y-6">
@@ -584,9 +603,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
                 {/* History Tab (for history mode) */}
                 {showHistoryOnly && (
-                  <TabsContent value="history" className="mt-0 space-y-4">
+                  <TabsContent value="history" className="mt-0 space-y-6">
                     {/* Simple Details Section */}
-                    <div className="bg-gray-50 rounded-lg p-6 mb-6">
+                    <div className="bg-gray-50 rounded-lg p-8 mb-8">
                       <div className="grid grid-cols-3 gap-8">
                         {/* Purchase Details */}
                         <div className="space-y-3">
@@ -628,11 +647,49 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   formatDateTimeLocal(purchase.date || purchase.created_at) : 'N/A'}
                               </span>
                             </div>
-                            <div>
+                            <div className="flex items-center gap-2">
                               <span className="text-sm text-gray-500">TD Status: </span>
-                              <span className="text-sm font-medium text-gray-900 capitalize">
-                                {purchase.technical_director_status || purchase.td_status || 'Pending'}
-                              </span>
+                              <Badge className={`text-xs ${
+                                (() => {
+                                  const hasAccountsCompleted =
+                                    purchase?.approvals?.action?.some((a: any) =>
+                                      a.role === 'accounts' && (a.status === 'completed' || a.status === 'complete' || a.status === 'approved')
+                                    );
+
+                                  const isCompleted =
+                                    latestStatus?.status === 'completed' ||
+                                    latestStatus?.status === 'complete' ||
+                                    purchase?.accounts_acknowledgement === true ||
+                                    purchase?.accounts_status?.toLowerCase() === 'completed' ||
+                                    purchase?.accounts_status?.toLowerCase() === 'approved' ||
+                                    hasAccountsCompleted;
+
+                                  if (isCompleted) return 'bg-blue-100 text-blue-700 border-blue-300';
+                                  if (purchase.technical_director_status?.toLowerCase() === 'approved') return 'bg-green-100 text-green-700 border-green-300';
+                                  if (purchase.technical_director_status?.toLowerCase() === 'rejected') return 'bg-red-100 text-red-700 border-red-300';
+                                  return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+                                })()
+                              }`}>
+                                {(() => {
+                                  const hasAccountsCompleted =
+                                    purchase?.approvals?.action?.some((a: any) =>
+                                      a.role === 'accounts' && (a.status === 'completed' || a.status === 'complete' || a.status === 'approved')
+                                    );
+
+                                  const isCompleted =
+                                    latestStatus?.status === 'completed' ||
+                                    latestStatus?.status === 'complete' ||
+                                    purchase?.accounts_acknowledgement === true ||
+                                    purchase?.accounts_status?.toLowerCase() === 'completed' ||
+                                    purchase?.accounts_status?.toLowerCase() === 'approved' ||
+                                    hasAccountsCompleted;
+
+                                  if (isCompleted) return 'Completed';
+                                  if (purchase.technical_director_status) return purchase.technical_director_status;
+                                  if (purchase?.estimation_status === 'approved') return 'Pending';
+                                  return 'Pending';
+                                })()}
+                              </Badge>
                             </div>
                           </div>
                         </div>

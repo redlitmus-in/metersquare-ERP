@@ -56,18 +56,20 @@ interface PurchaseDetailsModalProps {
   onClose: () => void;
   purchaseId: number | null;
   mode?: 'details' | 'history';
+  activeTab?: string;
 }
 
 const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
   isOpen,
   onClose,
   purchaseId,
-  mode = 'details'
+  mode = 'details',
+  activeTab
 }) => {
   const [purchase, setPurchase] = useState<Purchase | null>(null);
   const [latestStatus, setLatestStatus] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState(mode === 'history' ? 'history' : 'details');
+  const [currentTab, setCurrentTab] = useState(mode === 'history' ? 'history' : 'details');
 
   useEffect(() => {
     if (isOpen && purchaseId) {
@@ -76,7 +78,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
       setLoading(true);
       fetchPurchaseData();
       // Set the active tab based on mode
-      setActiveTab(mode === 'history' ? 'history' : 'details');
+      setCurrentTab(mode === 'history' ? 'history' : 'details');
     } else {
       // Reset state when closing modal
       setPurchase(null);
@@ -94,8 +96,75 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
         // Use getPurchaseHistory for history view
         const { purchase: purchaseData, latest_status } = await procurementService.getPurchaseHistory(purchaseId);
         console.log('History mode - Purchase data:', purchaseData);
-        setPurchase(purchaseData);
-        setLatestStatus(latest_status);
+        console.log('History mode - Latest status:', latest_status);
+
+        // Check if this is a completed purchase based on multiple indicators
+        let isCompleted = false;
+
+        // Check 1: History contains completed status
+        const hasCompletedHistory = purchaseData?.history?.some((item: any) => {
+          const status = item.status?.toLowerCase();
+          const action = item.action?.toLowerCase() || '';
+          const comments = item.comments?.toLowerCase() || '';
+          const comment = item.comment?.toLowerCase() || '';
+          const role = item.role?.toLowerCase() || '';
+
+          // Check for completed status
+          if (status === 'completed' || status === 'complete') {
+            return true;
+          }
+
+          // Check for payment completion in various fields
+          const allText = `${action} ${comments} ${comment}`.toLowerCase();
+          if (allText.includes('payment completed') ||
+              allText.includes('acknowledgement') ||
+              allText.includes('payment done') ||
+              allText.includes('completed')) {
+            return true;
+          }
+
+          // Check if accounts role has completed/acknowledged
+          if (role === 'accounts' && (status === 'completed' || status === 'acknowledged')) {
+            return true;
+          }
+
+          return false;
+        });
+
+        // Check 2: Purchase status itself
+        const purchaseStatus = purchaseData?.status?.toLowerCase();
+        const latestStatusValue = latest_status?.status?.toLowerCase();
+
+        if (purchaseStatus === 'completed' || purchaseStatus === 'complete' ||
+            latestStatusValue === 'completed' || latestStatusValue === 'complete') {
+          isCompleted = true;
+        }
+
+        // Check 3: Approvals contain accounts completion
+        const hasAccountsApproval = purchaseData?.approvals?.some?.((a: any) =>
+          a.role === 'accounts' && (a.status === 'completed' || a.status === 'acknowledged')
+        );
+
+        // Check 4: If viewing from completed tab, it should be completed
+        const isFromCompletedTab = activeTab === 'completed';
+
+        // Determine final status
+        isCompleted = isCompleted || hasCompletedHistory || hasAccountsApproval || isFromCompletedTab;
+
+        // Log for debugging
+        console.log('History check - hasCompletedHistory:', hasCompletedHistory);
+        console.log('History check - isFromCompletedTab:', isFromCompletedTab);
+        console.log('History check - isCompleted:', isCompleted);
+        console.log('History data:', purchaseData?.history);
+
+        // Override status if it's completed
+        if (isCompleted) {
+          setPurchase({...purchaseData, status: 'completed'});
+          setLatestStatus({...latest_status, status: 'completed'});
+        } else {
+          setPurchase(purchaseData);
+          setLatestStatus(latest_status);
+        }
       } else {
         // Use getPurchaseDetails for details view with full response
         const response = await procurementService.getPurchaseDetails(purchaseId);
@@ -309,7 +378,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
           </div>
         ) : purchase ? (
           <div className="flex-1 overflow-hidden flex flex-col">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+            <Tabs value={currentTab} onValueChange={setCurrentTab} className="flex-1 flex flex-col overflow-hidden">
               <div className="bg-white border-b px-6 pt-4">
                 <TabsList className={`grid w-full ${mode === 'history' ? 'grid-cols-1' : 'grid-cols-3'} max-w-2xl mx-auto bg-gray-100`}>
                   {mode === 'history' ? (
@@ -1037,87 +1106,103 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
               {/* History Tab */}
               <TabsContent value="history" className="flex-1 overflow-y-auto mt-0" style={{ maxHeight: 'calc(90vh - 200px)' }}>
-                <div className="pr-2 pb-4">
-                  {/* Summary Cards - Clean Minimal Design */}
-                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                    <div className="grid grid-cols-3 gap-6">
-                      {/* Purchase Details */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <Package className="w-5 h-5 text-blue-600" />
-                          <h3 className="font-semibold text-gray-900">Purchase Details</h3>
-                        </div>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex gap-2">
-                            <span className="text-gray-500">Purpose:</span>
-                            <span className="text-gray-900">{purchase?.purpose || 'N/A'}</span>
-                          </div>
-                          <div className="flex gap-2">
-                            <span className="text-gray-500">Location:</span>
-                            <span className="text-gray-900">{purchase?.site_location || 'N/A'}</span>
-                          </div>
-                          <div className="flex gap-2">
-                            <span className="text-gray-500">Project:</span>
-                            <span className="text-gray-900">#{purchase?.project_id || 'N/A'}</span>
-                          </div>
-                        </div>
+                <div className="flex justify-center px-8 py-6">
+                  {/* Card Container */}
+                  <Card className="w-full max-w-4xl shadow-lg border border-gray-200">
+                    <CardContent className="p-6">
+                      {/* Card Header */}
+                      <div className="flex items-center gap-2 mb-5 pb-3 border-b border-gray-200">
+                        <History className="w-5 h-5 text-gray-600" />
+                        <h2 className="text-lg font-semibold text-gray-900">History</h2>
                       </div>
 
-                      {/* Request Info */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <User className="w-5 h-5 text-green-600" />
-                          <h3 className="font-semibold text-gray-900">Request Info</h3>
+                      {/* Card Body - Compact Grid */}
+                      <div className="space-y-4">
+                        {/* Headers Row */}
+                        <div className="grid grid-cols-3 gap-8">
+                          <div className="flex items-center gap-2">
+                            <Package className="w-4 h-4 text-blue-600" />
+                            <h3 className="font-medium text-gray-900 text-sm">Purchase Details</h3>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 text-green-600" />
+                            <h3 className="font-medium text-gray-900 text-sm">Request Info</h3>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-purple-600" />
+                            <h3 className="font-medium text-gray-900 text-sm">Timeline Stats</h3>
+                          </div>
                         </div>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex gap-2">
-                            <span className="text-gray-500">Requested by:</span>
+
+                        <Separator className="my-3" />
+
+                        {/* Data Rows */}
+                        <div className="grid grid-cols-3 gap-8">
+                          {/* Row 1 */}
+                          <div className="text-sm">
+                            <span className="text-gray-500">Purpose: </span>
+                            <span className="text-gray-900" title={purchase?.purpose || 'N/A'}>{purchase?.purpose?.substring(0, 40) || 'N/A'}{purchase?.purpose?.length > 40 ? '...' : ''}</span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-gray-500">Requested by: </span>
                             <span className="text-gray-900">{purchase?.requested_by || 'N/A'}</span>
                           </div>
-                          <div className="flex gap-2">
-                            <span className="text-gray-500">Date:</span>
+                          <div className="text-sm">
+                            <span className="text-gray-500">Total Steps: </span>
+                            <span className="text-gray-900 font-medium">{purchase.approvals?.action?.length || 0}</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-8">
+                          {/* Row 2 */}
+                          <div className="text-sm">
+                            <span className="text-gray-500">Location: </span>
+                            <span className="text-gray-900">{purchase?.site_location || 'N/A'}</span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-gray-500">Date: </span>
                             <span className="text-gray-900">
                               {purchase?.date
-                                ? new Date(purchase.date).toLocaleDateString('en-AE', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric'
+                                ? new Date(purchase.date).toLocaleString('en-US', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    hour12: true
                                   })
                                 : 'N/A'}
                             </span>
                           </div>
-                        </div>
-                      </div>
-
-                      {/* Timeline Stats */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <Activity className="w-5 h-5 text-purple-600" />
-                          <h3 className="font-semibold text-gray-900">Timeline Stats</h3>
-                        </div>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex gap-2">
-                            <span className="text-gray-500">Total Steps:</span>
-                            <span className="text-gray-900">
-                              {purchase.approvals?.action?.length || 0}
-                            </span>
-                          </div>
-                          <div className="flex gap-2">
-                            <span className="text-gray-500">Approvals:</span>
+                          <div className="text-sm">
+                            <span className="text-gray-500">Approvals: </span>
                             <span className="text-green-600 font-medium">
                               {purchase.approvals?.action?.filter((s: any) => s.status === 'approved' || s.status === 'completed').length || 0}
                             </span>
                           </div>
-                          <div className="flex gap-2">
-                            <span className="text-gray-500">Rejections:</span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-8">
+                          {/* Row 3 */}
+                          <div className="text-sm">
+                            <span className="text-gray-500">Project: </span>
+                            <span className="text-gray-900">#{purchase?.project_id || 'N/A'}</span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-gray-500">TD Status: </span>
+                            <span className="text-gray-900">{latestStatus?.status || purchase?.latest_status || 'Pending'}</span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-gray-500">Rejections: </span>
                             <span className="text-red-600 font-medium">
                               {purchase.approvals?.action?.filter((s: any) => s.status === 'rejected').length || 0}
                             </span>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
+                    </CardContent>
+                  </Card>
+                </div>
 
                 {purchase.approvals?.action && purchase.approvals.action.length > 0 ? (
                   <div className="space-y-4">
@@ -1227,7 +1312,6 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                     <p className="text-sm mt-1">Approval history will appear here once processing begins</p>
                   </div>
                 )}
-                </div>
               </TabsContent>
             </Tabs>
           </div>

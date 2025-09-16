@@ -20,71 +20,49 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // Add hash to filenames for cache busting
-        entryFileNames: 'assets/[name].[hash].js',
-        chunkFileNames: 'assets/[name].[hash].js',
-        assetFileNames: 'assets/[name].[hash].[ext]',
-        // Optimized manual chunks for better code splitting
-        manualChunks: (id) => {
-          // Core React libraries - always needed
-          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-            return 'vendor';
-          }
-          // UI libraries - loaded when UI components are used
-          if (id.includes('framer-motion') || id.includes('@radix-ui')) {
-            return 'ui';
-          }
-          // Heavy charting library - only for analytics pages
-          if (id.includes('recharts')) {
-            return 'charts';
-          }
+        // Better file naming with hashes for cache busting
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+        // Optimized manual chunks
+        manualChunks: {
+          // React core - always needed
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          // UI framework
+          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-tabs', 'framer-motion'],
           // Form handling
-          if (id.includes('react-hook-form') || id.includes('zod')) {
-            return 'forms';
-          }
-          // PDF generation - lazy loaded
-          if (id.includes('jspdf') || id.includes('html2canvas')) {
-            return 'pdf';
-          }
-          // Excel handling - lazy loaded
-          if (id.includes('xlsx')) {
-            return 'excel';
-          }
-          // Supabase auth - loaded for authenticated routes
-          if (id.includes('@supabase')) {
-            return 'auth';
-          }
-          // Date utilities
-          if (id.includes('date-fns')) {
-            return 'dates';
-          }
+          'forms': ['react-hook-form', 'zod', '@hookform/resolvers'],
+          // Auth
+          'auth': ['@supabase/supabase-js'],
+          // Utils
+          'utils': ['axios', 'date-fns', 'clsx', 'tailwind-merge'],
         }
       }
     },
-    // Clear the output directory before building
-    emptyOutDir: true,
+    // Target modern browsers
+    target: 'es2020',
     // Optimize chunk size
-    chunkSizeWarningLimit: 500,
-    // Terser for better minification
+    chunkSizeWarningLimit: 1000,
+    // Minification with terser
     minify: 'terser',
     terserOptions: {
       compress: {
         drop_console: true,
-        drop_debugger: true
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug']
+      },
+      format: {
+        comments: false
       }
     },
-    // Better source maps for production
+    // No source maps in production for smaller size
     sourcemap: false,
-    // Aggressive code splitting
+    // CSS code splitting
     cssCodeSplit: true,
-    // Preload critical chunks
-    modulePreload: {
-      polyfill: true
-    },
-    // Optimize dependencies
-    commonjsOptions: {
-      transformMixedEsModules: true
-    }
+    // Report compressed size
+    reportCompressedSize: false,
+    // Assets inline limit
+    assetsInlineLimit: 4096
   },
   server: {
     port: 3000,

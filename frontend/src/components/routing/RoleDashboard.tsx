@@ -1,18 +1,18 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { UserRole } from '@/types';
 import { getRoleName } from '@/utils/roleRouting';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 
-// Import all role-specific dashboards
-import TechnicalDirectorDashboard from '@/pages/dashboards/TechnicalDirectorDashboard';
-import ProjectManagerDashboard from '@/pages/dashboards/ProjectManagerDashboard';
-import ProcurementDashboard from '@/pages/dashboards/ProcurementDashboard';
-import SiteSupervisorDashboard from '@/pages/dashboards/SiteSupervisorDashboard';
-import MEPSupervisorDashboard from '@/pages/dashboards/MEPSupervisorDashboard';
-import EstimationDashboard from '@/pages/dashboards/EstimationDashboard';
-import AccountsDashboard from '@/pages/dashboards/AccountsDashboard';
-import DesignDashboard from '@/pages/dashboards/DesignDashboard';
+// Lazy load all role-specific dashboards
+const TechnicalDirectorDashboard = lazy(() => import('@/pages/dashboards/TechnicalDirectorDashboard'));
+const ProjectManagerDashboard = lazy(() => import('@/pages/dashboards/ProjectManagerDashboard'));
+const ProcurementDashboard = lazy(() => import('@/pages/dashboards/ProcurementDashboard'));
+const SiteSupervisorDashboard = lazy(() => import('@/pages/dashboards/SiteSupervisorDashboard'));
+const MEPSupervisorDashboard = lazy(() => import('@/pages/dashboards/MEPSupervisorDashboard'));
+const EstimationDashboard = lazy(() => import('@/pages/dashboards/EstimationDashboard'));
+const AccountsDashboard = lazy(() => import('@/pages/dashboards/AccountsDashboard'));
+const DesignDashboard = lazy(() => import('@/pages/dashboards/DesignDashboard'));
 
 /**
  * Component that dynamically loads the appropriate dashboard based on user role
@@ -41,45 +41,67 @@ const RoleDashboard: React.FC = () => {
 
   // Get the role name from role_id (handles both numeric and string formats)
   const roleName = getRoleName(user.role_id);
-  
-  // Render dashboard based on user role
+
+  // Get the dashboard component based on role
+  let DashboardComponent: React.LazyExoticComponent<React.FC> | null = null;
+
   switch (roleName) {
     case UserRole.TECHNICAL_DIRECTOR:
-      return <TechnicalDirectorDashboard />;
-    
+      DashboardComponent = TechnicalDirectorDashboard;
+      break;
+
     case UserRole.PROJECT_MANAGER:
-      return <ProjectManagerDashboard />;
-    
+      DashboardComponent = ProjectManagerDashboard;
+      break;
+
     case UserRole.PROCUREMENT:
-      return <ProcurementDashboard />;
-    
+      DashboardComponent = ProcurementDashboard;
+      break;
+
     case UserRole.SITE_SUPERVISOR:
-      return <SiteSupervisorDashboard />;
-    
+      DashboardComponent = SiteSupervisorDashboard;
+      break;
+
     case UserRole.MEP_SUPERVISOR:
-      return <MEPSupervisorDashboard />;
-    
+      DashboardComponent = MEPSupervisorDashboard;
+      break;
+
     case UserRole.ESTIMATION:
-      return <EstimationDashboard />;
-    
+      DashboardComponent = EstimationDashboard;
+      break;
+
     case UserRole.ACCOUNTS:
-      return <AccountsDashboard />;
-    
+      DashboardComponent = AccountsDashboard;
+      break;
+
     case UserRole.DESIGN:
-      return <DesignDashboard />;
-    
-    default:
-      // Fallback to a generic dashboard if role is not recognized
-      return (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold text-gray-700">Dashboard not configured</h2>
-            <p className="text-gray-500 mt-2">Dashboard for role (ID: {user.role_id}) is not yet available</p>
-            <p className="text-xs text-gray-400 mt-1">Resolved to: {roleName}</p>
-          </div>
-        </div>
-      );
+      DashboardComponent = DesignDashboard;
+      break;
   }
+
+  // Render the dashboard with Suspense boundary
+  if (DashboardComponent) {
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+        </div>
+      }>
+        <DashboardComponent />
+      </Suspense>
+    );
+  }
+
+  // Fallback to a generic dashboard if role is not recognized
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <h2 className="text-xl font-semibold text-gray-700">Dashboard not configured</h2>
+        <p className="text-gray-500 mt-2">Dashboard for role (ID: {user.role_id}) is not yet available</p>
+        <p className="text-xs text-gray-400 mt-1">Resolved to: {roleName}</p>
+      </div>
+    </div>
+  );
 };
 
 export default RoleDashboard;
