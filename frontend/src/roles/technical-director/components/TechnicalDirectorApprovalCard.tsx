@@ -153,7 +153,7 @@ const TechnicalDirectorApprovalCard: React.FC<TechnicalDirectorApprovalCardProps
                 <span className="text-xs font-medium text-green-900">Total</span>
               </div>
               <span className="text-xs font-bold text-green-600 truncate">
-                {technicalDirectorService.formatCurrency(purchase.total_cost || 0)}
+                AED {(purchase.total_cost || 0).toLocaleString()}
               </span>
             </div>
           </div>

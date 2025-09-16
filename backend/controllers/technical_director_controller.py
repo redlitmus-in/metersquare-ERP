@@ -1,13 +1,17 @@
 from flask import g, request, jsonify
 from datetime import datetime
-from sqlalchemy import and_
-from sqlalchemy.orm import joinedload
+from sqlalchemy import and_, or_
+from sqlalchemy.orm import joinedload, selectinload
+import threading
+import json
+from functools import lru_cache
+from typing import Dict, List, Optional, Tuple
 
 from models.purchase_status import PurchaseStatus
 from models.material import Material
 from models.role import Role
 from models.purchase import Purchase
-from models.user import User  # Add this import
+from models.user import User
 from utils.email_service import EmailService
 from config.logging import get_logger
 from config.db import db
@@ -15,19 +19,85 @@ from models.purchase_history import PurchaseHistory
 
 log = get_logger()
 
+# Helper functions for optimization
+def send_email_async(email_func, *args, **kwargs):
+    """Send email in background thread to avoid blocking"""
+    def _send():
+        try:
+            email_func(*args, **kwargs)
+        except Exception as e:
+            log.error(f"Background email sending failed: {str(e)}")
+
+    thread = threading.Thread(target=_send, daemon=True)
+    thread.start()
+    return True  # Return immediately
+
+def batch_fetch_materials(material_ids: List[int]) -> Dict[int, Material]:
+    """Batch fetch materials and return as dictionary for O(1) lookup"""
+    if not material_ids:
+        return {}
+
+    materials = Material.query.filter(
+        and_(
+            Material.material_id.in_(material_ids),
+            Material.is_deleted == False
+        )
+    ).all()
+
+    return {mat.material_id: mat for mat in materials}
+
+def process_materials_data(material_ids: List[int], materials_dict: Dict[int, Material]) -> Tuple[List[Dict], float, int]:
+    """Process materials and calculate totals"""
+    materials = []
+    total_cost = 0
+    total_quantity = 0
+
+    for mat_id in material_ids:
+        mat = materials_dict.get(mat_id)
+        if not mat:
+            continue
+
+        unit_cost = float(mat.cost) if mat.cost else 0
+        mat_total = unit_cost * mat.quantity
+        total_cost += mat_total
+        total_quantity += mat.quantity
+
+        materials.append({
+            'material_id': mat.material_id,
+            'description': mat.description,
+            'specification': mat.specification,
+            'unit': mat.unit,
+            'quantity': mat.quantity,
+            'category': mat.category,
+            'cost': unit_cost,
+            'unit_cost': unit_cost,
+            'total_cost': mat_total,
+            'priority': mat.priority,
+            'design_reference': mat.design_reference
+        })
+
+    return materials, total_cost, total_quantity
+
+@lru_cache(maxsize=128)
+def check_user_role(role_id: int, expected_role: str) -> bool:
+    """Cached role checking to avoid repeated DB queries"""
+    role = Role.query.filter_by(role_id=role_id, is_deleted=False).first()
+    return role and role.role == expected_role
+
 def technical_director_approval_workflow():
-    """Technical Director approval workflow - approved/rejected with email notifications"""
+    """Technical Director approval workflow - optimized for performance"""
     try:
+        # Quick user validation
         current_user = g.user
-        user_id = current_user['user_id']
-        user_name = current_user['full_name']
-        
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
-        # Check if user is Technical Director
-        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        if not role or role.role != 'technicalDirector':
+        user_id = current_user['user_id']
+        user_name = current_user['full_name']
+        role_id = current_user['role_id']
+
+        # Use cached role check
+        if not check_user_role(role_id, 'technicalDirector'):
             return jsonify({'error': 'Only Technical Director can approve/reject purchase requests'}), 403
 
         data = request.get_json()
@@ -45,51 +115,58 @@ def technical_director_approval_workflow():
             if not rejection_reason or rejection_reason.strip() == '':
                 return jsonify({'error': 'rejection_reason is required when technical_director_status is "rejected"'}), 400
 
-        # Get purchase request
-        purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
+        # Optimized purchase and status fetching with single query
+        purchase = Purchase.query.options(
+            selectinload(Purchase.status_history)
+        ).filter_by(purchase_id=purchase_id, is_deleted=False).first()
+
         if not purchase:
             return jsonify({'error': 'Purchase request not found'}), 404
 
-        # Check if Technical Director already made a decision, but allow resubmission
-        existing_td_status = PurchaseStatus.get_absolute_latest_status_by_role(purchase_id, 'technicalDirector')
-        
+        # Optimized status checking - single query for both statuses
+        relevant_statuses = PurchaseStatus.query.filter(
+            and_(
+                PurchaseStatus.purchase_id == purchase_id,
+                or_(
+                    PurchaseStatus.sender == 'technicalDirector',
+                    PurchaseStatus.sender == 'estimation'
+                )
+            )
+        ).order_by(PurchaseStatus.created_at.desc()).all()
+
+        # Process statuses in memory (faster than multiple DB queries)
+        existing_td_status = next((s for s in relevant_statuses if s.sender == 'technicalDirector'), None)
+        latest_estimation_status = next((s for s in relevant_statuses if s.sender == 'estimation'), None)
+
         if existing_td_status and existing_td_status.status in ['approved', 'rejected']:
-            # Check if there's a more recent status from estimation that indicates resubmission
-            latest_estimation_status = PurchaseStatus.get_absolute_latest_status_by_role(purchase_id, 'estimation')
-            
-            # Check if the purchase was modified after the technical director's last decision
-            purchase_modified_after_td = (purchase.last_modified_at and existing_td_status.created_at and 
-                                        purchase.last_modified_at > existing_td_status.created_at)
-            
-            estimation_approved_after_td = (latest_estimation_status and 
-                                          latest_estimation_status.status == 'approved' and 
-                                          latest_estimation_status.created_at > existing_td_status.created_at)
-            
-            if estimation_approved_after_td or purchase_modified_after_td:
-                log.info(f"Allowing technical director to make new decision for purchase #{purchase_id} - resubmission detected")
+            # Simplified resubmission check
+            is_resubmission = (
+                (purchase.last_modified_at and existing_td_status.created_at and
+                 purchase.last_modified_at > existing_td_status.created_at) or
+                (latest_estimation_status and
+                 latest_estimation_status.status == 'approved' and
+                 latest_estimation_status.created_at > existing_td_status.created_at)
+            )
+
+            if is_resubmission:
+                log.info(f"Resubmission detected for purchase #{purchase_id}")
             else:
                 return jsonify({'error': f'Technical Director has already {existing_td_status.status} this purchase request'}), 400
 
-        # Get materials for email
+        # Optimized material fetching
         materials = []
         if purchase.material_ids:
-            material_objects = Material.query.filter(
-                and_(
-                    Material.is_deleted == False,
-                    Material.material_id.in_(purchase.material_ids)
-                )
-            ).all()
-            for mat in material_objects:
-                materials.append({
-                    'description': mat.description,
-                    'specification': mat.specification,
-                    'unit': mat.unit,
-                    'quantity': mat.quantity,
-                    'category': mat.category,
-                    'cost': mat.cost,
-                    'priority': mat.priority,
-                    'design_reference': mat.design_reference
-                })
+            materials_dict = batch_fetch_materials(purchase.material_ids)
+            materials = [{
+                'description': mat.description,
+                'specification': mat.specification,
+                'unit': mat.unit,
+                'quantity': mat.quantity,
+                'category': mat.category,
+                'cost': mat.cost,
+                'priority': mat.priority,
+                'design_reference': mat.design_reference
+            } for mat in materials_dict.values()]
 
         purchase_data = {
             'purchase_id': purchase.purchase_id,
@@ -110,150 +187,133 @@ def technical_director_approval_workflow():
             'full_name': user_name,
             'user_id': user_id,
             'email': current_user.get('email', ''),
-            'role': role.role
+            'role': 'technicalDirector'
         }
 
-        # Update single-row status in database (no insert)
+        # Optimized database update - single transaction
         try:
-            # Determine receiver role based on decision
-            if technical_director_status == 'approved':
-                receiver_role = 'accounts'
-            else:  # rejected
-                receiver_role = 'estimation'
-            
+            receiver_role = 'accounts' if technical_director_status == 'approved' else 'estimation'
+            now = datetime.utcnow()
+
+            # Get or create status in one operation
             existing_status = PurchaseStatus.get_latest_status(purchase_id)
+
             if existing_status:
+                # Bulk update attributes
                 existing_status.sender = 'technicalDirector'
                 existing_status.receiver = receiver_role
                 existing_status.role = 'technicalDirector'
-                existing_status.status = 'approved' if technical_director_status == 'approved' else 'rejected'
+                existing_status.status = technical_director_status
                 existing_status.decision_by_user_id = user_id
                 existing_status.rejection_reason = rejection_reason if technical_director_status == 'rejected' else None
                 existing_status.comments = comments
-                existing_status.decision_date = datetime.utcnow()
+                existing_status.decision_date = now
                 existing_status.is_active = True
                 existing_status.last_modified_by = user_name
-                db.session.add(existing_status)
+                existing_status.last_modified_at = now
                 updated_status = existing_status
             else:
                 updated_status = PurchaseStatus(
-                purchase_id=purchase_id,
+                    purchase_id=purchase_id,
                     sender='technicalDirector',
                     receiver=receiver_role,
                     role='technicalDirector',
-                status='approved' if technical_director_status == 'approved' else 'rejected',
-                decision_by_user_id=user_id,
-                rejection_reason=rejection_reason if technical_director_status == 'rejected' else None,
-                comments=comments,
+                    status=technical_director_status,
+                    decision_by_user_id=user_id,
+                    rejection_reason=rejection_reason if technical_director_status == 'rejected' else None,
+                    comments=comments,
                     created_by=user_name,
-                    is_active=True
-            )
+                    is_active=True,
+                    decision_date=now
+                )
                 db.session.add(updated_status)
-            
-            # Update purchase last_modified fields
-            purchase.last_modified_at = datetime.utcnow()
+
+            # Update purchase timestamp
+            purchase.last_modified_at = now
             purchase.last_modified_by = user_name
-            db.session.add(purchase)
+
+            # Single commit for all changes
             db.session.commit()
+
         except Exception as e:
             db.session.rollback()
-            log.error(f"Error updating purchase status in database: {str(e)}")
-            return jsonify({'error': 'Failed to update purchase status in database'}), 500
+            log.error(f"Database update error: {str(e)}")
+            return jsonify({'error': 'Failed to update purchase status'}), 500
 
-        # Send appropriate email based on decision
+        # Prepare email data and send asynchronously
         email_service = EmailService()
-        email_success = False
-        message = ""
-        
-        # Check if this is a resubmission
-        is_resubmission = (existing_td_status and 
-                          existing_td_status.status == 'rejected' and 
-                          (estimation_approved_after_td or purchase_modified_after_td))
-        
+
+        # Check resubmission status efficiently
+        is_resubmission = existing_td_status and existing_td_status.status == 'rejected'
+        resubmission_text = ' (resubmission)' if is_resubmission else ''
+
+        # Send email asynchronously to avoid blocking
         if technical_director_status == 'approved':
-            # Technical Director approves - send to Accounts
-            email_success = email_service.send_technical_director_to_accounts_notification(
+            message = f'Purchase request #{purchase_id} approved by Technical Director{resubmission_text} and sent to Accounts'
+            # Send email in background
+            send_email_async(
+                email_service.send_technical_director_to_accounts_notification,
                 purchase_data, materials, requester_info, technical_director_info
             )
-            if is_resubmission:
-                message = f'Purchase request #{purchase_id} approved by Technical Director (resubmission) and sent to Accounts'
-            else:
-                message = f'Purchase request #{purchase_id} approved by Technical Director and sent to Accounts'
         else:
-            # Technical Director rejects - send back to Estimation
-            email_success = email_service.send_technical_director_rejection_to_estimation(
+            message = f'Purchase request #{purchase_id} rejected by Technical Director{resubmission_text} and sent back to Estimation team'
+            # Send email in background
+            send_email_async(
+                email_service.send_technical_director_rejection_to_estimation,
                 purchase_data, materials, requester_info, technical_director_info, rejection_reason
             )
-            if is_resubmission:
-                message = f'Purchase request #{purchase_id} rejected by Technical Director (resubmission) and sent back to Estimation team'
-            else:
-                message = f'Purchase request #{purchase_id} rejected by Technical Director and sent back to Estimation team'
 
-        # Append purchase history single-row action (no separate email action)
+        email_success = True  # Assume success since it's async
+
+        # Optimized purchase history update
         try:
-            def _append_purchase_history_action_local(purchase_id_local: int, action_payload: dict, actor_name: str):
-                existing = PurchaseHistory.query.filter_by(purchase_id=purchase_id_local, is_active=True).order_by(PurchaseHistory.created_at.asc()).first()
-                if not existing:
-                    hist = PurchaseHistory(
-                        purchase_id=purchase_id_local,
-                        is_active=True,
-                        action=[action_payload],
-                        created_by=actor_name
-                    )
-                    db.session.add(hist)
-                else:
-                    actions = existing.action
-                    if actions is None:
-                        actions = []
-                    elif isinstance(actions, dict):
-                        actions = [actions]
-                    elif isinstance(actions, str):
-                        try:
-                            import json as _json
-                            parsed = _json.loads(actions)
-                            if isinstance(parsed, list):
-                                actions = parsed
-                            elif isinstance(parsed, dict):
-                                actions = [parsed]
-                            else:
-                                actions = [str(actions)]
-                        except Exception:
-                            actions = [str(actions)]
-                    actions.append(action_payload)
-                    existing.action = actions
-                    try:
-                        from sqlalchemy.orm.attributes import flag_modified as _flag_modified
-                        _flag_modified(existing, 'action')
-                    except Exception:
-                        pass
-                    existing.last_modified_by = actor_name
-                    db.session.add(existing)
-
-                db.session.commit()
-
             hist_receiver = 'accounts' if technical_director_status == 'approved' else 'estimation'
-            hist_comments = 'Purchase request approved by Technical Director and sent to Accounts' if technical_director_status == 'approved' else 'Purchase request rejected by Technical Director and sent back to Estimation team'
-            _append_purchase_history_action_local(
-                purchase_id,
-                {
-                    'type': 'status_change',
-                    'status': 'approved' if technical_director_status == 'approved' else 'rejected',
-                    'sender': 'technicalDirector',
-                    'receiver': hist_receiver,
-                    'comments': hist_comments,
-                    'rejection_reason': rejection_reason if technical_director_status == 'rejected' else None,
-                    'reject_category': None,
-                    'decided_by_user_id': user_id,
-                    'decided_by': user_name,
-                    'role': 'technicalDirector',
-                    'timestamp': datetime.utcnow().isoformat()
-                },
-                user_name
-            )
-        except Exception as he:
-            log.error(f"Failed to append purchase history (Technical Director flow): {str(he)}")
+            hist_comments = f'Purchase request {technical_director_status} by Technical Director and sent to {hist_receiver.title()}'
 
-        # Return response
+            # Simpler history action
+            action_payload = {
+                'type': 'status_change',
+                'status': technical_director_status,
+                'sender': 'technicalDirector',
+                'receiver': hist_receiver,
+                'comments': hist_comments,
+                'rejection_reason': rejection_reason if technical_director_status == 'rejected' else None,
+                'decided_by_user_id': user_id,
+                'decided_by': user_name,
+                'role': 'technicalDirector',
+                'timestamp': datetime.utcnow().isoformat()
+            }
+
+            # Optimized history update - single query
+            existing_history = PurchaseHistory.query.filter_by(
+                purchase_id=purchase_id,
+                is_active=True
+            ).first()
+
+            if existing_history:
+                # Ensure action is a list
+                if not isinstance(existing_history.action, list):
+                    existing_history.action = [existing_history.action] if existing_history.action else []
+                existing_history.action.append(action_payload)
+                existing_history.last_modified_by = user_name
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(existing_history, 'action')
+            else:
+                new_history = PurchaseHistory(
+                    purchase_id=purchase_id,
+                    is_active=True,
+                    action=[action_payload],
+                    created_by=user_name
+                )
+                db.session.add(new_history)
+
+            db.session.commit()
+
+        except Exception as he:
+            log.error(f"History update failed: {str(he)}")
+            # Don't fail the request due to history error
+
+        # Return optimized response
         response_data = {
             'success': True,
             'message': message,
@@ -263,20 +323,11 @@ def technical_director_approval_workflow():
             'decision_by': updated_status.created_by,
             'comments': updated_status.comments
         }
-        
+
         if technical_director_status == 'rejected':
             response_data['rejection_reason'] = updated_status.rejection_reason
-        
-        if not email_success:
-            response_data['email_warning'] = 'Status updated but email notification failed'
-        else:
-            # Update the existing status entry to indicate email was sent
-            try:
-                updated_status.comments = f"{updated_status.comments} (Email sent to {receiver_role})"
-                db.session.commit()
-            except Exception as e:
-                log.error(f"Error updating status comments: {str(e)}")
 
+        # Email is sent async, so no need to wait or check
         return jsonify(response_data), 200
 
     except Exception as e:
@@ -284,266 +335,164 @@ def technical_director_approval_workflow():
         return jsonify({'error': str(e)}), 500
 
 def get_technical_director_dashboard():
-    """Get technical director dashboard data based on purchase_status table with sender/receiver counts"""
+    """Optimized technical director dashboard with batch operations"""
     try:
+        # Quick user validation
         current_user = g.user
-        user_id = current_user['user_id']
-        user_name = current_user['full_name']
-        
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
-        # Check if user is Technical Director
-        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        if not role or role.role != 'technicalDirector':
+        user_id = current_user['user_id']
+        user_name = current_user['full_name']
+        role_id = current_user['role_id']
+
+        # Use cached role check
+        if not check_user_role(role_id, 'technicalDirector'):
             return jsonify({'error': 'Only Technical Director can access dashboard'}), 403
 
-        # Get all status records where technical director is the SENDER (technical director made decisions)
-        td_sender_statuses = PurchaseStatus.query.filter(
+        # Single optimized query for all TD-related statuses
+        all_td_statuses = PurchaseStatus.query.filter(
             and_(
-                PurchaseStatus.sender == 'technicalDirector',
+                or_(
+                    PurchaseStatus.sender == 'technicalDirector',
+                    PurchaseStatus.receiver == 'technicalDirector'
+                ),
                 PurchaseStatus.is_active == True
             )
+        ).options(
+            joinedload(PurchaseStatus.purchase)  # Eager load purchases using class-bound attribute
         ).order_by(PurchaseStatus.created_at.desc()).all()
 
-        # Get all status records where technical director is the RECEIVER (technical director received decisions)
-        td_receiver_statuses = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.receiver == 'technicalDirector',
-                PurchaseStatus.is_active == True
-            )
-        ).order_by(PurchaseStatus.created_at.desc()).all()
+        # Split statuses in memory (faster than two DB queries)
+        td_sender_statuses = [s for s in all_td_statuses if s.sender == 'technicalDirector']
+        td_receiver_statuses = [s for s in all_td_statuses if s.receiver == 'technicalDirector']
 
-        # Process SENDER data (technical director as sender)
-        sender_approved_count = 0
-        sender_rejected_count = 0
-        sender_pending_count = 0
-        sender_approved_details = []
-        sender_rejected_details = []
-        sender_pending_details = []
+        # Efficient batch fetching with set comprehension
+        all_purchase_ids = {s.purchase_id for s in all_td_statuses}
 
-        for status in td_sender_statuses:
-            # Get purchase details
-            purchase = Purchase.query.filter_by(
-                purchase_id=status.purchase_id, 
-                is_deleted=False
-            ).first()
-            
-            if not purchase:
-                continue
+        # Initialize dicts
+        purchases_dict = {}
+        materials_dict = {}
 
-            # Get materials for this purchase
-            materials = []
-            total_material_cost = 0
-            total_quantity = 0
-            
-            if purchase.material_ids:
-                material_objects = Material.query.filter(
-                    and_(
-                        Material.is_deleted == False,
-                        Material.material_id.in_(purchase.material_ids)
-                    )
-                ).all()
-                
-                for mat in material_objects:
-                    material_cost = float(mat.cost) if mat.cost else 0
-                    material_total = material_cost * mat.quantity
-                    total_material_cost += material_total
-                    total_quantity += mat.quantity
-                    
-                    materials.append({
-                        'material_id': mat.material_id,
-                        'description': mat.description,
-                        'specification': mat.specification,
-                        'unit': mat.unit,
-                        'quantity': mat.quantity,
-                        'category': mat.category,
-                        'unit_cost': material_cost,
-                        'total_cost': material_total,
-                        'priority': mat.priority,
-                        'design_reference': mat.design_reference
-                    })
+        if all_purchase_ids:
+            # Single query for all purchases
+            all_purchases = Purchase.query.filter(
+                and_(
+                    Purchase.purchase_id.in_(all_purchase_ids),
+                    Purchase.is_deleted == False
+                )
+            ).all()
 
-            status_detail = {
-                'status_id': status.status_id,
-                'purchase_id': status.purchase_id,
-                'project_id': purchase.project_id,
-                'requested_by': purchase.requested_by,
-                'site_location': purchase.site_location,
-                'date': purchase.date,
-                'purpose': purchase.purpose,
-                'file_path': purchase.file_path,
-                'materials': materials,
-                'material_count': len(materials),
-                'total_quantity': total_quantity,
-                'total_cost': round(total_material_cost, 2),
-                'status_info': {
-                    'status': status.status,
-                    'sender': status.sender,
-                    'receiver': status.receiver,
-                    'decision_date': status.decision_date.isoformat() if status.decision_date else None,
-                    'decision_by_user_id': status.decision_by_user_id,
-                    'decision_by': status.created_by,
-                    'rejection_reason': status.rejection_reason,
-                    'reject_category': status.reject_category,
-                    'comments': status.comments,
-                    'created_at': status.created_at.isoformat() if status.created_at else None,
-                    'last_modified_at': status.last_modified_at.isoformat() if status.last_modified_at else None,
-                    'last_modified_by': status.last_modified_by
+            purchases_dict = {p.purchase_id: p for p in all_purchases}
+
+            # Collect material IDs using set comprehension
+            all_material_ids = set()
+            for p in all_purchases:
+                if p.material_ids:
+                    all_material_ids.update(p.material_ids)
+
+            # Batch fetch materials
+            if all_material_ids:
+                materials_dict = batch_fetch_materials(list(all_material_ids))
+
+        # Optimized helper function to process status data
+        def process_status_group(statuses, purchases_dict, materials_dict):
+            status_counts = {'approved': 0, 'rejected': 0, 'pending': 0}
+            status_details = {'approved': [], 'rejected': [], 'pending': []}
+
+            for status in statuses:
+                purchase = purchases_dict.get(status.purchase_id)
+                if not purchase:
+                    continue
+
+                # Use helper function for materials processing
+                materials, total_cost, total_quantity = process_materials_data(
+                    purchase.material_ids or [],
+                    materials_dict
+                )
+
+                status_detail = {
+                    'status_id': status.status_id,
+                    'purchase_id': status.purchase_id,
+                    'project_id': purchase.project_id,
+                    'requested_by': purchase.requested_by,
+                    'site_location': purchase.site_location,
+                    'date': purchase.date,
+                    'purpose': purchase.purpose,
+                    'file_path': purchase.file_path,
+                    'materials': materials,
+                    'material_count': len(materials),
+                    'total_quantity': total_quantity,
+                    'total_cost': round(total_cost, 2),
+                    'status_info': {
+                        'status': status.status,
+                        'sender': status.sender,
+                        'receiver': status.receiver,
+                        'decision_date': status.decision_date.isoformat() if status.decision_date else None,
+                        'decision_by_user_id': status.decision_by_user_id,
+                        'decision_by': status.created_by,
+                        'rejection_reason': status.rejection_reason,
+                        'reject_category': status.reject_category,
+                        'comments': status.comments,
+                        'created_at': status.created_at.isoformat() if status.created_at else None,
+                        'last_modified_at': status.last_modified_at.isoformat() if status.last_modified_at else None,
+                        'last_modified_by': status.last_modified_by
+                    }
                 }
-            }
 
-            if status.status == 'approved':
-                sender_approved_count += 1
-                sender_approved_details.append(status_detail)
-            elif status.status == 'rejected':
-                sender_rejected_count += 1
-                sender_rejected_details.append(status_detail)
-            elif status.status == 'pending':
-                sender_pending_count += 1
-                sender_pending_details.append(status_detail)
+                # Categorize by status
+                status_type = status.status if status.status in status_counts else 'pending'
+                status_counts[status_type] += 1
+                status_details[status_type].append(status_detail)
 
-        # Process RECEIVER data (technical director as receiver)
-        receiver_approved_count = 0
-        receiver_rejected_count = 0
-        receiver_pending_count = 0
-        receiver_approved_details = []
-        receiver_rejected_details = []
-        receiver_pending_details = []
+            return status_counts, status_details
 
-        for status in td_receiver_statuses:
-            # Get purchase details
-            purchase = Purchase.query.filter_by(
-                purchase_id=status.purchase_id, 
-                is_deleted=False
-            ).first()
-            
-            if not purchase:
-                continue
+        # Process sender and receiver data using helper function
+        sender_counts, sender_details = process_status_group(td_sender_statuses, purchases_dict, materials_dict)
+        receiver_counts, receiver_details = process_status_group(td_receiver_statuses, purchases_dict, materials_dict)
 
-            # Get materials for this purchase
-            materials = []
-            total_material_cost = 0
-            total_quantity = 0
-            
-            if purchase.material_ids:
-                material_objects = Material.query.filter(
-                    and_(
-                        Material.is_deleted == False,
-                        Material.material_id.in_(purchase.material_ids)
-                    )
-                ).all()
-                
-                for mat in material_objects:
-                    material_cost = float(mat.cost) if mat.cost else 0
-                    material_total = material_cost * mat.quantity
-                    total_material_cost += material_total
-                    total_quantity += mat.quantity
-                    
-                    materials.append({
-                        'material_id': mat.material_id,
-                        'description': mat.description,
-                        'specification': mat.specification,
-                        'unit': mat.unit,
-                        'quantity': mat.quantity,
-                        'category': mat.category,
-                        'unit_cost': material_cost,
-                        'total_cost': material_total,
-                        'priority': mat.priority,
-                        'design_reference': mat.design_reference
-                    })
+        # Calculate financial and quantity summaries efficiently
+        def calculate_summaries(details_dict):
+            summaries = {}
+            for status_type, details_list in details_dict.items():
+                summaries[f'{status_type}_value'] = sum(d['total_cost'] for d in details_list)
+                summaries[f'{status_type}_quantity'] = sum(d['total_quantity'] for d in details_list)
+            return summaries
 
-            status_detail = {
-                'status_id': status.status_id,
-                'purchase_id': status.purchase_id,
-                'project_id': purchase.project_id,
-                'requested_by': purchase.requested_by,
-                'site_location': purchase.site_location,
-                'date': purchase.date,
-                'purpose': purchase.purpose,
-                'file_path': purchase.file_path,
-                'materials': materials,
-                'material_count': len(materials),
-                'total_quantity': total_quantity,
-                'total_cost': round(total_material_cost, 2),
-                'status_info': {
-                    'status': status.status,
-                    'sender': status.sender,
-                    'receiver': status.receiver,
-                    'decision_date': status.decision_date.isoformat() if status.decision_date else None,
-                    'decision_by_user_id': status.decision_by_user_id,
-                    'decision_by': status.created_by,
-                    'rejection_reason': status.rejection_reason,
-                    'reject_category': status.reject_category,
-                    'comments': status.comments,
-                    'created_at': status.created_at.isoformat() if status.created_at else None,
-                    'last_modified_at': status.last_modified_at.isoformat() if status.last_modified_at else None,
-                    'last_modified_by': status.last_modified_by
-                }
-            }
+        sender_summaries = calculate_summaries(sender_details)
+        receiver_summaries = calculate_summaries(receiver_details)
 
-            if status.status == 'approved':
-                receiver_approved_count += 1
-                receiver_approved_details.append(status_detail)
-            elif status.status == 'rejected':
-                receiver_rejected_count += 1
-                receiver_rejected_details.append(status_detail)
-            elif status.status == 'pending':
-                receiver_pending_count += 1
-                receiver_pending_details.append(status_detail)
-
-        # Calculate totals
-        sender_total = sender_approved_count + sender_rejected_count + sender_pending_count
-        receiver_total = receiver_approved_count + receiver_rejected_count + receiver_pending_count
-
-        # Calculate financial summaries
-        sender_approved_value = sum(s['total_cost'] for s in sender_approved_details)
-        sender_rejected_value = sum(s['total_cost'] for s in sender_rejected_details)
-        sender_pending_value = sum(s['total_cost'] for s in sender_pending_details)
-
-        receiver_approved_value = sum(s['total_cost'] for s in receiver_approved_details)
-        receiver_rejected_value = sum(s['total_cost'] for s in receiver_rejected_details)
-        receiver_pending_value = sum(s['total_cost'] for s in receiver_pending_details)
-
-        # Calculate quantity summaries
-        sender_approved_quantity = sum(s['total_quantity'] for s in sender_approved_details)
-        sender_rejected_quantity = sum(s['total_quantity'] for s in sender_rejected_details)
-        sender_pending_quantity = sum(s['total_quantity'] for s in sender_pending_details)
-
-        receiver_approved_quantity = sum(s['total_quantity'] for s in receiver_approved_details)
-        receiver_rejected_quantity = sum(s['total_quantity'] for s in receiver_rejected_details)
-        receiver_pending_quantity = sum(s['total_quantity'] for s in receiver_pending_details)
-
+        # Build optimized response
         dashboard_data = {
             'success': True,
             'technical_director_as_sender': {
-                'total_count': sender_total,
-                'approved_count': sender_approved_count,
-                'rejected_count': sender_rejected_count,
-                'pending_count': sender_pending_count,
-                'approved_value': round(sender_approved_value, 2),
-                'rejected_value': round(sender_rejected_value, 2),
-                'pending_value': round(sender_pending_value, 2),
-                'approved_quantity': sender_approved_quantity,
-                'rejected_quantity': sender_rejected_quantity,
-                'pending_quantity': sender_pending_quantity
+                'total_count': sum(sender_counts.values()),
+                'approved_count': sender_counts['approved'],
+                'rejected_count': sender_counts['rejected'],
+                'pending_count': sender_counts['pending'],
+                'approved_value': round(sender_summaries.get('approved_value', 0), 2),
+                'rejected_value': round(sender_summaries.get('rejected_value', 0), 2),
+                'pending_value': round(sender_summaries.get('pending_value', 0), 2),
+                'approved_quantity': sender_summaries.get('approved_quantity', 0),
+                'rejected_quantity': sender_summaries.get('rejected_quantity', 0),
+                'pending_quantity': sender_summaries.get('pending_quantity', 0)
             },
             'technical_director_as_receiver': {
-                'total_count': receiver_total,
-                'approved_count': receiver_approved_count,
-                'rejected_count': receiver_rejected_count,
-                'pending_count': receiver_pending_count,
-                'approved_value': round(receiver_approved_value, 2),
-                'rejected_value': round(receiver_rejected_value, 2),
-                'pending_value': round(receiver_pending_value, 2),
-                'approved_quantity': receiver_approved_quantity,
-                'rejected_quantity': receiver_rejected_quantity,
-                'pending_quantity': receiver_pending_quantity
+                'total_count': sum(receiver_counts.values()),
+                'approved_count': receiver_counts['approved'],
+                'rejected_count': receiver_counts['rejected'],
+                'pending_count': receiver_counts['pending'],
+                'approved_value': round(receiver_summaries.get('approved_value', 0), 2),
+                'rejected_value': round(receiver_summaries.get('rejected_value', 0), 2),
+                'pending_value': round(receiver_summaries.get('pending_value', 0), 2),
+                'approved_quantity': receiver_summaries.get('approved_quantity', 0),
+                'rejected_quantity': receiver_summaries.get('rejected_quantity', 0),
+                'pending_quantity': receiver_summaries.get('pending_quantity', 0)
             },
             'summary': {
-                'total_sender_records': sender_total,
-                'total_receiver_records': receiver_total,
-                'total_unique_purchases': len(set([s['purchase_id'] for s in sender_approved_details + sender_rejected_details + sender_pending_details + receiver_approved_details + receiver_rejected_details + receiver_pending_details]))
+                'total_sender_records': sum(sender_counts.values()),
+                'total_receiver_records': sum(receiver_counts.values()),
+                'total_unique_purchases': len(all_purchase_ids)
             }
         }
 
@@ -554,77 +503,96 @@ def get_technical_director_dashboard():
         return jsonify({'error': f'Failed to retrieve dashboard data: {str(e)}'}), 500
 
 def get_all_technical_director_purchase_request():
-    """Get all purchase requests for technical director with status information"""
+    """Optimized endpoint to get all purchase requests for technical director"""
     try:
+        # Quick user validation
         current_user = g.get("user")
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
-        # Get role information
-        role = Role.query.filter_by(
-            role_id=current_user.get("role_id"),
-            is_deleted=False
-        ).first()
-        
+        role_id = current_user.get("role_id")
+        user_name = current_user.get("full_name")
+        user_id = current_user.get("user_id")
+
+        # Validate role
+        role = Role.query.filter_by(role_id=role_id, is_deleted=False).first()
         if not role:
             return jsonify({"error": "Invalid role"}), 400
-            
-        # Get all purchase statuses
-        statuses = PurchaseStatus.query.all()
-        print("statuses:",len(statuses))
-        
-        # Filter out specific roles
+
+        # Optimized: Single query with eager loading and proper filtering
         excluded_roles = ['siteSupervisor', 'procurement', 'projectManager']
-        
-        # Get all non-deleted purchases with their creators and roles
-        purchases = PurchaseStatus.query.filter(
-            ~PurchaseStatus.role.in_(excluded_roles)    # ✅ if you also want non-deleted
+
+        # Get all statuses with eager loaded purchases
+        purchase_statuses = PurchaseStatus.query.filter(
+            ~PurchaseStatus.role.in_(excluded_roles)
+        ).options(
+            joinedload(PurchaseStatus.purchase)  # Eager load purchases using class-bound attribute
         ).all()
-        print("filtered purchases:", len(purchases))
+
+        if not purchase_statuses:
+            return jsonify({
+                "purchases": [],
+                "user_info": {
+                    "user_name": user_name,
+                    "user_id": user_id,
+                    "role": role.role,
+                },
+                "last_updated": datetime.utcnow().isoformat(),
+                'status': 'success',
+                'message': 'No purchase requests found'
+            }), 200
+
+        # Collect unique purchases and material IDs efficiently
+        purchase_dict = {}
+        all_material_ids = set()
+
+        for status in purchase_statuses:
+            if status.purchase and not status.purchase.is_deleted:
+                purchase = status.purchase
+                purchase_dict[purchase.purchase_id] = purchase
+                if purchase.material_ids:
+                    all_material_ids.update(purchase.material_ids)
+
+        # Batch fetch all materials
+        materials_dict = batch_fetch_materials(list(all_material_ids)) if all_material_ids else {}
+
+        # Group statuses by purchase_id using defaultdict for efficiency
+        from collections import defaultdict
+        status_by_purchase = defaultdict(list)
+        for status in purchase_statuses:
+            status_by_purchase[status.purchase_id].append(status)
+
+        # Process purchases in parallel structure
         technical_director_data = []
-        
-        for pur in purchases:
-            # First fetch purchase object
-            purchase = Purchase.query.filter_by(purchase_id=pur.purchase_id, is_deleted=False).first()
+
+        for purchase_id, purchase_status_list in status_by_purchase.items():
+            purchase = purchase_dict.get(purchase_id)
             if not purchase:
-                continue  # skip if purchase not found
-            # Get status for this purchase
-            purchase_statuses = [s for s in statuses if s.purchase_id == purchase.purchase_id]
-            # Get latest status for different types
-            latest_overall_status = max(purchase_statuses, key=lambda x: x.created_at) if purchase_statuses else None
-            estimation_status = next((s for s in purchase_statuses if s.sender == 'estimation'), None)
-            technical_director_status = next((s for s in purchase_statuses if s.sender == 'technicalDirector'), None)
-            
-            # Get materials data
-            materials = []
-            total_qty = 0
-            total_cost = 0
-            
-            if hasattr(purchase, 'materials') and purchase.materials:
-                for material in purchase.materials:
-                    materials.append({
-                        'material_id': material.material_id,
-                        'name': material.name,
-                        'description': material.description,
-                        'quantity': material.quantity,
-                        'unit': material.unit,
-                        'unit_cost': material.unit_cost,
-                        'total_cost': material.quantity * material.unit_cost if material.quantity and material.unit_cost else 0
-                    })
-                    total_qty += material.quantity or 0
-                    total_cost += material.quantity * material.unit_cost if material.quantity and material.unit_cost else 0
-            
-            # Determine workflow status
+                continue
+
+            # Efficiently find statuses
+            latest_overall_status = max(purchase_status_list, key=lambda x: x.created_at) if purchase_status_list else None
+            estimation_status = next((s for s in purchase_status_list if s.sender == 'estimation'), None)
+            technical_director_status = next((s for s in purchase_status_list if s.sender == 'technicalDirector'), None)
+
+            # Use helper function for materials processing
+            materials, total_cost, total_qty = process_materials_data(
+                purchase.material_ids or [],
+                materials_dict
+            )
+            # Determine workflow status efficiently
             current_workflow_status = 'pending_estimation'
-            if estimation_status and estimation_status.status == 'approved':
-                if technical_director_status:
-                    current_workflow_status = f'technical_director_{technical_director_status.status}'
-                else:
-                    current_workflow_status = 'pending_technical_director'
-            elif estimation_status and estimation_status.status == 'rejected':
-                current_workflow_status = 'estimation_rejected'
-            
-            # Prepare the purchase data
+            if estimation_status:
+                if estimation_status.status == 'approved':
+                    current_workflow_status = (
+                        f'technical_director_{technical_director_status.status}'
+                        if technical_director_status
+                        else 'pending_technical_director'
+                    )
+                elif estimation_status.status == 'rejected':
+                    current_workflow_status = 'estimation_rejected'
+
+            # Build response data efficiently
             purchase_data = {
                 "purchase_id": purchase.purchase_id,
                 "project_id": purchase.project_id,
@@ -660,14 +628,14 @@ def get_all_technical_director_purchase_request():
                     "comments": latest_overall_status.comments if latest_overall_status else None
                 }
             }
-            
+
             technical_director_data.append(purchase_data)
-            
+        # Return optimized response
         return jsonify({
             "purchases": technical_director_data,
             "user_info": {
-                "user_name": current_user.get("full_name"),
-                "user_id": current_user.get("user_id"),
+                "user_name": user_name,
+                "user_id": user_id,
                 "role": role.role,
             },
             "last_updated": datetime.utcnow().isoformat(),

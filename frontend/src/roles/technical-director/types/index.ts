@@ -60,6 +60,19 @@ export interface Purchase {
     reject_category?: string;
     comments?: string;
   };
+
+  // Latest status tracking
+  latest_status?: {
+    status: string;
+    sender?: string;
+    receiver?: string;
+    date?: string;
+    decision_by?: string;
+    comments?: string;
+  };
+
+  // Accounts acknowledgement flag
+  accounts_acknowledgement?: boolean;
 }
 
 // Technical Director approval request
