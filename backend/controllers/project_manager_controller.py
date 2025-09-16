@@ -395,7 +395,8 @@ def get_procurement_approved_purchases():
             )
             statuses = query.fetchall()
             rejection_statuses = []
-            estimation_pm_rejections = []
+            rejected_purchase_ids_list = []
+            rejection_status_map = {}
         else:
             # Parallel fetch using raw SQL for maximum speed
             query = db.session.execute(
@@ -412,14 +413,15 @@ def get_procurement_approved_purchases():
             rejection_statuses = [s for s in statuses if s[4] == 'estimation'
                                  and s[5] == 'projectManager' and s[2] == 'rejected']
 
+            # Store rejected purchase IDs for later processing
+            rejected_purchase_ids_list = []
+            rejection_status_map = {}
             if rejection_statuses:
-                # Convert to dict format for processing
-                rej_dicts = [{'purchase_id': r[0], 'status': r[2]} for r in rejection_statuses]
-                estimation_pm_rejections = _process_estimation_rejections(rej_dicts)
-            else:
-                estimation_pm_rejections = []
+                for r in rejection_statuses:
+                    rejected_purchase_ids_list.append(r[0])
+                    rejection_status_map[r[0]] = r  # Store the rejection status for later use
 
-        rejected_purchase_ids = {r['purchase_id'] for r in estimation_pm_rejections} if estimation_pm_rejections else set()
+        rejected_purchase_ids = set(rejected_purchase_ids_list) if rejected_purchase_ids_list else set()
 
         # Ultra-fast grouping
         purchases_status = defaultdict(list)
@@ -586,7 +588,133 @@ def get_procurement_approved_purchases():
             key=lambda x: x.get('last_modified_at') or x.get('created_at') or '',
             reverse=True
         )
-        
+
+        # Ultra-fast processing for rejected purchases
+        estimation_pm_rejections = []
+        if rejected_purchase_ids_list and not purchase_id_filter:
+            # Single combined query for rejected purchases and their statuses
+            rejected_data_query = db.session.execute(
+                text("""
+                    SELECT
+                        p.purchase_id, p.date, p.site_location, p.purpose,
+                        p.material_ids, p.created_at,
+                        ps.status_id, ps.status, ps.sender, ps.receiver, ps.decision_date,
+                        ps.created_at as status_created, ps.created_by, ps.comments,
+                        ps.rejection_reason, ps.reject_category
+                    FROM purchase p
+                    LEFT JOIN LATERAL (
+                        SELECT * FROM purchase_status
+                        WHERE purchase_id = p.purchase_id
+                        AND sender = 'estimation'
+                        AND receiver = 'projectManager'
+                        AND status = 'rejected'
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    ) ps ON true
+                    WHERE p.purchase_id IN :purchase_ids
+                    AND p.is_deleted = false
+                """),
+                {"purchase_ids": tuple(rejected_purchase_ids_list)}
+            )
+
+            rejected_data = rejected_data_query.fetchall()
+
+            # Collect material IDs from rejected purchases
+            rej_material_ids = set()
+            for row in rejected_data:
+                if row[4]:  # material_ids
+                    rej_material_ids.update(row[4])
+
+            # Batch load missing materials in one query
+            missing_material_ids = rej_material_ids - set(all_materials.keys())
+            if missing_material_ids:
+                missing_mat_query = db.session.execute(
+                    text("""
+                        SELECT material_id, description, specification, unit, quantity,
+                               category, cost, priority, design_reference
+                        FROM materials
+                        WHERE material_id IN :material_ids
+                        AND is_deleted = false
+                    """),
+                    {"material_ids": tuple(missing_material_ids)}
+                )
+
+                for m in missing_mat_query.fetchall():
+                    all_materials[m[0]] = {
+                        'material_id': m[0],
+                        'description': m[1],
+                        'specification': m[2],
+                        'unit': m[3],
+                        'quantity': m[4],
+                        'category': m[5],
+                        'cost': m[6],
+                        'priority': m[7],
+                        'design_reference': m[8]
+                    }
+
+            # Process rejected purchases in single pass
+            for row in rejected_data:
+                # Process materials
+                materials = []
+                total_cost = 0.0
+                total_quantity = 0
+
+                if row[4]:  # material_ids
+                    for mid in row[4]:
+                        mat = all_materials.get(mid)
+                        if mat:
+                            cost = float(mat['cost'] or 0)
+                            total = cost * mat['quantity']
+                            total_cost += total
+                            total_quantity += mat['quantity']
+
+                            materials.append({
+                                'material_id': mid,
+                                'description': mat['description'],
+                                'specification': mat['specification'],
+                                'unit': mat['unit'],
+                                'quantity': mat['quantity'],
+                                'category': mat['category'],
+                                'unit_cost': cost,
+                                'total_cost': total,
+                                'priority': mat['priority'],
+                                'design_reference': mat['design_reference']
+                            })
+
+                # Format dates efficiently
+                date_val = row[1].isoformat() if row[1] and hasattr(row[1], 'isoformat') else row[1]
+                created = row[5].isoformat() if row[5] and hasattr(row[5], 'isoformat') else row[5]
+
+                rejection_data = {
+                    'purchase_id': row[0],
+                    'date': date_val,
+                    'site_location': row[2],
+                    'purpose': row[3],
+                    'created_at': created,
+                    'materials': materials,
+                    'material_count': len(materials),
+                    'total_quantity': total_quantity,
+                    'total_cost': round(total_cost, 2)
+                }
+
+                # Add rejection status if available (from JOIN)
+                if row[6]:  # status_id exists
+                    rejection_data['rejected_status'] = {
+                        'status_id': row[6],
+                        'status': row[7],
+                        'sender': row[8],
+                        'receiver': row[9],
+                        'decision_date': row[10].isoformat() if row[10] and hasattr(row[10], 'isoformat') else row[10],
+                        'created_at': row[11].isoformat() if row[11] and hasattr(row[11], 'isoformat') else row[11],
+                        'created_by': row[12],
+                        'comments': row[13],
+                        'rejection_reason': row[14],
+                        'reject_category': row[15],
+                        'pm_status': 'pending'
+                    }
+
+                estimation_pm_rejections.append(rejection_data)
+
         # Handle single purchase response
         if purchase_id_filter:
             if not result:
@@ -595,6 +723,7 @@ def get_procurement_approved_purchases():
                 'success': True,
                 **result[0]
             }), 200
+
         return jsonify({
             'total_approved_procurement_purchases': len(result),
             'overall_total_cost': round(overall_total_cost, 2),
