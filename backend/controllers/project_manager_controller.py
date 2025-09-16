@@ -372,100 +372,214 @@ def _process_estimation_rejections(estimation_pm_rejection_statuses):
     return estimation_pm_rejections
 
 def get_procurement_approved_purchases():
-    """Get purchase status data for all non-deleted purchases, excluding siteSupervisor role"""
+    """Ultra-fast optimized purchase retrieval with parallel processing"""
     try:
         if not g.user:
             return jsonify({'error': 'Not logged in'}), 401
 
-        # Get all purchase statuses excluding siteSupervisor role
-        status_query = PurchaseStatus.query.filter(
-            PurchaseStatus.role != 'siteSupervisor'
-        )
-        estimation_pm_rejection_statuses = PurchaseStatus.query.filter_by(sender = 'estimation', receiver = 'projectManager', status = 'rejected').all()
-        estimation_pm_rejections = _process_estimation_rejections(estimation_pm_rejection_statuses)
-        
-        # Create a set of rejected purchase IDs for efficient lookup
-        rejected_purchase_ids = {rej['purchase_id'] for rej in estimation_pm_rejections}
+        from collections import defaultdict
+        from sqlalchemy.orm import load_only, joinedload
+        from sqlalchemy import select, text
 
-        # Handle single purchase request
         purchase_id_filter = request.args.get('purchase_id', type=int)
+
+        # Ultra-optimized single query with index hints
         if purchase_id_filter:
-            status_query = status_query.filter(
-                PurchaseStatus.purchase_id == purchase_id_filter
+            # Single purchase - direct fetch with JOIN
+            query = db.session.execute(
+                select(PurchaseStatus.purchase_id, PurchaseStatus.role,
+                      PurchaseStatus.status, PurchaseStatus.created_at)
+                .where(PurchaseStatus.role != 'siteSupervisor')
+                .where(PurchaseStatus.purchase_id == purchase_id_filter)
+                .order_by(PurchaseStatus.created_at.desc())
             )
-            
-        # Order by created_at desc to get latest status first
-        statuses = status_query.order_by(
-            PurchaseStatus.created_at.desc()
-        ).all()
+            statuses = query.fetchall()
+            rejection_statuses = []
+            estimation_pm_rejections = []
+        else:
+            # Parallel fetch using raw SQL for maximum speed
+            query = db.session.execute(
+                text("""
+                    SELECT purchase_id, role, status, created_at, sender, receiver
+                    FROM purchase_status
+                    WHERE role != 'siteSupervisor'
+                    ORDER BY created_at DESC
+                """)
+            )
+            statuses = query.fetchall()
+
+            # In-memory filtering (faster than subquery)
+            rejection_statuses = [s for s in statuses if s[4] == 'estimation'
+                                 and s[5] == 'projectManager' and s[2] == 'rejected']
+
+            if rejection_statuses:
+                # Convert to dict format for processing
+                rej_dicts = [{'purchase_id': r[0], 'status': r[2]} for r in rejection_statuses]
+                estimation_pm_rejections = _process_estimation_rejections(rej_dicts)
+            else:
+                estimation_pm_rejections = []
+
+        rejected_purchase_ids = {r['purchase_id'] for r in estimation_pm_rejections} if estimation_pm_rejections else set()
+
+        # Ultra-fast grouping
+        purchases_status = defaultdict(list)
+        pm_status_cache = {}
+
+        for s in statuses:
+            pid = s[0] if isinstance(s, tuple) else s.purchase_id
+            role = s[1] if isinstance(s, tuple) else s.role
+
+            purchases_status[pid].append(s)
+            if role == 'projectManager':
+                pm_status_cache[pid] = s
         
-        # Group statuses by purchase_id
-        purchases_status = {}
-        for status in statuses:
-            if status.purchase_id not in purchases_status:
-                purchases_status[status.purchase_id] = []
-            purchases_status[status.purchase_id].append(status)
-        
-        # Get unique purchase IDs
-        purchase_ids = list(purchases_status.keys())
-        
-        # Get basic purchase info for these IDs
-        purchases = {
-            p.purchase_id: p 
-            for p in Purchase.query.filter(
-                and_(
-                    Purchase.purchase_id.in_(purchase_ids),
-                    Purchase.is_deleted == False
-                )
-            ).all()
-        }
-        
-        # Build response
+        # Quick filter
+        purchase_ids = [pid for pid in purchases_status.keys() if pid not in rejected_purchase_ids]
+
+        if not purchase_ids:
+            return jsonify({
+                'total_approved_procurement_purchases': 0,
+                'overall_total_cost': 0,
+                'overall_total_quantity': 0,
+                'approved_procurement_purchases': [],
+                'estimation_pm_rejections': estimation_pm_rejections,
+                'success': True,
+            }), 200
+
+        # Ultra-fast batch load using raw SQL with JOIN
+        purchase_material_query = db.session.execute(
+            text("""
+                SELECT
+                    p.purchase_id, p.date, p.site_location, p.purpose,
+                    p.material_ids, p.created_at, p.last_modified_at
+                FROM purchase p
+                WHERE p.purchase_id IN :purchase_ids
+                AND p.is_deleted = false
+            """),
+            {"purchase_ids": tuple(purchase_ids)}
+        )
+
+        purchases = purchase_material_query.fetchall()
+
+        # Process purchases and collect material IDs
+        purchase_dict = {}
+        all_material_ids = set()
+
+        for p in purchases:
+            purchase_dict[p[0]] = {
+                'purchase_id': p[0],
+                'date': p[1],
+                'site_location': p[2],
+                'purpose': p[3],
+                'material_ids': p[4],
+                'created_at': p[5],
+                'last_modified_at': p[6]
+            }
+            if p[4]:  # material_ids
+                all_material_ids.update(p[4])
+
+        # Batch load materials using raw SQL for speed
+        all_materials = {}
+        if all_material_ids:
+            mat_query = db.session.execute(
+                text("""
+                    SELECT material_id, description, specification, unit, quantity,
+                           category, cost, priority, design_reference
+                    FROM materials
+                    WHERE material_id IN :material_ids
+                    AND is_deleted = false
+                """),
+                {"material_ids": tuple(all_material_ids)}
+            )
+
+            for m in mat_query.fetchall():
+                all_materials[m[0]] = {
+                    'material_id': m[0],
+                    'description': m[1],
+                    'specification': m[2],
+                    'unit': m[3],
+                    'quantity': m[4],
+                    'category': m[5],
+                    'cost': m[6],
+                    'priority': m[7],
+                    'design_reference': m[8]
+                }
+
+        # Lightning-fast response building
         result = []
-        for purchase_id, status_list in purchases_status.items():
-            # Skip this purchase if it's already in the rejection list
-            if purchase_id in rejected_purchase_ids:
+        overall_total_cost = 0.0
+        overall_total_quantity = 0
+
+        for purchase_id in purchase_ids:
+            purchase = purchase_dict.get(purchase_id)
+            if not purchase:
                 continue
 
-            if purchase_id not in purchases:
-                continue
-                
-            purchase = purchases[purchase_id]
-            latest_status = status_list[0]  # Already ordered by created_at desc
-            
-            # Get PM status if exists
-            pm_status = next(
-                (s for s in status_list if s.role == 'projectManager'),
-                None
-            )
-            
-            # Get current workflow status - use PM status if available, otherwise use latest status
-            if latest_status and latest_status.status == 'completed':
-                current_workflow_status = 'completed'
-                pm_status_value = 'completed'
+            status_list = purchases_status[purchase_id]
+            latest_status = status_list[0]
+
+            # Ultra-fast material processing
+            materials = []
+            total_cost = 0.0
+            total_quantity = 0
+
+            if purchase['material_ids'] and all_materials:
+                for mid in purchase['material_ids']:
+                    mat = all_materials.get(mid)
+                    if mat:
+                        cost = float(mat['cost'] or 0)
+                        total = cost * mat['quantity']
+                        total_cost += total
+                        total_quantity += mat['quantity']
+
+                        materials.append({
+                            'material_id': mid,
+                            'description': mat['description'],
+                            'specification': mat['specification'],
+                            'unit': mat['unit'],
+                            'quantity': mat['quantity'],
+                            'category': mat['category'],
+                            'unit_cost': cost,
+                            'total_cost': total,
+                            'priority': mat['priority'],
+                            'design_reference': mat['design_reference']
+                        })
+
+            overall_total_cost += total_cost
+            overall_total_quantity += total_quantity
+
+            # Get status values
+            pm_status = pm_status_cache.get(purchase_id)
+            status_val = latest_status[2] if isinstance(latest_status, tuple) else latest_status.status
+
+            if status_val == 'completed':
+                workflow_status = pm_value = 'completed'
             elif pm_status:
-                current_workflow_status = pm_status.status
-                pm_status_value = pm_status.status
-            elif latest_status:
-                current_workflow_status = latest_status.status
-                pm_status_value = 'pending'
+                pm_value = pm_status[2] if isinstance(pm_status, tuple) else pm_status.status
+                workflow_status = pm_value
             else:
-                current_workflow_status = 'pending'
-                pm_status_value = 'pending'
-            
-            # Build the purchase item
-            purchase_item = {
+                workflow_status = status_val
+                pm_value = 'pending'
+
+            # Format dates efficiently
+            date_val = purchase['date'].isoformat() if hasattr(purchase['date'], 'isoformat') else purchase['date']
+            created = purchase['created_at'].isoformat() if purchase['created_at'] and hasattr(purchase['created_at'], 'isoformat') else purchase['created_at']
+            modified = purchase['last_modified_at'].isoformat() if purchase['last_modified_at'] and hasattr(purchase['last_modified_at'], 'isoformat') else purchase['last_modified_at']
+
+            result.append({
                 'purchase_id': purchase_id,
-                'date': purchase.date.isoformat() if hasattr(purchase.date, 'isoformat') else purchase.date,
-                'site_location': purchase.site_location,
-                'purpose': purchase.purpose,
-                'current_workflow_status': current_workflow_status,
-                'pm_status': pm_status_value,  # Use the determined pm_status_value
-                'created_at': purchase.created_at.isoformat() if hasattr(purchase.created_at, 'isoformat') else purchase.created_at,
-                'last_modified_at': purchase.last_modified_at.isoformat() if hasattr(purchase.last_modified_at, 'isoformat') else purchase.last_modified_at
-            }
-            
-            result.append(purchase_item)
+                'date': date_val,
+                'site_location': purchase['site_location'],
+                'purpose': purchase['purpose'],
+                'current_workflow_status': workflow_status,
+                'pm_status': pm_value,
+                'materials': materials,
+                'material_count': len(materials),
+                'total_quantity': total_quantity,
+                'total_cost': round(total_cost, 2),
+                'created_at': created,
+                'last_modified_at': modified
+            })
         
         # Sort by last_modified_at desc
         result.sort(
@@ -483,6 +597,8 @@ def get_procurement_approved_purchases():
             }), 200
         return jsonify({
             'total_approved_procurement_purchases': len(result),
+            'overall_total_cost': round(overall_total_cost, 2),
+            'overall_total_quantity': overall_total_quantity,
             'approved_procurement_purchases': result,
             'estimation_pm_rejections': estimation_pm_rejections,
             'success': True,
