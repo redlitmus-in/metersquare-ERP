@@ -22,27 +22,48 @@ export const loadExcelLibrary = async () => {
   return XLSX;
 };
 
-// Lazy load chart libraries
+// Lazy load chart libraries with better typing and error handling
 export const loadChartLibraries = async () => {
-  const recharts = await import('recharts');
-  return recharts;
+  try {
+    const recharts = await import('recharts');
+    return recharts;
+  } catch (error) {
+    console.error('Failed to load chart libraries:', error);
+    throw error;
+  }
 };
 
 // Preload critical chunks for better performance
 export const preloadCriticalChunks = () => {
-  // Preload router chunk
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(() => {
-      import('react-router-dom');
-    });
-  }
+  // Use requestIdleCallback for non-critical preloading
+  const idlePreload = (callback: () => void) => {
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(callback, { timeout: 2000 });
+    } else {
+      setTimeout(callback, 1);
+    }
+  };
 
-  // Preload UI core components after initial render
+  // Preload router chunk (critical)
+  idlePreload(() => {
+    import('react-router-dom');
+  });
+
+  // Preload UI core components after initial render (medium priority)
   setTimeout(() => {
     import('@radix-ui/react-dialog');
     import('@radix-ui/react-select');
     import('@radix-ui/react-tabs');
   }, 1000);
+
+  // Preload export utilities when idle (low priority)
+  idlePreload(() => {
+    // These will be loaded when user is idle, improving perceived performance
+    setTimeout(() => {
+      import('jspdf').catch(() => {}); // Silent fail for preloading
+      import('xlsx').catch(() => {});
+    }, 3000);
+  });
 };
 
 // Prefetch role-specific dashboards based on user role

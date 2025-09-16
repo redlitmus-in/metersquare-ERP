@@ -171,9 +171,10 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
   const currentStatus = getCurrentStatus();
   const workflowStage = getCurrentWorkflowStage();
 
-  // Calculate totals from materials
-  const totalCost = purchase.materials?.reduce((sum, mat) => sum + (mat.cost * mat.quantity), 0) || 0;
-  const totalQuantity = purchase.materials?.reduce((sum, mat) => sum + mat.quantity, 0) || 0;
+  // Calculate totals from materials - check if we have materials data
+  const hasMaterials = purchase.materials && purchase.materials.length > 0;
+  const totalCost = hasMaterials ? purchase.materials.reduce((sum, mat) => sum + (mat.cost * mat.quantity), 0) : 0;
+  const totalQuantity = hasMaterials ? purchase.materials.reduce((sum, mat) => sum + mat.quantity, 0) : 0;
   const materialCount = purchase.materials?.length || 0;
 
   return (
@@ -238,15 +239,17 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
           <div className="bg-gray-50 rounded-lg p-2 mb-3">
             <div className="grid grid-cols-3 gap-2">
               <div className="text-center">
-                <p className="text-xs text-gray-500">Materials</p>
-                <p className="text-sm font-bold text-gray-900">{materialCount}</p>
+                <Package className="h-3.5 w-3.5 text-gray-400 mx-auto mb-1" />
+                <p className="text-xs text-gray-500">{materialCount} items</p>
               </div>
-              <div className="text-center">
-                <p className="text-xs text-gray-500">Total Quantity</p>
-                <p className="text-sm font-bold text-gray-900">{totalQuantity}</p>
+              <div className="text-center border-l border-gray-200">
+                <p className="text-xs text-gray-500">Qty: {totalQuantity}</p>
               </div>
-              <div className="text-center">
-                <p className="text-xs text-gray-500">Total Cost</p>
+              <div className="text-center border-l border-gray-200">
+                <div className="flex items-center justify-center gap-1">
+                  <DollarSign className="h-3 w-3 text-gray-400" />
+                  <p className="text-xs text-gray-500">Total</p>
+                </div>
                 <p className="text-sm font-bold text-green-600">
                   AED {totalCost.toLocaleString()}
                 </p>

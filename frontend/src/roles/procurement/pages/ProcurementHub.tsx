@@ -88,6 +88,7 @@ const ProcurementHub: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [sendingEmailIds, setSendingEmailIds] = useState<Set<number>>(new Set());
+  const [resendingToPMIds, setResendingToPMIds] = useState<Set<number>>(new Set());
 
   // Confirmation Dialog for email
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -548,14 +549,24 @@ const ProcurementHub: React.FC = () => {
 
   const handleResendToPM = async (purchaseId: number) => {
     try {
+      // Add to resending state
+      setResendingToPMIds(prev => new Set(prev).add(purchaseId));
+
       // Send back to Project Manager after estimation rejection
       await procurementService.sendApprovalEmail(purchaseId);
       toast.success('Purchase request resent to Project Manager for approval');
-      
+
       // Refresh data
       await fetchPurchases();
     } catch (error: any) {
       toast.error(error.message || 'Failed to resend email to Project Manager');
+    } finally {
+      // Remove from resending state
+      setResendingToPMIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(purchaseId);
+        return newSet;
+      });
     }
   };
 
@@ -1107,6 +1118,7 @@ const ProcurementHub: React.FC = () => {
                       onResendToEst={handleResendToPM}
                       emailSent={pmEmailedPRs.has(purchase.purchase_id)}
                       sendingEmail={sendingEmailIds.has(purchase.purchase_id)}
+                      isLoading={resendingToPMIds.has(purchase.purchase_id)}
                     />
                   ))}
                 </div>

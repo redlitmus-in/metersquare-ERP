@@ -21,14 +21,29 @@ export interface ProcurementPurchase {
   email_sent: boolean;
   created_at: string;
   current_workflow_status: string;
-  pm_status: 'pending' | 'approved' | 'rejected' | null;
+  pm_status: 'pending' | 'approved' | 'rejected' | 'completed' | null;
   pm_status_date: string | null;
   pm_comments: string | null;
   pm_rejection_reason: string | null;
   procurement_status: string;
   procurement_status_date: string;
   procurement_comments: string;
-  materials_summary: {
+  total_quantity?: number;
+  total_cost?: number;
+  material_count?: number;
+  materials?: Array<{
+    material_id: number;
+    description: string;
+    category: string;
+    quantity: number;
+    unit: string;
+    unit_cost: number;
+    total_cost: number;
+    specification: string;
+    design_reference: string;
+    priority: string;
+  }>;
+  materials_summary?: {
     total_materials: number;
     total_quantity: number;
     total_cost: number;

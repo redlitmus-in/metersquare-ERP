@@ -209,6 +209,14 @@ const ProjectManagerHub: React.FC = () => {
         setEstimationRejectedPurchases(estimationRejections);
         
         // Calculate metrics from the response
+        // Calculate total quantities and values from actual purchases
+        const pendingPurchases = active.filter(p => !p.pm_status || p.pm_status === 'pending');
+        const approvedPurchases = active.filter(p => p.pm_status === 'approved');
+        const rejectedPurchases = active.filter(p => p.pm_status === 'rejected');
+
+        const totalQuantity = response.overall_total_quantity || 0;
+        const totalValue = response.overall_total_cost || 0;
+
         const metricsData: MetricCard[] = [
           {
             title: 'Total Purchases',
@@ -221,7 +229,7 @@ const ProjectManagerHub: React.FC = () => {
           },
           {
             title: 'Pending Approvals',
-            value: response.summary?.workflow_status_counts?.pending_pm_review || 0,
+            value: pendingPurchases.length,
             icon: <Clock className="h-5 w-5 text-yellow-600" />,
             bgColor: 'bg-yellow-50',
             iconColor: 'bg-yellow-100',
@@ -230,7 +238,7 @@ const ProjectManagerHub: React.FC = () => {
           },
           {
             title: 'Approved',
-            value: response.summary?.workflow_status_counts?.pm_approved || 0,
+            value: approvedPurchases.length,
             icon: <CheckCircle className="h-5 w-5 text-green-600" />,
             bgColor: 'bg-green-50',
             iconColor: 'bg-green-100',
@@ -239,7 +247,7 @@ const ProjectManagerHub: React.FC = () => {
           },
           {
             title: 'Rejected',
-            value: response.summary?.workflow_status_counts?.pm_rejected || 0,
+            value: rejectedPurchases.length,
             icon: <XCircle className="h-5 w-5 text-red-600" />,
             bgColor: 'bg-red-50',
             iconColor: 'bg-red-100',
@@ -248,7 +256,7 @@ const ProjectManagerHub: React.FC = () => {
           },
           {
             title: 'Completed',
-            value: completed.length || 0,
+            value: completed.length,
             icon: <FileText className="h-5 w-5 text-blue-600" />,
             bgColor: 'bg-blue-50',
             iconColor: 'bg-blue-100',
@@ -256,8 +264,17 @@ const ProjectManagerHub: React.FC = () => {
             trendType: 'up'
           },
           {
+            title: 'Total Quantity',
+            value: totalQuantity.toLocaleString(),
+            icon: <Package className="h-5 w-5 text-purple-600" />,
+            bgColor: 'bg-purple-50',
+            iconColor: 'bg-purple-100',
+            trend: '+7%',
+            trendType: 'up'
+          },
+          {
             title: 'Total Value',
-            value: `AED ${(response.summary?.financial_summary?.total_value || 0).toLocaleString()}`,
+            value: `AED ${totalValue.toLocaleString()}`,
             icon: <TrendingUp className="h-5 w-5 text-indigo-600" />,
             bgColor: 'bg-indigo-50',
             iconColor: 'bg-indigo-100',
@@ -730,7 +747,7 @@ const ProjectManagerHub: React.FC = () => {
 
       {/* Metrics Section */}
       <div className="px-6 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
           {metrics.map((metric, index) => (
             <MetricCardComponent key={index} metric={metric} />
           ))}

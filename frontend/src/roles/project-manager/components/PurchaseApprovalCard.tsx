@@ -199,10 +199,10 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
               <div className="bg-gray-50 rounded px-1.5 py-1">
                 <div className="flex items-center gap-0.5">
                   <Package className="h-2.5 w-2.5 text-gray-500" />
-                  <span className="text-[10px] text-gray-600">Items</span>
+                  <span className="text-[10px] text-gray-600">Qty</span>
                 </div>
                 <p className="text-xs font-semibold text-gray-900">
-                  {purchase.materials_summary?.total_materials || 0}
+                  {purchase.total_quantity || 0}
                 </p>
               </div>
               <div className="bg-gray-50 rounded px-1.5 py-1">
@@ -211,7 +211,7 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                   <span className="text-[10px] text-gray-600">Total</span>
                 </div>
                 <p className="text-xs font-semibold text-gray-900">
-                  AED {((purchase.materials_summary?.total_cost || 0)/1000).toFixed(1)}K
+                  AED {purchase.total_cost ? purchase.total_cost.toLocaleString() : '0'}
                 </p>
               </div>
             </div>

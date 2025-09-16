@@ -448,11 +448,17 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   size="sm"
                   onClick={() => onResendToPM(purchase.purchase_id)}
                   disabled={isLoading}
-                  className="bg-red-600 hover:bg-red-700 text-white w-full h-7 text-xs flex items-center justify-center"
+                  className="bg-red-600 hover:bg-red-700 text-white w-full h-7 text-xs flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Resend to Project Manager after revision"
                 >
-                  <Mail className="w-3 h-3 mr-1" />
-                  Resend to PM
+                  {isLoading ? (
+                    <ModernLoadingSpinners variant="pulse-wave" size="sm" />
+                  ) : (
+                    <>
+                      <Mail className="w-3 h-3 mr-1" />
+                      Resend to PM
+                    </>
+                  )}
                 </Button>
               </div>
             )}
@@ -464,14 +470,20 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   size="sm"
                   onClick={() => onResendToEst(purchase.purchase_id)}
                   disabled={isLoading}
-                  className="text-white w-full h-7 text-xs flex items-center justify-center"
-                  style={{ backgroundColor: '#243d8a' }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a2d66'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#243d8a'}
+                  className="text-white w-full h-7 text-xs flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: isLoading ? '#94a3b8' : '#243d8a' }}
+                  onMouseEnter={(e) => !isLoading && (e.currentTarget.style.backgroundColor = '#1a2d66')}
+                  onMouseLeave={(e) => !isLoading && (e.currentTarget.style.backgroundColor = '#243d8a')}
                   title="Send to Project Manager after Estimation revision"
                 >
-                  <Mail className="w-3 h-3 mr-1" />
-                  Send PM
+                  {isLoading ? (
+                    <ModernLoadingSpinners variant="pulse-wave" size="sm" />
+                  ) : (
+                    <>
+                      <Mail className="w-3 h-3 mr-1" />
+                      Send PM
+                    </>
+                  )}
                 </Button>
               </div>
             )}

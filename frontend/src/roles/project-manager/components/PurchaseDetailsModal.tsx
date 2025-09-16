@@ -92,8 +92,11 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
       if (mode === 'history') {
         // For history mode, fetch from /purchase_history/{id}
         const { purchase } = await projectManagerService.getPurchaseHistory(purchaseId);
-        
+
         // Transform the purchase data to match PurchaseStatusDetails structure
+        // Extract all status actions from the approvals.action array
+        const allActions = purchase.approvals?.action || [];
+
         const details: PurchaseStatusDetails = {
           purchase_id: purchase.purchase_id,
           purchase_details: {
@@ -113,8 +116,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               materials: purchase.materials || []
             }
           },
-          procurement_statuses: purchase.approvals?.action?.filter((a: any) => a.role === 'procurement') || [],
-          project_manager_statuses: purchase.approvals?.action?.filter((a: any) => a.role === 'projectManager') || [],
+          // Include ALL actions in both arrays so they all show in history
+          procurement_statuses: allActions,
+          project_manager_statuses: [],
           latest_pm_proc_status: purchase.latest_status || purchase.approvals?.action?.[purchase.approvals?.action?.length - 1] || {
             status: purchase.status || 'pending',
             role: null,
@@ -127,13 +131,13 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
             last_modified_at: null
           },
           summary: {
-            total_procurement_statuses: purchase.approvals?.action?.filter((a: any) => a.role === 'procurement').length || 0,
-            total_pm_statuses: purchase.approvals?.action?.filter((a: any) => a.role === 'projectManager').length || 0,
-            pm_approved_count: purchase.approvals?.action?.filter((a: any) => a.role === 'projectManager' && a.status === 'approved').length || 0,
-            pm_rejected_count: purchase.approvals?.action?.filter((a: any) => a.role === 'projectManager' && a.status === 'rejected').length || 0,
+            total_procurement_statuses: allActions.filter((a: any) => a.role === 'procurement').length || 0,
+            total_pm_statuses: allActions.filter((a: any) => a.role === 'projectManager').length || 0,
+            pm_approved_count: allActions.filter((a: any) => a.role === 'projectManager' && a.status === 'approved').length || 0,
+            pm_rejected_count: allActions.filter((a: any) => a.role === 'projectManager' && a.status === 'rejected').length || 0,
             pm_pending_count: 0,
-            procurement_approved_count: purchase.approvals?.action?.filter((a: any) => a.role === 'procurement' && a.status === 'approved').length || 0,
-            procurement_rejected_count: purchase.approvals?.action?.filter((a: any) => a.role === 'procurement' && a.status === 'rejected').length || 0,
+            procurement_approved_count: allActions.filter((a: any) => a.role === 'procurement' && a.status === 'approved').length || 0,
+            procurement_rejected_count: allActions.filter((a: any) => a.role === 'procurement' && a.status === 'rejected').length || 0,
             procurement_pending_count: 0
           }
         };
@@ -1155,21 +1159,21 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                           <div className="flex gap-2">
                             <span className="text-gray-500">Total Steps:</span>
                             <span className="text-gray-900">
-                              {(statusDetails?.procurement_statuses?.length || 0) + (statusDetails?.project_manager_statuses?.length || 0)}
+                              {(statusDetails?.procurement_statuses?.length || 0)}
                             </span>
                           </div>
                           <div className="flex gap-2">
                             <span className="text-gray-500">Approvals:</span>
                             <span className="text-green-600 font-medium">
-                              {[...(statusDetails?.procurement_statuses || []), ...(statusDetails?.project_manager_statuses || [])]
-                                .filter(s => s.status === 'approved' || s.status === 'completed').length}
+                              {(statusDetails?.procurement_statuses || [])
+                                .filter((s: any) => s.status === 'approved' || s.status === 'completed').length}
                             </span>
                           </div>
                           <div className="flex gap-2">
                             <span className="text-gray-500">Rejections:</span>
                             <span className="text-red-600 font-medium">
-                              {[...(statusDetails?.procurement_statuses || []), ...(statusDetails?.project_manager_statuses || [])]
-                                .filter(s => s.status === 'rejected').length}
+                              {(statusDetails?.procurement_statuses || [])
+                                .filter((s: any) => s.status === 'rejected').length}
                             </span>
                           </div>
                         </div>
@@ -1178,11 +1182,11 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                   </div>
 
                   {/* Combined History */}
-                  {((statusDetails.procurement_statuses?.length || 0) > 0 || (statusDetails.project_manager_statuses?.length || 0) > 0) ? (
+                  {(statusDetails.procurement_statuses?.length || 0) > 0 ? (
                     <div className="space-y-4">
-                      {[...(statusDetails.procurement_statuses || []), ...(statusDetails.project_manager_statuses || [])]
-                        .sort((a, b) => new Date(b.timestamp || b.date).getTime() - new Date(a.timestamp || a.date).getTime())
-                        .map((status, idx) => {
+                      {(statusDetails.procurement_statuses || [])
+                        .sort((a: any, b: any) => new Date(a.timestamp || a.date).getTime() - new Date(b.timestamp || b.date).getTime())
+                        .map((status: any, idx: number) => {
                           const getRoleName = (role: string) => {
                             const roleMap: { [key: string]: string } = {
                               'projectManager': 'Project Manager',
@@ -1203,7 +1207,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                               .join(' ');
                           };
 
-                          const allStatuses = [...(statusDetails.procurement_statuses || []), ...(statusDetails.project_manager_statuses || [])];
+                          const allStatuses = statusDetails.procurement_statuses || [];
                           const isLast = idx === allStatuses.length - 1;
 
                           return (
@@ -1272,39 +1276,6 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                       <History className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                       <p>No approval history available</p>
                       <p className="text-sm mt-1">Approval history will appear here once processing begins</p>
-                    </div>
-                  )}
-
-                  {/* Summary Stats */}
-                  {statusDetails?.summary && (
-                    <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                      <h4 className="font-medium text-gray-900 mb-3">Summary Statistics</h4>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="text-center">
-                          <p className="text-xl font-bold text-blue-600">
-                            {statusDetails.summary?.total_procurement_statuses || 0}
-                          </p>
-                          <p className="text-xs text-gray-600">Procurement Reviews</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xl font-bold text-purple-600">
-                            {statusDetails.summary?.total_pm_statuses || 0}
-                          </p>
-                          <p className="text-xs text-gray-600">PM Reviews</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xl font-bold text-green-600">
-                            {statusDetails.summary?.pm_approved_count || 0}
-                          </p>
-                          <p className="text-xs text-gray-600">PM Approvals</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xl font-bold text-red-600">
-                            {statusDetails.summary?.pm_rejected_count || 0}
-                          </p>
-                          <p className="text-xs text-gray-600">PM Rejections</p>
-                        </div>
-                      </div>
                     </div>
                   )}
                 </div>
