@@ -115,16 +115,43 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
+          // Check for cached user data first for instant load
+          const cachedUser = localStorage.getItem('user');
+          if (cachedUser) {
+            try {
+              const user = JSON.parse(cachedUser);
+              set({
+                user,
+                isAuthenticated: true,
+                isLoading: false,
+                error: null,
+              });
+
+              // Fetch fresh data in background (don't await)
+              apiWrapper.get<any>(API_ENDPOINTS.AUTH.ME).then(response => {
+                const freshUser = response.user || response;
+                localStorage.setItem('user', JSON.stringify(freshUser));
+                set({ user: freshUser });
+              }).catch(() => {
+                // Ignore errors for background refresh
+              });
+
+              return;
+            } catch (e) {
+              // Invalid cached data, continue with API call
+            }
+          }
+
           set({ isLoading: true });
-          
+
           const response = await apiWrapper.get<any>(API_ENDPOINTS.AUTH.ME);
-          
+
           // Extract user from response (backend returns { user: {...}, api_info: {...} })
           const user = response.user || response;
-          
+
           // Cache user data
           localStorage.setItem('user', JSON.stringify(user));
-          
+
           set({
             user,
             isAuthenticated: true,
@@ -136,14 +163,14 @@ export const useAuthStore = create<AuthState>()(
           localStorage.removeItem('access_token');
           localStorage.removeItem('user');
           localStorage.removeItem('auth-storage');
-          
+
           set({
             user: null,
             isAuthenticated: false,
             isLoading: false,
             error: null, // Don't set error to avoid toast messages on token expiry
           });
-          
+
           // Throw error so calling code knows it failed
           throw error;
         }

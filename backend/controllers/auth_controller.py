@@ -14,6 +14,7 @@ from models.user import User
 from models.role import Role
 from config.logging import get_logger
 from utils.authentication import send_otp
+from utils.async_email import send_otp_async
 import os
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT")
@@ -114,8 +115,8 @@ def user_register():
         db.session.add(user)
         db.session.commit()
 
-        # Send welcome OTP for first login
-        otp = send_otp(email)
+        # Send welcome OTP for first login (async)
+        otp = send_otp_async(email)
         
         response_data = {
             "message": "User registered successfully. OTP sent to email for first login.",
@@ -166,9 +167,9 @@ def user_login():
             else:
                 return jsonify({"error": "User not found or inactive"}), 404
         
-        # Send OTP to user's email
-        otp = send_otp(email)
-        
+        # Send OTP to user's email ASYNCHRONOUSLY (instant return)
+        otp = send_otp_async(email)
+
         if otp:
             # Store user_id and role for verification step
             from utils.authentication import otp_storage

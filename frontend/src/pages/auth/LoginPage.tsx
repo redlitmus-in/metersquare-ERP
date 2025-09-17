@@ -184,20 +184,22 @@ const LoginPage: React.FC = () => {
       
       const roleData = availableRoles.find(r => r.value === userRole);
       
+      // Update auth store immediately with the user data we already have
+      useAuthStore.setState({
+        user: response.user,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+      });
+
       toast.success('Welcome to MeterSquare ERP', {
         description: `Logged in as ${response.user.role}`,
         icon: <CheckCircle className="w-5 h-5 text-green-500" />
       });
-      
-      // Update auth store with the user data
-      await useAuthStore.getState().getCurrentUser();
-      
-      // Navigate to role-specific dashboard
+
+      // Navigate to role-specific dashboard immediately
       const dashboardPath = getRoleDashboardPath(response.user.role || userRole);
-      
-      setTimeout(() => {
-        navigate(dashboardPath);
-      }, 500);
+      navigate(dashboardPath);
     } catch (error: any) {
       // Check if it's a duplicate attempt after successful login
       const errorMessage = error.message?.toLowerCase() || '';

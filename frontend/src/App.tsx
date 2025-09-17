@@ -1,9 +1,13 @@
 import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { validateSupabaseConnection } from '@/utils/environment';
 import { setupCacheValidator } from '@/utils/clearCache';
+import { queryClient } from '@/lib/queryClient';
+import { setupRealtimeSubscriptions } from '@/lib/realtimeSubscriptions';
 
 // Critical components loaded immediately
 import { LoginPage } from '@/pages/auth/LoginPage';
@@ -12,8 +16,6 @@ import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import RoleBasedRedirect from '@/components/routing/RoleBasedRedirect';
 
 // Lazy load all non-critical pages
-const LoginPageOTP = lazy(() => import('@/pages/auth/LoginPageOTP'));
-const ModernDashboard = lazy(() => import('@/pages/ModernDashboard'));
 const TasksPage = lazy(() => import('@/pages/common/TasksPage'));
 const ProjectsPage = lazy(() => import('@/pages/common/ProjectsPage'));
 const ProcessFlowPage = lazy(() => import('@/pages/common/ProcessFlowPage'));
@@ -22,22 +24,9 @@ const AnalyticsPage = lazy(() => import('@/pages/common/AnalyticsPage'));
 const WorkflowStatusPage = lazy(() => import('@/pages/common/WorkflowStatusPage'));
 const CreativeErrorPage = lazy(() => import('@/components/ui/CreativeErrorPage'));
 
-// Lazy load role-specific dashboards - Direct imports for proper code splitting
-const TechnicalDirectorDashboard = lazy(() => import('@/pages/dashboards/TechnicalDirectorDashboard'));
-const ProjectManagerDashboard = lazy(() => import('@/pages/dashboards/ProjectManagerDashboard'));
-const ProcurementDashboard = lazy(() => import('@/pages/dashboards/ProcurementDashboard'));
-const SiteSupervisorDashboard = lazy(() => import('@/pages/dashboards/SiteSupervisorDashboard'));
-const MEPSupervisorDashboard = lazy(() => import('@/pages/dashboards/MEPSupervisorDashboard'));
-const EstimationDashboard = lazy(() => import('@/pages/dashboards/EstimationDashboard'));
-const AccountsDashboard = lazy(() => import('@/pages/dashboards/AccountsDashboard'));
-const DesignDashboard = lazy(() => import('@/pages/dashboards/DesignDashboard'));
-
 // Lazy load procurement pages - Direct imports for proper code splitting
 const ProcurementHub = lazy(() => import('@/roles/procurement/pages/ProcurementHub'));
 const DeliveriesPage = lazy(() => import('@/roles/procurement/pages/DeliveriesPage'));
-const ApprovalsPage = lazy(() => import('@/roles/procurement/pages/ApprovalsPage'));
-const PurchaseRequestsPage = lazy(() => import('@/roles/procurement/pages/PurchaseRequestsPage'));
-const VendorQuotationsPage = lazy(() => import('@/roles/procurement/pages/VendorQuotationsPage'));
 
 // Lazy load role hubs - Direct import for better code splitting
 const ProjectManagerHub = lazy(() => import('@/roles/project-manager/pages/ProjectManagerHub'));
@@ -96,40 +85,25 @@ const RoleSpecificProcurementHub: React.FC = () => {
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading, getCurrentUser } = useAuthStore();
-  const [tokenChecked, setTokenChecked] = useState(false);
+  const { isAuthenticated, getCurrentUser, user } = useAuthStore();
   const token = localStorage.getItem('access_token');
 
   useEffect(() => {
-    // Check token validity when component mounts
-    const checkToken = async () => {
-      if (token && !isAuthenticated) {
-        try {
-          await getCurrentUser();
-        } catch (error) {
-          // Token is invalid, getCurrentUser will handle cleanup
-        }
-      }
-      setTokenChecked(true);
-    };
-    
-    checkToken();
-  }, [token, isAuthenticated, getCurrentUser]);
+    // Check token validity when component mounts - but don't block rendering
+    if (token && !isAuthenticated && !user) {
+      // Try to get current user but don't await - it will update state when ready
+      getCurrentUser().catch(() => {
+        // Token is invalid, getCurrentUser will handle cleanup
+      });
+    }
+  }, [token, isAuthenticated, user, getCurrentUser]);
 
-  // Show loading only during initial token check
-  if (!tokenChecked && token) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <ModernLoadingSpinners variant="pulse-wave" size="lg" />
-      </div>
-    );
-  }
-
-  // After token check, redirect if not authenticated
-  if (!isAuthenticated && !token) {
+  // Quick check - if no token, redirect immediately
+  if (!token) {
     return <Navigate to="/login" replace />;
   }
 
+  // If we have a token, show the content (auth check happens in background)
   return <>{children}</>;
 };
 
@@ -148,9 +122,21 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 function App() {
-  const { getCurrentUser, isAuthenticated, logout } = useAuthStore();
+  const { getCurrentUser, isAuthenticated, logout, user } = useAuthStore();
   const [isEnvironmentValid, setIsEnvironmentValid] = useState<boolean | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+
+  // Setup real-time subscriptions when user is authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const userRole = (user as any)?.role || '';
+      const unsubscribe = setupRealtimeSubscriptions(userRole);
+
+      return () => {
+        unsubscribe();
+      };
+    }
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
     // Setup cache validation for role mismatches
@@ -159,17 +145,19 @@ function App() {
     // Quick initialization - don't block on environment validation
     const initialize = async () => {
       try {
-        // Set a timeout for environment validation to prevent long waits
-        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ success: true }), 3000));
+        // Set a SHORT timeout for environment validation to prevent long waits
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ success: true }), 500));
         const validationPromise = validateSupabaseConnection();
-        
-        const { success } = await Promise.race([validationPromise, timeoutPromise]) as { success: boolean };
+
+        const result = await Promise.race([validationPromise, timeoutPromise]) as { success: boolean };
+        const { success } = result;
         setIsEnvironmentValid(success);
-       
+
         if (success) {
-          // Check for existing session on app load in parallel
+          // Check for existing session on app load - don't wait for it
           const token = localStorage.getItem('access_token');
           if (token && !isAuthenticated) {
+            // Fire and forget - don't await
             getCurrentUser().catch(() => {
               console.log('Token validation failed, cleaning up...');
               logout();
@@ -211,6 +199,7 @@ function App() {
             </ol>
           </div>
           <button
+            type="button"
             onClick={() => window.location.reload()}
             className="mt-4 px-4 py-2 bg-[#243d8a] text-white rounded hover:bg-[#243d8a]"
           >
@@ -222,19 +211,20 @@ function App() {
   }
 
   return (
-    <div className="App">
-      <Toaster 
-        position="top-right" 
-        richColors 
-        toastOptions={{
-          style: {
-            marginTop: '80px',
-            marginRight: '16px'
-          }
-        }}
-      />
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
+    <QueryClientProvider client={queryClient}>
+      <div className="App">
+        <Toaster
+          position="top-right"
+          richColors
+          toastOptions={{
+            style: {
+              marginTop: '80px',
+              marginRight: '16px'
+            }
+          }}
+        />
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
         {/* Public Routes */}
         <Route
           path="/login"
@@ -340,8 +330,13 @@ function App() {
           } 
         />
       </Routes>
-      </Suspense>
-    </div>
+        </Suspense>
+        {/* React Query DevTools - Only in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <ReactQueryDevtools initialIsOpen={false} />
+        )}
+      </div>
+    </QueryClientProvider>
   );
 }
 
