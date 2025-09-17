@@ -275,7 +275,42 @@ const PurchaseHistoryModal: React.FC<PurchaseHistoryModalProps> = ({
                 {purchase.approvals?.action && purchase.approvals.action.length > 0 ? (
                   <div className="space-y-4">
                     {purchase.approvals.action
-                      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                      // Group by role and show only the latest/most significant action for each role
+                      .reduce((acc: ApprovalAction[], approval) => {
+                        const existingIndex = acc.findIndex(a => a.role === approval.role);
+                        if (existingIndex === -1) {
+                          // First occurrence of this role
+                          acc.push(approval);
+                        } else {
+                          // Replace with this action if it's a decision (approved/rejected/completed)
+                          // Keep pending only if there's no other action for this role
+                          const existing = acc[existingIndex];
+                          if (approval.status !== 'pending' || existing.status === 'pending') {
+                            // Prefer non-pending status, or if both are same, keep the later one
+                            if (new Date(approval.timestamp) > new Date(existing.timestamp)) {
+                              acc[existingIndex] = approval;
+                            }
+                          }
+                        }
+                        return acc;
+                      }, [])
+                      // Sort by predefined workflow order
+                      .sort((a, b) => {
+                        const roleOrder: { [key: string]: number } = {
+                          'sitesupervisor': 1,
+                          'site supervisor': 1,
+                          'procurement': 2,
+                          'projectmanager': 3,
+                          'project manager': 3,
+                          'estimation': 4,
+                          'technicaldirector': 5,
+                          'technical director': 5,
+                          'accounts': 6
+                        };
+                        const aOrder = roleOrder[a.role?.toLowerCase()] || 999;
+                        const bOrder = roleOrder[b.role?.toLowerCase()] || 999;
+                        return aOrder - bOrder;
+                      })
                       .map((approval, idx) => (
                         <motion.div
                           key={`${idx}-${approval.timestamp}`}

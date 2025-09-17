@@ -1186,7 +1186,41 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                     <div className="space-y-4">
                       {(statusDetails.procurement_statuses || [])
                         .sort((a: any, b: any) => new Date(a.timestamp || a.date).getTime() - new Date(b.timestamp || b.date).getTime())
-                        .map((status: any, idx: number) => {
+                        // Group by role and show only the latest/most significant action for each role
+                        .reduce((acc: any[], status: any) => {
+                          const existingIndex = acc.findIndex(a => a.role === status.role);
+                          if (existingIndex === -1) {
+                            // First occurrence of this role
+                            acc.push(status);
+                          } else {
+                            // Replace with this action if it's a decision (approved/rejected/completed)
+                            const existing = acc[existingIndex];
+                            if (status.status !== 'pending' || existing.status === 'pending') {
+                              // Prefer non-pending status, or if both are same, keep the later one
+                              if (new Date(status.timestamp || status.date) > new Date(existing.timestamp || existing.date)) {
+                                acc[existingIndex] = status;
+                              }
+                            }
+                          }
+                          return acc;
+                        }, [])
+                        .sort((a: any, b: any) => {
+                          const roleOrder: { [key: string]: number } = {
+                            'sitesupervisor': 1,
+                            'site supervisor': 1,
+                            'procurement': 2,
+                            'projectmanager': 3,
+                            'project manager': 3,
+                            'estimation': 4,
+                            'technicaldirector': 5,
+                            'technical director': 5,
+                            'accounts': 6
+                          };
+                          const aOrder = roleOrder[a.role?.toLowerCase()] || 999;
+                          const bOrder = roleOrder[b.role?.toLowerCase()] || 999;
+                          return aOrder - bOrder;
+                        })
+                        .map((status: any, idx: number, consolidatedArray) => {
                           const getRoleName = (role: string) => {
                             const roleMap: { [key: string]: string } = {
                               'projectManager': 'Project Manager',
@@ -1207,8 +1241,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                               .join(' ');
                           };
 
-                          const allStatuses = statusDetails.procurement_statuses || [];
-                          const isLast = idx === allStatuses.length - 1;
+                          const isLast = idx === consolidatedArray.length - 1;
 
                           return (
                             <div key={idx} className="relative">
