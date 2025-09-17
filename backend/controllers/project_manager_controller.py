@@ -167,33 +167,36 @@ def pm_approval_workflow():
             else:
                 message = f'Purchase request #{purchase_id} rejected by Project Manager and sent back to Procurement team'
 
-        # Send email asynchronously in background thread
-        def send_email_async():
+        # Send email asynchronously in background thread with app context
+        def send_email_async(app_context):
             try:
-                email_service = EmailService()
-                if purchase_status == 'approved':
-                    # PM approves - send to Estimation team
-                    success = email_service.send_pm_to_estimation_notification(
-                        purchase_data, materials, requester_info, pm_info
-                    )
-                    if success:
-                        log.info(f"Email sent successfully for approved purchase #{purchase_id}")
+                with app_context:
+                    email_service = EmailService()
+                    if purchase_status == 'approved':
+                        # PM approves - send to Estimation team
+                        success = email_service.send_pm_to_estimation_notification(
+                            purchase_data, materials, requester_info, pm_info
+                        )
+                        if success:
+                            log.info(f"Email sent successfully for approved purchase #{purchase_id}")
+                        else:
+                            log.warning(f"Failed to send email for approved purchase #{purchase_id}")
                     else:
-                        log.warning(f"Failed to send email for approved purchase #{purchase_id}")
-                else:
-                    # PM rejects - send back to Procurement team
-                    success = email_service.send_pm_rejection_to_procurement(
-                        purchase_data, materials, requester_info, pm_info, rejection_reason
-                    )
-                    if success:
-                        log.info(f"Email sent successfully for rejected purchase #{purchase_id}")
-                    else:
-                        log.warning(f"Failed to send email for rejected purchase #{purchase_id}")
+                        # PM rejects - send back to Procurement team
+                        success = email_service.send_pm_rejection_to_procurement(
+                            purchase_data, materials, requester_info, pm_info, rejection_reason
+                        )
+                        if success:
+                            log.info(f"Email sent successfully for rejected purchase #{purchase_id}")
+                        else:
+                            log.warning(f"Failed to send email for rejected purchase #{purchase_id}")
             except Exception as e:
                 log.error(f"Error sending email for purchase #{purchase_id}: {str(e)}")
 
-        # Start email thread
-        email_thread = threading.Thread(target=send_email_async)
+        # Start email thread with app context
+        from flask import current_app
+        app_context = current_app.app_context()
+        email_thread = threading.Thread(target=send_email_async, args=(app_context,))
         email_thread.daemon = True  # Daemon thread will not block app shutdown
         email_thread.start()
 
@@ -363,7 +366,7 @@ def get_procurement_approved_purchases():
 
         # Ultra-fast grouping
         purchases_status = defaultdict(list)
-        pm_status_cache = {}
+        get_pm_status = {}
 
         for s in statuses:
             pid = s[0] if isinstance(s, tuple) else s.purchase_id
@@ -371,7 +374,7 @@ def get_procurement_approved_purchases():
 
             purchases_status[pid].append(s)
             if role == 'projectManager':
-                pm_status_cache[pid] = s
+                get_pm_status[pid] = s
         
         # Quick filter
         purchase_ids = [pid for pid in purchases_status.keys() if pid not in rejected_purchase_ids]
@@ -489,7 +492,7 @@ def get_procurement_approved_purchases():
             overall_total_quantity += total_quantity
 
             # Get status values
-            pm_status = pm_status_cache.get(purchase_id)
+            pm_status = get_pm_status.get(purchase_id)
             status_val = latest_status[2] if isinstance(latest_status, tuple) else latest_status.status
 
             if status_val == 'completed':

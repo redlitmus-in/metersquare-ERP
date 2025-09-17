@@ -204,44 +204,47 @@ def estimation_approval_workflow():
                 else:
                     message = f'Purchase request #{purchase_id} rejected by Estimation team (PM Flag) and sent back to Project Manager'
 
-        # Send email asynchronously in background thread
-        def send_email_async():
+        # Send email asynchronously in background thread with app context
+        def send_email_async(app_context):
             try:
-                email_service = EmailService()
-                if estimation_status == 'approved':
-                    # Estimation approves - send to Technical Director
-                    success = email_service.send_estimation_to_technical_director_notification(
-                        purchase_data, materials, requester_info, estimation_info
-                    )
-                    if success:
-                        log.info(f"Email sent successfully for approved purchase #{purchase_id} to Technical Director")
+                with app_context:
+                    email_service = EmailService()
+                    if estimation_status == 'approved':
+                        # Estimation approves - send to Technical Director
+                        success = email_service.send_estimation_to_technical_director_notification(
+                            purchase_data, materials, requester_info, estimation_info
+                        )
+                        if success:
+                            log.info(f"Email sent successfully for approved purchase #{purchase_id} to Technical Director")
+                        else:
+                            log.warning(f"Failed to send email for approved purchase #{purchase_id}")
                     else:
-                        log.warning(f"Failed to send email for approved purchase #{purchase_id}")
-                else:
-                    # Estimation rejects - send based on rejection type
-                    if rejection_type == 'cost':
-                        # Cost rejection - send back to Procurement team
-                        success = email_service.send_estimation_cost_rejection_to_procurement(
-                            purchase_data, materials, requester_info, estimation_info, rejection_reason
-                        )
-                        if success:
-                            log.info(f"Email sent successfully for cost-rejected purchase #{purchase_id} to Procurement")
-                        else:
-                            log.warning(f"Failed to send email for cost-rejected purchase #{purchase_id}")
-                    else:  # pm_flag
-                        # PM flag rejection - send back to Project Manager
-                        success = email_service.send_estimation_pm_flag_rejection_to_pm(
-                            purchase_data, materials, requester_info, estimation_info, rejection_reason
-                        )
-                        if success:
-                            log.info(f"Email sent successfully for PM-flag-rejected purchase #{purchase_id} to Project Manager")
-                        else:
-                            log.warning(f"Failed to send email for PM-flag-rejected purchase #{purchase_id}")
+                        # Estimation rejects - send based on rejection type
+                        if rejection_type == 'cost':
+                            # Cost rejection - send back to Procurement team
+                            success = email_service.send_estimation_cost_rejection_to_procurement(
+                                purchase_data, materials, requester_info, estimation_info, rejection_reason
+                            )
+                            if success:
+                                log.info(f"Email sent successfully for cost-rejected purchase #{purchase_id} to Procurement")
+                            else:
+                                log.warning(f"Failed to send email for cost-rejected purchase #{purchase_id}")
+                        else:  # pm_flag
+                            # PM flag rejection - send back to Project Manager
+                            success = email_service.send_estimation_pm_flag_rejection_to_pm(
+                                purchase_data, materials, requester_info, estimation_info, rejection_reason
+                            )
+                            if success:
+                                log.info(f"Email sent successfully for PM-flag-rejected purchase #{purchase_id} to Project Manager")
+                            else:
+                                log.warning(f"Failed to send email for PM-flag-rejected purchase #{purchase_id}")
             except Exception as e:
                 log.error(f"Error sending email for purchase #{purchase_id}: {str(e)}")
 
-        # Start email thread
-        email_thread = threading.Thread(target=send_email_async)
+        # Start email thread with app context
+        from flask import current_app
+        app_context = current_app.app_context()
+        email_thread = threading.Thread(target=send_email_async, args=(app_context,))
         email_thread.daemon = True  # Daemon thread will not block app shutdown
         email_thread.start()
 
@@ -881,8 +884,6 @@ def get_all_estimation_purchase_request():
 
         # Use set for O(1) lookup performance
         completed_purchase_ids = {cs.purchase_id for cs in completed_status_records}
-        completed_purchase_status = {cs.purchase_id: cs for cs in completed_status_records}
-
         # Batch load all purchases at once to avoid N+1 queries
         purchase_ids = list(latest_overall_status.keys())
         all_purchases = {p.purchase_id: p for p in
@@ -915,22 +916,19 @@ def get_all_estimation_purchase_request():
 
         purchase_details = []
         for purchase_id, status in latest_overall_status.items():
-            # Use cached purchase data
             purchase = all_purchases.get(purchase_id)
             if not purchase:
                 continue
 
-            # Process materials using cached data
             materials = []
             total_material_cost = 0
             total_quantity = 0
             if purchase.material_ids:
-                # Get materials from cache
                 material_objects = [all_materials.get(mid) for mid in purchase.material_ids
                                   if mid in all_materials]
 
                 for mat in material_objects:
-                    if mat:  # Check if material exists in cache
+                    if mat:
                         material_cost = float(mat.cost or 0)  # Simplified null check
                         material_total = material_cost * mat.quantity
                         total_material_cost += material_total
@@ -1002,23 +1000,9 @@ def get_all_estimation_purchase_request():
         # Sort by latest status creation date (newest first)
         purchase_details.sort(key=lambda x: x['status_info']['created_at'], reverse=True)
 
-        # Calculate summary statistics based on estimation status
         total_count = len(purchase_details)
-        approved_count = len([p for p in purchase_details if p['status_info']['estimation_status'] == 'approved'])
-        rejected_count = len([p for p in purchase_details if p['status_info']['estimation_status'] == 'rejected'])
-        pending_count = len([p for p in purchase_details if p['status_info']['estimation_status'] == 'pending'])
-
-        # Calculate financial summary based on estimation status
         total_value = sum(p['total_cost'] for p in purchase_details)
-        approved_value = sum(p['total_cost'] for p in purchase_details if p['status_info']['estimation_status'] == 'approved')
-        rejected_value = sum(p['total_cost'] for p in purchase_details if p['status_info']['estimation_status'] == 'rejected')
-        pending_value = sum(p['total_cost'] for p in purchase_details if p['status_info']['estimation_status'] == 'pending')
-
-        # Calculate quantity summary based on estimation status
         total_quantity = sum(p['total_quantity'] for p in purchase_details)
-        approved_quantity = sum(p['total_quantity'] for p in purchase_details if p['status_info']['estimation_status'] == 'approved')
-        rejected_quantity = sum(p['total_quantity'] for p in purchase_details if p['status_info']['estimation_status'] == 'rejected')
-        pending_quantity = sum(p['total_quantity'] for p in purchase_details if p['status_info']['estimation_status'] == 'pending')
 
         response_data = {
             'success': True,

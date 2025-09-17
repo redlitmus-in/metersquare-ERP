@@ -128,20 +128,6 @@ def create_purchase_request():
             quantities.append(new_material.quantity)
             costs.append(new_material.cost)
 
-        # # Step 3: Create ONE RequisitionItem with all material_ids as a list
-        # total_quantity = sum(quantities)
-        # total_cost = sum((q * c if c else 0) for q, c in zip(quantities, costs))
-
-        # requisition_item = RequisitionItem(
-        #     purchase_id=new_purchase.purchase_id,
-        #     material_id=material_ids,  # pass list here, e.g. [12, 34]
-        #     quantity_requested=total_quantity,
-        #     unit_cost=None,  # or some calculated/average unit cost
-        #     total_cost=total_cost,
-        #     created_by=current_user['full_name']
-        # )
-        # db.session.add(requisition_item)
-
         # Step 4: Update Purchase.material_ids with all material ids
         new_purchase.material_ids = material_ids
 
@@ -187,98 +173,174 @@ def create_purchase_request():
 
 def get_all_purchase_request():
     try:
+        from sqlalchemy import text
+        from flask import request
+
         current_user = g.user
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
-        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        allowed_roles = 'siteSupervisor,mepSupervisor,procurement,projectManager,estimation,technicalDirector'
-        if not role or role.role not in allowed_roles:
+        # Pagination params
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 50)  # Max 50 items
+        offset = (page - 1) * per_page
+
+        # Single optimized query to get everything at once
+        query = text("""
+            WITH purchase_data AS (
+                SELECT
+                    p.purchase_id, p.user_id, p.requested_by, p.site_location,
+                    p.date, p.project_id, p.purpose, p.material_ids, p.file_path,
+                    p.email_sent, p.created_at, p.created_by, p.last_modified_at,
+                    p.last_modified_by,
+                    ps.status_id, ps.sender, ps.receiver, ps.status, ps.decision_date,
+                    ps.created_at as status_created_at, ps.created_by as status_created_by,
+                    ps.comments, ps.rejection_reason, ps.reject_category, ps.is_active,
+                    r.role
+                FROM purchase p
+                LEFT JOIN LATERAL (
+                    SELECT * FROM purchase_status
+                    WHERE purchase_id = p.purchase_id
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ) ps ON true
+                CROSS JOIN roles r
+                WHERE p.is_deleted = false
+                    AND r.role_id = :role_id
+                    AND r.is_deleted = false
+                    AND r.role IN ('siteSupervisor','mepSupervisor','procurement','projectManager','estimation','technicalDirector')
+                ORDER BY p.created_at DESC
+                LIMIT :limit OFFSET :offset
+            )
+            SELECT * FROM purchase_data;
+        """)
+
+        result = db.session.execute(query, {
+            'role_id': current_user['role_id'],
+            'limit': per_page,
+            'offset': offset
+        }).fetchall()
+
+        if not result:
+            # Check if role is valid
+            role_check = db.session.execute(text("""
+                SELECT role FROM roles
+                WHERE role_id = :role_id AND is_deleted = false
+            """), {'role_id': current_user['role_id']}).first()
+
+            if not role_check or role_check[0] not in ['siteSupervisor','mepSupervisor','procurement','projectManager','estimation','technicalDirector']:
+                return jsonify({'error': 'Invalid role. Access denied for viewing purchase requisitions'}), 403
+
             return jsonify({
-                'error': 'Invalid role. Access denied for viewing purchase requisitions'
-            }), 403
+                'success': True,
+                'message': 'No purchase requests found',
+                'purchase_requests': [],
+                'pagination': {'page': page, 'per_page': per_page, 'total': 0}
+            }), 200
+
+        # Collect all material IDs for batch fetch
+        all_material_ids = set()
+        for row in result:
+            if row.material_ids:
+                all_material_ids.update(row.material_ids)
+
+        # Batch fetch all materials
+        materials_map = {}
+        if all_material_ids:
+            mat_result = db.session.execute(text("""
+                SELECT material_id, project_id, description, specification,
+                       unit, quantity, category, cost, priority, design_reference,
+                       created_at, created_by
+                FROM materials
+                WHERE is_deleted = false AND material_id = ANY(:ids)
+            """), {'ids': list(all_material_ids)}).fetchall()
+
+            for mat in mat_result:
+                materials_map[mat[0]] = {
+                    'material_id': mat[0],
+                    'project_id': mat[1],
+                    'description': mat[2],
+                    'specification': mat[3],
+                    'unit': mat[4],
+                    'quantity': mat[5],
+                    'category': mat[6],
+                    'cost': mat[7],
+                    'priority': mat[8],
+                    'design_reference': mat[9],
+                    'created_at': mat[10],
+                    'created_by': mat[11]
+                }
+
+        # Build response
         purchase_list = []
-        purchases = Purchase.query.filter_by(is_deleted=False).all()
-        for purchase in purchases:
-            material_ids = purchase.material_ids if purchase.material_ids else []
+        user_name = current_user['full_name']
 
-            # Fetch related materials for this purchase
-            materials = Material.query.filter(
-                Material.is_deleted == False,
-                Material.material_id.in_(material_ids)
-            ).all()
-
+        for row in result:
+            # Get materials for this purchase
             material_data = []
-            for mat in materials:
-                material_data.append({
-                    'material_id': mat.material_id,
-                    'project_id': mat.project_id,
-                    'description': mat.description,
-                    'specification': mat.specification,
-                    'unit': mat.unit,
-                    'quantity': mat.quantity,
-                    'category': mat.category,
-                    'cost': mat.cost,
-                    'priority': mat.priority,
-                    'design_reference': mat.design_reference,
-                    'created_at': mat.created_at,
-                    'created_by': mat.created_by
-                })
+            if row.material_ids:
+                material_data = [materials_map[mid] for mid in row.material_ids if mid in materials_map]
 
-            # Get latest status for this purchase
-            latest_status = PurchaseStatus.get_latest_status(purchase.purchase_id)
-            
-            # Format latest status details
+            # Format status
             latest_status_info = None
-            if latest_status:
-                # Determine receiver_latest_status based on sender and receiver
+            if row.status_id:
                 receiver_latest_status = "pending"
-                if latest_status.sender == 'accounts' and latest_status.receiver == 'accounts':
-                    receiver_latest_status = "task completed"  # task completed - waiting for accounts action
-                elif latest_status.sender == 'accounts':
-                    receiver_latest_status = latest_status.status
-                
+                if row.sender == 'accounts' and row.receiver == 'accounts':
+                    receiver_latest_status = "task completed"
+                elif row.sender == 'accounts':
+                    receiver_latest_status = row.status
+
                 latest_status_info = {
-                    'status_id': latest_status.status_id,
-                    'sender_latest_status': latest_status.status,
-                    'sender': latest_status.sender,
-                    'receiver': latest_status.receiver,
-                    'status': latest_status.status,
-                    'decision_date': latest_status.decision_date.isoformat() if latest_status.decision_date else None,
-                    'created_at': latest_status.created_at.isoformat(),
-                    'created_by': latest_status.created_by,
-                    'comments': latest_status.comments,
-                    'rejection_reason': latest_status.rejection_reason,
-                    'reject_category': latest_status.reject_category,
-                    'is_active': latest_status.is_active,
+                    'status_id': row.status_id,
+                    'sender_latest_status': row.status,
+                    'sender': row.sender,
+                    'receiver': row.receiver,
+                    'status': row.status,
+                    'decision_date': row.decision_date.isoformat() if row.decision_date else None,
+                    'created_at': row.status_created_at.isoformat() if row.status_created_at else None,
+                    'created_by': row.status_created_by,
+                    'comments': row.comments,
+                    'rejection_reason': row.rejection_reason,
+                    'reject_category': row.reject_category,
+                    'is_active': row.is_active,
                     'receiver_latest_status': receiver_latest_status
                 }
 
-            # Build final purchase response (✅ includes materials + latest status)
             purchase_list.append({
-                'purchase_id': purchase.purchase_id,
-                'user_id': purchase.user_id,
-                'user_name': current_user['full_name'],
-                'requested_by': purchase.requested_by,
-                'site_location': purchase.site_location,
-                'date': purchase.date,
-                'project_id': purchase.project_id,
-                'purpose': purchase.purpose,
-                'material_ids': material_ids,
-                'materials': material_data,     # ✅ nested materials
-                'file_path': purchase.file_path,
-                'email_sent': purchase.email_sent,
-                'created_at': purchase.created_at,
-                'created_by': purchase.created_by,
-                'last_modified_at': purchase.last_modified_at,
-                'last_modified_by': purchase.last_modified_by,
-                'latest_status': latest_status_info  # ✅ latest status details
+                'purchase_id': row.purchase_id,
+                'user_id': row.user_id,
+                'user_name': user_name,
+                'requested_by': row.requested_by,
+                'site_location': row.site_location,
+                'date': row.date,
+                'project_id': row.project_id,
+                'purpose': row.purpose,
+                'material_ids': row.material_ids or [],
+                'materials': material_data,
+                'file_path': row.file_path,
+                'email_sent': row.email_sent,
+                'created_at': row.created_at,
+                'created_by': row.created_by,
+                'last_modified_at': row.last_modified_at,
+                'last_modified_by': row.last_modified_by,
+                'latest_status': latest_status_info
             })
+
+        # Get total count for pagination
+        count_result = db.session.execute(text("""
+            SELECT COUNT(*) FROM purchase WHERE is_deleted = false
+        """)).scalar()
 
         return jsonify({
             'success': True,
             'message': 'Purchase requests fetched successfully',
-            'purchase_requests': purchase_list
+            'purchase_requests': purchase_list,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': count_result,
+                'pages': (count_result + per_page - 1) // per_page
+            }
         }), 200
 
     except Exception as e:
@@ -598,190 +660,105 @@ ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'}
 # Initialize Supabase client
 supabase: Client = create_client(supabase_url, supabase_key)
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def file_upload(purchase_id):
-    try:
-        # Check if user is logged in
-        current_user = g.get("user")
-        if not current_user:
-            return jsonify({"error": "Not logged in"}), 401
-
-        if current_user['role'] == 'procurement':
-            if 'file' not in request.files:
-                return jsonify({'error': 'No file part in the request'}), 400
-
-            file = request.files['file']
-
-            if file.filename == '':
-                return jsonify({'error': 'No file selected'}), 400
-
-            if not allowed_file(file.filename):
-                return jsonify({'error': 'File type not allowed'}), 400
-
-            # Prepare file for upload
-            filename = secure_filename(file.filename)
-            file_path = f"{purchase_id}/{filename}"
-            file_content = file.read()
-
-            # Optional: delete existing file
-            try:
-                supabase.storage.from_(SUPABASE_BUCKET).remove([file_path])
-            except Exception as e:
-                log.warning(f"Failed to delete existing file: {e}")
-
-            # Upload the file
-            response = supabase.storage.from_(SUPABASE_BUCKET).upload(
-                path=file_path,
-                file=file_content,
-                file_options={"content-type": file.content_type}
-            )
-
-            if isinstance(response, dict) and response.get("error"):
-                return jsonify({'error': 'Upload failed', 'details': response['error']}), 500
-
-            # 🔥 Build public URL manually
-            public_url = f"{file_path}"
-
-            # Optionally update your database (example)
-            purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
-            if not purchase:
-                return jsonify({'error': 'Purchase request not found'}), 404
-
-            purchase.file_path = public_url
-            purchase.last_modified_at = datetime.utcnow()
-            db.session.commit()
-
-            return jsonify({
-                'success': True,
-                'message': 'File uploaded successfully',
-                'file_url': public_url
-            }), 200
-
-        if current_user['role'] == 'accounts':
-            if 'file' not in request.files:
-                return jsonify({'error': 'No file part in the request'}), 400
-
-            file = request.files['file']
-
-            if file.filename == '':
-                return jsonify({'error': 'No file selected'}), 400
-
-            if not allowed_file(file.filename):
-                return jsonify({'error': 'File type not allowed'}), 400
-
-            # Prepare file for upload
-            filename = secure_filename(file.filename)
-            file_path = f"{purchase_id}/{filename}"
-            file_content = file.read()
-
-            # Optional: delete existing file
-            try:
-                supabase.storage.from_(ACCOUNT_BUCKET).remove([file_path])
-            except Exception as e:
-                log.warning(f"Failed to delete existing file: {e}")
-
-            # Upload the file
-            response = supabase.storage.from_(SUPABASE_BUCKET).upload(
-                path=file_path,
-                file=file_content,
-                file_options={"content-type": file.content_type}
-            )
-
-            if isinstance(response, dict) and response.get("error"):
-                return jsonify({'error': 'Upload failed', 'details': response['error']}), 500
-
-            # 🔥 Build public URL manually
-            public_url = f"{file_path}"
-
-            # Optionally update your database (example)
-            purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
-            if not purchase:
-                return jsonify({'error': 'Purchase request not found'}), 404
-
-            purchase.file_path = public_url
-            purchase.last_modified_at = datetime.utcnow()
-            db.session.commit()
-
-            return jsonify({
-                'success': True,
-                'message': 'File uploaded successfully',
-                'file_url': public_url
-            }), 200
-
-    except Exception as e:
-        log.error(f"File upload error: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
-
 def send_purchase_request_email(purchase_id):
-    """API to manually trigger email for a purchase request"""
+    """API to manually trigger email for a purchase request - OPTIMIZED FOR SPEED"""
     try:
+        from sqlalchemy.orm import load_only
+        from sqlalchemy import text
+        import threading
+
         current_user = g.user
         user_id = current_user['user_id']
         user_name = current_user['full_name']
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
-        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        if not role or role.role not in ['siteSupervisor', 'mepSupervisor', 'procurement', 'projectManager', 'technicalDirector']:
+        # Ultra-fast single SQL query to get all data at once
+        result = db.session.execute(text("""
+            SELECT
+                r.role,
+                p.purchase_id, p.site_location, p.date, p.project_id,
+                p.purpose, p.file_path, p.material_ids, p.requested_by
+            FROM purchase p
+            CROSS JOIN roles r
+            WHERE p.purchase_id = :pid
+                AND p.is_deleted = false
+                AND r.role_id = :rid
+                AND r.is_deleted = false
+            LIMIT 1
+        """), {'pid': purchase_id, 'rid': current_user['role_id']}).first()
+
+        if not result:
+            return jsonify({'error': 'Purchase request not found or invalid role'}), 404
+
+        role_name = result[0]
+        if role_name not in ['siteSupervisor', 'mepSupervisor', 'procurement', 'projectManager', 'technicalDirector']:
             return jsonify({'error': 'Insufficient permissions'}), 403
 
-        purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
-        if not purchase:
-            return jsonify({'error': 'Purchase request not found'}), 404
-
-        materials = []
-        if purchase.material_ids:
-            material_objects = Material.query.filter(
-                and_(
-                    Material.is_deleted == False,
-                    Material.material_id.in_(purchase.material_ids)
-                )
-            ).all()
-            for mat in material_objects:
-                materials.append({
-                    'description': mat.description,
-                    'specification': mat.specification,
-                    'unit': mat.unit,
-                    'quantity': mat.quantity,
-                    'category': mat.category,
-                    'cost': mat.cost,
-                    'priority': mat.priority,
-                    'design_reference': mat.design_reference
-                })
-
+        # Extract purchase data from result
         purchase_data = {
-            'purchase_id': purchase.purchase_id,
-            'site_location': purchase.site_location,
-            'date': purchase.date,
-            'project_id': purchase.project_id,
-            'purpose': purchase.purpose,
-            'file_path': purchase.file_path
+            'purchase_id': result[1],
+            'site_location': result[2],
+            'date': result[3],
+            'project_id': result[4],
+            'purpose': result[5],
+            'file_path': result[6]
         }
+        material_ids = result[7]
+        requested_by = result[8]
 
         requester_info = {
-            'full_name': purchase.requested_by,
+            'full_name': requested_by,
             'email': current_user.get('email', ''),
-            'role': role.role
+            'role': role_name
         }
 
-        email_service = EmailService()
-        
-        # Determine which email method to use based on user role
-        if role.role == 'procurement':
-            # Procurement sends to project manager only
-            procurement_info = {
-                'full_name': user_name,
-                'user_id': user_id,
-                'email': current_user.get('email', ''),
-                'role': role.role
-            }
-            
-            # Update existing single PurchaseStatus row instead of creating a new one
+        # Get materials only if needed (single optimized query)
+        materials = []
+        if material_ids:
+            mat_query = db.session.execute(text("""
+                SELECT description, specification, unit, quantity, category, cost, priority, design_reference
+                FROM materials
+                WHERE is_deleted = false AND material_id = ANY(:ids)
+            """), {'ids': material_ids}).fetchall()
+
+            materials = [dict(zip(['description', 'specification', 'unit', 'quantity', 'category', 'cost', 'priority', 'design_reference'], m)) for m in mat_query]
+
+        # Send email in background thread for instant response
+        def send_email_async(app_context):
             try:
-                from models.purchase_status import PurchaseStatus
-                existing_status = PurchaseStatus.get_latest_status(purchase_id)
+                with app_context:
+                    email_service = EmailService()
+                    if role_name == 'procurement':
+                        procurement_info = {
+                            'full_name': user_name,
+                            'user_id': user_id,
+                            'email': current_user.get('email', ''),
+                            'role': role_name
+                        }
+                        email_service.send_procurement_to_project_manager_notification(
+                            purchase_data, materials, requester_info, procurement_info
+                        )
+                    else:
+                        email_service.send_purchase_request_notification(
+                            purchase_data, materials, requester_info
+                        )
+                    log.info(f"Email sent for purchase #{purchase_id}")
+            except Exception as e:
+                log.error(f"Email error: {str(e)}")
+
+        # Start background thread with current app context
+        from flask import current_app
+        app_context = current_app.app_context()
+        threading.Thread(target=send_email_async, args=(app_context,), daemon=True).start()
+
+        # Update status immediately (non-blocking)
+        from models.purchase_status import PurchaseStatus
+        try:
+            # Quick status update
+            if role_name == 'procurement':
+                # Check if status exists and update or create
+                existing_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id).first()
                 if existing_status:
                     existing_status.sender = 'procurement'
                     existing_status.receiver = 'projectManager'
@@ -790,15 +767,11 @@ def send_purchase_request_email(purchase_id):
                     existing_status.decision_by_user_id = user_id
                     existing_status.rejection_reason = None
                     existing_status.reject_category = None
-                    existing_status.comments = 'Procurement reviewed and sent to Project Manager for approval'
+                    existing_status.comments = 'Procurement reviewed and sent to Project Manager for approval (Email queued)'
                     existing_status.decision_date = datetime.utcnow()
                     existing_status.is_active = True
                     existing_status.last_modified_by = user_name
-                    db.session.add(existing_status)
-                    db.session.commit()
-                    log.info(f"Updated PurchaseStatus (single row) for purchase #{purchase_id} -> procurement→projectManager approved")
                 else:
-                    # As a fallback, if no status row exists, create the first (still single-row behavior)
                     new_status = PurchaseStatus(
                         purchase_id=purchase_id,
                         sender='procurement',
@@ -806,111 +779,48 @@ def send_purchase_request_email(purchase_id):
                         role='procurement',
                         status='approved',
                         decision_by_user_id=user_id,
-                        rejection_reason=None,
-                        reject_category=None,
-                        comments='Procurement reviewed and sent to Project Manager for approval',
+                        comments='Procurement reviewed and sent to Project Manager for approval (Email queued)',
                         created_by=user_name,
-                        is_active=True
+                        is_active=True,
+                        decision_date=datetime.utcnow()
                     )
                     db.session.add(new_status)
-                    db.session.commit()
-                    log.info(f"Created initial PurchaseStatus for purchase #{purchase_id} (procurement→projectManager approved)")
-
-                # Record history for procurement -> projectManager status transition
-                try:
-                    _append_purchase_history_action(
-                        purchase_id,
-                        {
-                            'type': 'status_change',
-                            'status': 'approved',
-                            'sender': 'procurement',
-                            'receiver': 'projectmanager',
-                            'comments': 'Purchase request created and sent to Project team',
-                            'rejection_reason': None,
-                            'reject_category': None,
-                            'decided_by_user_id': user_id,
-                            'decided_by': user_name,
-                            'role': 'procurement',
-                            'timestamp': datetime.utcnow().isoformat()
-                        },
-                        user_name
-                    )
-                except Exception as he:
-                    log.error(f"Failed to record purchase history (procurement->PM): {str(he)}")
-            except Exception as e:
-                db.session.rollback()
-                log.error(f"Error updating procurement status entry: {str(e)}")
-                # Continue with email even if status update fails
-            
-            success = email_service.send_procurement_to_project_manager_notification(purchase_data, materials, requester_info, procurement_info)
-        else:
-            # All other roles (siteSupervisor, mepSupervisor, projectManager, technicalDirector) send to all procurement
-            # Create initial status entry for the requester
-            try:
-                from models.purchase_status import PurchaseStatus
-                initial_status = PurchaseStatus.create_new_status(
+            else:
+                # Create initial status for other roles
+                initial_status = PurchaseStatus(
                     purchase_id=purchase_id,
-                    sender_role=role.role,
-                    receiver_role='procurement',
-                    status='pending',  # Initial status when sending to procurement
+                    sender=role_name,
+                    receiver='procurement',
+                    role=role_name,
+                    status='pending',
                     decision_by_user_id=user_id,
-                    comments=f'Purchase request created and sent to Procurement team',
-                    created_by=user_name
+                    comments='Purchase request created and sent to Procurement team (Email queued)',
+                    created_by=user_name,
+                    is_active=True,
+                    decision_date=datetime.utcnow()
                 )
                 db.session.add(initial_status)
-                db.session.commit()  # Commit the status entry immediately
-                log.info(f"Created and committed initial status entry for purchase #{purchase_id}")
 
-                # Record history for requester -> procurement status transition
-                try:
-                    _append_purchase_history_action(
-                        purchase_id,
-                        {
-                            'type': 'status_change',
-                            'status': 'pending',
-                            'sender': role.role,
-                            'receiver': 'procurement',
-                            'comments': 'Purchase request created and sent to Procurement team',
-                            'rejection_reason': None,
-                            'reject_category': None,
-                            'decided_by_user_id': user_id,
-                            'decided_by': user_name,
-                            'role': role.role,
-                            'timestamp': datetime.utcnow().isoformat()
-                        },
-                        user_name
-                    )
-                except Exception as he:
-                    log.error(f"Failed to record purchase history (requester->procurement): {str(he)}")
-            except Exception as e:
-                db.session.rollback()
-                log.error(f"Error creating initial status entry: {str(e)}")
-                # Continue with email even if status creation fails
-            
-            success = email_service.send_purchase_request_notification(purchase_data, materials, requester_info)
-        
-        if success:
-            # Update the email_sent status in database
-            purchase.email_sent = True
-            purchase.last_modified_by = current_user['full_name']
-            
-            # Update the existing status entry to indicate email was sent
-            try:
-                from models.purchase_status import PurchaseStatus
-                latest_status = PurchaseStatus.get_latest_status(purchase_id)
-                if latest_status:
-                    latest_status.comments = f"{latest_status.comments} (Email sent to {'procurement' if role.role != 'procurement' else 'projectManager'})"
-                    db.session.commit()
-                    log.info(f"Updated status entry to indicate email sent for purchase #{purchase_id}")
-            except Exception as e:
-                log.error(f"Error updating status comments: {str(e)}")
-                # Continue even if status update fails
+            # Single commit for all changes
+            db.session.commit()
 
-            # Do not append a separate email_sent action to avoid double entries
-            
-            return jsonify({'success': True, 'message': f'Email sent for purchase request #{purchase_id}'}), 200
-        else:
-            return jsonify({'success': False, 'message': f'Failed to send email for purchase request #{purchase_id}'}), 500
+            # Update purchase email_sent flag
+            Purchase.query.filter_by(purchase_id=purchase_id).update({
+                'email_sent': True,
+                'last_modified_by': user_name
+            })
+            db.session.commit()
+
+        except Exception as e:
+            log.error(f"Error updating status: {str(e)}")
+            db.session.rollback()
+
+        # Return immediate success response (email is being sent in background)
+        return jsonify({
+            'success': True,
+            'message': f'Email processing for purchase request #{purchase_id}',
+            'status': 'Email queued and being sent in background'
+        }), 200
 
     except Exception as e:
         log.error(f"Error in send_purchase_request_email: {str(e)}")

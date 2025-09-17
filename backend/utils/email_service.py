@@ -699,19 +699,30 @@ class EmailService:
         try:
             pm_role = Role.query.filter_by(role='projectManager', is_deleted=False).first()
             if not pm_role:
-                return None
-            
+                log.error("Project Manager role not found in database")
+                return []
+
+            log.info(f"Found Project Manager role with role_id: {pm_role.role_id}")
+
             users = User.query.filter_by(
                 role_id=pm_role.role_id,
                 is_deleted=False,
                 is_active=True
             ).all()
 
+            log.info(f"Found {len(users)} Project Manager user(s)")
+
             emails = [u.email for u in users if u.email]
-            return emails if emails else None
+
+            if not emails:
+                log.warning("No valid email addresses found for Project Managers")
+                return []
+
+            log.info(f"Retrieved {len(emails)} Project Manager email(s): {emails}")
+            return emails
         except Exception as e:
-            log.error(f"Error fetching project manager emails: {str(e)}")
-            return None
+            log.error(f"Error fetching project manager emails: {str(e)}", exc_info=True)
+            return []
 
 
 
@@ -2236,23 +2247,46 @@ Project Manager
                                                requester_info: Dict, estimation_info: Dict, rejection_reason: str) -> bool:
         """Send PM flag rejection notification from Estimation team back to Project Manager"""
         try:
+            log.info(f"Attempting to send PM flag rejection email for purchase #{purchase_data.get('purchase_id')}")
+
             # Get project manager emails
             recipients = self.get_project_manager_emails()
-            
+
             if not recipients:
-                log.error("No project manager emails found")
-                return False
-            
+                log.error("No project manager emails found - cannot send rejection notification")
+                # Try to get at least one PM email as fallback
+                from models.user import User
+                from models.role import Role
+
+                pm_role = Role.query.filter_by(role='projectManager', is_deleted=False).first()
+                if pm_role:
+                    # Try to find any PM user even if not active
+                    any_pm = User.query.filter_by(role_id=pm_role.role_id, is_deleted=False).first()
+                    if any_pm and any_pm.email:
+                        log.warning(f"Using fallback PM email: {any_pm.email}")
+                        recipients = [any_pm.email]
+                    else:
+                        log.error("No Project Manager users found at all in database")
+                        return False
+                else:
+                    log.error("Project Manager role not found in database")
+                    return False
+
+            log.info(f"Sending PM flag rejection email to {len(recipients)} recipient(s): {recipients}")
+
             subject = f"Purchase Request Rejected by Estimation (PM Flag) - Requires PM Review - #{purchase_data.get('purchase_id')}"
             html_content = self._generate_estimation_pm_flag_rejection_email_html(purchase_data, materials_data, requester_info, estimation_info, rejection_reason)
             text_content = self._generate_estimation_pm_flag_rejection_email_text(purchase_data, materials_data, requester_info, estimation_info, rejection_reason)
 
             success = self._send_email(recipients, subject, html_content, text_content)
             if success:
+                log.info(f"PM flag rejection email sent successfully to {len(recipients)} project manager(s)")
                 print(f"PM flag rejection email sent to {len(recipients)} project manager(s)")
+            else:
+                log.error("Failed to send PM flag rejection email")
             return success
         except Exception as e:
-            log.error(f"Error sending estimation PM flag rejection to PM: {str(e)}")
+            log.error(f"Error sending estimation PM flag rejection to PM: {str(e)}", exc_info=True)
             return False
 
     def get_technical_director_emails(self) -> List[str]:

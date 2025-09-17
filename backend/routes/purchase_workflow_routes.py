@@ -31,11 +31,6 @@ def update_purchase_request_route(purchase_id):
 def delete_purchase_route(purchase_id):
     return delete_purchase(purchase_id)
 
-@purchase_workflow_routes.route('/upload_file/<int:purchase_id>', methods=['POST'])
-@jwt_required
-def file_upload_route(purchase_id):
-    return file_upload(purchase_id)
-
 @purchase_workflow_routes.route('/purchase_email/<int:purchase_id>', methods=['GET'])
 @jwt_required
 def send_purchase_request_email_route(purchase_id):

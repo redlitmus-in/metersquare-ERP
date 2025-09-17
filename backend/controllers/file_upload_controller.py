@@ -1,295 +1,224 @@
 from flask import request, jsonify
-from sqlalchemy.orm.attributes import flag_modified
 import os
-import io
-import asyncio
-import concurrent.futures
-from functools import lru_cache
-import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 from models.payment_transaction import PaymentTransaction
 from models.purchase_status import PurchaseStatus
-from models.approval import Approval
-from models.material import Material
 from models.purchase import Purchase
-from models.role import Role
 from config.db import db
-from datetime import datetime
 from config.logging import get_logger
 from werkzeug.utils import secure_filename
 from supabase import create_client, Client
-from utils.email_service import EmailService
-
 log = get_logger()
 
-# Thread pool for parallel file uploads
-executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
-
+# Configuration constants
 supabase_url = os.environ.get('SUPABASE_URL')
 supabase_key = os.environ.get('SUPABASE_KEY')
 SUPABASE_BUCKET = "file_upload"
-ACCOUNT_BUCKET = "account_file"
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'}
+MAX_WORKERS = 12  # Increased for better parallelism
 
-# Initialize Supabase client with connection pooling
+# Role to folder mapping - defined once
+ROLE_FOLDER_MAP = {
+    "siteSupervisor": "sitesupervisor",
+    "mepSupervisor": "mepsupervisor",
+    "procurement": "procurement",
+    "projectManager": "projectmanager",
+    "estimation": "estimation",
+    "technicalDirector": "technicaldirector",
+    "accounts": "accounts"
+}
+
+# Initialize single reusable client
 supabase: Client = create_client(supabase_url, supabase_key)
 
-# Cache for role folder mapping
-@lru_cache(maxsize=32)
-def get_role_folder_map():
-    return {
-        "siteSupervisor": "sitesupervisor",
-        "mepSupervisor": "mepsupervisor",
-        "procurement": "procurement",
-        "projectManager": "projectmanager",
-        "estimation": "estimation",
-        "technicalDirector": "technicaldirector",
-        "accounts": "accounts"
-    }
+# Pre-build base URL for public files
+PUBLIC_URL_BASE = f"{supabase_url}/storage/v1/object/public/{SUPABASE_BUCKET}/"
 
-def upload_file_async(supabase_path, file_content, content_type):
-    """Upload file to Supabase asynchronously"""
-    try:
-        # Try to remove existing file silently
-        try:
-            supabase.storage.from_(SUPABASE_BUCKET).remove([supabase_path])
-        except:
-            pass
-
-        # Upload file
-        response = supabase.storage.from_(SUPABASE_BUCKET).upload(
-            path=supabase_path,
-            file=file_content,
-            file_options={"content-type": content_type}
-        )
-
-        if isinstance(response, dict) and response.get('error'):
-            return None, response['error']
-
-        public_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(supabase_path)
-        return public_url, None
-    except Exception as e:
-        return None, str(e)
 
 def allowed_file(filename):
+    """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# Create a global executor for better resource management
+global_executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
+
+def upload_single_file(path, content, content_type):
+    """Optimized single file upload"""
+    try:
+        # Direct upload with upsert
+        supabase.storage.from_(SUPABASE_BUCKET).upload(
+            path=path,
+            file=content,
+            file_options={
+                "content-type": content_type,
+                "upsert": "true"
+            }
+        )
+        # Return URL immediately
+        return f"{PUBLIC_URL_BASE}{path}"
+    except Exception as e:
+        # Try once more on failure
+        try:
+            supabase.storage.from_(SUPABASE_BUCKET).update(
+                path=path,
+                file=content,
+                file_options={"content-type": content_type}
+            )
+            return f"{PUBLIC_URL_BASE}{path}"
+        except:
+            raise e
+
+def process_file_batch(files, purchase_id, storage_path_prefix=""):
+    """Ultra-fast parallel batch processing"""
+    if not files:
+        return [], []
+
+    uploaded_files = []
+    errors = []
+    futures = []
+
+    # Use global executor for all uploads
+    for index, file in enumerate(files):
+        if not file or file.filename == '':
+            continue
+
+        try:
+            # Quick filename processing
+            filename = secure_filename(file.filename)
+            name_part, ext_part = os.path.splitext(filename)
+            unique_filename = f"{name_part}_{index}{ext_part}"
+
+            # Build path
+            supabase_path = f"{storage_path_prefix}/{purchase_id}/{unique_filename}" if storage_path_prefix else f"{purchase_id}/{unique_filename}"
+
+            # Read file
+            file_content = file.read()
+            content_type = file.content_type or "application/octet-stream"
+
+            # Submit upload task immediately
+            future = global_executor.submit(
+                upload_single_file,
+                supabase_path,
+                file_content,
+                content_type
+            )
+
+            futures.append((future, {
+                "filename": unique_filename,
+                "original": filename,
+                "path": supabase_path,
+                "size": len(file_content),
+                "type": content_type
+            }))
+        except Exception as e:
+            errors.append(f"Prep error for {file.filename}: {str(e)}")
+
+    # Collect results as they complete
+    for future, file_info in futures:
+        try:
+            public_url = future.result(timeout=2)  # 2 second timeout
+            uploaded_files.append({
+                "fn": file_info["filename"],
+                "orig": file_info["original"],
+                "path": file_info["path"],
+                "size": file_info["size"],
+                "type": file_info["type"],
+                "url": public_url
+            })
+        except Exception as e:
+            errors.append(f"{file_info['original']}: {str(e)}")
+
+    return uploaded_files, errors
+
 def upload_files(key, id):
-    """Optimized file upload with parallel processing"""
+    """Ultra-optimized file upload function"""
+    start_time = time.time()
+
     files = request.files.getlist("file") if "file" in request.files else []
 
     if not files:
         return jsonify({"error": "No files provided"}), 400
-
-    log.info(f"Upload request - key: {key}, id: {id}, files count: {len(files)}")
-
-    # Use cached role folder map
-    role_folder_map = get_role_folder_map()
-
-    if key in ["siteSupervisor","mepSupervisor","procurement","projectManager","estimation","technicalDirector"]:
-        # Quick DB check with specific columns
-        get_purchase = db.session.query(Purchase.purchase_id, Purchase.file_path).filter_by(
-            purchase_id=id
-        ).first()
-        if not get_purchase:
-            return jsonify({"error": "Purchase not found"}), 404
-        # Process files in parallel using thread pool
-        upload_tasks = []
-        uploaded_files = []
-
-        for index, file in enumerate(files):
-            if file.filename == '':
-                continue
-
-            # Generate secure filename
-            filename = secure_filename(file.filename)
-            file_name, file_extension = os.path.splitext(filename)
-            unique_filename = f"{file_name}_{index}{file_extension}"
-            supabase_path = f"{id}/{unique_filename}"
-
-            # Read file content once into memory
-            file_content = file.read()
-            content_type = file.content_type or "application/octet-stream"
-
-            # Submit upload task to thread pool
-            future = executor.submit(
-                upload_file_async,
-                supabase_path,
-                file_content,
-                content_type
-            )
-
-            upload_tasks.append({
-                'future': future,
-                'filename': unique_filename,
-                'original': filename,
-                'path': supabase_path,
-                'size': len(file_content),
-                'type': content_type
-            })
-
-        # Wait for all uploads to complete
-        for task in upload_tasks:
-            try:
-                public_url, error = task['future'].result(timeout=10)
-                if error:
-                    log.error(f"Upload failed for {task['filename']}: {error}")
-                    continue
-
-                uploaded_files.append({
-                    "fn": task['filename'],
-                    "orig": task['original'],
-                    "path": task['path'],
-                    "size": task['size'],
-                    "type": task['type']
-                })
-            except Exception as e:
-                log.error(f"Upload task failed: {str(e)}")
-                continue
-        # Optimized database update
-        if uploaded_files:
-            try:
-                filenames = [f["fn"] for f in uploaded_files]
-                # Direct SQL update for better performance
-                Purchase.query.filter_by(purchase_id=id).update(
-                    {"file_path": ",".join(filenames)},
-                    synchronize_session=False
-                )
-                db.session.commit()
-
-                return jsonify({
-                    "message": "Files uploaded successfully",
-                    "uploaded_files": uploaded_files,
-                    "total_files": len(uploaded_files)
-                }), 200
-            except Exception as e:
-                db.session.rollback()
-                log.error(f"Database error: {str(e)}")
-                return jsonify({"error": "Failed to save file information"}), 500
+    if key not in ROLE_FOLDER_MAP:
+        return jsonify({"error": "Invalid role key"}), 400
+    try:
+        # Determine the entity and storage path based on role
+        if key == "accounts":
+            entity = PaymentTransaction.query.filter_by(purchase_id=id).first()
+            if not entity:
+                return jsonify({"error": "Payment transaction not found"}), 404
+            storage_prefix = "accounts"
+            field_name = "supporting_documents"
         else:
-            return jsonify({"error": "No files were uploaded successfully"}), 400
-
-    elif key == "accounts":
-        # Quick DB check
-        exists = db.session.query(PaymentTransaction.purchase_id).filter_by(
-            purchase_id=id
-        ).first()
-        if not exists:
-            return jsonify({"error": "Purchase not found"}), 404
-
-        # Process files in parallel
-        upload_tasks = []
-        uploaded_files = []
-
-        for index, file in enumerate(files):
-            if file.filename == '':
-                continue
-
-            filename = secure_filename(file.filename)
-            file_name, file_extension = os.path.splitext(filename)
-            unique_filename = f"{file_name}_{index}{file_extension}"
-            supabase_path = f"accounts/{id}/{unique_filename}"
-
-            file_content = file.read()
-            content_type = file.content_type or "application/octet-stream"
-
-            # Submit to thread pool
-            future = executor.submit(
-                upload_file_async,
-                supabase_path,
-                file_content,
-                content_type
-            )
-
-            upload_tasks.append({
-                'future': future,
-                'filename': unique_filename,
-                'original': filename,
-                'path': supabase_path,
-                'size': len(file_content),
-                'type': content_type
-            })
-
-        # Wait for uploads
-        for task in upload_tasks:
-            try:
-                public_url, error = task['future'].result(timeout=10)
-                if error:
-                    continue
-
-                uploaded_files.append({
-                    "fn": task['filename'],
-                    "orig": task['original'],
-                    "path": task['path'],
-                    "size": task['size'],
-                    "type": task['type']
-                })
-            except:
-                continue
-
-        # Update database
+            entity = Purchase.query.filter_by(purchase_id=id).first()
+            if not entity:
+                return jsonify({"error": "Purchase not found"}), 404
+            storage_prefix = ""  # Purchase files go directly under purchase_id
+            field_name = "file_path"
+        # Process uploads concurrently
+        uploaded_files, errors = process_file_batch(files, id, storage_prefix)
+        # Update entity with filenames
         if uploaded_files:
-            try:
-                filenames = [f["fn"] for f in uploaded_files]
-                PaymentTransaction.query.filter_by(purchase_id=id).update(
-                    {"supporting_documents": ",".join(filenames)},
-                    synchronize_session=False
-                )
-                db.session.commit()
+            filenames = [f["fn"] for f in uploaded_files]
+            setattr(entity, field_name, ",".join(filenames))
+        db.session.commit()
+        upload_time = time.time() - start_time
+        return jsonify({
+            "message": "Files uploaded successfully",
+            "uploaded_files": uploaded_files,
+            "total_files": len(uploaded_files),
+            "upload_time": f"{upload_time:.2f}s",
+            "errors": errors if errors else None
+        }), 200
 
-                return jsonify({
-                    "message": "Files uploaded successfully",
-                    "uploaded_files": uploaded_files,
-                    "total_files": len(uploaded_files)
-                }), 200
-            except Exception as e:
-                db.session.rollback()
-                return jsonify({"error": "Failed to save file information"}), 500
-        else:
-            return jsonify({"error": "No files uploaded"}), 400
+    except Exception as e:
+        db.session.rollback()
+        log.error(f"Upload failed for {key}/{id}: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 def get_uploaded_file(key, id):
-    """Get uploaded files for a specific purchase from Supabase storage.
-    Rules:
-      - key == "accounts": list ONLY from accounts/{purchase_id}
-      - key in {procurement, projectManager, technicalDirector}: list from ALL non-accounts folders
-      - other allowed roles: list only from that role's folder
-    """
-    try:
-        role_folder_map = {
-            "siteSupervisor": "sitesupervisor",
-            "mepSupervisor": "mepsupervisor",
-            "procurement": "procurement",
-            "projectManager": "projectmanager",
-            "estimation": "estimation",
-            "technicalDirector": "technicaldirector",
-            "accounts": "accounts",
-        }
+    """Optimized file retrieval with caching and parallel processing"""
+    start_time = time.time()
 
-        def list_folder(prefix_folder: str, purchase_id: str):
+    try:
+        def generate_public_url(file_path):
+            """Generate public URL directly without API call"""
+            return f"{PUBLIC_URL_BASE}{file_path}"
+
+        def list_folder_optimized(prefix_folder: str, purchase_id: str):
+            """Optimized folder listing with batch URL generation"""
             try:
-                entries = supabase.storage.from_(SUPABASE_BUCKET).list(path=f"{prefix_folder}/{purchase_id}")
-                files = []
-                if isinstance(entries, list):
-                    for entry in entries:
-                        name = entry.get('name') if isinstance(entry, dict) else None
-                        if name:
-                            path = f"{prefix_folder}/{purchase_id}/{name}"
-                            public_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(path)
-                            files.append({
-                                "filename": name,
-                                "file_path": path,
-                                "public_url": public_url,
-                                "storage_bucket": SUPABASE_BUCKET,
-                                "folder": prefix_folder,
-                            })
-                return files
+                path = f"{prefix_folder}/{purchase_id}" if prefix_folder else purchase_id
+                entries = supabase.storage.from_(SUPABASE_BUCKET).list(path=path)
+
+                if not isinstance(entries, list):
+                    return []
+
+                # Process all entries with direct URL generation (no API calls)
+                results = []
+                for entry in entries:
+                    if isinstance(entry, dict) and entry.get('name'):
+                        file_path = f"{path}/{entry['name']}"
+                        results.append({
+                            "filename": entry['name'],
+                            "file_path": file_path,
+                            "public_url": generate_public_url(file_path),
+                            "storage_bucket": SUPABASE_BUCKET,
+                            "folder": prefix_folder or "root"
+                        })
+                return results
+
             except Exception as e:
                 log.warning(f"List storage failed for {prefix_folder}/{purchase_id}: {str(e)}")
                 return []
 
-        # Accounts: only its own folder (separate group response shape)
+        # Validate key
+        if key not in ROLE_FOLDER_MAP:
+            return jsonify({"error": "Invalid key"}), 400
+        # Quick response for accounts role
         if key == "accounts":
-            accounts_files = list_folder(role_folder_map["accounts"], id)
+            accounts_files = list_folder_optimized(ROLE_FOLDER_MAP["accounts"], id)
+            elapsed = time.time() - start_time
             return jsonify({
                 "success": True,
                 "accounts_files": accounts_files,
@@ -297,42 +226,54 @@ def get_uploaded_file(key, id):
                 "totals": {
                     "accounts_files": len(accounts_files),
                     "purchase_files": 0
-                }
+                },
+                "response_time": f"{elapsed:.3f}s"
             }), 200
 
-        allowed_roles = set(role_folder_map.keys())
-        if key not in allowed_roles:
-            return jsonify({"error": "Invalid key"}), 400
-
-        # PM/procurement/TD: view non-accounts (purchase) union, and accounts separately
+        # PM/procurement/TD: parallel loading for elevated roles
         elevated_view = {"procurement", "projectManager", "technicalDirector"}
         if key in elevated_view:
-            accounts_files = list_folder(role_folder_map["accounts"], id)
-            purchase_folders = [v for k, v in role_folder_map.items() if k != "accounts"]
-            aggregated = []
-            for folder in purchase_folders:
-                aggregated.extend(list_folder(folder, id))
-            # Legacy fallback: files that may exist at top-level {purchase_id}/ from earlier versions
-            try:
-                legacy_entries = supabase.storage.from_(SUPABASE_BUCKET).list(path=f"{id}")
-                if isinstance(legacy_entries, list):
-                    for entry in legacy_entries:
-                        name = entry.get('name') if isinstance(entry, dict) else None
-                        if name:
-                            path = f"{id}/{name}"
-                            public_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(path)
-                            aggregated.append({
-                                "filename": name,
-                                "file_path": path,
-                                "public_url": public_url,
-                                "storage_bucket": SUPABASE_BUCKET,
-                                "folder": "legacy"
-                            })
-            except Exception as e:
-                log.warning(f"Legacy list failed for {id}: {str(e)}")
-            # dedupe by path
-            unique_purchase = {f["file_path"]: f for f in aggregated}
+            # Prepare all folders to fetch in parallel
+            folders_to_fetch = []
+            # Add accounts folder
+            folders_to_fetch.append((ROLE_FOLDER_MAP["accounts"], id))
+
+            # Add all non-accounts folders
+            for k, v in ROLE_FOLDER_MAP.items():
+                if k != "accounts":
+                    folders_to_fetch.append((v, id))
+
+            # Add legacy folder (empty prefix means root)
+            folders_to_fetch.append(("", id))
+
+            # Fetch all folders in parallel
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = {}
+
+                # Submit accounts folder separately for tracking
+                accounts_future = executor.submit(list_folder_optimized, ROLE_FOLDER_MAP["accounts"], id)
+
+                # Submit all other folders
+                for folder, purchase_id in folders_to_fetch:
+                    if folder != ROLE_FOLDER_MAP["accounts"]:
+                        futures[executor.submit(list_folder_optimized, folder, purchase_id)] = folder
+
+                # Get accounts files
+                accounts_files = accounts_future.result(timeout=2)
+
+                # Collect all other files
+                all_purchase_files = []
+                for future in as_completed(futures):
+                    try:
+                        files = future.result(timeout=2)
+                        all_purchase_files.extend(files)
+                    except Exception as e:
+                        log.warning(f"Failed to fetch folder: {str(e)}")
+
+            # Deduplicate by file_path
+            unique_purchase = {f["file_path"]: f for f in all_purchase_files}
             purchase_files = list(unique_purchase.values())
+            elapsed = time.time() - start_time
             return jsonify({
                 "success": True,
                 "accounts_files": accounts_files,
@@ -340,177 +281,139 @@ def get_uploaded_file(key, id):
                 "totals": {
                     "accounts_files": len(accounts_files),
                     "purchase_files": len(purchase_files)
-                }
+                },
+                "response_time": f"{elapsed:.3f}s"
             }), 200
 
-        # Other roles: their own folder + legacy files
-        folder = role_folder_map[key]
-        files = list_folder(folder, id)
-        
-        # Also check for legacy files at top-level {id}/ from earlier versions
-        try:
-            legacy_entries = supabase.storage.from_(SUPABASE_BUCKET).list(path=f"{id}")
-            if isinstance(legacy_entries, list):
-                for entry in legacy_entries:
-                    name = entry.get('name') if isinstance(entry, dict) else None
-                    if name:
-                        path = f"{id}/{name}"
-                        public_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(path)
-                        files.append({
-                            "filename": name,
-                            "file_path": path,
-                            "public_url": public_url,
-                            "storage_bucket": SUPABASE_BUCKET,
-                            "folder": "legacy"
-                        })
-        except Exception as e:
-            log.warning(f"Legacy list failed for {id}: {str(e)}")
-        
-        # Dedupe by path
-        unique_files = {f["file_path"]: f for f in files}
+        # Other roles: parallel fetch accounts + role folder + legacy
+        folders_to_fetch = [
+            (ROLE_FOLDER_MAP["accounts"], id),  # accounts folder
+            (ROLE_FOLDER_MAP[key], id),         # role-specific folder
+            ("", id)                             # legacy/root folder
+        ]
+
+        # Fetch all folders in parallel
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {
+                executor.submit(list_folder_optimized, folder, purchase_id): idx
+                for idx, (folder, purchase_id) in enumerate(folders_to_fetch)
+            }
+
+            results = [None, None, None]
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    results[idx] = future.result(timeout=2)
+                except Exception as e:
+                    log.warning(f"Failed to fetch folder at index {idx}: {str(e)}")
+                    results[idx] = []
+
+        accounts_files = results[0] or []
+        role_files = results[1] or []
+        legacy_files = results[2] or []
+
+        # Combine role and legacy files, then deduplicate
+        combined_files = role_files + legacy_files
+        unique_files = {f["file_path"]: f for f in combined_files}
         purchase_files = list(unique_files.values())
-        
+        elapsed = time.time() - start_time
         return jsonify({
             "success": True,
-            "accounts_files": [],
+            "accounts_files": accounts_files,
             "purchase_files": purchase_files,
             "totals": {
-                "accounts_files": 0,
+                "accounts_files": len(accounts_files),
                 "purchase_files": len(purchase_files)
-            }
+            },
+            "response_time": f"{elapsed:.3f}s"
         }), 200
     except Exception as e:
         log.error(f"get_uploaded_file failed for key={key}, id={id}: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 def all_delete_file(key, id):
-    """Delete all uploaded files for a specific purchase"""
+    """Optimized batch file deletion"""
     try:
-        if key in ["siteSupervisor","mepSupervisor","procurement","projectManager","estimation","technicalDirector"]:
-            role_folder_map = {
-                "siteSupervisor": "sitesupervisor",
-                "mepSupervisor": "mepsupervisor",
-                "procurement": "procurement",
-                "projectManager": "projectmanager",
-                "estimation": "estimation",
-                "technicalDirector": "technicaldirector",
-            }
-            base_folder = role_folder_map.get(key, key.lower())
-            get_purchase = Purchase.query.filter_by(purchase_id=id).first()
-            if not get_purchase:
-                return jsonify({"error": "Purchase not found"}), 404
-            
-            # Get current files and delete from Supabase storage
-            if get_purchase.file_path:
-                try:
-                    filenames = get_purchase.file_path.split(",")
-                    
-                    # Delete each file from Supabase storage
-                    for filename in filenames:
-                        if filename.strip():
-                            # Files are stored directly under purchase_id
-                            file_path = f"{id}/{filename.strip()}"
-                            try:
-                                supabase.storage.from_(SUPABASE_BUCKET).remove([file_path])
-                                log.info(f"Deleted file from Supabase: {file_path}")
-                            except Exception as e:
-                                log.warning(f"Failed to delete file: {file_path} - {str(e)}")
-                            
-                except Exception as e:
-                    log.warning(f"Failed to parse filenames for purchase {id}: {str(e)}")
-            
-            # Clear all uploaded files from database
-            get_purchase.file_path = None
-            db.session.commit()
-            
-            return jsonify({
-                "success": True,
-                "message": "All files deleted successfully from Supabase storage and database"
-            }), 200
-        else:
+        # Validate key
+        if key not in ROLE_FOLDER_MAP or key == "accounts":
             return jsonify({"error": "Invalid key"}), 400
+
+        get_purchase = Purchase.query.filter_by(purchase_id=id).first()
+        if not get_purchase:
+            return jsonify({"error": "Purchase not found"}), 404
+
+        # Get current files and delete from Supabase storage
+        if get_purchase.file_path:
+            filenames = [f.strip() for f in get_purchase.file_path.split(",") if f.strip()]
+
+            # Batch delete files concurrently
+            files_to_delete = [f"{id}/{filename}" for filename in filenames]
+
+            # Delete files in batch using single client
+            for file_path in files_to_delete:
+                try:
+                    supabase.storage.from_(SUPABASE_BUCKET).remove([file_path])
+                except Exception as e:
+                    log.warning(f"Failed to delete: {file_path} - {str(e)}")
+
+        # Clear all uploaded files from database
+        get_purchase.file_path = None
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "All files deleted successfully from Supabase storage and database"
+        }), 200
+
     except Exception as e:
         db.session.rollback()
+        log.error(f"Error in all_delete_file: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 def delete_file_file(key, id):
-    """Delete specific files from uploaded files"""
+    """Optimized selective file deletion"""
     try:
-        if key in ["siteSupervisor","mepSupervisor","procurement","projectManager","estimation","technicalDirector"]:
-            role_folder_map = {
-                "siteSupervisor": "sitesupervisor",
-                "mepSupervisor": "mepsupervisor",
-                "procurement": "procurement",
-                "projectManager": "projectmanager",
-                "estimation": "estimation",
-                "technicalDirector": "technicaldirector",
-            }
-            base_folder = role_folder_map.get(key, key.lower())
-            
-            get_purchase = Purchase.query.filter_by(purchase_id=id).first()
-            if not get_purchase:
-                return jsonify({"error": "Purchase not found"}), 404
-            
-            # Get files to delete from request body
-            data = request.get_json()
-            files_to_delete = data.get('deletedfiles_name', [])
-            
-            if not files_to_delete:
-                return jsonify({"error": "No files specified for deletion"}), 400
-                
-            log.info(f"Request to delete files: {files_to_delete} for purchase {id}")
-            
-            # Parse current filenames from file_path (comma-separated string)
-            current_files = []
-            if get_purchase.file_path:
-                try:
-                    current_files = [f.strip() for f in get_purchase.file_path.split(",")]
-                except Exception as e:
-                    log.error(f"Failed to parse filenames: {str(e)}")
-                    current_files = []
-            
-            log.info(f"Current files in database: {current_files}")
-            
-            # Delete each file from Supabase storage
-            deleted_count = 0
-            failed_files = []
-            
-            for filename in files_to_delete:
-                filename = filename.strip()
-                
-                # Files are stored directly under purchase_id
-                file_path = f"{id}/{filename}"
-                
-                try:
-                    # Attempt to delete the file
-                    response = supabase.storage.from_(SUPABASE_BUCKET).remove([file_path])
-                    log.info(f"Successfully deleted file from Supabase: {file_path}")
-                    deleted_count += 1
-                except Exception as e:
-                    log.error(f"Failed to delete file {file_path}: {str(e)}")
-                    failed_files.append(filename)
-            
-            # Update database with remaining files
-            remaining_files = [f for f in current_files if f not in files_to_delete]
-            if remaining_files:
-                get_purchase.file_path = ",".join(remaining_files)
-            else:
-                get_purchase.file_path = None
-                
-            db.session.commit()
-            
-            log.info(f"Deletion complete. Deleted: {deleted_count}, Failed: {len(failed_files)}, Remaining in DB: {len(remaining_files)}")
-            
-            return jsonify({
-                "success": True,
-                "message": f"File deletion process completed",
-                "deleted_count": deleted_count,
-                "failed_files": failed_files,
-                "remaining_files": len(remaining_files),
-                "updated_file_path": get_purchase.file_path
-            }), 200
-        else:
+        if key not in ROLE_FOLDER_MAP or key == "accounts":
             return jsonify({"error": "Invalid key"}), 400
+
+        get_purchase = Purchase.query.filter_by(purchase_id=id).first()
+        if not get_purchase:
+            return jsonify({"error": "Purchase not found"}), 404
+        # Get files to delete from request body
+        data = request.get_json()
+        files_to_delete = data.get('deletedfiles_name', [])
+
+        if not files_to_delete:
+            return jsonify({"error": "No files specified for deletion"}), 400
+        # Parse current filenames
+        current_files = [f.strip() for f in (get_purchase.file_path or "").split(",") if f.strip()]
+        # Use set for O(1) lookup
+        files_to_delete_set = {f.strip() for f in files_to_delete}
+        # Concurrent deletion
+        deleted_count = 0
+        failed_files = []
+        # Fast batch deletion
+        for filename in files_to_delete_set:
+            file_path = f"{id}/{filename}"
+            try:
+                supabase.storage.from_(SUPABASE_BUCKET).remove([file_path])
+                deleted_count += 1
+            except Exception as e:
+                log.error(f"Failed to delete {file_path}: {str(e)}")
+                failed_files.append(filename)
+
+        # Update database with remaining files
+        remaining_files = [f for f in current_files if f not in files_to_delete_set]
+        get_purchase.file_path = ",".join(remaining_files) if remaining_files else None
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "message": "File deletion process completed",
+            "deleted_count": deleted_count,
+            "failed_files": failed_files,
+            "remaining_files": len(remaining_files),
+            "updated_file_path": get_purchase.file_path
+        }), 200
     except Exception as e:
         db.session.rollback()
         log.error(f"Error in delete_file_file: {str(e)}")

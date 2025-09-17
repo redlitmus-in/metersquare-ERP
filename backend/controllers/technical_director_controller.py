@@ -4,7 +4,6 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload, selectinload
 import threading
 import json
-from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
 
 from models.purchase_status import PurchaseStatus
@@ -83,9 +82,8 @@ def process_materials_data(material_ids: List[int], materials_dict: Dict[int, Ma
 
     return materials, total_cost, total_quantity
 
-@lru_cache(maxsize=128)
 def check_user_role(role_id: int, expected_role: str) -> bool:
-    """Cached role checking to avoid repeated DB queries"""
+    """Optimized role checking - queries only when needed"""
     role = Role.query.filter_by(role_id=role_id, is_deleted=False).first()
     return role and role.role == expected_role
 
