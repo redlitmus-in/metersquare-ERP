@@ -1,7 +1,6 @@
 import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { validateSupabaseConnection } from '@/utils/environment';
@@ -331,10 +330,6 @@ function App() {
         />
       </Routes>
         </Suspense>
-        {/* React Query DevTools - Only in development */}
-        {process.env.NODE_ENV === 'development' && (
-          <ReactQueryDevtools initialIsOpen={false} />
-        )}
       </div>
     </QueryClientProvider>
   );
