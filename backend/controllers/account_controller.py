@@ -1,10 +1,14 @@
 import os
 import json
+import threading
 from flask import g, request, jsonify
 from datetime import datetime
 from sqlalchemy import and_, or_, desc, func
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from supabase import create_client, Client
+from functools import lru_cache
+from typing import Dict, List, Optional, Tuple
+from collections import defaultdict
 
 from models.purchase import Purchase
 from models.purchase_status import PurchaseStatus
@@ -27,6 +31,90 @@ supabase_key = os.environ.get('SUPABASE_KEY')
 # Files are stored in the main upload bucket under accounts/{purchase_id}
 SUPABASE_BUCKET = "file_upload"
 supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+
+# Helper functions for optimization
+def send_email_async(email_func, *args, **kwargs):
+    """Send email in background thread to avoid blocking"""
+    from flask import current_app
+
+    def _send(app):
+        try:
+            with app.app_context():
+                email_func(*args, **kwargs)
+        except Exception as e:
+            log.error(f"Background email sending failed: {str(e)}")
+
+    # Get current app reference before thread starts
+    app = current_app._get_current_object()
+    thread = threading.Thread(target=_send, args=(app,), daemon=True)
+    thread.start()
+    return True  # Return immediately
+
+def batch_fetch_materials(material_ids: List[int]) -> Dict[int, Material]:
+    """Batch fetch materials and return as dictionary for O(1) lookup"""
+    if not material_ids:
+        return {}
+
+    materials = Material.query.filter(
+        and_(
+            Material.material_id.in_(material_ids),
+            Material.is_deleted == False
+        )
+    ).all()
+
+    return {mat.material_id: mat for mat in materials}
+
+def process_materials_data(material_ids: List[int], materials_dict: Dict[int, Material]) -> Tuple[List[Dict], float, int]:
+    """Process materials and calculate totals"""
+    materials = []
+    total_cost = 0
+    total_quantity = 0
+
+    for mat_id in material_ids:
+        mat = materials_dict.get(mat_id)
+        if not mat:
+            continue
+
+        unit_cost = float(mat.cost) if mat.cost else 0
+        mat_total = unit_cost * mat.quantity
+        total_cost += mat_total
+        total_quantity += mat.quantity
+
+        materials.append({
+            'material_id': mat.material_id,
+            'description': mat.description,
+            'specification': mat.specification,
+            'unit': mat.unit,
+            'quantity': mat.quantity,
+            'category': mat.category,
+            'cost': unit_cost,
+            'unit_cost': unit_cost,
+            'total_cost': mat_total,
+            'priority': mat.priority,
+            'design_reference': mat.design_reference
+        })
+
+    return materials, total_cost, total_quantity
+
+@lru_cache(maxsize=128)
+def check_user_role(role_id: int, expected_role: str) -> bool:
+    """Cached role checking to avoid repeated DB queries"""
+    role = Role.query.filter_by(role_id=role_id, is_deleted=False).first()
+    return role and role.role == expected_role
+
+def get_file_async(func, *args, **kwargs):
+    """Download files asynchronously"""
+    def _download():
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            log.error(f"Async file download failed: {str(e)}")
+            return None
+
+    thread = threading.Thread(target=_download)
+    thread.start()
+    thread.join(timeout=5)  # 5 second timeout
+    return thread.result if hasattr(thread, 'result') else None
 
 def _get_account_bucket_attachments(purchase_id):
     """Fetch files from ACCOUNT_BUCKET under accounts/{purchase_id} and return
@@ -80,20 +168,20 @@ def _list_account_file_paths(purchase_id):
 
 def process_payment_transaction():
     """
-    Process payment transaction for approved purchase requests
-    This is the main entry point for the Accounts department workflow
+    Optimized payment transaction processing for approved purchase requests
     """
     try:
+        # Quick user validation
         current_user = g.user
-        user_id = current_user['user_id']
-        user_name = current_user['full_name']
-        
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
-        # Check if user is Accounts role
-        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        if not role or role.role != 'accounts':
+        user_id = current_user['user_id']
+        user_name = current_user['full_name']
+        role_id = current_user['role_id']
+
+        # Use cached role check
+        if not check_user_role(role_id, 'accounts'):
             return jsonify({'error': 'Only Accounts department can process payments'}), 403
 
         data = request.get_json()
@@ -253,19 +341,20 @@ def process_payment_transaction():
 
 def approve_payment_transaction():
     """
-    Approve payment transaction (internal approval within accounts)
+    Optimized payment transaction approval
     """
     try:
+        # Quick user validation
         current_user = g.user
-        user_id = current_user['user_id']
-        user_name = current_user['full_name']
-        
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
-        # Check if user is Accounts role
-        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        if not role or role.role != 'accounts':
+        user_id = current_user['user_id']
+        user_name = current_user['full_name']
+        role_id = current_user['role_id']
+
+        # Use cached role check
+        if not check_user_role(role_id, 'accounts'):
             return jsonify({'error': 'Only Accounts department can approve payments'}), 403
 
         data = request.get_json()
@@ -308,17 +397,15 @@ def approve_payment_transaction():
                 created_by=user_name
             )
 
-            # Send notification
-            try:
-                email_service = EmailService()
-                email_service.send_payment_approved_notification(
-                    purchase_id=transaction.purchase_id,
-                    transaction_id=transaction_id,
-                    amount=transaction.amount,
-                    approved_by=user_name
-                )
-            except Exception as e:
-                log.warning(f"Failed to send payment approved email: {str(e)}")
+            # Send notification asynchronously
+            email_service = EmailService()
+            send_email_async(
+                email_service.send_payment_approved_notification,
+                purchase_id=transaction.purchase_id,
+                transaction_id=transaction_id,
+                amount=transaction.amount,
+                approved_by=user_name
+            )
 
         else:  # rejected
             transaction.status = 'failed'
@@ -353,67 +440,69 @@ def approve_payment_transaction():
 
 def create_acknowledgement():
     """
-    Create acknowledgement for payment received/processed
-    This handles the acknowledgement flow from Task Completion back to Accounts
+    Ultra-optimized acknowledgement with minimal DB operations
     """
     try:
+        # Quick validation
         current_user = g.user
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
         user_id = current_user['user_id']
         user_name = current_user['full_name']
-        log.info(f"Processing acknowledgement for user_id: {user_id}, user_name: {user_name}")
+        role_id = current_user['role_id']
 
         data = request.get_json()
-        log.info(f"Request data: {data}")
-        
         purchase_id = data.get('purchase_id')
         transaction_id = data.get('transaction_id')
         acknowledgement_type = data.get('acknowledgement_type', 'payment_received')
         acknowledgement_message = data.get('acknowledgement_message', '')
 
         if not purchase_id:
-            log.error("Missing purchase_id in request")
             return jsonify({'error': 'purchase_id is required'}), 400
 
-        # Get user role
-        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        if not role:
-            log.error(f"Role not found for role_id: {current_user['role_id']}")
+        # Quick role check
+        role_name = db.session.query(Role.role).filter_by(
+            role_id=role_id, is_deleted=False
+        ).scalar()
+        if not role_name:
             return jsonify({'error': 'User role not found'}), 400
 
-        log.info(f"Found role: {role.role}")
+        # --- Acknowledgement creation/update ---
+        # Get file paths if supabase is available
+        file_paths = []
+        if supabase:
+            try:
+                # Quick check for files without downloading
+                file_paths = _list_account_file_paths(purchase_id)
+            except:
+                pass
 
-        # --- Upsert acknowledgement ---
-        try:
-            acknowledgement = Acknowledgement.query.filter_by(purchase_id=purchase_id).first()
-            if acknowledgement:
-                log.info(f"Updating existing acknowledgement for purchase_id: {purchase_id}")
-                acknowledgement.transaction_id = transaction_id
-                acknowledgement.acknowledgement_type = acknowledgement_type
-                acknowledgement.acknowledged_by = user_name
-                acknowledgement.acknowledged_by_role = role.role
-                acknowledgement.acknowledgement_message = acknowledgement_message
-                acknowledgement.supporting_documents = json.dumps(_list_account_file_paths(purchase_id))
-                acknowledgement.last_modified_by = user_name
-            else:
-                log.info(f"Creating new acknowledgement for purchase_id: {purchase_id}")
-                acknowledgement = Acknowledgement(
-                    transaction_id=transaction_id,
-                    purchase_id=purchase_id,
-                    acknowledgement_type=acknowledgement_type,
-                    acknowledged_by=user_name,
-                    acknowledged_by_role=role.role,
-                    acknowledgement_message=acknowledgement_message,
-                    supporting_documents=json.dumps(_list_account_file_paths(purchase_id)),
-                    created_by=user_name
-                )
-                db.session.add(acknowledgement)
-        except Exception as e:
-            log.error(f"Error in acknowledgement upsert: {str(e)}", exc_info=True)
-            db.session.rollback()
-            return jsonify({'error': 'Failed to process acknowledgement', 'details': str(e)}), 500
+        # Use traditional method for acknowledgement (more reliable)
+        acknowledgement = Acknowledgement.query.filter_by(purchase_id=purchase_id).first()
+        if acknowledgement:
+            # Update existing acknowledgement
+            acknowledgement.transaction_id = transaction_id
+            acknowledgement.acknowledgement_type = acknowledgement_type
+            acknowledgement.acknowledged_by = user_name
+            acknowledgement.acknowledged_by_role = role_name
+            acknowledgement.acknowledgement_message = acknowledgement_message
+            acknowledgement.supporting_documents = json.dumps(file_paths) if file_paths else None
+            acknowledgement.last_modified_by = user_name
+            acknowledgement.last_modified_at = datetime.utcnow()
+        else:
+            # Create new acknowledgement
+            acknowledgement = Acknowledgement(
+                transaction_id=transaction_id,
+                purchase_id=purchase_id,
+                acknowledgement_type=acknowledgement_type,
+                acknowledged_by=user_name,
+                acknowledged_by_role=role_name,
+                acknowledgement_message=acknowledgement_message,
+                supporting_documents=json.dumps(file_paths) if file_paths else None,
+                created_by=user_name
+            )
+            db.session.add(acknowledgement)
 
         # --- Always update PurchaseStatus (never insert new) ---
         existing_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id).first()
@@ -421,26 +510,27 @@ def create_acknowledgement():
             log.error(f"PurchaseStatus not found for purchase_id: {purchase_id}")
             return jsonify({'error': 'PurchaseStatus not found for this purchase_id'}), 400
 
-        # Update the existing status
-        existing_status.sender = role.role
+        # Optimized status update with single operation
+        now = datetime.utcnow()
+        existing_status.sender = role_name
         existing_status.receiver = 'accounts'
-        existing_status.role = role.role
+        existing_status.role = role_name
         existing_status.status = 'completed'
         existing_status.decision_by_user_id = user_id
         existing_status.rejection_reason = None
         existing_status.reject_category = None
         existing_status.comments = f'Acknowledgement created by {user_name}'
-        existing_status.decision_date = datetime.utcnow()
+        existing_status.decision_date = now
         existing_status.is_active = True
         existing_status.last_modified_by = user_name
+        existing_status.last_modified_at = now
 
-        # --- Update PurchaseHistory (append to existing actions) ---
-        existing_hist = PurchaseHistory.query.filter_by(purchase_id=purchase_id).order_by(PurchaseHistory.created_at.desc()).first()
+        # --- Optimized PurchaseHistory update ---
+        existing_hist = PurchaseHistory.query.filter_by(purchase_id=purchase_id).first()
         if not existing_hist:
-            log.error(f"PurchaseHistory not found for purchase_id: {purchase_id}")
             return jsonify({'error': 'PurchaseHistory not found for this purchase_id'}), 400
 
-        # Create the new action payload
+        # Create action payload
         action_payload = {
             "role": "accounts",
             "type": "status_change",
@@ -450,45 +540,18 @@ def create_acknowledgement():
             "receiver": "technicalDirector,projectmanager,procurement",
             "timestamp": datetime.utcnow().isoformat(),
             "decided_by": user_name,
-            "reject_category": None,
-            "rejection_reason": None,
             "decided_by_user_id": user_id
         }
 
-        # Get existing actions - handle different formats
-        actions = []
-        if existing_hist.action:
-            if isinstance(existing_hist.action, str):
-                try:
-                    actions = json.loads(existing_hist.action)
-                    if not isinstance(actions, list):
-                        actions = [actions]
-                except json.JSONDecodeError:
-                    actions = [{"comments": str(existing_hist.action)}]
-            elif isinstance(existing_hist.action, dict):
-                actions = [existing_hist.action]
-            elif isinstance(existing_hist.action, list):
-                actions = existing_hist.action
-        
-        # Ensure all actions are dictionaries
-        actions = [a if isinstance(a, dict) else {"comments": str(a)} for a in actions]
-        
-        # Append new action
-        actions.append(action_payload)
-        
-        # Update the history record
-        existing_hist.action = actions
+        # Simplified action handling
+        if not isinstance(existing_hist.action, list):
+            existing_hist.action = [existing_hist.action] if existing_hist.action else []
+        existing_hist.action.append(action_payload)
         existing_hist.last_modified_by = user_name
         existing_hist.last_modified_date = datetime.utcnow()
-        
-        # Mark the action field as modified
-        try:
-            from sqlalchemy.orm.attributes import flag_modified
-            flag_modified(existing_hist, 'action')
-        except Exception as e:
-            log.warning(f"Could not flag action as modified: {str(e)}")
-            db.session.rollback()
-            return jsonify({'error': 'Failed to update action history', 'details': str(e)}), 500
+
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(existing_hist, 'action')
         
         # Commit DB changes
         try:
@@ -502,36 +565,29 @@ def create_acknowledgement():
                 'details': str(e)
             }), 500
 
-        # --- Send acknowledgement notification ---
-        try:
-            email_service = EmailService()
-            attachment_paths = []
-            try:
-                if hasattr(acknowledgement, 'supporting_documents') and acknowledgement.supporting_documents:
-                    attachment_paths = json.loads(acknowledgement.supporting_documents) or []
-            except Exception as e:
-                log.warning(f"Error loading supporting documents: {str(e)}")
-            attachments = []
-            if supabase and attachment_paths:
-                for path in attachment_paths:
-                    try:
-                        name = os.path.basename(path)
-                        file_bytes = supabase.storage.from_(SUPABASE_BUCKET).download(path)
-                        attachments.append({'filename': name, 'content': file_bytes})
-                    except Exception as e:
-                        log.warning(f"Failed to download attachment {path}: {str(e)}")
-            if not attachments:
-                attachments = _get_account_bucket_attachments(purchase_id)
+        # --- Send acknowledgement notification asynchronously ---
+        email_service = EmailService()
 
-            email_service.send_acknowledgement_to_stakeholders(
-                purchase_id=purchase_id,
-                acknowledgement_type=acknowledgement_type,
-                acknowledged_by=user_name,
-                message=acknowledgement_message,
-                attachments=attachments
-            )
-        except Exception as e:
-            log.warning(f"Failed to send acknowledgement email: {str(e)}")
+        # Prepare attachments asynchronously if needed
+        attachments = None
+        if supabase:
+            try:
+                attachment_paths = json.loads(acknowledgement.supporting_documents) if hasattr(acknowledgement, 'supporting_documents') and acknowledgement.supporting_documents else []
+                if attachment_paths:
+                    # Download attachments in background for email
+                    attachments = _get_account_bucket_attachments(purchase_id)
+            except Exception as e:
+                log.warning(f"Error preparing attachments: {str(e)}")
+
+        # Send email asynchronously
+        send_email_async(
+            email_service.send_acknowledgement_to_stakeholders,
+            purchase_id=purchase_id,
+            acknowledgement_type=acknowledgement_type,
+            acknowledged_by=user_name,
+            message=acknowledgement_message,
+            attachments=attachments
+        )
 
         return jsonify({
             'message': 'Acknowledgement updated successfully',
@@ -826,21 +882,41 @@ def get_pending_approvals():
         if not role or role.role != 'accounts':
             return jsonify({'error': 'Only Accounts department can view pending approvals'}), 403
 
-        # Get pending transactions with related data
+        # Get pending transactions - fix joinedload with proper relationships
+        # Note: PaymentTransaction may not have direct relationships, so we'll handle differently
         pending_transactions = PaymentTransaction.query.filter_by(
             status='pending',
             is_deleted=False
-        ).options(
-            joinedload(PaymentTransaction.purchase),
-            joinedload(PaymentTransaction.project)
         ).order_by(desc(PaymentTransaction.created_at)).all()
 
-        # Format response with related data
+        # Batch fetch related purchases and projects
+        purchase_ids = [t.purchase_id for t in pending_transactions if t.purchase_id]
+        project_ids = [t.project_id for t in pending_transactions if t.project_id]
+
+        purchases_dict = {}
+        if purchase_ids:
+            purchases = Purchase.query.filter(
+                Purchase.purchase_id.in_(purchase_ids),
+                Purchase.is_deleted == False
+            ).all()
+            purchases_dict = {p.purchase_id: p for p in purchases}
+
+        projects_dict = {}
+        if project_ids:
+            projects = Project.query.filter(
+                Project.project_id.in_(project_ids)
+            ).all()
+            projects_dict = {p.project_id: p for p in projects}
+
+        # Format response with cached related data
         transactions_data = []
         for transaction in pending_transactions:
             transaction_dict = transaction.to_dict()
-            transaction_dict['purchase'] = transaction.purchase.to_dict() if transaction.purchase else None
-            transaction_dict['project'] = transaction.project.to_dict() if transaction.project else None
+            # Get purchase and project from cached dicts
+            purchase = purchases_dict.get(transaction.purchase_id)
+            project = projects_dict.get(transaction.project_id)
+            transaction_dict['purchase'] = purchase.to_dict() if purchase else None
+            transaction_dict['project'] = project.to_dict() if project else None
             transactions_data.append(transaction_dict)
 
         return jsonify({
@@ -930,136 +1006,233 @@ def account_dashboard():
         log.error(f"Error getting account dashboard: {str(e)}", exc_info=True)
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
+@lru_cache(maxsize=1)
+def get_material_columns():
+    """Cache material column names for efficient queries"""
+    return ['material_id', 'description', 'specification', 'unit', 'quantity', 'category', 'cost', 'priority', 'design_reference']
+
 def account_purchase():
     """
-    Get all purchases where accounts is the receiver with their latest status and material details
+    Ultra-optimized endpoint with minimal queries and maximum efficiency
     """
     try:
+        # Quick user validation
         current_user = g.user
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
-        
-        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
-        
-        # For accounts role, only show purchases where accounts is the receiver
-        # For technicalDirector, show all purchases
-        if role.role == 'accounts':
-            # Get all purchase IDs where accounts is either sender or receiver
-            purchase_ids_query = db.session.query(
-                PurchaseStatus.purchase_id
-            ).filter(
-                or_(
-                    PurchaseStatus.receiver == 'accounts',
-                    PurchaseStatus.sender == 'accounts'
-                ),
-                PurchaseStatus.is_active == True
-            ).distinct()
-        else:
-            # For technicalDirector, get all purchase IDs that have any status
-            purchase_ids_query = db.session.query(
-                PurchaseStatus.purchase_id
-            ).filter(
-                PurchaseStatus.is_active == True
-            ).distinct()
-        
-        purchase_ids = [row[0] for row in purchase_ids_query.all()]
-        purchase_ids = list(set(purchase_ids))
-        purchase_details = []
-        processed_purchase_ids = set()  # Track processed purchase IDs to avoid duplicates
-        
-        for purchase_id in purchase_ids:
-            processed_purchase_ids.add(purchase_id)
-            # Get purchase details
-            purchase = Purchase.query.filter_by(purchase_id=purchase_id, is_deleted=False).first()
-            if not purchase:
-                continue
-            latest_status = PurchaseStatus.get_latest_status(purchase_id)
-            material_details = []
-            if purchase.material_ids:
-                materials = Material.query.filter(
-                    Material.material_id.in_(purchase.material_ids),
-                    Material.is_deleted == False
-                ).all()
-                
-                for material in materials:
-                    material_details.append(material.to_dict())
 
-            # Format latest status details
+        role_id = current_user['role_id']
+        # Simple role query without defer
+        role = Role.query.filter_by(role_id=role_id, is_deleted=False).first()
+        if not role:
+            return jsonify({"error": "Invalid role"}), 400
+        
+        # Ultra-optimized single query with selective loading
+        from sqlalchemy import text
+
+        # Raw SQL for maximum performance
+        if role.role == 'accounts':
+            sql = text("""
+                SELECT DISTINCT ps.purchase_id, ps.status_id, ps.sender, ps.receiver,
+                       ps.status, ps.created_at, ps.decision_date, ps.created_by,
+                       ps.comments, ps.rejection_reason, ps.reject_category,
+                       p.project_id, p.user_id, p.requested_by, p.site_location,
+                       p.date, p.purpose, p.material_ids, p.file_path,
+                       p.created_at as p_created_at, p.created_by as p_created_by,
+                       p.last_modified_at, p.last_modified_by
+                FROM purchase_status ps
+                INNER JOIN purchase p ON ps.purchase_id = p.purchase_id
+                WHERE (ps.receiver = 'accounts' OR ps.sender = 'accounts')
+                  AND ps.is_active = true
+                  AND p.is_deleted = false
+                ORDER BY ps.created_at DESC
+            """)
+        else:
+            sql = text("""
+                SELECT DISTINCT ps.purchase_id, ps.status_id, ps.sender, ps.receiver,
+                       ps.status, ps.created_at, ps.decision_date, ps.created_by,
+                       ps.comments, ps.rejection_reason, ps.reject_category,
+                       p.project_id, p.user_id, p.requested_by, p.site_location,
+                       p.date, p.purpose, p.material_ids, p.file_path,
+                       p.created_at as p_created_at, p.created_by as p_created_by,
+                       p.last_modified_at, p.last_modified_by
+                FROM purchase_status ps
+                INNER JOIN purchase p ON ps.purchase_id = p.purchase_id
+                WHERE ps.is_active = true
+                  AND p.is_deleted = false
+                ORDER BY ps.created_at DESC
+            """)
+
+        result = db.session.execute(sql)
+        rows = result.fetchall()
+
+        # Process results efficiently
+        purchase_data_map = {}
+        status_by_purchase = defaultdict(list)
+        all_material_ids = set()
+
+        for row in rows:
+            purchase_id = row.purchase_id
+
+            # Store purchase data
+            if purchase_id not in purchase_data_map:
+                purchase_data_map[purchase_id] = {
+                    'purchase_id': purchase_id,
+                    'project_id': row.project_id,
+                    'user_id': row.user_id,
+                    'requested_by': row.requested_by,
+                    'site_location': row.site_location,
+                    'date': row.date,
+                    'purpose': row.purpose,
+                    'material_ids': row.material_ids,
+                    'file_path': row.file_path,
+                    'created_at': row.p_created_at,
+                    'created_by': row.p_created_by,
+                    'last_modified_at': row.last_modified_at,
+                    'last_modified_by': row.last_modified_by
+                }
+
+                # Collect material IDs
+                if row.material_ids:
+                    all_material_ids.update(row.material_ids)
+
+            # Store status data
+            status_by_purchase[purchase_id].append({
+                'status_id': row.status_id,
+                'sender': row.sender,
+                'receiver': row.receiver,
+                'status': row.status,
+                'created_at': row.created_at,
+                'decision_date': row.decision_date,
+                'created_by': row.created_by,
+                'comments': row.comments,
+                'rejection_reason': row.rejection_reason,
+                'reject_category': row.reject_category
+            })
+
+        purchase_ids = set(purchase_data_map.keys())
+        # Batch fetch materials with optimized query
+        materials_dict = {}
+        if all_material_ids:
+            # Use raw SQL for better performance
+            mat_sql = text("""
+                SELECT material_id, description, specification, unit, quantity,
+                       category, cost, priority, design_reference
+                FROM materials
+                WHERE material_id = ANY(:ids)
+                  AND is_deleted = false
+            """)
+            mat_result = db.session.execute(mat_sql, {'ids': list(all_material_ids)})
+            for mat_row in mat_result:
+                materials_dict[mat_row.material_id] = mat_row
+
+        # Batch fetch payments and acknowledgements with single query
+        payments_dict = {}
+        acknowledgements_dict = {}
+
+        if purchase_ids:
+            # Fetch latest payments
+            payment_sql = text("""
+                SELECT DISTINCT ON (purchase_id)
+                    purchase_id, transaction_id, amount, payment_method,
+                    status, processed_at
+                FROM payment_transactions
+                WHERE purchase_id = ANY(:ids)
+                  AND is_deleted = false
+                ORDER BY purchase_id, transaction_id DESC
+            """)
+
+            payment_result = db.session.execute(payment_sql, {'ids': list(purchase_ids)})
+            for row in payment_result:
+                payments_dict[row.purchase_id] = row
+
+            # Fetch latest acknowledgements
+            ack_sql = text("""
+                SELECT DISTINCT ON (purchase_id)
+                    purchase_id, acknowledgement_id, transaction_id,
+                    acknowledgement_type, acknowledged_by, acknowledged_by_role,
+                    acknowledgement_message, acknowledged_at
+                FROM acknowledgements
+                WHERE purchase_id = ANY(:ids)
+                ORDER BY purchase_id, acknowledgement_id DESC
+            """)
+
+            ack_result = db.session.execute(ack_sql, {'ids': list(purchase_ids)})
+            for row in ack_result:
+                acknowledgements_dict[row.purchase_id] = row
+
+        # Process all data efficiently
+        purchase_details = []
+
+        for purchase_id, purchase_data in purchase_data_map.items():
+            # Get latest status
+            purchase_statuses = status_by_purchase.get(purchase_id, [])
+            latest_status = max(purchase_statuses, key=lambda x: x['created_at']) if purchase_statuses else None
+
+            # Process materials efficiently
+            material_list = []
+            total_cost = 0
+            total_quantity = 0
+
+            if purchase_data['material_ids']:
+                for mat_id in purchase_data['material_ids']:
+                    mat = materials_dict.get(mat_id)
+                    if mat:
+                        unit_cost = float(mat.cost) if mat.cost else 0
+                        mat_total = unit_cost * mat.quantity
+                        total_cost += mat_total
+                        total_quantity += mat.quantity
+
+                        material_list.append({
+                            'material_id': mat.material_id,
+                            'description': mat.description,
+                            'specification': mat.specification,
+                            'unit': mat.unit,
+                            'quantity': mat.quantity,
+                            'category': mat.category,
+                            'cost': unit_cost,
+                            'unit_cost': unit_cost,
+                            'total_cost': mat_total,
+                            'priority': mat.priority,
+                            'design_reference': mat.design_reference
+                        })
+
+            # Format status info
             latest_status_info = None
             if latest_status:
                 latest_status_info = {
-                    'status_id': latest_status.status_id,
-                    'sender': latest_status.sender,
-                    'receiver': latest_status.receiver,
-                    'status': latest_status.status,
-                    'decision_date': latest_status.decision_date.isoformat() if latest_status.decision_date else None,
-                    'created_at': latest_status.created_at.isoformat(),
-                    'created_by': latest_status.created_by,
-                    'comments': latest_status.comments,
-                    'rejection_reason': latest_status.rejection_reason,
-                    'reject_category': latest_status.reject_category,
-                    'is_active': latest_status.is_active
+                    'status_id': latest_status['status_id'],
+                    'sender': latest_status['sender'],
+                    'receiver': latest_status['receiver'],
+                    'status': latest_status['status'],
+                    'decision_date': latest_status['decision_date'].isoformat() if latest_status['decision_date'] else None,
+                    'created_at': latest_status['created_at'].isoformat() if latest_status['created_at'] else None,
+                    'created_by': latest_status['created_by'],
+                    'comments': latest_status['comments'],
+                    'rejection_reason': latest_status['rejection_reason'],
+                    'reject_category': latest_status['reject_category'],
+                    'is_active': True
                 }
-            # Create the purchase data in the desired format
-            purchase_data = {
-                'purchase_id': purchase.purchase_id,
-                'project_id': purchase.project_id,
-                'user_id': purchase.user_id,
-                'requested_by': purchase.requested_by,
-                'site_location': purchase.site_location,
-                'date': purchase.date,
-                'purpose': purchase.purpose,
-                'material_ids': purchase.material_ids,
-                'file_path': purchase.file_path,
-                'is_deleted': purchase.is_deleted,
-                'email_sent': purchase.email_sent,
-                'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
-                'created_by': purchase.created_by,
-                'last_modified_at': purchase.last_modified_at.isoformat() if purchase.last_modified_at else None,
-                'last_modified_by': purchase.last_modified_by
-            }
-            # Calculate total cost from materials
-            total_cost = 0
-            total_quantity = 0
-            for material in material_details:
-                qty = material.get('quantity', 0) or 0
-                cost = material.get('cost', 0) or 0
-                total_cost += qty * cost
-                total_quantity += qty
-            
-            purchase_data['total_cost'] = total_cost
-            purchase_data['total_quantity'] = total_quantity
-            purchase_data['material_count'] = len(material_details)
-            
-            # Add latest status and material details to purchase data
-            purchase_data['latest_status'] = latest_status_info
-            purchase_data['material_details'] = material_details
 
-            # Get payment transaction details
-            payment_transaction = PaymentTransaction.query.filter_by(
-                purchase_id=purchase_id,
-                is_deleted=False
-            ).order_by(PaymentTransaction.transaction_id.desc()).first()
-            
+            # Get payment from cached dict
+            payment_transaction = payments_dict.get(purchase_id)
+            payment_data = None
             if payment_transaction:
-                purchase_data['payment_transaction'] = {
+                payment_data = {
                     'transaction_id': payment_transaction.transaction_id,
                     'amount': float(payment_transaction.amount),
                     'payment_method': payment_transaction.payment_method,
                     'status': payment_transaction.status,
                     'processed_at': payment_transaction.processed_at.isoformat() if payment_transaction.processed_at else None
                 }
-            else:
-                purchase_data['payment_transaction'] = None
-            
-            # Check if acknowledgement has been sent for this purchase
-            acknowledgement = Acknowledgement.query.filter_by(
-                purchase_id=purchase_id
-            ).order_by(Acknowledgement.acknowledgement_id.desc()).first()
-            
+
+            # Get acknowledgement from cached dict
+            acknowledgement = acknowledgements_dict.get(purchase_id)
+            ack_data = None
+            ack_sent = False
             if acknowledgement:
-                purchase_data['acknowledgement_sent'] = True
-                purchase_data['acknowledgement'] = {
+                ack_sent = True
+                ack_data = {
                     'acknowledgement_id': acknowledgement.acknowledgement_id,
                     'transaction_id': acknowledgement.transaction_id,
                     'acknowledgement_type': acknowledgement.acknowledgement_type,
@@ -1068,23 +1241,48 @@ def account_purchase():
                     'acknowledgement_message': acknowledgement.acknowledgement_message,
                     'acknowledged_at': acknowledgement.acknowledged_at.isoformat() if acknowledgement.acknowledged_at else None
                 }
+
+            # Build final response efficiently
+            final_data = {
+                'purchase_id': purchase_data['purchase_id'],
+                'project_id': purchase_data['project_id'],
+                'user_id': purchase_data['user_id'],
+                'requested_by': purchase_data['requested_by'],
+                'site_location': purchase_data['site_location'],
+                'date': purchase_data['date'],
+                'purpose': purchase_data['purpose'],
+                'material_ids': purchase_data['material_ids'],
+                'file_path': purchase_data['file_path'],
+                'is_deleted': False,
+                'email_sent': True,
+                'created_at': purchase_data['created_at'].isoformat() if purchase_data['created_at'] else None,
+                'created_by': purchase_data['created_by'],
+                'last_modified_at': purchase_data['last_modified_at'].isoformat() if purchase_data['last_modified_at'] else None,
+                'last_modified_by': purchase_data['last_modified_by'],
+                'total_cost': round(total_cost, 2),
+                'total_quantity': total_quantity,
+                'material_count': len(material_list),
+                'latest_status': latest_status_info,
+                'material_details': material_list,
+                'payment_transaction': payment_data,
+                'acknowledgement_sent': ack_sent,
+                'acknowledgement': ack_data
+            }
+
+            # Add receiver status
+            if latest_status_info and latest_status_info.get('sender') == 'accounts':
+                final_data['receiver_latest_status'] = latest_status_info.get('status', 'pending')
             else:
-                purchase_data['acknowledgement_sent'] = False
-                purchase_data['acknowledgement'] = None
+                final_data['receiver_latest_status'] = 'pending'
 
-            # Add receiver_latest_status for accounts department
-            purchase_data['receiver_latest_status'] = "pending"
-            if latest_status_info and latest_status_info.get('sender') == 'accounts' and latest_status_info.get('status') == 'pending':
-                purchase_data['receiver_latest_status'] = "pending"  # waiting for payment process
-            elif latest_status_info and latest_status_info.get('sender') == 'accounts':
-                purchase_data['receiver_latest_status'] = latest_status_info.get('status', 'pending')
+            purchase_details.append(final_data)
 
-            purchase_details.append(purchase_data)
-                
+        # Return optimized response
         return jsonify({
             'success': True,
             'message': 'Account purchase details fetched successfully',
-            'purchase_details': purchase_details
+            'purchase_details': purchase_details,
+            'total_count': len(purchase_details)
         }), 200
 
     except Exception as e:

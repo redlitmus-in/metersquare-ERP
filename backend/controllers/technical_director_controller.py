@@ -22,13 +22,18 @@ log = get_logger()
 # Helper functions for optimization
 def send_email_async(email_func, *args, **kwargs):
     """Send email in background thread to avoid blocking"""
-    def _send():
+    from flask import current_app
+
+    def _send(app):
         try:
-            email_func(*args, **kwargs)
+            with app.app_context():
+                email_func(*args, **kwargs)
         except Exception as e:
             log.error(f"Background email sending failed: {str(e)}")
 
-    thread = threading.Thread(target=_send, daemon=True)
+    # Get current app reference before thread starts
+    app = current_app._get_current_object()
+    thread = threading.Thread(target=_send, args=(app,), daemon=True)
     thread.start()
     return True  # Return immediately
 
