@@ -786,20 +786,34 @@ def send_purchase_request_email(purchase_id):
                     )
                     db.session.add(new_status)
             else:
-                # Create initial status for other roles
-                initial_status = PurchaseStatus(
-                    purchase_id=purchase_id,
-                    sender=role_name,
-                    receiver='procurement',
-                    role=role_name,
-                    status='pending',
-                    decision_by_user_id=user_id,
-                    comments='Purchase request created and sent to Procurement team (Email queued)',
-                    created_by=user_name,
-                    is_active=True,
-                    decision_date=datetime.utcnow()
-                )
-                db.session.add(initial_status)
+                # Check if status already exists for site/MEP supervisor
+                existing_status = PurchaseStatus.query.filter_by(purchase_id=purchase_id).first()
+                if existing_status:
+                    # Update existing status instead of creating new
+                    existing_status.sender = role_name
+                    existing_status.receiver = 'procurement'
+                    existing_status.role = role_name
+                    existing_status.status = 'pending'
+                    existing_status.decision_by_user_id = user_id
+                    existing_status.comments = 'Purchase request created and sent to Procurement team (Email queued)'
+                    existing_status.decision_date = datetime.utcnow()
+                    existing_status.is_active = True
+                    existing_status.last_modified_by = user_name
+                else:
+                    # Create initial status only if it doesn't exist
+                    initial_status = PurchaseStatus(
+                        purchase_id=purchase_id,
+                        sender=role_name,
+                        receiver='procurement',
+                        role=role_name,
+                        status='pending',
+                        decision_by_user_id=user_id,
+                        comments='Purchase request created and sent to Procurement team (Email queued)',
+                        created_by=user_name,
+                        is_active=True,
+                        decision_date=datetime.utcnow()
+                    )
+                    db.session.add(initial_status)
 
             # Single commit for all changes
             db.session.commit()

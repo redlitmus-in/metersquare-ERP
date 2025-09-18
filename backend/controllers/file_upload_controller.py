@@ -38,9 +38,12 @@ if not supabase_url or not supabase_key:
 # Initialize single reusable client
 try:
     supabase: Client = create_client(supabase_url, supabase_key)
-    log.info("Supabase client initialized successfully")
+    log.info(f"Supabase client initialized successfully with URL: {supabase_url[:30]}...")
+    log.info(f"Using bucket: {SUPABASE_BUCKET}")
 except Exception as e:
     log.error(f"Failed to initialize Supabase client: {str(e)}")
+    log.error(f"SUPABASE_URL: {supabase_url[:30] if supabase_url else 'NOT SET'}")
+    log.error(f"SUPABASE_KEY: {'SET' if supabase_key else 'NOT SET'}")
     raise
 
 # Pre-build base URL for public files
@@ -70,19 +73,39 @@ def upload_single_file(path, content, content_type):
         return f"{PUBLIC_URL_BASE}{path}"
     except Exception as e:
         error_msg = str(e)
-        # Try once more on failure with update
-        try:
-            response = supabase.storage.from_(SUPABASE_BUCKET).update(
-                path=path,
-                file=content,
-                file_options={"content-type": content_type}
-            )
-            return f"{PUBLIC_URL_BASE}{path}"
-        except Exception as update_error:
-            # Log the actual error for debugging
-            log.error(f"Upload failed for {path}: {error_msg}, Update failed: {str(update_error)}")
-            # Raise with more descriptive error
-            raise Exception(f"Upload failed: {error_msg}")
+        # Check if it's a file exists error
+        if "already exists" in error_msg.lower() or "duplicate" in error_msg.lower():
+            # Try to update existing file
+            try:
+                response = supabase.storage.from_(SUPABASE_BUCKET).update(
+                    path=path,
+                    file=content,
+                    file_options={"content-type": content_type}
+                )
+                return f"{PUBLIC_URL_BASE}{path}"
+            except Exception as update_error:
+                # Log the actual error for debugging
+                log.error(f"Upload failed for {path}: {error_msg}, Update failed: {str(update_error)}")
+                # Provide more specific error message
+                if "storage" in str(update_error).lower():
+                    raise Exception(f"Storage error: Check Supabase bucket permissions and configuration")
+                elif "size" in str(update_error).lower():
+                    raise Exception(f"File size error: File may be too large")
+                else:
+                    raise Exception(f"Upload failed: {str(update_error)[:100]}")
+        else:
+            # Log detailed error
+            log.error(f"Initial upload failed for {path}: {error_msg}")
+            # Provide more specific error messages
+            if "unauthorized" in error_msg.lower() or "permission" in error_msg.lower():
+                raise Exception(f"Permission denied: Check Supabase API key and bucket permissions")
+            elif "not found" in error_msg.lower():
+                raise Exception(f"Bucket not found: Verify '{SUPABASE_BUCKET}' bucket exists")
+            elif "network" in error_msg.lower() or "connection" in error_msg.lower():
+                raise Exception(f"Network error: Check internet connection and Supabase URL")
+            else:
+                # Return a more descriptive error
+                raise Exception(f"Upload error: {error_msg[:100]}")
 
 def process_file_batch(files, purchase_id, storage_path_prefix=""):
     """Ultra-fast parallel batch processing"""
@@ -159,9 +182,16 @@ def process_file_batch(files, purchase_id, storage_path_prefix=""):
                 "url": public_url
             })
         except Exception as e:
-            error_msg = str(e) if str(e) else "Unknown error occurred"
+            # Extract meaningful error message
+            error_str = str(e)
+            if "error:" in error_str.lower():
+                # Extract the actual error message after "error:"
+                error_msg = error_str.split(":", 1)[-1].strip() if ":" in error_str else error_str
+            else:
+                error_msg = error_str if error_str else "Upload failed - check logs for details"
+
             errors.append(f"{file_info['original']}: {error_msg}")
-            log.error(f"Failed to upload {file_info['original']}: {error_msg}")
+            log.error(f"Failed to upload {file_info['original']}: {error_msg}, Full error: {error_str}")
 
     return uploaded_files, errors
 
