@@ -324,7 +324,20 @@ const PurchaseRequestsPage: React.FC = () => {
     if (activeTab === 'pending') {
       filtered = filtered.filter(request => request.status === 'pending');
     } else if (activeTab === 'approved') {
-      filtered = filtered.filter(request => request.status === 'approved');
+      // For procurement role, show items they've approved regardless of later rejections
+      filtered = filtered.filter(request => {
+        // If status is approved, show it
+        if (request.status === 'approved') return true;
+
+        // If rejected by estimation or technical director but procurement approved it, still show in approved tab
+        if (request.status === 'rejected' && (request.rejectionType === 'estimation' || request.rejectionType === 'technical')) {
+          // Check if procurement had previously approved (senderStatus would have been 'approved')
+          // Since procurement sends to PM, if it reached estimation, procurement must have approved
+          return true;
+        }
+
+        return false;
+      });
     } else if (activeTab === 'rejected') {
       filtered = filtered.filter(request => request.status === 'rejected');
     } else if (activeTab === 'pm-rejected') {
