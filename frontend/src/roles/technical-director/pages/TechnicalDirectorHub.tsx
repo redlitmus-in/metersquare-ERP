@@ -29,12 +29,26 @@ import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
 import { Purchase, technicalDirectorService } from '../services/technicalDirectorService';
 import { toast } from 'sonner';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
+import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseStore';
 
 const TechnicalDirectorHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState('pending');
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+
+  // Use centralized store for real-time updates
+  const {
+    purchases: storePurchases,
+    isLoading,
+    lastFetchTime,
+    fetchPurchases: storeFetchPurchases,
+    setupRealtimeSubscription,
+    cleanupRealtimeSubscription,
+    getPurchasesForRole
+  } = usePurchaseStore();
+
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Search and Filter states
@@ -63,26 +77,54 @@ const TechnicalDirectorHub: React.FC = () => {
     totalQuantity: 0
   });
 
-  // Fetch purchases data ONLY - no dashboard API call
-  const fetchPurchases = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Only fetch technical director purchases
-      const response = await technicalDirectorService.getTechnicalDirectorPurchases();
-      
-      if (response && response.purchases) {
-        const allPurchases = response.purchases;
-        
-        setPurchases(allPurchases);
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await storeFetchPurchases('technicalDirector');
+    setIsRefreshing(false);
+    toast.success('Data refreshed');
+  };
+
+  // Check for real-time status
+  const isRealtime = lastFetchTime && Date.now() - lastFetchTime.getTime() < 15000;
+
+  // Initialize real-time updates on mount
+  useEffect(() => {
+    // Store user role for the purchase store
+    localStorage.setItem('userRole', 'technicalDirector');
+
+    // Setup real-time subscriptions
+    setupRealtimeSubscription();
+
+    // Start polling for updates
+    startPolling('technicalDirector');
+
+    // Initial fetch
+    storeFetchPurchases('technicalDirector');
+
+    // Cleanup on unmount
+    return () => {
+      stopPolling();
+      cleanupRealtimeSubscription();
+    };
+  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, storeFetchPurchases]);
+
+  // Watch store purchases and update local state for role-specific data
+  useEffect(() => {
+    setPurchases(getPurchasesForRole('technicalDirector'));
+  }, [storePurchases, getPurchasesForRole]);
+
+  // Calculate metrics whenever purchases change
+  useEffect(() => {
+    if (purchases.length > 0) {
         
         // Calculate metrics based on actual technical_director_status in each purchase
         let pendingPurchases: Purchase[] = [];
         let approvedPurchases: Purchase[] = [];
         let rejectedPurchases: Purchase[] = [];
         let completedPurchases: Purchase[] = [];
-        
-        allPurchases.forEach(p => {
+
+        purchases.forEach(p => {
           // Check if purchase is completed (accounts has acknowledged)
           const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
@@ -119,42 +161,13 @@ const TechnicalDirectorHub: React.FC = () => {
           pendingCount: pendingPurchases.length,
           approvedCount: approvedPurchases.length,
           rejectedCount: rejectedPurchases.length,
-          completedCount: completedPurchases.length,
-          totalValue: pendingValue,
-          avgProcessingTime: 0,
-          totalQuantity: totalQuantity
-        });
-      } else {
-        setPurchases([]);
-        setMetrics({
-          pendingCount: 0,
-          approvedCount: 0,
-          rejectedCount: 0,
-          totalValue: 0,
-          avgProcessingTime: 0,
-          totalQuantity: 0
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching purchases:', error);
-      setPurchases([]);
-      setMetrics({
-        pendingCount: 0,
-        approvedCount: 0,
-        rejectedCount: 0,
-        completedCount: 0,
-        totalValue: 0,
+        completedCount: completedPurchases.length,
+        totalValue: pendingValue,
         avgProcessingTime: 0,
-        totalQuantity: 0
+        totalQuantity: totalQuantity
       });
-    } finally {
-      setIsLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchPurchases();
-  }, []);
+  }, [purchases]);
 
   // Filter purchases based on tab and search
   useEffect(() => {
@@ -336,15 +349,12 @@ const TechnicalDirectorHub: React.FC = () => {
 
   // Handle success after approval/rejection
   const handleApprovalSuccess = async () => {
-    // Show loading state briefly
-    setIsLoading(true);
-    
     // Wait for backend to properly update
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
+
     // Refresh the list to get updated data
-    await fetchPurchases();
-    
+    await storeFetchPurchases('technicalDirector');
+
     // Move to appropriate tab after action
     if (modalMode === 'approve') {
       setActiveTab('approved');
@@ -409,7 +419,7 @@ const TechnicalDirectorHub: React.FC = () => {
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
       {/* Page Header - Responsive */}
       <div className="mb-4">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 rounded-xl shadow-xl p-6 border border-[#243d8a]/20"

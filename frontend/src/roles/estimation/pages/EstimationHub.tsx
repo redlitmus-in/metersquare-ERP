@@ -29,17 +29,93 @@ import {
 import { EstimationApprovalCard } from '../components/EstimationApprovalCard';
 import { EstimationApprovalModal } from '../components/EstimationApprovalModal';
 import { PurchaseDetailsModal } from '../components/PurchaseDetailsModal';
-import { Purchase, estimationService } from '../services/estimationService';
+import { estimationService } from '../services/estimationService';
 import { toast } from 'sonner';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
+import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseStore';
+
+// Define Purchase type to match the store
+interface Purchase {
+  purchase_id: number;
+  project_id: string;
+  requested_by: string;
+  site_location: string;
+  date: string;
+  purpose?: string;
+  materials?: any[];
+  material_details?: any[];
+  material_count?: number;
+  total_cost?: number;
+  total_quantity?: number;
+  priority?: string;
+  status?: string;
+  created_at?: string;
+  latest_status?: {
+    sender: string;
+    receiver: string;
+    status: string;
+    timestamp?: string;
+  };
+  status_info?: {
+    estimation_status?: string;
+    sender?: string;
+    receiver?: string;
+    rejection_reason?: string;
+    accounts_status?: string;
+    completed_status?: string;
+  };
+  materials_summary?: {
+    total_cost?: number;
+  };
+  project_manager_status?: string;
+  estimation_status?: string;
+  technical_director_status?: string;
+  accounts_status?: string;
+  accounts_acknowledgement?: boolean;
+  acknowledgement?: boolean;
+  acknowledgement_sent?: boolean;
+  project_manager_rejection_reason?: string;
+  estimation_rejection_reason?: string;
+  technical_director_rejection_reason?: string;
+  accounts_rejection_reason?: string;
+  payment_details?: any;
+}
+
+// Material type for internal use
+interface Material {
+  material_id?: number;
+  description: string;
+  specification?: string;
+  unit?: string;
+  quantity: number;
+  category?: string;
+  cost?: number;
+  unit_cost?: number;
+  total_cost?: number;
+  priority?: string;
+  design_reference?: string;
+}
 
 const EstimationHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState('pending');
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
+  // Use centralized store for real-time updates
+  const {
+    purchases: storePurchases,
+    isLoading,
+    lastFetchTime,
+    fetchPurchases: storeFetchPurchases,
+    setupRealtimeSubscription,
+    cleanupRealtimeSubscription,
+    getPurchasesForRole
+  } = usePurchaseStore();
+
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   // Sort and Filter states
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'priority' | 'id'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -78,18 +154,47 @@ const EstimationHub: React.FC = () => {
     pmFlagRejections: 0
   });
 
-  // Fetch purchases data ONLY - no dashboard API call here
-  const fetchPurchases = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Only fetch estimation purchases, NOT dashboard
-      const response = await estimationService.getEstimationPurchases();
-      
-      if (response && response.purchases) {
-        const allPurchases = response.purchases;
-        
-        setPurchases(allPurchases);
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await storeFetchPurchases('estimation');
+    setIsRefreshing(false);
+    toast.success('Data refreshed');
+  };
+
+  // Check for real-time status
+  const isRealtime = lastFetchTime && Date.now() - lastFetchTime.getTime() < 15000;
+
+  // Initialize real-time updates on mount
+  useEffect(() => {
+    // Store user role for the purchase store
+    localStorage.setItem('userRole', 'estimation');
+
+    // Setup real-time subscriptions
+    setupRealtimeSubscription();
+
+    // Start polling for updates
+    startPolling('estimation');
+
+    // Initial fetch
+    storeFetchPurchases('estimation');
+
+    // Cleanup on unmount
+    return () => {
+      stopPolling();
+      cleanupRealtimeSubscription();
+    };
+  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, storeFetchPurchases]);
+
+  // Watch store purchases and update local state for role-specific data
+  useEffect(() => {
+    setPurchases(getPurchasesForRole('estimation'));
+  }, [storePurchases, getPurchasesForRole]);
+
+  // Calculate metrics whenever purchases change
+  useEffect(() => {
+    if (purchases.length > 0) {
+        const allPurchases = purchases;
         
         // Extract unique categories from all purchases
         const categories = new Set<string>();
@@ -152,7 +257,7 @@ const EstimationHub: React.FC = () => {
         const totalValue = purchases.reduce((sum, p) => {
           const cost = p.total_cost || 
                       p.materials_summary?.total_cost || 
-                      (p.materials ? p.materials.reduce((matSum, mat) => matSum + (mat.cost * mat.quantity), 0) : 0);
+                      (p.materials ? p.materials.reduce((matSum, mat) => matSum + ((mat.cost || mat.unit_cost || 0) * mat.quantity), 0) : 0);
           return sum + cost;
         }, 0);
         
@@ -175,51 +280,15 @@ const EstimationHub: React.FC = () => {
           totalQuantity: totalQuantity,
           costRejections: rejectedPurchases.filter(p => p.status_info?.rejection_reason?.includes('cost')).length,
           pmFlagRejections: rejectedPurchases.filter(p => p.status_info?.rejection_reason?.includes('PM')).length
-        });
-      } else {
-        setPurchases([]);
-        setMetrics({
-          pendingCount: 0,
-          approvedCount: 0,
-          rejectedCount: 0,
-          tdRejectedCount: 0,
-          completedCount: 0,
-          totalValue: 0,
-          avgProcessingTime: 0,
-          totalQuantity: 0,
-          costRejections: 0,
-          pmFlagRejections: 0
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching purchases:', error);
-      setPurchases([]);
-      setMetrics({
-        pendingCount: 0,
-        approvedCount: 0,
-        rejectedCount: 0,
-        tdRejectedCount: 0,
-        totalValue: 0,
-        avgProcessingTime: 0,
-        totalQuantity: 0,
-        costRejections: 0,
-        pmFlagRejections: 0
       });
-    } finally {
-      setIsLoading(false);
     }
-  };
-
-
-  useEffect(() => {
-    fetchPurchases();
-  }, []);
+  }, [purchases]);
 
   // Helper function to get purchase amount
   const getPurchaseAmount = (purchase: Purchase) => {
     return purchase.total_cost || 
            purchase.materials_summary?.total_cost || 
-           (purchase.materials ? purchase.materials.reduce((sum, mat) => sum + (mat.cost * mat.quantity), 0) : 0);
+           (purchase.materials ? purchase.materials.reduce((sum, mat) => sum + ((mat.cost || mat.unit_cost || 0) * mat.quantity), 0) : 0);
   };
 
   // Helper function to get purchase priority
@@ -481,14 +550,11 @@ const EstimationHub: React.FC = () => {
 
   // Handle success after approval/rejection
   const handleApprovalSuccess = async () => {
-    // Show loading state briefly
-    setIsLoading(true);
-    
     // Wait for backend to properly update
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
+
     // Refresh the list to get updated data
-    await fetchPurchases();
+    await storeFetchPurchases('estimation');
     
     // Move to appropriate tab after action
     if (modalMode === 'approve') {
@@ -690,13 +756,6 @@ const EstimationHub: React.FC = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              onClick={fetchPurchases}
-              disabled={isLoading}
-              variant="outline"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </Button>
           </div>
         </div>
 

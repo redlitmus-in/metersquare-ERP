@@ -42,12 +42,24 @@ import PurchaseHistoryModal from '../components/PurchaseHistoryModal';
 import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
 import { siteSupervisorService, Purchase } from '../services/siteSupervisorService';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
+import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseStore';
 
 const SiteSupervisorHub: React.FC = () => {
   const navigate = useNavigate();
+  // Use centralized store for real-time updates
+  const {
+    purchases: storePurchases,
+    isLoading,
+    lastFetchTime,
+    fetchPurchases: storeFetchPurchases,
+    setupRealtimeSubscription,
+    cleanupRealtimeSubscription,
+    getPurchasesForRole
+  } = usePurchaseStore();
+
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [activeTab, setActiveTab] = useState('pending');
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
@@ -57,7 +69,10 @@ const SiteSupervisorHub: React.FC = () => {
   const [newPurchaseModalOpen, setNewPurchaseModalOpen] = useState(false);
   const [editPurchaseModalOpen, setEditPurchaseModalOpen] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
-  
+
+  // Check for real-time status
+  const isRealtime = lastFetchTime && Date.now() - lastFetchTime.getTime() < 15000;
+
   // Search and Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -92,9 +107,31 @@ const SiteSupervisorHub: React.FC = () => {
   });
 
   // Fetch purchases on component mount
+  // Initialize real-time updates on mount
   useEffect(() => {
-    fetchPurchases();
-  }, []);
+    // Store user role for the purchase store
+    localStorage.setItem('userRole', 'siteSupervisor');
+
+    // Setup real-time subscriptions
+    setupRealtimeSubscription();
+
+    // Start polling for updates
+    startPolling('siteSupervisor');
+
+    // Initial fetch
+    storeFetchPurchases('siteSupervisor');
+
+    // Cleanup on unmount
+    return () => {
+      stopPolling();
+      cleanupRealtimeSubscription();
+    };
+  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, storeFetchPurchases]);
+
+  // Watch store purchases and update local state for role-specific data
+  useEffect(() => {
+    setPurchases(getPurchasesForRole('siteSupervisor'));
+  }, [storePurchases, getPurchasesForRole]);
 
   // Filter and sort purchases based on tab, filters, search and sort order
   useEffect(() => {
@@ -106,18 +143,17 @@ const SiteSupervisorHub: React.FC = () => {
     calculateMetrics();
   }, [purchases]);
 
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await storeFetchPurchases('siteSupervisor');
+    setIsRefreshing(false);
+    toast.success('Data refreshed');
+  };
+
+  // Keep fetchPurchases for legacy calls
   const fetchPurchases = async () => {
-    setIsLoading(true);
-    try {
-      const data = await siteSupervisorService.getPurchases();
-      setPurchases(data);
-      toast.success(`Loaded ${data.length} purchase requests`);
-    } catch (error: any) {
-      console.error('Error fetching purchases:', error);
-      toast.error(error.message || 'Failed to load purchases');
-    } finally {
-      setIsLoading(false);
-    }
+    await storeFetchPurchases('siteSupervisor');
   };
 
   const filterPurchases = () => {
@@ -387,8 +423,7 @@ const SiteSupervisorHub: React.FC = () => {
     
     const purchaseId = confirmDialog.purchaseId;
     setConfirmDialog({ isOpen: false, purchaseId: null, type: 'delete' });
-    setIsLoading(true);
-    
+
     try {
       await siteSupervisorService.deletePurchase(purchaseId);
       
@@ -398,13 +433,11 @@ const SiteSupervisorHub: React.FC = () => {
         message: 'Purchase request has been deleted successfully!'
       });
       
-      // Remove the deleted purchase from the list
-      setPurchases(prev => prev.filter(p => p.purchase_id !== purchaseId));
+      // Refresh the purchase list
+      await fetchPurchases();
     } catch (error: any) {
       console.error('Delete error:', error);
       toast.error(error.message || 'Failed to delete purchase request');
-    } finally {
-      setIsLoading(false);
     }
   };
   
@@ -425,22 +458,8 @@ const SiteSupervisorHub: React.FC = () => {
         message: 'Email has been sent successfully to the procurement team!'
       });
       
-      // Update the purchase to mark it as email sent with current timestamp
-      const now = new Date().toISOString();
-      setPurchases(prev => prev.map(p => 
-        p.purchase_id === purchaseId 
-          ? { 
-              ...p, 
-              email_sent: true,
-              last_modified_at: now, // Set to current time to ensure it appears at top
-              last_modified_by: 'Site Supervisor'
-            } 
-          : p
-      ));
-      
-      // Optional: Fetch fresh data to ensure we have the latest from server
-      // Uncomment if you want to ensure server-side data is synced
-      // setTimeout(() => fetchPurchases(), 500);
+      // Refresh the purchase list to get the latest data from server
+      await fetchPurchases();
       
     } catch (error: any) {
       console.error('Send email error:', error);
@@ -658,13 +677,6 @@ const SiteSupervisorHub: React.FC = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              onClick={fetchPurchases}
-              disabled={isLoading}
-              variant="outline"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </Button>
           </div>
         </div>
 

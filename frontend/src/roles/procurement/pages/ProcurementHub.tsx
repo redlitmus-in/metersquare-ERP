@@ -8,6 +8,7 @@ import PurchaseCard from '../components/PurchaseCard';
 import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
 import EditPurchaseModal from '../components/EditPurchaseModal';
 import { procurementService, Purchase } from '../services/procurementService';
+import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseStore';
 
 import {
   Package,
@@ -77,10 +78,21 @@ const ProcurementHub: React.FC = () => {
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  // Use centralized store for real-time updates
+  const {
+    purchases: storePurchases,
+    isLoading,
+    lastFetchTime,
+    fetchPurchases: storeFetchPurchases,
+    setupRealtimeSubscription,
+    cleanupRealtimeSubscription,
+    getPurchasesForRole
+  } = usePurchaseStore();
+
+  const purchases = getPurchasesForRole('procurement') as Purchase[];
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
   const [metrics, setMetrics] = useState<MetricCard[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
   const [modalMode, setModalMode] = useState<'details' | 'history'>('details');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -89,6 +101,9 @@ const ProcurementHub: React.FC = () => {
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [sendingEmailIds, setSendingEmailIds] = useState<Set<number>>(new Set());
   const [resendingToPMIds, setResendingToPMIds] = useState<Set<number>>(new Set());
+
+  // Check for real-time status
+  const isRealtime = lastFetchTime && Date.now() - lastFetchTime.getTime() < 15000;
 
   // Confirmation Dialog for email
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -103,59 +118,66 @@ const ProcurementHub: React.FC = () => {
     isLoading: false
   });
 
-  // Fetch data on mount with delay to prevent duplicate calls
+  // Initialize real-time updates on mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchPurchases();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
+    // Store user role for the purchase store
+    localStorage.setItem('userRole', 'procurement');
+
+    // Setup real-time subscriptions
+    setupRealtimeSubscription();
+
+    // Start polling for updates
+    startPolling('procurement');
+
+    // Initial fetch
+    storeFetchPurchases('procurement');
+
+    // Cleanup on unmount
+    return () => {
+      stopPolling();
+      cleanupRealtimeSubscription();
+    };
+  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, storeFetchPurchases]);
 
   // Filter purchases when filters change
   useEffect(() => {
     filterPurchases();
   }, [activeTab, filterPriority, filterProject, filterLocation, filterAmountRange, filterDateRange, sortBy, sortOrder, purchases]);
 
-  const fetchPurchases = async () => {
-    try {
-      setLoading(true);
-      
-      // Fetch purchases and metrics separately with error handling
-      let purchaseData: Purchase[] = [];
-      let metricsData: any = {};
-      
-      try {
-        purchaseData = await procurementService.getPurchases();
-        setPurchases(purchaseData);
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await storeFetchPurchases('procurement');
+    setIsRefreshing(false);
+    toast.success('Data refreshed');
+  };
 
-        // Track emails sent to PM
-        const emailedSet = new Set<number>();
-        purchaseData.forEach((p: Purchase) => {
-          if (p.latest_status === 'approved' || p.approvals?.action?.some((a: any) =>
-            a.role === 'procurement' && a.status === 'approved'
-          )) {
-            emailedSet.add(p.purchase_id);
-          }
-        });
-        setPmEmailedPRs(emailedSet);
-      } catch (error: any) {
-        console.error('Error fetching purchases:', error);
-        setPurchases([]);
-        toast.error(error.message || 'Failed to fetch purchase requests');
-      }
+  // Update metrics and email tracking when purchases change
+  useEffect(() => {
+    if (purchases && purchases.length >= 0) {
+      // Track emails sent to PM
+      const emailedSet = new Set<number>();
+      purchases.forEach((p: Purchase) => {
+        if (p.latest_status === 'approved' || p.approvals?.action?.some((a: any) =>
+          a.role === 'procurement' && a.status === 'approved'
+        )) {
+          emailedSet.add(p.purchase_id);
+        }
+      });
+      setPmEmailedPRs(emailedSet);
 
-      // Calculate metrics from purchase data without calling dashboard API
-      metricsData = {
-        totalPurchaseValue: purchaseData.reduce((sum, p) => {
+      // Calculate metrics from purchase data
+      const metricsData = {
+        totalPurchaseValue: purchases.reduce((sum, p) => {
           const amount = p.materials?.reduce((s, m) => s + (m.quantity * m.cost), 0) || 0;
           return sum + amount;
         }, 0),
-        totalRequisitions: purchaseData.length,
-        pendingRequisitions: purchaseData.filter(p => !p.latest_status || p.latest_status === 'pending').length,
+        totalRequisitions: purchases.length,
+        pendingRequisitions: purchases.filter(p => !p.latest_status || p.latest_status === 'pending').length,
         vendorPerformance: 95 // Default vendor performance
       };
 
-      // Set metrics with safe access
+      // Set metrics
       setMetrics([
         {
           title: 'Total Purchase Value',
@@ -167,18 +189,18 @@ const ProcurementHub: React.FC = () => {
         },
         {
           title: 'Requisitions to Process',
-          value: metricsData?.totalRequisitions || purchaseData.length || 0,
+          value: metricsData?.totalRequisitions || 0,
           change: -5.2,
           icon: FileText,
           color: 'bg-red-500',
           trend: 'down'
         },
         {
-          title: 'Pending Processing',
+          title: 'Pending Requisitions',
           value: metricsData?.pendingRequisitions || 0,
-          change: 25.0,
+          change: 8.1,
           icon: Clock,
-          color: 'bg-amber-500',
+          color: 'bg-blue-500',
           trend: 'up'
         },
         {
@@ -190,49 +212,12 @@ const ProcurementHub: React.FC = () => {
           trend: 'up'
         }
       ]);
-    } catch (error: any) {
-      console.error('Unexpected error in fetchPurchases:', error);
-      toast.error('An unexpected error occurred');
-      
-      // Set default empty state
-      setPurchases([]);
-      setMetrics([
-        {
-          title: 'Total Purchase Value',
-          value: 'AED 0',
-          change: 0,
-          icon: Banknote,
-          color: 'bg-green-500',
-          trend: 'up'
-        },
-        {
-          title: 'Requisitions to Process',
-          value: 0,
-          change: 0,
-          icon: FileText,
-          color: 'bg-red-500',
-          trend: 'down'
-        },
-        {
-          title: 'Pending Processing',
-          value: 0,
-          change: 0,
-          icon: Clock,
-          color: 'bg-amber-500',
-          trend: 'up'
-        },
-        {
-          title: 'Vendor Performance',
-          value: '0%',
-          change: 0,
-          icon: Award,
-          color: 'bg-purple-500',
-          trend: 'up'
-        }
-      ]);
-    } finally {
-      setLoading(false);
     }
+  }, [purchases]);
+
+  // Keep fetchPurchases for legacy calls (email send, resend, etc.)
+  const fetchPurchases = async () => {
+    await storeFetchPurchases('procurement');
   };
 
   const filterPurchases = () => {
@@ -657,15 +642,6 @@ const ProcurementHub: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={fetchPurchases}
-              title="Refresh"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-            
             {/* Export Buttons */}
             <div className="flex gap-2">
               <Button

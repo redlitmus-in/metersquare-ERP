@@ -33,6 +33,7 @@ import { toast } from 'sonner';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { AnimatePresence } from 'framer-motion';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseStore';
 
 // Metric card component
 interface MetricCard {
@@ -84,12 +85,21 @@ const ProjectManagerHub: React.FC = () => {
   
   // State management
   const [activeTab, setActiveTab] = useState('pending');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [purchases, setPurchases] = useState<ProcurementPurchase[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Use centralized store for real-time updates
+  const storePurchases = usePurchaseStore((state) => state.purchases);
+  const fetchPurchases = usePurchaseStore((state) => state.fetchPurchases);
+  const setupRealtimeSubscription = usePurchaseStore((state) => state.setupRealtimeSubscription);
+  const cleanupRealtimeSubscription = usePurchaseStore((state) => state.cleanupRealtimeSubscription);
+  const lastFetchTime = usePurchaseStore((state) => state.lastFetchTime);
+  const getPurchasesForRole = usePurchaseStore((state) => state.getPurchasesForRole);
   const [estimationRejectedPurchases, setEstimationRejectedPurchases] = useState<ProcurementPurchase[]>([]);
   const [completedPurchases, setCompletedPurchases] = useState<ProcurementPurchase[]>([]);
   const [filteredPurchases, setFilteredPurchases] = useState<ProcurementPurchase[]>([]);
   const [metrics, setMetrics] = useState<MetricCard[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [hasError, setHasError] = useState(false);
@@ -124,8 +134,20 @@ const ProjectManagerHub: React.FC = () => {
     resending: new Set()
   });
 
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchPurchases('projectManager');
+    await fetchPurchasesData();
+    setIsRefreshing(false);
+    toast.success('Data refreshed');
+  };
+
+  // Check for real-time status
+  const isRealtime = lastFetchTime && Date.now() - lastFetchTime.getTime() < 15000;
+
   // Fetch purchases from API
-  const fetchPurchases = useCallback(async () => {
+  const fetchPurchasesData = useCallback(async () => {
     try {
       setIsLoading(true);
       setHasError(false);
@@ -360,11 +382,134 @@ const ProjectManagerHub: React.FC = () => {
     setRefreshKey(prev => prev + 1);
   }, []);
 
-  // Initial data fetch - ONLY call once on mount or when refreshKey changes
+  // Initialize real-time updates on mount
   useEffect(() => {
-    fetchPurchases();
+    // Store user role for the purchase store
+    localStorage.setItem('userRole', 'projectManager');
+
+    // Fetch immediately on mount
+    fetchPurchases('projectManager');
+
+    // Setup real-time subscriptions
+    setupRealtimeSubscription();
+
+    // Start polling for updates (will fetch every 3 seconds)
+    startPolling('projectManager');
+
+    console.log('✅ Real-time updates initialized for Project Manager');
+
+    // Cleanup on unmount
+    return () => {
+      stopPolling();
+      cleanupRealtimeSubscription();
+    };
+  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, fetchPurchases]);
+
+  // Initial data fetch - REMOVED to prevent overriding store data
+  // The store now handles all data fetching via polling
+  useEffect(() => {
+    // Only fetch local data if needed for initial load
+    if (!storePurchases || storePurchases.length === 0) {
+      fetchPurchasesData();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey]); // Intentionally exclude fetchPurchases to prevent duplicate calls
+  }, [refreshKey]); // Intentionally exclude fetchPurchasesData to prevent duplicate calls
+
+  // AUTO-UPDATE from store when data changes!
+  useEffect(() => {
+    // Get purchases for project manager role from the store
+    const projectManagerPurchases = getPurchasesForRole('projectManager');
+
+    if (projectManagerPurchases) {
+      console.log('🔄 Auto-updating from store:', projectManagerPurchases.length, 'purchases');
+
+      // Update local state with store data
+      setPurchases(projectManagerPurchases);
+
+      // Recalculate metrics with new data
+      const pendingPurchases = projectManagerPurchases.filter(p => !p.pm_status || p.pm_status === 'pending');
+      const approvedPurchases = projectManagerPurchases.filter(p => p.pm_status === 'approved');
+      const rejectedPurchases = projectManagerPurchases.filter(p => p.pm_status === 'rejected');
+      const completedPurchases = projectManagerPurchases.filter(p =>
+        p.latest_status?.status === 'completed' ||
+        p.accounts_acknowledgement === true
+      );
+
+      // Calculate totals
+      const totalQuantity = projectManagerPurchases.reduce((sum, p) => sum + (p.total_quantity || 0), 0);
+      const totalValue = projectManagerPurchases.reduce((sum, p) => sum + (p.total_cost || 0), 0);
+
+      // Update metrics
+      const metricsData: MetricCard[] = [
+        {
+          title: 'Total Purchases',
+          value: projectManagerPurchases.length,
+          icon: <Package className="h-5 w-5 text-blue-600" />,
+          bgColor: 'bg-blue-50',
+          iconColor: 'bg-blue-100',
+          trend: '+12%',
+          trendType: 'up'
+        },
+        {
+          title: 'Pending Approvals',
+          value: pendingPurchases.length,
+          icon: <Clock className="h-5 w-5 text-yellow-600" />,
+          bgColor: 'bg-yellow-50',
+          iconColor: 'bg-yellow-100',
+          trend: pendingPurchases.length > 0 ? '+5%' : '-5%',
+          trendType: pendingPurchases.length > 0 ? 'up' : 'down'
+        },
+        {
+          title: 'Approved',
+          value: approvedPurchases.length,
+          icon: <CheckCircle className="h-5 w-5 text-green-600" />,
+          bgColor: 'bg-green-50',
+          iconColor: 'bg-green-100',
+          trend: '+8%',
+          trendType: 'up'
+        },
+        {
+          title: 'Rejected',
+          value: rejectedPurchases.length,
+          icon: <XCircle className="h-5 w-5 text-red-600" />,
+          bgColor: 'bg-red-50',
+          iconColor: 'bg-red-100',
+          trend: '-2%',
+          trendType: 'down'
+        },
+        {
+          title: 'Completed',
+          value: completedPurchases.length,
+          icon: <FileText className="h-5 w-5 text-blue-600" />,
+          bgColor: 'bg-blue-50',
+          iconColor: 'bg-blue-100',
+          trend: '+10%',
+          trendType: 'up'
+        },
+        {
+          title: 'Total Quantity',
+          value: totalQuantity.toLocaleString(),
+          icon: <Package className="h-5 w-5 text-purple-600" />,
+          bgColor: 'bg-purple-50',
+          iconColor: 'bg-purple-100',
+          trend: '+7%',
+          trendType: 'up'
+        },
+        {
+          title: 'Total Value',
+          value: `AED ${totalValue.toLocaleString()}`,
+          icon: <TrendingUp className="h-5 w-5 text-indigo-600" />,
+          bgColor: 'bg-indigo-50',
+          iconColor: 'bg-indigo-100',
+          trend: '+15%',
+          trendType: 'up'
+        }
+      ];
+
+      setMetrics(metricsData);
+      setCompletedPurchases(completedPurchases);
+    }
+  }, [storePurchases, getPurchasesForRole]); // Re-run whenever store purchases change!
 
   // Filter purchases based on active tab and search
   useEffect(() => {

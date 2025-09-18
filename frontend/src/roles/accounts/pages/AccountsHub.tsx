@@ -29,12 +29,25 @@ import AcknowledgementModal from '../components/AcknowledgementModal';
 import { accountsService } from '../services/accountsService';
 import type { Purchase } from '../types';
 import { toast } from 'sonner';
+import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseStore';
 
 const AccountsHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState('processing');
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+
+  // Use centralized store for real-time updates - PROPER SUBSCRIPTION
+  const storePurchases = usePurchaseStore((state) => state.purchases);
+  const isLoading = usePurchaseStore((state) => state.isLoading);
+  const lastFetchTime = usePurchaseStore((state) => state.lastFetchTime);
+  const fetchPurchases = usePurchaseStore((state) => state.fetchPurchases);
+  const setupRealtimeSubscription = usePurchaseStore((state) => state.setupRealtimeSubscription);
+  const cleanupRealtimeSubscription = usePurchaseStore((state) => state.cleanupRealtimeSubscription);
+  const getPurchasesForRole = usePurchaseStore((state) => state.getPurchasesForRole);
+
+  // Local state for filtered purchases
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'project' | 'location'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -68,34 +81,56 @@ const AccountsHub: React.FC = () => {
     totalTransactions: 0
   });
 
-  // Fetch purchases data
-  const fetchPurchases = async () => {
-    try {
-      setIsLoading(true);
-      
-      const response = await accountsService.getAccountsPurchases();
-      
-      if (response && response.purchase_details) {
-        const allPurchases = response.purchase_details.map(purchase => {
-          // Use material_details if available, fallback to materials
-          const materials = purchase.material_details || purchase.materials || [];
-          
-          return {
-            ...purchase,
-            materials: materials, // Normalize to 'materials' for consistency
-            // Calculate total cost from materials
-            total_cost: materials.reduce((sum: number, material: any) => 
-              sum + (material.cost || 0) * (material.quantity || 1), 0
-            ) || 0,
-            // Calculate total quantity from materials
-            total_quantity: materials.reduce((sum: number, material: any) => 
-              sum + (material.quantity || 0), 0
-            ) || 0,
-            // Set material count
-            material_count: materials.length || 0
-          };
-        });
-        setPurchases(allPurchases);
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchPurchases('accounts');
+    setIsRefreshing(false);
+    toast.success('Data refreshed');
+  };
+
+  // Check for real-time status
+  const isRealtime = lastFetchTime && Date.now() - lastFetchTime.getTime() < 15000;
+
+  // Initialize real-time updates on mount
+  useEffect(() => {
+    // Store user role for the purchase store
+    localStorage.setItem('userRole', 'accounts');
+
+    // Fetch immediately on mount
+    fetchPurchases('accounts');
+
+    // Setup real-time subscriptions
+    setupRealtimeSubscription();
+
+    // Start polling for updates (every 3 seconds)
+    startPolling('accounts');
+
+    console.log('✅ Real-time updates initialized for Accounts');
+
+    // Cleanup on unmount
+    return () => {
+      stopPolling();
+      cleanupRealtimeSubscription();
+    };
+  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, fetchPurchases]);
+
+  // AUTO-UPDATE from store when data changes!
+  useEffect(() => {
+    // Get purchases for accounts role from the store
+    const accountsPurchases = getPurchasesForRole('accounts');
+
+    if (accountsPurchases) {
+      console.log('🔄 Auto-updating from store:', accountsPurchases.length, 'purchases');
+      // Update local state with store data
+      setPurchases(accountsPurchases);
+    }
+  }, [storePurchases, getPurchasesForRole]); // Re-run whenever store purchases change!
+
+  // Calculate metrics whenever purchases change
+  useEffect(() => {
+    if (purchases.length > 0) {
+        const allPurchases = purchases;
         
         // Calculate metrics based on accounts_status - only processing and processed
         let processingPurchases: Purchase[] = [];
@@ -151,47 +186,17 @@ const AccountsHub: React.FC = () => {
         
         const totalTransactions = processingPurchases.length + processedPurchases.length;
 
-        setMetrics({
-          pendingPaymentCount: 0, // Remove pending tab
-          processingCount: processingPurchases.length,
-          processedCount: processedPurchases.length,
-          rejectedCount: 0, // Remove rejected tab
-          totalValue: processingValue,
-          avgProcessingTime: 0, // Would need to calculate from transaction data
-          totalTransactions: totalTransactions
-        });
-      } else {
-        setPurchases([]);
-        setMetrics({
-          pendingPaymentCount: 0,
-          processingCount: 0,
-          processedCount: 0,
-          rejectedCount: 0,
-          totalValue: 0,
-          avgProcessingTime: 0,
-          totalTransactions: 0
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching purchases:', error);
-      setPurchases([]);
       setMetrics({
-        pendingPaymentCount: 0,
-        processingCount: 0,
-        processedCount: 0,
-        rejectedCount: 0,
-        totalValue: 0,
-        avgProcessingTime: 0,
-        totalTransactions: 0
+        pendingPaymentCount: 0, // Remove pending tab
+        processingCount: processingPurchases.length,
+        processedCount: processedPurchases.length,
+        rejectedCount: 0, // Remove rejected tab
+        totalValue: processingValue,
+        avgProcessingTime: 0, // Would need to calculate from transaction data
+        totalTransactions: totalTransactions
       });
-    } finally {
-      setIsLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchPurchases();
-  }, []);
+  }, [purchases]);
 
   // Filter purchases based on tab and search
   useEffect(() => {
