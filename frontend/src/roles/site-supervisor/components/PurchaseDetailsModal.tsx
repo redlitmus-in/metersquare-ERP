@@ -227,6 +227,19 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
     }
   };
 
+  const formatStatusText = (status: string) => {
+    const statusMap: { [key: string]: string } = {
+      'approved': 'APPROVED',
+      'complete': 'COMPLETED',
+      'completed': 'COMPLETED',
+      'rejected': 'REJECTED',
+      'pending': 'PENDING',
+      'under_review': 'UNDER REVIEW',
+      'in_progress': 'IN PROGRESS'
+    };
+    return statusMap[status?.toLowerCase()] || status?.toUpperCase() || 'PENDING';
+  };
+
   const getFileIcon = (fileName?: string) => {
     if (!fileName) return <File className="h-5 w-5 text-gray-400" />;
     const ext = fileName.split('.').pop()?.toLowerCase();
@@ -683,285 +696,229 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
             {/* Latest Status Tab */}
             <TabsContent value="status" className="flex-1 overflow-hidden mt-0 bg-white">
-              <div className="h-full overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-                {latestStatus || (purchase && (purchase.approvals?.length > 0 || purchase.latest_status || purchase.status_info)) ? (
+              <div className="h-full overflow-y-auto p-6">
+                {latestStatus ? (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="space-y-4"
+                    className="space-y-6"
                   >
-                    {/* Current Status Overview */}
+                    {/* Status Overview Card */}
                     <Card className="border-0 shadow-sm">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="p-1.5 bg-blue-100 rounded-lg">
-                            <Activity className="w-4 h-4 text-blue-600" />
+                      <CardContent className="p-6">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="p-2 bg-blue-100 rounded-lg">
+                            <Activity className="w-5 h-5 text-blue-600" />
                           </div>
-                          <h3 className="text-base font-semibold text-gray-900">Current Status</h3>
+                          <h3 className="text-lg font-semibold text-gray-900">Current Status Information</h3>
                         </div>
-                        
-                        {/* Get the latest approval status */}
-                        {(() => {
-                          // First try to get from approvals array, then from latest_status, then from status_info
-                          const latestApproval = purchase.approvals?.length > 0 
-                            ? purchase.approvals[purchase.approvals.length - 1] 
-                            : purchase.latest_status || purchase.status_info || {};
-                          return (
-                            <div className="p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <Badge className={`${getStatusColor(latestApproval.status)} border text-sm py-1 px-2`}>
-                                      {getStatusIcon(latestApproval.status)}
-                                      <span className="ml-1">{latestApproval.status?.toUpperCase() || 'PENDING'}</span>
+                        <div className="space-y-4">
+                          {/* Status Header */}
+                          <div className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Current Status</p>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Badge className={`${getStatusColor(latestStatus.status)} border text-sm py-1 px-3`}>
+                                    {getStatusIcon(latestStatus.status)}
+                                    <span className="ml-1">{formatStatusText(latestStatus.status || 'pending')}</span>
+                                  </Badge>
+                                  {latestStatus.is_active && (
+                                    <Badge className="bg-green-100 text-green-700 border-green-200">
+                                      <Activity className="w-3 h-3 mr-1" />
+                                      Active
                                     </Badge>
-                                    <span className="text-sm text-gray-600">by {formatRole(latestApproval.role)}</span>
-                                  </div>
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    {latestApproval.decision_date && formatDateTimeLocal(latestApproval.decision_date)}
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-gray-500">Status ID</p>
+                                <p className="font-mono text-sm font-semibold text-gray-700">#{latestStatus.status_id || 'N/A'}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Role and Decision Info */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                              <div className="flex items-center gap-2 mb-3">
+                                <UserCheck className="w-4 h-4 text-blue-600" />
+                                <p className="text-sm font-medium text-blue-900">Decision Information</p>
+                              </div>
+                              <div className="space-y-2">
+                                <div>
+                                  <p className="text-xs text-blue-600">Current Role</p>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {latestStatus.role?.replace(/([A-Z])/g, ' $1').trim() || 'N/A'}
                                   </p>
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-xs text-gray-500">Status ID</p>
-                                  <p className="font-mono text-sm font-semibold text-gray-700">#{latestApproval.status_id}</p>
+                                <div>
+                                  <p className="text-xs text-blue-600">Decision By</p>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {latestStatus.created_by || 'N/A'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-blue-600">Decision Date</p>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {latestStatus.decision_date ?
+                                      new Date(latestStatus.decision_date).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      }) : 'N/A'}
+                                  </p>
                                 </div>
                               </div>
-                              
-                              {/* Show rejection reason if rejected */}
-                              {latestApproval.status === 'rejected' && latestApproval.rejection_reason && (
-                                <div className="mt-3 p-2 bg-red-50 rounded border border-red-100">
-                                  <div className="flex items-start gap-2">
-                                    <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-                                    <div>
-                                      <p className="text-xs text-red-600 font-medium">Rejection Reason</p>
-                                      <p className="text-sm text-red-700 mt-1">{latestApproval.rejection_reason}</p>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {/* Show comments */}
-                              {latestApproval.comments && (
-                                <div className="mt-3 p-2 bg-blue-50 rounded border border-blue-100">
-                                  <div className="flex items-start gap-2">
-                                    <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                                    <div>
-                                      <p className="text-xs text-blue-600 font-medium">Comments</p>
-                                      <p className="text-sm text-blue-700 mt-1 italic">"{latestApproval.comments}"</p>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
                             </div>
-                          );
-                        })()}
-                      </CardContent>
-                    </Card>
 
-                    {/* Complete Approval Timeline - Only show if we have approvals array */}
-                    {purchase.approvals && purchase.approvals.length > 0 && (
-                      <Card className="border-0 shadow-sm">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2 mb-4">
-                            <div className="p-1.5 bg-green-100 rounded-lg">
-                              <Workflow className="w-4 h-4 text-green-600" />
-                            </div>
-                            <h3 className="text-base font-semibold text-gray-900">Complete Approval Timeline</h3>
-                            <Badge className="bg-gray-100 text-gray-600 text-xs ml-auto">
-                              {purchase.approvals.length} Steps
-                            </Badge>
-                          </div>
-                          
-                          <div className="space-y-3">
-                            {purchase.approvals.map((approval: any, idx: number) => (
-                            <motion.div
-                              key={approval.status_id}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: idx * 0.1 }}
-                              className="relative"
-                            >
-                              {/* Timeline connector */}
-                              {idx < purchase.approvals.length - 1 && (
-                                <div className="absolute left-6 top-12 bottom-0 w-0.5 bg-gray-200"></div>
-                              )}
-                              
-                              <div className={`flex gap-3 p-3 rounded-lg border-l-4 ${
-                                approval.status === 'approved' ? 'bg-green-50 border-l-green-400' :
-                                approval.status === 'rejected' ? 'bg-red-50 border-l-red-400' :
-                                'bg-yellow-50 border-l-yellow-400'
-                              }`}>
-                                <div className={`p-2 rounded-full ${
-                                  approval.status === 'approved' ? 'bg-green-100' :
-                                  approval.status === 'rejected' ? 'bg-red-100' :
-                                  'bg-yellow-100'
-                                }`}>
-                                  {getRoleIcon(approval.role)}
+                            <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
+                              <div className="flex items-center gap-2 mb-3">
+                                <ArrowRight className="w-4 h-4 text-purple-600" />
+                                <p className="text-sm font-medium text-purple-900">Workflow Path</p>
+                              </div>
+                              <div className="space-y-2">
+                                <div>
+                                  <p className="text-xs text-purple-600">From (Sender)</p>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {latestStatus.sender?.replace(/([A-Z])/g, ' $1').trim() || 'N/A'}
+                                  </p>
                                 </div>
-                                
-                                <div className="flex-1">
-                                  <div className="flex items-start justify-between">
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <p className="text-sm font-semibold text-gray-900">
-                                          {formatRole(approval.role)}
-                                        </p>
-                                        <Badge className={`${getStatusColor(approval.status)} text-xs`}>
-                                          {getStatusIcon(approval.status)}
-                                          <span className="ml-1">{approval.status.charAt(0).toUpperCase() + approval.status.slice(1)}</span>
-                                        </Badge>
-                                      </div>
-                                      <p className="text-xs text-gray-600 mt-1">
-                                        {approval.created_by} • {formatDateTimeLocal(approval.decision_date)}
-                                      </p>
-                                    </div>
-                                    <div className="text-right">
-                                      <p className="text-xs text-gray-400">Step {idx + 1}</p>
-                                      <p className="text-xs text-gray-400">ID: #{approval.status_id}</p>
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Workflow path */}
-                                  <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-                                    <span>{formatRole(approval.sender)}</span>
-                                    <ArrowRight className="w-3 h-3" />
-                                    <span>{formatRole(approval.receiver)}</span>
-                                  </div>
-                                  
-                                  {/* Comments */}
-                                  {approval.comments && (
-                                    <div className="mt-2 p-2 bg-white/60 rounded border">
-                                      <p className="text-xs text-gray-600 italic">"{approval.comments}"</p>
-                                    </div>
-                                  )}
-                                  
-                                  {/* Rejection reason */}
-                                  {approval.status === 'rejected' && approval.rejection_reason && (
-                                    <div className="mt-2 p-2 bg-red-100/60 rounded border border-red-200">
-                                      <p className="text-xs text-red-600 font-medium">Rejection Reason:</p>
-                                      <p className="text-xs text-red-700 mt-1">{approval.rejection_reason}</p>
-                                    </div>
-                                  )}
+                                <div>
+                                  <p className="text-xs text-purple-600">To (Receiver)</p>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {latestStatus.receiver?.replace(/([A-Z])/g, ' $1').trim() || 'N/A'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-purple-600">Purchase ID</p>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    PR-{latestStatus.purchase_id || 'N/A'}
+                                  </p>
                                 </div>
                               </div>
-                            </motion.div>
-                          ))}
+                            </div>
+                          </div>
+
+                          {/* Comments Section */}
+                          {latestStatus.comments && (
+                            <Card className="border-0 shadow-sm bg-gradient-to-r from-amber-50 to-yellow-50">
+                              <CardContent className="p-4">
+                                <div className="flex items-start gap-3">
+                                  <div className="p-2 bg-amber-100 rounded-lg">
+                                    <Info className="w-4 h-4 text-amber-600" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium text-amber-900 mb-2">Comments</p>
+                                    <p className="text-sm text-amber-800 italic">
+                                      "{latestStatus.comments}"
+                                    </p>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+
+                          {/* Rejection Info */}
+                          {(latestStatus.rejection_reason || latestStatus.reject_category) && (
+                            <Card className="border-0 shadow-sm bg-gradient-to-r from-red-50 to-pink-50">
+                              <CardContent className="p-4">
+                                <div className="flex items-start gap-3">
+                                  <div className="p-2 bg-red-100 rounded-lg">
+                                    <XCircle className="w-4 h-4 text-red-600" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium text-red-900 mb-2">Rejection Details</p>
+                                    {latestStatus.rejection_reason && (
+                                      <p className="text-sm text-red-800 mb-2">
+                                        {latestStatus.rejection_reason}
+                                      </p>
+                                    )}
+                                    {latestStatus.reject_category && (
+                                      <Badge variant="destructive">
+                                        {latestStatus.reject_category}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
-                    )}
 
-                    {/* Summary Statistics - Only show if we have approvals */}
-                    {purchase.approvals && purchase.approvals.length > 0 && (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100">
-                          <CardContent className="p-3">
+                    {/* Timestamps Card */}
+                    <Card className="border-0 shadow-sm">
+                      <CardContent className="p-6">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="p-2 bg-gray-100 rounded-lg">
+                            <Clock className="w-5 h-5 text-gray-600" />
+                          </div>
+                          <h3 className="text-lg font-semibold text-gray-900">Timeline</h3>
+                        </div>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                             <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 text-blue-600" />
-                              <div>
-                                <p className="text-xs text-blue-600 font-medium">Total Steps</p>
-                                <p className="text-lg font-bold text-blue-900">{purchase.approvals.length}</p>
+                              <CalendarCheck className="w-4 h-4 text-gray-500" />
+                              <span className="text-sm text-gray-600">Created At</span>
                             </div>
+                            <span className="text-sm font-semibold text-gray-900">
+                              {latestStatus.created_at ?
+                                new Date(latestStatus.created_at).toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                }) : 'N/A'}
+                            </span>
                           </div>
-                        </CardContent>
-                      </Card>
-                      
-                      <Card className="border-0 shadow-sm bg-gradient-to-br from-green-50 to-green-100">
-                        <CardContent className="p-3">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                            <div>
-                              <p className="text-xs text-green-600 font-medium">Approved</p>
-                              <p className="text-lg font-bold text-green-900">
-                                {purchase.approvals.filter((a: any) => a.status === 'approved').length}
-                              </p>
+
+                          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-gray-500" />
+                              <span className="text-sm text-gray-600">Last Modified</span>
                             </div>
+                            <span className="text-sm font-semibold text-gray-900">
+                              {latestStatus.last_modified_at ?
+                                new Date(latestStatus.last_modified_at).toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                }) : 'N/A'}
+                            </span>
                           </div>
-                        </CardContent>
-                      </Card>
-                      
-                      <Card className="border-0 shadow-sm bg-gradient-to-br from-red-50 to-red-100">
-                        <CardContent className="p-3">
-                          <div className="flex items-center gap-2">
-                            <XCircle className="w-4 h-4 text-red-600" />
-                            <div>
-                              <p className="text-xs text-red-600 font-medium">Rejected</p>
-                              <p className="text-lg font-bold text-red-900">
-                                {purchase.approvals.filter((a: any) => a.status === 'rejected').length}
-                              </p>
+
+                          {latestStatus.last_modified_by && (
+                            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 text-gray-500" />
+                                <span className="text-sm text-gray-600">Modified By</span>
+                              </div>
+                              <span className="text-sm font-semibold text-gray-900">
+                                {latestStatus.last_modified_by}
+                              </span>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                    )}
-                    {/* Show simple status if no approvals array but have latest_status or basic status */}
-                    {!purchase.approvals?.length && (latestStatus || purchase.latest_status || purchase.status) && (
-                      <Card className="border-0 shadow-sm">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2 mb-3">
-                            <div className="p-1.5 bg-purple-100 rounded-lg">
-                              <Info className="w-4 h-4 text-purple-600" />
-                            </div>
-                            <h3 className="text-base font-semibold text-gray-900">Status Information</h3>
-                          </div>
-                          <div className="space-y-2">
-                            {(() => {
-                              const statusData = latestStatus || purchase.latest_status || {};
-                              return (
-                                <>
-                                  {(statusData.status || purchase.status) && (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm text-gray-600">Status:</span>
-                                      <Badge className={`${getStatusColor(statusData.status || purchase.status)} border`}>
-                                        {(statusData.status || purchase.status || 'PENDING').toUpperCase()}
-                                      </Badge>
-                                    </div>
-                                  )}
-                                  {statusData.role && (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm text-gray-600">Role:</span>
-                                      <span className="text-sm font-medium text-gray-900">{formatRole(statusData.role)}</span>
-                                    </div>
-                                  )}
-                                  {statusData.sender && (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm text-gray-600">From:</span>
-                                      <span className="text-sm font-medium text-gray-900">{formatRole(statusData.sender)}</span>
-                                    </div>
-                                  )}
-                                  {statusData.receiver && (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm text-gray-600">To:</span>
-                                      <span className="text-sm font-medium text-gray-900">{formatRole(statusData.receiver)}</span>
-                                    </div>
-                                  )}
-                                  {statusData.comments && (
-                                    <div className="mt-2 p-2 bg-gray-50 rounded">
-                                      <p className="text-sm text-gray-700">{statusData.comments}</p>
-                                    </div>
-                                  )}
-                                  {purchase.purpose && !statusData.comments && (
-                                    <div className="mt-2 p-2 bg-yellow-50 rounded">
-                                      <p className="text-xs text-gray-600 font-medium">Purpose:</p>
-                                      <p className="text-sm text-gray-700">{purchase.purpose}</p>
-                                    </div>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+
                   </motion.div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <Activity className="h-16 w-16 text-gray-300 mb-4" />
-                    <p className="text-lg font-medium text-gray-600">No Status Information</p>
-                    <p className="text-sm text-gray-500 mt-2">
-                      Status information will appear once the request is processed
-                    </p>
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="p-4 bg-gray-100 rounded-full inline-block mb-4">
+                        <AlertCircle className="w-16 h-16 text-gray-400" />
+                      </div>
+                      <p className="text-lg font-medium text-gray-600">No status information available</p>
+                      <p className="text-sm text-gray-500 mt-1">Status details will appear here once available</p>
+                    </div>
                   </div>
                 )}
               </div>
