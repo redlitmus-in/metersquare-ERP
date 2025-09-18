@@ -115,7 +115,9 @@ const ProjectManagerHub: React.FC = () => {
     p.latest_status?.status !== 'completed' &&
     p.latest_status?.status !== 'complete' &&
     p.accounts_acknowledgement !== true &&
-    p.current_workflow_status !== 'completed'
+    p.current_workflow_status !== 'completed' &&
+    // Exclude ONLY PM flag estimation rejections - they go to estimation_rejected tab
+    (p.rejection_from !== 'estimation' || !p.rejected_status?.reject_category?.includes('pm_flag'))
   ) || [];
   // Derived from store data - Only show PM flag rejections from Estimation
   const estimationRejectedPurchases = (allStorePurchases || [])
@@ -308,10 +310,24 @@ const ProjectManagerHub: React.FC = () => {
     // Filter by status based on active tab
     switch (activeTab) {
       case 'pending':
-        filtered = [...purchases].filter(p => !p.pm_status || p.pm_status === 'pending');
+        // Show purchases waiting for PM action
+        filtered = [...purchases].filter(p =>
+          (!p.pm_status || p.pm_status === 'pending') &&
+          // Check multiple possible status fields for procurement approval
+          (p.procurement_status === 'approved' ||
+           p.sender_latest_status === 'approved' ||
+           p.current_workflow_status === 'project_manager' ||
+           p.latest_status?.sender === 'procurement' ||
+           // If no specific procurement status, show all pending for PM
+           (!p.procurement_status && !p.rejection_from))
+        );
         break;
       case 'approved':
-        filtered = [...purchases].filter(p => p.pm_status === 'approved');
+        // Show ALL PM approved purchases (including ones that moved to next stage)
+        filtered = [...allStorePurchases].filter(p =>
+          p.pm_status === 'approved' ||
+          p.project_manager_status === 'approved'
+        );
         break;
       case 'rejected':
         filtered = [...purchases].filter(p => p.pm_status === 'rejected');
