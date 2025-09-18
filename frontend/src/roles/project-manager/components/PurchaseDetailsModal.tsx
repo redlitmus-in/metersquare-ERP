@@ -94,8 +94,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
         const { purchase } = await projectManagerService.getPurchaseHistory(purchaseId);
 
         // Transform the purchase data to match PurchaseStatusDetails structure
-        // Extract all status actions from the approvals.action array
-        const allActions = purchase.approvals?.action || [];
+        // Extract all status actions from the approvals.action array - ensure it's always an array
+        const allActions = Array.isArray(purchase.approvals?.action) ? purchase.approvals.action :
+                          (purchase.approvals?.action ? [purchase.approvals.action] : []);
 
         const details: PurchaseStatusDetails = {
           purchase_id: purchase.purchase_id,
@@ -116,7 +117,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               materials: purchase.materials || []
             }
           },
-          // Include ALL actions in both arrays so they all show in history
+          // Include ALL actions in both arrays so they all show in history - ensure it's an array
           procurement_statuses: allActions,
           project_manager_statuses: [],
           latest_pm_proc_status: purchase.latest_status || purchase.approvals?.action?.[purchase.approvals?.action?.length - 1] || {
@@ -131,13 +132,13 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
             last_modified_at: null
           },
           summary: {
-            total_procurement_statuses: allActions.filter((a: any) => a.role === 'procurement').length || 0,
-            total_pm_statuses: allActions.filter((a: any) => a.role === 'projectManager').length || 0,
-            pm_approved_count: allActions.filter((a: any) => a.role === 'projectManager' && a.status === 'approved').length || 0,
-            pm_rejected_count: allActions.filter((a: any) => a.role === 'projectManager' && a.status === 'rejected').length || 0,
+            total_procurement_statuses: allActions.filter((a: any) => a?.role === 'procurement').length || 0,
+            total_pm_statuses: allActions.filter((a: any) => a?.role === 'projectManager').length || 0,
+            pm_approved_count: allActions.filter((a: any) => a?.role === 'projectManager' && a?.status === 'approved').length || 0,
+            pm_rejected_count: allActions.filter((a: any) => a?.role === 'projectManager' && a?.status === 'rejected').length || 0,
             pm_pending_count: 0,
-            procurement_approved_count: allActions.filter((a: any) => a.role === 'procurement' && a.status === 'approved').length || 0,
-            procurement_rejected_count: allActions.filter((a: any) => a.role === 'procurement' && a.status === 'rejected').length || 0,
+            procurement_approved_count: allActions.filter((a: any) => a?.role === 'procurement' && a?.status === 'approved').length || 0,
+            procurement_rejected_count: allActions.filter((a: any) => a?.role === 'procurement' && a?.status === 'rejected').length || 0,
             procurement_pending_count: 0
           }
         };
@@ -1159,21 +1160,23 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                           <div className="flex gap-2">
                             <span className="text-gray-500">Total Steps:</span>
                             <span className="text-gray-900">
-                              {(statusDetails?.procurement_statuses?.length || 0)}
+                              {(Array.isArray(statusDetails?.procurement_statuses) ? statusDetails.procurement_statuses.length : 0)}
                             </span>
                           </div>
                           <div className="flex gap-2">
                             <span className="text-gray-500">Approvals:</span>
                             <span className="text-green-600 font-medium">
-                              {(statusDetails?.procurement_statuses || [])
-                                .filter((s: any) => s.status === 'approved' || s.status === 'completed').length}
+                              {Array.isArray(statusDetails?.procurement_statuses)
+                                ? statusDetails.procurement_statuses.filter((s: any) => s?.status === 'approved' || s?.status === 'completed').length
+                                : 0}
                             </span>
                           </div>
                           <div className="flex gap-2">
                             <span className="text-gray-500">Rejections:</span>
                             <span className="text-red-600 font-medium">
-                              {(statusDetails?.procurement_statuses || [])
-                                .filter((s: any) => s.status === 'rejected').length}
+                              {Array.isArray(statusDetails?.procurement_statuses)
+                                ? statusDetails.procurement_statuses.filter((s: any) => s?.status === 'rejected').length
+                                : 0}
                             </span>
                           </div>
                         </div>
@@ -1182,11 +1185,15 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                   </div>
 
                   {/* Combined History */}
-                  {(statusDetails.procurement_statuses?.length || 0) > 0 ? (
+                  {Array.isArray(statusDetails.procurement_statuses) && statusDetails.procurement_statuses.length > 0 ? (
                     <div className="space-y-4">
-                      {(statusDetails.procurement_statuses || [])
+                      {statusDetails.procurement_statuses
                         // Sort chronologically to show full history in order
-                        .sort((a: any, b: any) => new Date(a.timestamp || a.date).getTime() - new Date(b.timestamp || b.date).getTime())
+                        .sort((a: any, b: any) => {
+                          const dateA = new Date(a?.timestamp || a?.date || 0).getTime();
+                          const dateB = new Date(b?.timestamp || b?.date || 0).getTime();
+                          return dateA - dateB;
+                        })
                         .map((status: any, idx: number, allStatuses) => {
                           const getRoleName = (role: string) => {
                             const roleMap: { [key: string]: string } = {
@@ -1208,7 +1215,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                               .join(' ');
                           };
 
-                          const isLast = idx === consolidatedArray.length - 1;
+                          const isLast = idx === allStatuses.length - 1;
 
                           return (
                             <div key={idx} className="relative">

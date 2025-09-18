@@ -386,7 +386,7 @@ def get_procurement_approved_purchases():
                 'overall_total_cost': 0,
                 'overall_total_quantity': 0,
                 'approved_procurement_purchases': [],
-                'estimation_pm_rejections': estimation_pm_rejections,
+                'estimation_pm_rejections': [],
                 'success': True,
             }), 200
 

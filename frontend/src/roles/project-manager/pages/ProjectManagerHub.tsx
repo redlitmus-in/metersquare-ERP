@@ -101,7 +101,7 @@ const ProjectManagerHub: React.FC = () => {
   const allStorePurchases = getPurchasesForRole('projectManager') as ProcurementPurchase[];
 
   // Transform and separate purchases by status
-  const purchases = allStorePurchases.map(p => ({
+  const purchases = (allStorePurchases || []).map(p => ({
     ...p,
     pm_status: p.project_manager_status || p.pm_status,
     materials_summary: p.materials_summary || {
@@ -116,9 +116,9 @@ const ProjectManagerHub: React.FC = () => {
     p.latest_status?.status !== 'complete' &&
     p.accounts_acknowledgement !== true &&
     p.current_workflow_status !== 'completed'
-  );
+  ) || [];
   // Derived from store data - Only show PM flag rejections from Estimation
-  const estimationRejectedPurchases = allStorePurchases
+  const estimationRejectedPurchases = (allStorePurchases || [])
     .filter(p =>
       // Check if it's a rejection that needs PM action
       (p.requires_pm_action === true ||
@@ -143,9 +143,9 @@ const ProjectManagerHub: React.FC = () => {
     .map(p => ({
       ...p,
       pm_status: p.project_manager_status || p.pm_status
-    }));
+    })) || [];
 
-  const completedPurchases = allStorePurchases
+  const completedPurchases = (allStorePurchases || [])
     .filter(p =>
       p.latest_status?.status === 'completed' ||
       p.latest_status?.status === 'complete' ||
@@ -155,7 +155,7 @@ const ProjectManagerHub: React.FC = () => {
     .map(p => ({
       ...p,
       pm_status: p.project_manager_status || p.pm_status
-    }));
+    })) || [];
   const [filteredPurchases, setFilteredPurchases] = useState<ProcurementPurchase[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   
