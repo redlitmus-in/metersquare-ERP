@@ -329,7 +329,8 @@ def get_procurement_approved_purchases():
             # Single purchase - direct fetch with JOIN
             query = db.session.execute(
                 select(PurchaseStatus.purchase_id, PurchaseStatus.role,
-                      PurchaseStatus.status, PurchaseStatus.created_at)
+                      PurchaseStatus.status, PurchaseStatus.created_at,
+                      PurchaseStatus.sender, PurchaseStatus.receiver)
                 .where(PurchaseStatus.role != 'siteSupervisor')
                 .where(PurchaseStatus.purchase_id == purchase_id_filter)
                 .order_by(PurchaseStatus.created_at.desc())
@@ -494,15 +495,47 @@ def get_procurement_approved_purchases():
 
             # Get status values
             pm_status = get_pm_status.get(purchase_id)
-            status_val = latest_status[2] if isinstance(latest_status, tuple) else latest_status.status
+            actual_status = latest_status[2] if isinstance(latest_status, tuple) else latest_status.status
+            sender = latest_status[4] if isinstance(latest_status, tuple) and len(latest_status) > 4 else (latest_status.sender if hasattr(latest_status, 'sender') else None)
+            receiver = latest_status[5] if isinstance(latest_status, tuple) and len(latest_status) > 5 else (latest_status.receiver if hasattr(latest_status, 'receiver') else None)
 
-            if status_val == 'completed':
-                workflow_status = pm_value = 'completed'
+            # Determine display status based on business logic
+            display_status = actual_status
+
+            # Check if status is rejected
+            if actual_status == 'rejected':
+                # Check if this is a rejection sent back to project manager from estimation
+                if receiver == 'projectManager' and sender == 'estimation':
+                    display_status = 'approved'  # Changed to show approved even for PM receiver
+                else:
+                    # For any other rejection scenario, show as approved
+                    display_status = 'approved'
+
+            # If receiver is accounts, show as completed regardless of actual status
+            if receiver == 'accounts':
+                display_status = 'completed'
+
+            # Set workflow status
+            workflow_status = display_status
+
+            # Special handling for pm_status
+            if receiver == 'accounts':
+                pm_value = 'completed'
+            elif sender == 'projectManager' and actual_status == 'rejected':
+                # PM sent a rejection - show the original rejected status
+                pm_value = 'rejected'
+            elif actual_status == 'rejected' and receiver == 'projectManager' and sender == 'estimation':
+                # Rejection from estimation to PM - show as approved
+                pm_value = 'approved'
+            elif actual_status == 'rejected':
+                # Other rejections - show as approved
+                pm_value = 'approved'
             elif pm_status:
-                pm_value = pm_status[2] if isinstance(pm_status, tuple) else pm_status.status
-                workflow_status = pm_value
+                # PM has made a decision, use their actual status
+                pm_actual = pm_status[2] if isinstance(pm_status, tuple) else pm_status.status
+                pm_value = pm_actual
             else:
-                workflow_status = status_val
+                # PM hasn't acted yet
                 pm_value = 'pending'
 
             # Format dates efficiently
@@ -516,7 +549,10 @@ def get_procurement_approved_purchases():
                 'site_location': purchase['site_location'],
                 'purpose': purchase['purpose'],
                 'current_workflow_status': workflow_status,
+                'actual_status': actual_status,  # Add actual status for reference
                 'pm_status': pm_value,
+                'sender': sender,
+                'receiver': receiver,
                 'materials': materials,
                 'material_count': len(materials),
                 'total_quantity': total_quantity,

@@ -348,7 +348,27 @@ def get_all_procurement():
 
             # Add status information
             if latest_status:
-                purchase_dict['sender_latest_status'] = latest_status.status
+                # Store actual status for reference
+                actual_status = latest_status.status
+
+                # Determine display status based on business logic
+                display_status = actual_status
+
+                # If status is rejected and receiver is procurement, show actual rejected status
+                # If status is rejected but receiver is not procurement, show as approved
+                if actual_status == 'rejected':
+                    if latest_status.receiver == 'procurement':
+                        display_status = 'rejected'
+                    else:
+                        # If rejected by PM, Estimation, or TD but procurement already approved it
+                        display_status = 'approved'
+
+                # If receiver is accounts, show as completed
+                elif latest_status.receiver == 'accounts':
+                    display_status = 'completed'
+
+                # Set the display status
+                purchase_dict['sender_latest_status'] = display_status
                 purchase_dict['status_sender'] = latest_status.sender
                 purchase_dict['status_receiver'] = latest_status.receiver
                 purchase_dict['status_role'] = latest_status.role
@@ -358,9 +378,13 @@ def get_all_procurement():
                 purchase_dict['reject_category'] = latest_status.reject_category
                 purchase_dict['rejection_reason'] = latest_status.rejection_reason
 
+                # Add actual_status for reference
+                purchase_dict['actual_status'] = actual_status
+
                 # Add status_info for compatibility
                 purchase_dict['status_info'] = {
-                    'status': latest_status.status,
+                    'status': display_status,
+                    'actual_status': actual_status,
                     'sender': latest_status.sender,
                     'receiver': latest_status.receiver,
                     'reject_category': latest_status.reject_category,
@@ -368,16 +392,17 @@ def get_all_procurement():
                 }
 
                 # Determine receiver_latest_status
-                if (latest_status.receiver == 'procurement' and
-                    latest_status.status == 'rejected' and
-                    latest_status.sender in ['estimation', 'projectManager']):
-                    purchase_dict['receiver_latest_status'] = "pending"
-                elif latest_status.sender == 'accounts' and latest_status.receiver == 'accounts':
-                    purchase_dict['receiver_latest_status'] = "task completed"
-                elif latest_status.sender == 'accounts':
-                    purchase_dict['receiver_latest_status'] = latest_status.status
-                else:
-                    purchase_dict['receiver_latest_status'] = latest_status.status
+                purchase_dict['receiver_latest_status'] = display_status
+
+                # Add latest_status object for frontend compatibility
+                purchase_dict['latest_status'] = {
+                    'status': display_status,
+                    'actual_status': actual_status,
+                    'sender': latest_status.sender,
+                    'receiver': latest_status.receiver,
+                    'comments': latest_status.comments,
+                    'created_at': latest_status.created_at.isoformat() if latest_status.created_at else None
+                }
             else:
                 purchase_dict['sender_latest_status'] = 'pending'
                 purchase_dict['status_sender'] = None
@@ -387,6 +412,16 @@ def get_all_procurement():
                 purchase_dict['decision_date'] = None
                 purchase_dict['status_comments'] = None
                 purchase_dict['receiver_latest_status'] = "pending"
+
+                # Add latest_status object for frontend compatibility
+                purchase_dict['latest_status'] = {
+                    'status': 'pending',
+                    'actual_status': 'pending',
+                    'sender': None,
+                    'receiver': 'procurement',
+                    'comments': None,
+                    'created_at': None
+                }
 
             procurement_data.append(purchase_dict)
 
