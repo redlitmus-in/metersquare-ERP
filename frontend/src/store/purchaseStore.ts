@@ -381,7 +381,7 @@ const usePurchaseStore = create<PurchaseStore>()(
       // Filter based on role-specific logic
       switch (roleLower) {
         case 'procurement':
-          // All purchases visible to procurement
+          // All purchases visible to procurement (including TD rejected)
           return purchases;
 
         case 'projectmanager':
@@ -390,10 +390,13 @@ const usePurchaseStore = create<PurchaseStore>()(
           // Show purchases relevant to Project Manager
           return purchases.filter(p => {
             // Show if it has any PM-related status or is in PM workflow stage
+            // Don't exclude based on rejections from other roles
             return p.project_manager_status ||
                    p.pm_status ||
                    p.procurement_status === 'approved' ||
                    p.current_workflow_status === 'project_manager' ||
+                   p.rejection_from === 'estimation' || // Show rejections that came back
+                   p.status_receiver === 'projectManager' || // Show if awaiting PM action
                    true; // For now, show all to ensure nothing is missed
           });
 

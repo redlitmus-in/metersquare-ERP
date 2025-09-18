@@ -414,7 +414,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
             </div>
 
             {/* Action Row - Send to PM */}
-            {!emailSent && status === 'pending' && onSendEmail && (
+            {!emailSent && (status === 'pending' || (status === 'rejected' && (rejectedByPM || rejectedByEst))) && onSendEmail && (
               <div className="flex items-center justify-center">
                 <Button
                   size="sm"
@@ -424,7 +424,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   style={{ backgroundColor: sendingEmail ? '#64748b' : '#243d8a' }}
                   onMouseEnter={(e) => !sendingEmail && (e.currentTarget.style.backgroundColor = '#1a2d66')}
                   onMouseLeave={(e) => !sendingEmail && (e.currentTarget.style.backgroundColor = '#243d8a')}
-                  title="Send to Project Manager"
+                  title={status === 'rejected' ? "Resend to Project Manager after revision" : "Send to Project Manager"}
                 >
                   {sendingEmail ? (
                     <>
@@ -434,59 +434,14 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   ) : (
                     <>
                       <Mail className="w-3 h-3 mr-1" />
-                      Send to PM
+                      {status === 'rejected' ? 'Resend to PM' : 'Send to PM'}
                     </>
                   )}
                 </Button>
               </div>
             )}
-            
-            {/* Resend to PM Button for PM-rejected PRs */}
-            {rejectedByPM && onResendToPM && (
-              <div className="flex items-center justify-center">
-                <Button
-                  size="sm"
-                  onClick={() => onResendToPM(purchase.purchase_id)}
-                  disabled={isLoading}
-                  className="bg-red-600 hover:bg-red-700 text-white w-full h-7 text-xs flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Resend to Project Manager after revision"
-                >
-                  {isLoading ? (
-                    <ModernLoadingSpinners variant="pulse-wave" size="sm" />
-                  ) : (
-                    <>
-                      <Mail className="w-3 h-3 mr-1" />
-                      Resend to PM
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-            
-            {/* Send to PM Button for Est-rejected PRs */}
-            {rejectedByEst && onResendToEst && (
-              <div className="flex items-center justify-center">
-                <Button
-                  size="sm"
-                  onClick={() => onResendToEst(purchase.purchase_id)}
-                  disabled={isLoading}
-                  className="text-white w-full h-7 text-xs flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ backgroundColor: isLoading ? '#94a3b8' : '#243d8a' }}
-                  onMouseEnter={(e) => !isLoading && (e.currentTarget.style.backgroundColor = '#1a2d66')}
-                  onMouseLeave={(e) => !isLoading && (e.currentTarget.style.backgroundColor = '#243d8a')}
-                  title="Send to Project Manager after Estimation revision"
-                >
-                  {isLoading ? (
-                    <ModernLoadingSpinners variant="pulse-wave" size="sm" />
-                  ) : (
-                    <>
-                      <Mail className="w-3 h-3 mr-1" />
-                      Send PM
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
+
+            {/* Removed duplicate buttons - now combined in main Send to PM button above */}
             
             {/* Email Sent Indicator */}
             {emailSent && (

@@ -299,7 +299,7 @@ const ProcurementHub: React.FC = () => {
     // Apply tab filter based on actual status from backend
     switch (activeTab) {
       case 'pending':
-        // Show pending items including those edited by procurement
+        // Show ONLY true pending items, NOT rejections
         filtered = filtered.filter(p => {
           const status = p.sender_latest_status || p.latest_status || p.status || 'pending';
 
@@ -308,7 +308,24 @@ const ProcurementHub: React.FC = () => {
             return false;
           }
 
-          // Include pending items that haven't been sent to PM or were just edited
+          // Exclude ALL rejected items - they should go to their respective rejection tabs
+          if (status === 'rejected') {
+            return false;
+          }
+
+          // Check if this purchase was rejected by PM or Estimation (need revision from procurement)
+          // But NOT TD rejections (those should show in approved tab)
+          const hasProcurementRejection = p.project_manager_status === 'rejected' ||
+                                         (p.estimation_status === 'rejected' &&
+                                          p.status_receiver === 'procurement') ||
+                                         p.accounts_status === 'rejected' ||
+                                         (p.rejected_status && p.status_receiver === 'procurement');
+
+          if (hasProcurementRejection) {
+            return false;
+          }
+
+          // Only show true pending items that haven't been sent to PM
           return (status === 'pending' || status === 'draft') && !pmEmailedPRs.has(p.purchase_id);
         });
         break;
@@ -330,12 +347,30 @@ const ProcurementHub: React.FC = () => {
             return false;
           }
 
+          // Include TD rejected purchases in approved tab (since procurement already approved them)
+          const isTDRejected = p.technical_director_status === 'rejected' ||
+                              (p.status_sender === 'technicalDirector' && p.status === 'rejected');
+
+          // Include items that have been approved by procurement, even if rejected by others
+          // This ensures purchases with mixed approvals/rejections remain visible
+          const hasAnyApproval = p.approvals?.action?.some((a: any) =>
+            a.status === 'approved'
+          );
+
+          const procurementApproved = pmEmailedPRs.has(p.purchase_id) ||
+                                     (p.status_sender === 'procurement' &&
+                                      (p.sender_latest_status === 'approved' || status === 'approved'));
+
           // Include approved items that haven't reached completion
+          // Include TD rejected items (they were approved by procurement before going to TD)
           return status === 'approved' ||
-                 pmEmailedPRs.has(p.purchase_id) ||
+                 procurementApproved ||
+                 hasAnyApproval ||
+                 isTDRejected ||
                  (p.status_receiver === 'projectManager' && p.status_sender === 'procurement') ||
                  (p.status_receiver === 'accounts' && status !== 'completed') ||
-                 (p.status_receiver === 'technicalDirector' && status === 'approved');
+                 (p.status_receiver === 'technicalDirector' && status === 'approved') ||
+                 (p.status_receiver === 'estimation' && p.status_sender === 'technicalDirector');
         });
         break;
         
@@ -539,10 +574,20 @@ const ProcurementHub: React.FC = () => {
   };
 
   const handleSendEmail = (purchaseId: number) => {
+    // Find the purchase to check if it's a rejection
+    const purchase = purchases.find(p => p.purchase_id === purchaseId);
+    const isRejection = purchase && (
+      purchase.project_manager_status === 'rejected' ||
+      purchase.estimation_status === 'rejected' ||
+      purchase.status === 'rejected'
+    );
+
     setConfirmDialog({
       isOpen: true,
       purchaseId,
-      message: 'Send this purchase request to Project Manager for approval?'
+      message: isRejection
+        ? 'Resend this purchase request to Project Manager after addressing the rejection issues?'
+        : 'Send this purchase request to Project Manager for approval?'
     });
   };
 
@@ -576,14 +621,25 @@ const ProcurementHub: React.FC = () => {
     try {
       // Set loading state for dialog button
       setConfirmDialog(prev => ({ ...prev, isLoading: true }));
-      
+
       // Add to sending state
       setSendingEmailIds(prev => new Set(prev).add(purchaseId));
-      
+
+      // Check if this is a resend after rejection
+      const purchase = purchases.find(p => p.purchase_id === purchaseId);
+      const isRejection = purchase && (
+        purchase.project_manager_status === 'rejected' ||
+        purchase.estimation_status === 'rejected' ||
+        purchase.status === 'rejected'
+      );
+
       await procurementService.sendApprovalEmail(purchaseId);
       setPmEmailedPRs(prev => new Set(prev).add(purchaseId));
-      toast.success('Purchase request sent to Project Manager for approval');
-      
+      toast.success(isRejection
+        ? 'Purchase request resent to Project Manager for approval'
+        : 'Purchase request sent to Project Manager for approval'
+      );
+
       // Refresh data
       await fetchPurchases();
     } catch (error: any) {

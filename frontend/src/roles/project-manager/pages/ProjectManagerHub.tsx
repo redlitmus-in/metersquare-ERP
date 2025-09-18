@@ -110,15 +110,30 @@ const ProjectManagerHub: React.FC = () => {
       total_cost: p.total_cost || 0,
       materials: p.materials || []
     }
-  })).filter(p =>
-    // Active purchases (not completed)
-    p.latest_status?.status !== 'completed' &&
-    p.latest_status?.status !== 'complete' &&
-    p.accounts_acknowledgement !== true &&
-    p.current_workflow_status !== 'completed' &&
-    // Exclude ONLY PM flag estimation rejections - they go to estimation_rejected tab
-    (p.rejection_from !== 'estimation' || !p.rejected_status?.reject_category?.includes('pm_flag'))
-  ) || [];
+  })).filter(p => {
+    // Check if TD rejected (these should remain visible)
+    const isTDRejected = p.technical_director_status === 'rejected' ||
+                        (p.status_sender === 'technicalDirector' && p.status === 'rejected');
+
+    // If TD rejected and PM approved, always include
+    if (isTDRejected && p.pm_status === 'approved') {
+      return true;
+    }
+
+    return (
+      // Active purchases (not completed)
+      p.latest_status?.status !== 'completed' &&
+      p.latest_status?.status !== 'complete' &&
+      p.accounts_acknowledgement !== true &&
+      p.current_workflow_status !== 'completed' &&
+      // Exclude ONLY PM flag estimation rejections - they go to estimation_rejected tab
+      // But include purchases rejected by other roles for different reasons
+      (p.rejection_from !== 'estimation' ||
+       !p.rejected_status?.reject_category?.includes('pm_flag') ||
+       // Include if PM has already approved and it was rejected by a later role
+       p.pm_status === 'approved')
+    );
+  }) || [];
   // Derived from store data - Only show PM flag rejections from Estimation
   const estimationRejectedPurchases = (allStorePurchases || [])
     .filter(p =>
@@ -311,23 +326,36 @@ const ProjectManagerHub: React.FC = () => {
     switch (activeTab) {
       case 'pending':
         // Show purchases waiting for PM action
-        filtered = [...purchases].filter(p =>
-          (!p.pm_status || p.pm_status === 'pending') &&
-          // Check multiple possible status fields for procurement approval
-          (p.procurement_status === 'approved' ||
-           p.sender_latest_status === 'approved' ||
-           p.current_workflow_status === 'project_manager' ||
-           p.latest_status?.sender === 'procurement' ||
-           // If no specific procurement status, show all pending for PM
-           (!p.procurement_status && !p.rejection_from))
-        );
+        filtered = [...purchases].filter(p => {
+          // Exclude TD rejected purchases from pending (they should stay in approved)
+          const isTDRejected = p.technical_director_status === 'rejected' ||
+                              (p.status_sender === 'technicalDirector' && p.status === 'rejected');
+
+          if (isTDRejected) return false;
+
+          return (
+            (!p.pm_status || p.pm_status === 'pending') &&
+            // Check multiple possible status fields for procurement approval
+            (p.procurement_status === 'approved' ||
+             p.sender_latest_status === 'approved' ||
+             p.current_workflow_status === 'project_manager' ||
+             p.latest_status?.sender === 'procurement' ||
+             // If no specific procurement status, show all pending for PM
+             (!p.procurement_status && !p.rejection_from))
+          );
+        });
         break;
       case 'approved':
-        // Show ALL PM approved purchases (including ones that moved to next stage)
-        filtered = [...allStorePurchases].filter(p =>
-          p.pm_status === 'approved' ||
-          p.project_manager_status === 'approved'
-        );
+        // Show ALL PM approved purchases (including ones that moved to next stage or were rejected by TD)
+        filtered = [...allStorePurchases].filter(p => {
+          // Include TD rejected purchases in approved tab (PM already approved them)
+          const isTDRejected = p.technical_director_status === 'rejected' ||
+                              (p.status_sender === 'technicalDirector' && p.status === 'rejected');
+
+          return (p.pm_status === 'approved' ||
+                  p.project_manager_status === 'approved' ||
+                  (isTDRejected && p.pm_status !== 'rejected'));
+        });
         break;
       case 'rejected':
         filtered = [...purchases].filter(p => p.pm_status === 'rejected');

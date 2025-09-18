@@ -232,23 +232,53 @@ const EstimationHub: React.FC = () => {
             // Check estimation_status field directly from status_info
             const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
             
-            // Check for TD rejection - when receiver is estimation and sender is technicalDirector
-            // This happens when TD rejects and sends back to estimation
-            const isTDRejected = p.status_info?.receiver === 'estimation' && 
-                                p.status_info?.sender === 'technicalDirector';
-            
+            // Check for TD rejection - comprehensive check for all TD rejection indicators
+            const isTDRejected = (p.status_info?.receiver === 'estimation' &&
+                                 p.status_info?.sender === 'technicalDirector') ||
+                                 p.technical_director_status === 'rejected' ||
+                                 (p.latest_status?.sender === 'technicalDirector' &&
+                                  p.latest_status?.status === 'rejected') ||
+                                 (p.status_sender === 'technicalDirector' &&
+                                  (p.status === 'rejected' || p.sender_latest_status === 'rejected')) ||
+                                 (p.current_workflow_status === 'technical_director_rejected') ||
+                                 // Additional check for TD rejection in rejected_status
+                                 (p.rejected_status && p.rejection_from === 'technicalDirector') ||
+                                 (p.status === 'rejected' && p.status_info?.receiver === 'estimation');
+
+            // Debug logging to see the actual data
+            if (p.purchase_id === 74 || p.purchase_id === 80) {
+              console.log(`Purchase ${p.purchase_id} TD rejection check:`, {
+                statusInfo: p.status_info,
+                tdStatus: p.technical_director_status,
+                latestStatus: p.latest_status,
+                statusSender: p.status_sender,
+                status: p.status,
+                rejectedStatus: p.rejected_status,
+                rejectionFrom: p.rejection_from,
+                isTDRejected
+              });
+            }
+
             // Check if estimation itself rejected (not TD rejection)
-            const isEstimationRejected = estimationStatus === 'rejected' && 
+            const isEstimationRejected = estimationStatus === 'rejected' &&
                                          p.status_info?.sender === 'estimation';
-            
+
+            // IMPORTANT: Check TD rejection FIRST before checking estimation status
             if (isTDRejected) {
               tdRejectedPurchases.push(p);
-            } else if (estimationStatus === 'pending') {
-              pendingPurchases.push(p);
-            } else if (estimationStatus === 'approved') {
-              approvedPurchases.push(p);
+              // Don't add to pending even if estimationStatus is pending
             } else if (isEstimationRejected) {
               rejectedPurchases.push(p);
+            } else if (estimationStatus === 'approved') {
+              approvedPurchases.push(p);
+            } else if (estimationStatus === 'pending' ||
+                      (estimationStatus === 'approved' && p.status_receiver === 'estimation' && !p.technical_director_status) ||
+                      (!estimationStatus && p.status_receiver === 'estimation')) {
+              // Include as pending if:
+              // - estimation status is pending
+              // - estimation approved but now back for review (but not TD rejected)
+              // - no estimation status but receiver is estimation
+              pendingPurchases.push(p);
             }
           }
         });
@@ -310,16 +340,29 @@ const EstimationHub: React.FC = () => {
     switch (activeTab) {
       case 'pending':
         filtered = purchases.filter(p => {
-          const isCompleted = p.latest_status?.status === 'completed' || 
+          const isCompleted = p.latest_status?.status === 'completed' ||
                              p.latest_status?.status === 'complete' ||
                              p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
                              (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
           if (isCompleted) return false;
-          
+
+          // Exclude TD rejected purchases from pending tab - comprehensive check
+          const isTDRejected = (p.status_info?.receiver === 'estimation' &&
+                               p.status_info?.sender === 'technicalDirector') ||
+                              p.technical_director_status === 'rejected' ||
+                              (p.latest_status?.sender === 'technicalDirector' &&
+                               p.latest_status?.status === 'rejected') ||
+                              (p.status_sender === 'technicalDirector' &&
+                               (p.status === 'rejected' || p.sender_latest_status === 'rejected')) ||
+                              (p.current_workflow_status === 'technical_director_rejected');
+          if (isTDRejected) return false;
+
           const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
-          return estimationStatus === 'pending';
+          // Include as pending if no status yet or status is pending
+          return estimationStatus === 'pending' ||
+                 (!estimationStatus && p.status_receiver === 'estimation');
         });
         break;
         
@@ -357,16 +400,23 @@ const EstimationHub: React.FC = () => {
         
       case 'td-rejected':
         filtered = purchases.filter(p => {
-          const isCompleted = p.latest_status?.status === 'completed' || 
+          const isCompleted = p.latest_status?.status === 'completed' ||
                              p.latest_status?.status === 'complete' ||
                              p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
                              (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
           if (isCompleted) return false;
-          
-          return p.status_info?.receiver === 'estimation' && 
-                 p.status_info?.sender === 'technicalDirector';
+
+          // Show purchases rejected by TD - comprehensive check
+          return (p.status_info?.receiver === 'estimation' &&
+                  p.status_info?.sender === 'technicalDirector') ||
+                 p.technical_director_status === 'rejected' ||
+                 (p.latest_status?.sender === 'technicalDirector' &&
+                  p.latest_status?.status === 'rejected') ||
+                 (p.status_sender === 'technicalDirector' &&
+                  (p.status === 'rejected' || p.sender_latest_status === 'rejected')) ||
+                 (p.current_workflow_status === 'technical_director_rejected');
         });
         break;
         
