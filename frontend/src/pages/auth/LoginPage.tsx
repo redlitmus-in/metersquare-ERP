@@ -806,7 +806,7 @@ const LoginPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-1.5 text-gray-500">
               <Activity className="w-4 h-4 text-[#243d8a]" />
-              <span className="text-xs">99.9% Uptime</span>
+              <span className="text-xs">99.9% Uptime Guaranteed</span>
             </div>
           </motion.div>
         </motion.div>
