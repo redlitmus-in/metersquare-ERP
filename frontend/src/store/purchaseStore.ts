@@ -11,10 +11,15 @@ import { subscribeToRealtime } from '@/lib/realtimeSubscriptions';
 
 interface Purchase {
   purchase_id: number;
-  project_id: string;
+  project_id: string | number;
   requested_by: string;
+  created_by?: string;
   site_location: string;
+  purpose?: string;
   date: string;
+  created_at?: string;
+  last_modified_at?: string;
+  last_modified_by?: string;
   materials?: any[];
   material_details?: any[];
   material_count?: number;
@@ -22,12 +27,25 @@ interface Purchase {
   total_quantity?: number;
   priority?: string;
   status?: string;
+  current_workflow_status?: string;
+  pm_status?: string;
   latest_status?: {
     sender: string;
     receiver: string;
     status: string;
     timestamp?: string;
   };
+  sender_latest_status?: string;
+  receiver_latest_status?: string;
+  status_comments?: string;
+  status_date?: string;
+  status_receiver?: string;
+  status_role?: string;
+  status_sender?: string;
+  decision_date?: string;
+  email_sent?: boolean;
+  file_path?: string;
+  is_deleted?: boolean;
   project_manager_status?: string;
   estimation_status?: string;
   technical_director_status?: string;
@@ -39,7 +57,22 @@ interface Purchase {
   estimation_rejection_reason?: string;
   technical_director_rejection_reason?: string;
   accounts_rejection_reason?: string;
+  rejected_status?: {
+    status_id: number;
+    status: string;
+    sender: string;
+    receiver: string;
+    decision_date: string;
+    created_at: string;
+    created_by: string;
+    comments: string;
+    rejection_reason: string;
+    reject_category: string;
+    pm_status: string;
+  };
   payment_details?: any;
+  rejection_from?: string;
+  requires_pm_action?: boolean;
 }
 
 interface PurchaseStore {
@@ -144,9 +177,23 @@ const usePurchaseStore = create<PurchaseStore>()(
           if (response.data.procurement) {
             // For /all_procurement endpoint
             purchaseData = response.data.procurement;
-          } else if (response.data.approved_procurement_purchases) {
-            // For project manager endpoint
-            purchaseData = response.data.approved_procurement_purchases;
+          } else if (response.data.approved_procurement_purchases || response.data.estimation_pm_rejections) {
+            // For project manager endpoint - combine approved purchases and estimation rejections
+            const approved = response.data.approved_procurement_purchases || [];
+            const rejections = response.data.estimation_pm_rejections || [];
+
+            // Map rejections to include proper status fields for display
+            const formattedRejections = rejections.map((rejection: any) => ({
+              ...rejection,
+              current_workflow_status: 'rejected',
+              pm_status: 'pending',
+              estimation_status: 'rejected',
+              status: 'rejected',
+              rejection_from: 'estimation',
+              requires_pm_action: true
+            }));
+
+            purchaseData = [...approved, ...formattedRejections];
           } else if (response.data.purchase_details) {
             purchaseData = response.data.purchase_details;
           } else if (response.data.purchases) {

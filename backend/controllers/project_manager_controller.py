@@ -342,7 +342,7 @@ def get_procurement_approved_purchases():
             # Parallel fetch using raw SQL for maximum speed
             query = db.session.execute(
                 text("""
-                    SELECT purchase_id, role, status, created_at, sender, receiver
+                    SELECT purchase_id, role, status, created_at, sender, receiver, reject_category
                     FROM purchase_status
                     WHERE role != 'siteSupervisor'
                     ORDER BY created_at DESC
@@ -350,9 +350,10 @@ def get_procurement_approved_purchases():
             )
             statuses = query.fetchall()
 
-            # In-memory filtering (faster than subquery)
+            # In-memory filtering (faster than subquery) - Only PM flag rejections
             rejection_statuses = [s for s in statuses if s[4] == 'estimation'
-                                 and s[5] == 'projectManager' and s[2] == 'rejected']
+                                 and s[5] == 'projectManager' and s[2] == 'rejected'
+                                 and s[6] == 'pm_flag']
 
             # Store rejected purchase IDs for later processing
             rejected_purchase_ids_list = []
@@ -549,6 +550,7 @@ def get_procurement_approved_purchases():
                         AND sender = 'estimation'
                         AND receiver = 'projectManager'
                         AND status = 'rejected'
+                        AND reject_category = 'pm_flag'
                         ORDER BY created_at DESC
                         LIMIT 1
                     ) ps ON true

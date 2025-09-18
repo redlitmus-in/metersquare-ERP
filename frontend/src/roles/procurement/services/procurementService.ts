@@ -75,6 +75,26 @@ export interface Purchase {
   status_receiver?: string;
   status_role?: string;
   status_sender?: string;
+  reject_category?: string;
+  rejection_reason?: string;
+  status_info?: {
+    status?: string;
+    sender?: string;
+    receiver?: string;
+    reject_category?: string;
+    rejection_reason?: string;
+  };
+  rejected_status?: {
+    status?: string;
+    sender?: string;
+    receiver?: string;
+    reject_category?: string;
+    rejection_reason?: string;
+    created_at?: string;
+    decision_date?: string;
+    created_by?: string;
+    comments?: string;
+  };
 }
 
 class ProcurementService {

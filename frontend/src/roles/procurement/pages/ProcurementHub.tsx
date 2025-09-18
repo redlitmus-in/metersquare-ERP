@@ -368,7 +368,7 @@ const ProcurementHub: React.FC = () => {
         break;
         
       case 'est_rejected':
-        // Filter for purchases rejected by Estimation
+        // Filter for purchases rejected by Estimation with COST flag only
         filtered = filtered.filter(p => {
           const status = p.sender_latest_status || p.latest_status || p.status;
 
@@ -388,10 +388,24 @@ const ProcurementHub: React.FC = () => {
             // Estimation rejected and sent back to procurement
             (p.status_role === 'estimation' && p.sender_latest_status === 'rejected') ||
             (p.status_sender === 'estimation' && p.sender_latest_status === 'rejected') ||
-            (p.status_sender === 'estimation' && p.latest_status === 'rejected')
+            (p.status_sender === 'estimation' && p.latest_status === 'rejected') ||
+            (p.status_sender === 'estimation' && p.status_receiver === 'procurement' && status === 'rejected')
           );
 
-          return hasRejection || rejectedByEst;
+          // IMPORTANT: Only show COST flag rejections in Procurement
+          // PM flag rejections should go to Project Manager
+          // Check multiple places for reject_category
+          const isCostRejection = p.rejected_status?.reject_category === 'cost' ||
+                                 p.status_info?.reject_category === 'cost' ||
+                                 p.reject_category === 'cost' ||
+                                 (p.status_receiver === 'procurement' && p.status_sender === 'estimation' && status === 'rejected') ||
+                                 p.approvals?.action?.some((a: any) =>
+                                   a.role === 'estimation' &&
+                                   a.status === 'rejected' &&
+                                   a.reject_category === 'cost'
+                                 );
+
+          return (hasRejection || rejectedByEst) && (isCostRejection || (rejectedByEst && p.status_receiver === 'procurement'));
         });
         break;
         
@@ -1000,9 +1014,20 @@ const ProcurementHub: React.FC = () => {
                     const rejectedByEst = (
                       (p.status_role === 'estimation' && p.sender_latest_status === 'rejected') ||
                       (p.status_sender === 'estimation' && p.sender_latest_status === 'rejected') ||
-                      (p.status_sender === 'estimation' && p.latest_status === 'rejected')
+                      (p.status_sender === 'estimation' && p.latest_status === 'rejected') ||
+                      (p.status_sender === 'estimation' && p.status_receiver === 'procurement' && status === 'rejected')
                     );
-                    return hasRejection || rejectedByEst;
+                    // Only count COST flag rejections for Procurement
+                    const isCostRejection = p.rejected_status?.reject_category === 'cost' ||
+                                          p.status_info?.reject_category === 'cost' ||
+                                          p.reject_category === 'cost' ||
+                                          (p.status_receiver === 'procurement' && p.status_sender === 'estimation' && status === 'rejected') ||
+                                          p.approvals?.action?.some((a: any) =>
+                                            a.role === 'estimation' &&
+                                            a.status === 'rejected' &&
+                                            a.reject_category === 'cost'
+                                          );
+                    return (hasRejection || rejectedByEst) && (isCostRejection || (rejectedByEst && p.status_receiver === 'procurement'));
                   }).length})
                 </TabsTrigger>
                 <TabsTrigger value="completed" className="text-green-600 data-[state=active]:text-green-700 data-[state=active]:border-green-500">

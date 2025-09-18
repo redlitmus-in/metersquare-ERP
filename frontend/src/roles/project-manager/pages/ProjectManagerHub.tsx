@@ -117,13 +117,28 @@ const ProjectManagerHub: React.FC = () => {
     p.accounts_acknowledgement !== true &&
     p.current_workflow_status !== 'completed'
   );
-  // Derived from store data
+  // Derived from store data - Only show PM flag rejections from Estimation
   const estimationRejectedPurchases = allStorePurchases
     .filter(p =>
-      p.estimation_status === 'rejected' &&
+      // Check if it's a rejection that needs PM action
+      (p.requires_pm_action === true ||
+       p.rejection_from === 'estimation' ||
+       p.estimation_status === 'rejected') &&
+      // Check for PM flag rejection specifically
+      (p.rejected_status?.reject_category === 'pm_flag' ||
+       p.status_info?.reject_category === 'pm_flag' ||
+       p.reject_category === 'pm_flag' ||
+       p.approvals?.action?.some((a: any) =>
+         a.role === 'estimation' &&
+         a.status === 'rejected' &&
+         a.reject_category === 'pm_flag'
+       )) && // Only PM flag rejections
+      // Ensure PM hasn't already rejected it
       p.pm_status !== 'rejected' &&
+      // Not completed
       p.latest_status?.status !== 'completed' &&
-      p.accounts_acknowledgement !== true
+      p.accounts_acknowledgement !== true &&
+      p.current_workflow_status !== 'completed'
     )
     .map(p => ({
       ...p,

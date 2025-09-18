@@ -285,7 +285,9 @@ def get_all_procurement():
                 PurchaseStatus.role,
                 PurchaseStatus.created_at,
                 PurchaseStatus.decision_date,
-                PurchaseStatus.comments
+                PurchaseStatus.comments,
+                PurchaseStatus.reject_category,
+                PurchaseStatus.rejection_reason
             )
         ).all()
 
@@ -353,6 +355,17 @@ def get_all_procurement():
                 purchase_dict['status_date'] = latest_status.created_at.isoformat() if latest_status.created_at else None
                 purchase_dict['decision_date'] = latest_status.decision_date.isoformat() if latest_status.decision_date else None
                 purchase_dict['status_comments'] = latest_status.comments
+                purchase_dict['reject_category'] = latest_status.reject_category
+                purchase_dict['rejection_reason'] = latest_status.rejection_reason
+
+                # Add status_info for compatibility
+                purchase_dict['status_info'] = {
+                    'status': latest_status.status,
+                    'sender': latest_status.sender,
+                    'receiver': latest_status.receiver,
+                    'reject_category': latest_status.reject_category,
+                    'rejection_reason': latest_status.rejection_reason
+                }
 
                 # Determine receiver_latest_status
                 if (latest_status.receiver == 'procurement' and
