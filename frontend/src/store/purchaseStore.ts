@@ -186,7 +186,7 @@ const usePurchaseStore = create<PurchaseStore>()(
             const formattedRejections = rejections.map((rejection: any) => ({
               ...rejection,
               current_workflow_status: 'rejected',
-              pm_status: 'pending',
+              // DO NOT set pm_status here - keep existing PM status
               estimation_status: 'rejected',
               status: 'rejected',
               rejection_from: 'estimation',
