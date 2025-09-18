@@ -1164,42 +1164,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                 {purchase.approvals?.action && purchase.approvals.action.length > 0 ? (
                   <div className="space-y-4">
                     {purchase.approvals.action
+                      // Sort chronologically to show full history in order
                       .sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-                      // Group by role and show only the latest/most significant action for each role
-                      .reduce((acc: any[], approval: any) => {
-                        const existingIndex = acc.findIndex(a => a.role === approval.role);
-                        if (existingIndex === -1) {
-                          // First occurrence of this role
-                          acc.push(approval);
-                        } else {
-                          // Replace with this action if it's a decision (approved/rejected/completed)
-                          const existing = acc[existingIndex];
-                          if (approval.status !== 'pending' || existing.status === 'pending') {
-                            // Prefer non-pending status, or if both are same, keep the later one
-                            if (new Date(approval.timestamp) > new Date(existing.timestamp)) {
-                              acc[existingIndex] = approval;
-                            }
-                          }
-                        }
-                        return acc;
-                      }, [])
-                      .sort((a: any, b: any) => {
-                        const roleOrder: { [key: string]: number } = {
-                          'sitesupervisor': 1,
-                          'site supervisor': 1,
-                          'procurement': 2,
-                          'projectmanager': 3,
-                          'project manager': 3,
-                          'estimation': 4,
-                          'technicaldirector': 5,
-                          'technical director': 5,
-                          'accounts': 6
-                        };
-                        const aOrder = roleOrder[a.role?.toLowerCase()] || 999;
-                        const bOrder = roleOrder[b.role?.toLowerCase()] || 999;
-                        return aOrder - bOrder;
-                      })
-                      .map((approval: any, idx: number, consolidatedArray) => {
+                      .map((approval: any, idx: number, allApprovals) => {
                       // Format role name properly from the role field
                       const getRoleName = (approval: any) => {
                         const role = approval.role;
@@ -1259,7 +1226,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
 
                       return (
                         <div key={idx} className="relative">
-                          {idx < consolidatedArray.length - 1 && (
+                          {idx < allApprovals.length - 1 && (
                             <div className="absolute left-5 top-10 bottom-0 w-0.5 bg-gray-200" />
                           )}
                           <div className="flex gap-4">

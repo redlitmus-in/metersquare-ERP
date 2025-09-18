@@ -742,42 +742,9 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                       console.log('History actions extracted:', historyActions);
 
                       if (historyActions && historyActions.length > 0) {
-                        // Group by role and show only the latest/most significant action for each role
+                        // Sort chronologically to show full history in order
                         const consolidatedHistory = historyActions
-                          .reduce((acc: any[], entry: any) => {
-                            const existingIndex = acc.findIndex(a => a.role === entry.role);
-                            if (existingIndex === -1) {
-                              // First occurrence of this role
-                              acc.push(entry);
-                            } else {
-                              // Replace with this action if it's a decision (approved/rejected/completed)
-                              const existing = acc[existingIndex];
-                              if (entry.status !== 'pending' || existing.status === 'pending') {
-                                // Prefer non-pending status, or if both are same, keep the later one
-                                if (new Date(entry.timestamp) > new Date(existing.timestamp)) {
-                                  acc[existingIndex] = entry;
-                                }
-                              }
-                            }
-                            return acc;
-                          }, [])
-                          // Sort by predefined workflow order
-                          .sort((a: any, b: any) => {
-                            const roleOrder: { [key: string]: number } = {
-                              'sitesupervisor': 1,
-                              'site supervisor': 1,
-                              'procurement': 2,
-                              'projectmanager': 3,
-                              'project manager': 3,
-                              'estimation': 4,
-                              'technicaldirector': 5,
-                              'technical director': 5,
-                              'accounts': 6
-                            };
-                            const aOrder = roleOrder[a.role?.toLowerCase()] || 999;
-                            const bOrder = roleOrder[b.role?.toLowerCase()] || 999;
-                            return aOrder - bOrder;
-                          });
+                          .sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
                         return (
                           <div className="relative">
