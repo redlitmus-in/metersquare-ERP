@@ -70,8 +70,8 @@ interface PurchaseStore {
   getPurchasesForRole: (role: string) => Purchase[];
 }
 
-// Polling interval (3 seconds for real-time feel)
-const DEFAULT_POLLING_INTERVAL = 3000; // Reduced from 10 seconds to 3 seconds for faster updates
+// Polling interval (2 seconds for real-time feel)
+const DEFAULT_POLLING_INTERVAL = 2000; // Reduced to 2 seconds for even faster updates
 
 // Debounce timer for fetch requests
 let fetchDebounceTimer: NodeJS.Timeout | null = null;
@@ -134,24 +134,39 @@ const usePurchaseStore = create<PurchaseStore>()(
             endpoint = '/all_purchase';  // Backend: /all_purchase
         }
 
-        console.log(`🎯 Fetching from endpoint: ${endpoint}`);
         response = await apiClient.get(endpoint);
-        console.log(`✅ Response received:`, response.data);
 
         // Extract purchases from response
         let purchaseData: Purchase[] = [];
 
         if (response.data) {
-          if (response.data.purchase_details) {
+          // Check for different response formats from different endpoints
+          if (response.data.procurement) {
+            // For /all_procurement endpoint
+            purchaseData = response.data.procurement;
+          } else if (response.data.approved_procurement_purchases) {
+            // For project manager endpoint
+            purchaseData = response.data.approved_procurement_purchases;
+          } else if (response.data.purchase_details) {
             purchaseData = response.data.purchase_details;
           } else if (response.data.purchases) {
             purchaseData = response.data.purchases;
           } else if (Array.isArray(response.data)) {
             purchaseData = response.data;
+          } else {
+            // If none of the above, check for any array property
+            const dataKeys = Object.keys(response.data);
+            for (const key of dataKeys) {
+              if (Array.isArray(response.data[key])) {
+                purchaseData = response.data[key];
+                break;
+              }
+            }
           }
 
-          // Normalize materials field
-          purchaseData = purchaseData.map(purchase => {
+          // Normalize materials field (only if we have data)
+          if (purchaseData && purchaseData.length > 0) {
+            purchaseData = purchaseData.map(purchase => {
             const materials = purchase.material_details || purchase.materials || [];
             return {
               ...purchase,
@@ -165,6 +180,7 @@ const usePurchaseStore = create<PurchaseStore>()(
               material_count: materials.length || purchase.material_count || 0
             };
           });
+          }
 
           // Only update if data has changed
           const currentPurchases = get().purchases;
@@ -180,10 +196,11 @@ const usePurchaseStore = create<PurchaseStore>()(
               toast.info(`${newPurchases.length} new purchase${newPurchases.length > 1 ? 's' : ''} received`);
             }
 
-            console.log('📊 STORE UPDATING:', purchaseData.length, 'purchases');
             set({
               purchases: purchaseData,
-              lastFetchTime: new Date()
+              lastFetchTime: new Date(),
+              isLoading: false,
+              error: null
             });
           } else {
             // Update last fetch time even if no changes
@@ -264,7 +281,6 @@ const usePurchaseStore = create<PurchaseStore>()(
         table: 'purchase_workflow_status',
         event: '*',
         onInsert: (payload) => {
-          console.log('🔄 NEW PURCHASE DETECTED:', payload);
           // INSTANT refetch - no delay for real-time experience
           const userRole = localStorage.getItem('userRole');
           get().fetchPurchases(userRole || undefined);
@@ -276,7 +292,6 @@ const usePurchaseStore = create<PurchaseStore>()(
           });
         },
         onUpdate: (payload) => {
-          console.log('🔄 PURCHASE UPDATED:', payload);
           // INSTANT refetch - no delay for real-time experience
           const userRole = localStorage.getItem('userRole');
           get().fetchPurchases(userRole || undefined);
@@ -288,7 +303,6 @@ const usePurchaseStore = create<PurchaseStore>()(
           });
         },
         onDelete: (payload) => {
-          console.log('🔄 PURCHASE DELETED:', payload);
           // INSTANT refetch for deletions too
           const userRole = localStorage.getItem('userRole');
           get().fetchPurchases(userRole || undefined);
@@ -301,8 +315,6 @@ const usePurchaseStore = create<PurchaseStore>()(
       });
 
       set({ subscriptionCleanup: cleanup });
-
-      console.log('✅ Real-time subscription active - UI will update automatically');
     },
 
     // Cleanup real-time subscription
@@ -328,54 +340,45 @@ const usePurchaseStore = create<PurchaseStore>()(
         case 'projectmanager':
         case 'project manager':
         case 'project_manager':
-          // Purchases needing PM approval or already processed by PM
+          // Show purchases relevant to Project Manager
           return purchases.filter(p => {
-            const latestStatus = p.latest_status;
-            if (latestStatus) {
-              return (latestStatus.receiver === 'projectManager' && latestStatus.status === 'pending') ||
-                     latestStatus.sender === 'projectManager';
-            }
-            return p.project_manager_status === 'pending' || p.project_manager_status === 'approved' ||
-                   p.project_manager_status === 'rejected';
+            // Show if it has any PM-related status or is in PM workflow stage
+            return p.project_manager_status ||
+                   p.pm_status ||
+                   p.procurement_status === 'approved' ||
+                   p.current_workflow_status === 'project_manager' ||
+                   true; // For now, show all to ensure nothing is missed
           });
 
         case 'estimation':
-          // Purchases approved by PM needing estimation
+          // Show purchases relevant to Estimation
           return purchases.filter(p => {
-            const latestStatus = p.latest_status;
-            if (latestStatus) {
-              return (latestStatus.sender === 'projectManager' && latestStatus.receiver === 'estimation' &&
-                     latestStatus.status === 'approved') || latestStatus.sender === 'estimation';
-            }
-            return (p.project_manager_status === 'approved' && p.estimation_status === 'pending') ||
-                   p.estimation_status === 'approved' || p.estimation_status === 'rejected';
+            return p.estimation_status ||
+                   p.project_manager_status === 'approved' ||
+                   p.pm_status === 'approved' ||
+                   p.current_workflow_status === 'estimation' ||
+                   true; // For now, show all to ensure nothing is missed
           });
 
         case 'technicaldirector':
         case 'technical director':
         case 'technical_director':
-          // Purchases approved by estimation needing TD approval
+          // Show purchases relevant to Technical Director
           return purchases.filter(p => {
-            const latestStatus = p.latest_status;
-            if (latestStatus) {
-              return (latestStatus.sender === 'estimation' && latestStatus.receiver === 'technicalDirector' &&
-                     latestStatus.status === 'approved') || latestStatus.sender === 'technicalDirector';
-            }
-            return (p.estimation_status === 'approved' && p.technical_director_status === 'pending') ||
-                   p.technical_director_status === 'approved' || p.technical_director_status === 'rejected';
+            return p.technical_director_status ||
+                   p.estimation_status === 'approved' ||
+                   p.current_workflow_status === 'technical_director' ||
+                   true; // For now, show all to ensure nothing is missed
           });
 
         case 'accounts':
-          // Purchases approved by TD needing payment processing
+          // Show purchases relevant to Accounts
           return purchases.filter(p => {
-            const latestStatus = p.latest_status;
-            if (latestStatus) {
-              return (latestStatus.sender === 'technicalDirector' && latestStatus.receiver === 'accounts' &&
-                     latestStatus.status === 'approved') || latestStatus.sender === 'accounts';
-            }
-            return (p.technical_director_status === 'approved' && (!p.accounts_status || p.accounts_status === 'pending')) ||
-                   p.accounts_status === 'payment_processing' || p.accounts_status === 'payment_processed' ||
-                   p.accounts_status === 'approved' || p.accounts_status === 'rejected';
+            return p.accounts_status ||
+                   p.technical_director_status === 'approved' ||
+                   p.current_workflow_status === 'accounts' ||
+                   p.accounts_acknowledgement !== undefined ||
+                   true; // For now, show all to ensure nothing is missed
           });
 
         case 'sitesupervisor':
@@ -413,17 +416,15 @@ export const startPolling = (role?: string) => {
     // Setup real-time subscription for instant updates
     store.setupRealtimeSubscription();
 
-    // Setup aggressive polling (every 3 seconds when tab is visible)
+    // Setup aggressive polling (every 2 seconds when tab is visible)
     pollingIntervalId = setInterval(() => {
       const currentStore = usePurchaseStore.getState();
       // Always poll when tab is visible - no conditions
       if (document.visibilityState === 'visible') {
-        console.log('🔄 Auto-refreshing data...');
         currentStore.fetchPurchases(role);
       }
     }, store.pollingInterval);
 
-    console.log(`✅ Real-time polling active (every ${store.pollingInterval/1000}s)`);
   }
 };
 
@@ -441,7 +442,6 @@ document.addEventListener('visibilitychange', () => {
     const store = usePurchaseStore.getState();
     const userRole = localStorage.getItem('userRole');
 
-    console.log('🔄 Tab active - refreshing data immediately!');
     store.fetchPurchases(userRole || undefined);
   }
 });

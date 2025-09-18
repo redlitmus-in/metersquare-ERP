@@ -86,24 +86,63 @@ const ProjectManagerHub: React.FC = () => {
   // State management
   const [activeTab, setActiveTab] = useState('pending');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [purchases, setPurchases] = useState<ProcurementPurchase[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
 
-  // Use centralized store for real-time updates
-  const storePurchases = usePurchaseStore((state) => state.purchases);
-  const fetchPurchases = usePurchaseStore((state) => state.fetchPurchases);
-  const setupRealtimeSubscription = usePurchaseStore((state) => state.setupRealtimeSubscription);
-  const cleanupRealtimeSubscription = usePurchaseStore((state) => state.cleanupRealtimeSubscription);
-  const lastFetchTime = usePurchaseStore((state) => state.lastFetchTime);
-  const getPurchasesForRole = usePurchaseStore((state) => state.getPurchasesForRole);
-  const [estimationRejectedPurchases, setEstimationRejectedPurchases] = useState<ProcurementPurchase[]>([]);
-  const [completedPurchases, setCompletedPurchases] = useState<ProcurementPurchase[]>([]);
+  // Use centralized store for real-time updates - EXACTLY like ProcurementHub
+  const {
+    isLoading,
+    lastFetchTime,
+    fetchPurchases: storeFetchPurchases,
+    setupRealtimeSubscription,
+    cleanupRealtimeSubscription,
+    getPurchasesForRole
+  } = usePurchaseStore();
+
+  // Get purchases directly from store - no local state needed!
+  const allStorePurchases = getPurchasesForRole('projectManager') as ProcurementPurchase[];
+
+  // Transform and separate purchases by status
+  const purchases = allStorePurchases.map(p => ({
+    ...p,
+    pm_status: p.project_manager_status || p.pm_status,
+    materials_summary: p.materials_summary || {
+      total_materials: p.materials?.length || 0,
+      total_quantity: p.total_quantity || 0,
+      total_cost: p.total_cost || 0,
+      materials: p.materials || []
+    }
+  })).filter(p =>
+    // Active purchases (not completed)
+    p.latest_status?.status !== 'completed' &&
+    p.latest_status?.status !== 'complete' &&
+    p.accounts_acknowledgement !== true &&
+    p.current_workflow_status !== 'completed'
+  );
+  // Derived from store data
+  const estimationRejectedPurchases = allStorePurchases
+    .filter(p =>
+      p.estimation_status === 'rejected' &&
+      p.pm_status !== 'rejected' &&
+      p.latest_status?.status !== 'completed' &&
+      p.accounts_acknowledgement !== true
+    )
+    .map(p => ({
+      ...p,
+      pm_status: p.project_manager_status || p.pm_status
+    }));
+
+  const completedPurchases = allStorePurchases
+    .filter(p =>
+      p.latest_status?.status === 'completed' ||
+      p.latest_status?.status === 'complete' ||
+      p.accounts_acknowledgement === true ||
+      p.current_workflow_status === 'completed'
+    )
+    .map(p => ({
+      ...p,
+      pm_status: p.project_manager_status || p.pm_status
+    }));
   const [filteredPurchases, setFilteredPurchases] = useState<ProcurementPurchase[]>([]);
-  const [metrics, setMetrics] = useState<MetricCard[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [hasError, setHasError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
   
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
@@ -137,8 +176,7 @@ const ProjectManagerHub: React.FC = () => {
   // Manual refresh handler
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchPurchases('projectManager');
-    await fetchPurchasesData();
+    await storeFetchPurchases('projectManager');
     setIsRefreshing(false);
     toast.success('Data refreshed');
   };
@@ -146,370 +184,107 @@ const ProjectManagerHub: React.FC = () => {
   // Check for real-time status
   const isRealtime = lastFetchTime && Date.now() - lastFetchTime.getTime() < 15000;
 
-  // Fetch purchases from API
-  const fetchPurchasesData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setHasError(false);
-      setErrorMessage('');
-      const response = await projectManagerService.getProcurementApprovedPurchases();
-      
-      if (response.success) {
-        const allPurchases = response.approved_procurement_purchases || [];
-        
-        // Map purchases to include latest_status from status_history
-        const mappedPurchases = allPurchases.map((p: any) => {
-          // Get the latest status from status_history
-          const latestStatusEntry = p.status_history && p.status_history.length > 0 
-            ? p.status_history[p.status_history.length - 1]
-            : null;
-          
-          return {
-            ...p,
-            latest_status: latestStatusEntry ? {
-              status: latestStatusEntry.status,
-              sender: latestStatusEntry.sender,
-              receiver: latestStatusEntry.receiver,
-              date: latestStatusEntry.date
-            } : undefined
-          };
-        });
-        
-        // Separate completed purchases from active ones
-        const completed = mappedPurchases.filter((p: ProcurementPurchase) => {
-          const isCompleted = p.latest_status?.status === 'completed' || 
-                             p.latest_status?.status === 'complete' ||
-                             p.accounts_acknowledgement === true ||
-                             p.current_workflow_status === 'completed';
-          return isCompleted;
-        });
-        
-        const active = mappedPurchases.filter((p: ProcurementPurchase) => {
-          const isCompleted = p.latest_status?.status === 'completed' || 
-                             p.latest_status?.status === 'complete' ||
-                             p.accounts_acknowledgement === true ||
-                             p.current_workflow_status === 'completed';
-          return !isCompleted;
-        });
-        
-        setPurchases(active);
-        setCompletedPurchases(completed);
-        
-        // Filter estimation rejected purchases to exclude those rejected by PM
-        // Only show purchases that were approved by PM but rejected by Estimation
-        const estimationRejectionsMapped = (response.estimation_pm_rejections || []).map((p: any) => {
-          // Get the latest status from status_history
-          const latestStatusEntry = p.status_history && p.status_history.length > 0 
-            ? p.status_history[p.status_history.length - 1]
-            : null;
-          
-          return {
-            ...p,
-            latest_status: latestStatusEntry ? {
-              status: latestStatusEntry.status,
-              sender: latestStatusEntry.sender,
-              receiver: latestStatusEntry.receiver,
-              date: latestStatusEntry.date
-            } : undefined
-          };
-        });
-        
-        const estimationRejections = estimationRejectionsMapped.filter(
-          (purchase: ProcurementPurchase) => {
-            // Exclude completed purchases
-            const isCompleted = purchase.latest_status?.status === 'completed' || 
-                               purchase.latest_status?.status === 'complete' ||
-                               purchase.accounts_acknowledgement === true ||
-                               purchase.current_workflow_status === 'completed';
-            if (isCompleted) return false;
-            
-            // Only include purchases where PM approved but Estimation rejected
-            // Exclude purchases where PM rejected (pm_status === 'rejected')
-            return purchase.pm_status !== 'rejected';
-          }
-        );
-        setEstimationRejectedPurchases(estimationRejections);
-        
-        // Calculate metrics from the response
-        // Calculate total quantities and values from actual purchases
-        const pendingPurchases = active.filter(p => !p.pm_status || p.pm_status === 'pending');
-        const approvedPurchases = active.filter(p => p.pm_status === 'approved');
-        const rejectedPurchases = active.filter(p => p.pm_status === 'rejected');
+  // Calculate metrics from current data
+  const calculateMetrics = useCallback(() => {
+    const pendingPurchases = purchases.filter(p => !p.pm_status || p.pm_status === 'pending');
+    const approvedPurchases = purchases.filter(p => p.pm_status === 'approved');
+    const rejectedPurchases = purchases.filter(p => p.pm_status === 'rejected');
 
-        const totalQuantity = response.overall_total_quantity || 0;
-        const totalValue = response.overall_total_cost || 0;
+    const totalQuantity = allStorePurchases.reduce((sum, p) => sum + (p.total_quantity || 0), 0);
+    const totalValue = allStorePurchases.reduce((sum, p) => sum + (p.total_cost || 0), 0);
 
-        const metricsData: MetricCard[] = [
-          {
-            title: 'Total Purchases',
-            value: response.total_approved_procurement_purchases || 0,
-            icon: <Package className="h-5 w-5 text-blue-600" />,
-            bgColor: 'bg-blue-50',
-            iconColor: 'bg-blue-100',
-            trend: '+12%',
-            trendType: 'up'
-          },
-          {
-            title: 'Pending Approvals',
-            value: pendingPurchases.length,
-            icon: <Clock className="h-5 w-5 text-yellow-600" />,
-            bgColor: 'bg-yellow-50',
-            iconColor: 'bg-yellow-100',
-            trend: '-5%',
-            trendType: 'down'
-          },
-          {
-            title: 'Approved',
-            value: approvedPurchases.length,
-            icon: <CheckCircle className="h-5 w-5 text-green-600" />,
-            bgColor: 'bg-green-50',
-            iconColor: 'bg-green-100',
-            trend: '+8%',
-            trendType: 'up'
-          },
-          {
-            title: 'Rejected',
-            value: rejectedPurchases.length,
-            icon: <XCircle className="h-5 w-5 text-red-600" />,
-            bgColor: 'bg-red-50',
-            iconColor: 'bg-red-100',
-            trend: '-2%',
-            trendType: 'down'
-          },
-          {
-            title: 'Completed',
-            value: completed.length,
-            icon: <FileText className="h-5 w-5 text-blue-600" />,
-            bgColor: 'bg-blue-50',
-            iconColor: 'bg-blue-100',
-            trend: '+10%',
-            trendType: 'up'
-          },
-          {
-            title: 'Total Quantity',
-            value: totalQuantity.toLocaleString(),
-            icon: <Package className="h-5 w-5 text-purple-600" />,
-            bgColor: 'bg-purple-50',
-            iconColor: 'bg-purple-100',
-            trend: '+7%',
-            trendType: 'up'
-          },
-          {
-            title: 'Total Value',
-            value: `AED ${totalValue.toLocaleString()}`,
-            icon: <TrendingUp className="h-5 w-5 text-indigo-600" />,
-            bgColor: 'bg-indigo-50',
-            iconColor: 'bg-indigo-100',
-            trend: '+15%',
-            trendType: 'up'
-          }
-        ];
-        
-        setMetrics(metricsData);
+    const metricsData: MetricCard[] = [
+      {
+        title: 'Total Purchases',
+        value: allStorePurchases.length,
+        icon: <Package className="h-5 w-5 text-blue-600" />,
+        bgColor: 'bg-blue-50',
+        iconColor: 'bg-blue-100',
+        trend: '+12%',
+        trendType: 'up'
+      },
+      {
+        title: 'Pending Approvals',
+        value: pendingPurchases.length,
+        icon: <Clock className="h-5 w-5 text-yellow-600" />,
+        bgColor: 'bg-yellow-50',
+        iconColor: 'bg-yellow-100',
+        trend: '-5%',
+        trendType: 'down'
+      },
+      {
+        title: 'Approved',
+        value: approvedPurchases.length,
+        icon: <CheckCircle className="h-5 w-5 text-green-600" />,
+        bgColor: 'bg-green-50',
+        iconColor: 'bg-green-100',
+        trend: '+8%',
+        trendType: 'up'
+      },
+      {
+        title: 'Rejected',
+        value: rejectedPurchases.length,
+        icon: <XCircle className="h-5 w-5 text-red-600" />,
+        bgColor: 'bg-red-50',
+        iconColor: 'bg-red-100',
+        trend: '-2%',
+        trendType: 'down'
+      },
+      {
+        title: 'Completed',
+        value: completedPurchases.length,
+        icon: <FileText className="h-5 w-5 text-blue-600" />,
+        bgColor: 'bg-blue-50',
+        iconColor: 'bg-blue-100',
+        trend: '+10%',
+        trendType: 'up'
+      },
+      {
+        title: 'Total Quantity',
+        value: totalQuantity.toLocaleString(),
+        icon: <Package className="h-5 w-5 text-purple-600" />,
+        bgColor: 'bg-purple-50',
+        iconColor: 'bg-purple-100',
+        trend: '+7%',
+        trendType: 'up'
+      },
+      {
+        title: 'Total Value',
+        value: `AED ${totalValue.toLocaleString()}`,
+        icon: <TrendingUp className="h-5 w-5 text-indigo-600" />,
+        bgColor: 'bg-indigo-50',
+        iconColor: 'bg-indigo-100',
+        trend: '+15%',
+        trendType: 'up'
       }
-    } catch (error) {
-      console.error('Error fetching purchases:', error);
-      
-      // Set error state
-      setHasError(true);
-      
-      // Provide fallback data when API fails
-      setPurchases([]);
-      setEstimationRejectedPurchases([]);
-      setCompletedPurchases([]);
-      
-      // Set default metrics when API fails
-      const fallbackMetrics: MetricCard[] = [
-        {
-          title: 'Total Purchases',
-          value: 0,
-          icon: <Package className="h-5 w-5 text-blue-600" />,
-          bgColor: 'bg-blue-50',
-          iconColor: 'bg-blue-100',
-          trend: 'N/A',
-          trendType: 'neutral'
-        },
-        {
-          title: 'Pending Approvals',
-          value: 0,
-          icon: <Clock className="h-5 w-5 text-yellow-600" />,
-          bgColor: 'bg-yellow-50',
-          iconColor: 'bg-yellow-100',
-          trend: 'N/A',
-          trendType: 'neutral'
-        },
-        {
-          title: 'Approved',
-          value: 0,
-          icon: <CheckCircle className="h-5 w-5 text-green-600" />,
-          bgColor: 'bg-green-50',
-          iconColor: 'bg-green-100',
-          trend: 'N/A',
-          trendType: 'neutral'
-        },
-        {
-          title: 'Rejected',
-          value: 0,
-          icon: <XCircle className="h-5 w-5 text-red-600" />,
-          bgColor: 'bg-red-50',
-          iconColor: 'bg-red-100',
-          trend: 'N/A',
-          trendType: 'neutral'
-        }
-      ];
-      
-      setMetrics(fallbackMetrics);
-      
-      // Set error message based on error type
-      let message = 'An unknown error occurred';
-      if (error instanceof Error && error.message.includes('500')) {
-        message = 'Server is temporarily unavailable. Please try again later.';
-      } else if (error instanceof Error && error.message.includes('Network Error')) {
-        message = 'Network connection error. Please check your internet connection.';
-      } else {
-        message = 'Failed to fetch purchase requests. Please try again.';
-      }
-      
-      setErrorMessage(message);
-      toast.error(message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    ];
 
-  // Retry function
-  const handleRetry = useCallback(() => {
-    setRefreshKey(prev => prev + 1);
-  }, []);
+    return metricsData;
+  }, [purchases, allStorePurchases, completedPurchases]);
 
-  // Initialize real-time updates on mount
+  // Initialize real-time updates on mount - EXACTLY like ProcurementHub
   useEffect(() => {
     // Store user role for the purchase store
     localStorage.setItem('userRole', 'projectManager');
 
-    // Fetch immediately on mount
-    fetchPurchases('projectManager');
-
     // Setup real-time subscriptions
     setupRealtimeSubscription();
 
-    // Start polling for updates (will fetch every 3 seconds)
+    // Start polling for updates
     startPolling('projectManager');
 
-    console.log('✅ Real-time updates initialized for Project Manager');
+    // Initial fetch
+    storeFetchPurchases('projectManager');
 
     // Cleanup on unmount
     return () => {
       stopPolling();
       cleanupRealtimeSubscription();
     };
-  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, fetchPurchases]);
+  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, storeFetchPurchases]);
 
-  // Initial data fetch - REMOVED to prevent overriding store data
-  // The store now handles all data fetching via polling
-  useEffect(() => {
-    // Only fetch local data if needed for initial load
-    if (!storePurchases || storePurchases.length === 0) {
-      fetchPurchasesData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey]); // Intentionally exclude fetchPurchasesData to prevent duplicate calls
-
-  // AUTO-UPDATE from store when data changes!
-  useEffect(() => {
-    // Get purchases for project manager role from the store
-    const projectManagerPurchases = getPurchasesForRole('projectManager');
-
-    if (projectManagerPurchases) {
-      console.log('🔄 Auto-updating from store:', projectManagerPurchases.length, 'purchases');
-
-      // Update local state with store data
-      setPurchases(projectManagerPurchases);
-
-      // Recalculate metrics with new data
-      const pendingPurchases = projectManagerPurchases.filter(p => !p.pm_status || p.pm_status === 'pending');
-      const approvedPurchases = projectManagerPurchases.filter(p => p.pm_status === 'approved');
-      const rejectedPurchases = projectManagerPurchases.filter(p => p.pm_status === 'rejected');
-      const completedPurchases = projectManagerPurchases.filter(p =>
-        p.latest_status?.status === 'completed' ||
-        p.accounts_acknowledgement === true
-      );
-
-      // Calculate totals
-      const totalQuantity = projectManagerPurchases.reduce((sum, p) => sum + (p.total_quantity || 0), 0);
-      const totalValue = projectManagerPurchases.reduce((sum, p) => sum + (p.total_cost || 0), 0);
-
-      // Update metrics
-      const metricsData: MetricCard[] = [
-        {
-          title: 'Total Purchases',
-          value: projectManagerPurchases.length,
-          icon: <Package className="h-5 w-5 text-blue-600" />,
-          bgColor: 'bg-blue-50',
-          iconColor: 'bg-blue-100',
-          trend: '+12%',
-          trendType: 'up'
-        },
-        {
-          title: 'Pending Approvals',
-          value: pendingPurchases.length,
-          icon: <Clock className="h-5 w-5 text-yellow-600" />,
-          bgColor: 'bg-yellow-50',
-          iconColor: 'bg-yellow-100',
-          trend: pendingPurchases.length > 0 ? '+5%' : '-5%',
-          trendType: pendingPurchases.length > 0 ? 'up' : 'down'
-        },
-        {
-          title: 'Approved',
-          value: approvedPurchases.length,
-          icon: <CheckCircle className="h-5 w-5 text-green-600" />,
-          bgColor: 'bg-green-50',
-          iconColor: 'bg-green-100',
-          trend: '+8%',
-          trendType: 'up'
-        },
-        {
-          title: 'Rejected',
-          value: rejectedPurchases.length,
-          icon: <XCircle className="h-5 w-5 text-red-600" />,
-          bgColor: 'bg-red-50',
-          iconColor: 'bg-red-100',
-          trend: '-2%',
-          trendType: 'down'
-        },
-        {
-          title: 'Completed',
-          value: completedPurchases.length,
-          icon: <FileText className="h-5 w-5 text-blue-600" />,
-          bgColor: 'bg-blue-50',
-          iconColor: 'bg-blue-100',
-          trend: '+10%',
-          trendType: 'up'
-        },
-        {
-          title: 'Total Quantity',
-          value: totalQuantity.toLocaleString(),
-          icon: <Package className="h-5 w-5 text-purple-600" />,
-          bgColor: 'bg-purple-50',
-          iconColor: 'bg-purple-100',
-          trend: '+7%',
-          trendType: 'up'
-        },
-        {
-          title: 'Total Value',
-          value: `AED ${totalValue.toLocaleString()}`,
-          icon: <TrendingUp className="h-5 w-5 text-indigo-600" />,
-          bgColor: 'bg-indigo-50',
-          iconColor: 'bg-indigo-100',
-          trend: '+15%',
-          trendType: 'up'
-        }
-      ];
-
-      setMetrics(metricsData);
-      setCompletedPurchases(completedPurchases);
-    }
-  }, [storePurchases, getPurchasesForRole]); // Re-run whenever store purchases change!
+  // Calculate metrics whenever purchases change
+  const metrics = useMemo(() => calculateMetrics(), [calculateMetrics]);
 
   // Filter purchases based on active tab and search
   useEffect(() => {
@@ -657,9 +432,9 @@ const ProjectManagerHub: React.FC = () => {
           isOpen: true,
           message: 'Purchase request has been approved successfully and sent to the next workflow stage!'
         });
-        
-        // Refresh data
-        setRefreshKey(prev => prev + 1);
+
+        // Refresh data from store
+        storeFetchPurchases('projectManager');
       }
     } catch (error) {
       toast.error('Failed to approve purchase');
@@ -696,9 +471,9 @@ const ProjectManagerHub: React.FC = () => {
           isOpen: true,
           message: 'Purchase request has been rejected and sent back to the requester for revision!'
         });
-        
-        // Refresh data
-        setRefreshKey(prev => prev + 1);
+
+        // Refresh data from store
+        storeFetchPurchases('projectManager');
       }
     } catch (error: any) {
       // Show specific error message if available
@@ -772,7 +547,8 @@ const ProjectManagerHub: React.FC = () => {
           isOpen: true,
           message: 'Purchase request has been resent to Estimation team for further review!'
         });
-        setRefreshKey(prev => prev + 1);
+        // Refresh data from store
+        storeFetchPurchases('projectManager');
       } else {
         // If there's an error in the response
         toast.error(result.message || result.error || 'Failed to resend to Estimation');

@@ -103,10 +103,8 @@ const AccountsHub: React.FC = () => {
     // Setup real-time subscriptions
     setupRealtimeSubscription();
 
-    // Start polling for updates (every 3 seconds)
+    // Start polling for updates (every 2 seconds)
     startPolling('accounts');
-
-    console.log('✅ Real-time updates initialized for Accounts');
 
     // Cleanup on unmount
     return () => {

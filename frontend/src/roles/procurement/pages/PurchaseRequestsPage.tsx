@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Filter, Download, Eye, Edit2, Trash2, CheckCircle, XCircle, FileText, Clock, AlertTriangle, Package, Mail, AlertCircle as AlertCircleIcon, SlidersHorizontal, Calendar, DollarSign, Building2 } from 'lucide-react';
+import { Plus, Filter, Download, Eye, Edit2, Trash2, CheckCircle, XCircle, FileText, Clock, AlertTriangle, Package, Mail, AlertCircle as AlertCircleIcon, SlidersHorizontal, Calendar, DollarSign, Building2, RefreshCw } from 'lucide-react';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import { UserRole } from '@/types';
 import { toast } from 'sonner';
 import { apiClient, API_ENDPOINTS } from '@/api/config';
 import { SimpleHorizontalCards } from '@/components/ui/SimpleHorizontalCards';
+import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseStore';
+import { RealtimeIndicator } from '@/components/ui/RealtimeIndicator';
 
 const PurchaseRequestsPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -37,42 +39,80 @@ const PurchaseRequestsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('pending');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-  // Initialize empty purchase requests - will be fetched from API
+  // Use centralized store for real-time updates
+  const storePurchases = usePurchaseStore((state) => state.purchases);
+  const storeLoading = usePurchaseStore((state) => state.isLoading);
+  const storeError = usePurchaseStore((state) => state.error);
+  const fetchStorePurchases = usePurchaseStore((state) => state.fetchPurchases);
+  const setupRealtimeSubscription = usePurchaseStore((state) => state.setupRealtimeSubscription);
+  const cleanupRealtimeSubscription = usePurchaseStore((state) => state.cleanupRealtimeSubscription);
+  const lastFetchTime = usePurchaseStore((state) => state.lastFetchTime);
+  const getPurchasesForRole = usePurchaseStore((state) => state.getPurchasesForRole);
+
+  // Local state for UI
   const [purchaseRequests, setPurchaseRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fetch purchase requests from API
+  // Setup real-time updates on mount
   useEffect(() => {
-    fetchPurchaseRequests();
-  }, []);
+    // Store user role for the purchase store
+    localStorage.setItem('userRole', 'procurement');
 
-  const fetchPurchaseRequests = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Use the correct endpoint for procurement role
-      const response = await apiClient.get(API_ENDPOINTS.PROCUREMENT.ALL_PURCHASES);
-      
-      if (response.data.success && response.data.procurement) {
-        // Transform the API data to match our frontend structure
-        const transformedRequests = response.data.procurement.map((pr: any) => {
-          // Calculate total amount from materials
-          const totalAmount = pr.materials?.reduce((sum: number, m: any) => 
-            sum + (m.quantity * m.cost), 0
-          ) || 0;
-          
-          // Get priority from first material (or default to 'Medium')
-          const priority = pr.materials?.[0]?.priority || 'Medium';
-          
-          // Determine rejection type and status
-          let rejectionType = null;
-          let status = 'pending';
-          
-          if (pr.sender_latest_status === 'rejected') {
+    // Setup real-time subscriptions
+    setupRealtimeSubscription();
+
+    // Start polling for updates (every 2 seconds)
+    startPolling('procurement');
+
+    // Cleanup on unmount
+    return () => {
+      stopPolling();
+      cleanupRealtimeSubscription();
+    };
+  }, [setupRealtimeSubscription, cleanupRealtimeSubscription]);
+
+  // Update local state when store updates
+  useEffect(() => {
+    if (storePurchases && storePurchases.length > 0) {
+      // Transform store data to match component structure
+      const transformedRequests = storePurchases.map((pr: any) => {
+        // Calculate total amount from materials
+        const totalAmount = pr.materials?.reduce((sum: number, m: any) =>
+          sum + ((m.cost || 0) * (m.quantity || 1)), 0
+        ) || pr.total_cost || 0;
+
+        // Get priority from first material (or default to 'Medium')
+        const priority = pr.materials?.[0]?.priority || pr.priority || 'Medium';
+
+        // Determine rejection type and status
+        let rejectionType = null;
+        let status = 'pending';
+
+        // Check latest_status first (from store)
+        if (pr.latest_status) {
+          if (pr.latest_status.status === 'rejected') {
             status = 'rejected';
-            // Check who rejected based on status_role
+            // Check who rejected based on sender
+            if (pr.latest_status.sender === 'projectManager') {
+              rejectionType = 'pm';
+            } else if (pr.latest_status.sender === 'estimation') {
+              rejectionType = 'estimation';
+            } else if (pr.latest_status.sender === 'technicalDirector') {
+              rejectionType = 'technical';
+            }
+          } else if (pr.latest_status.status === 'approved') {
+            status = 'approved';
+          } else {
+            status = pr.latest_status.status || 'pending';
+          }
+        } else if (pr.sender_latest_status) {
+          // Fallback to old format
+          status = pr.sender_latest_status === 'approved' ? 'approved' :
+                  pr.sender_latest_status === 'rejected' ? 'rejected' : 'pending';
+
+          if (pr.sender_latest_status === 'rejected') {
             if (pr.status_role === 'projectManager') {
               rejectionType = 'pm';
             } else if (pr.status_role === 'estimation') {
@@ -80,46 +120,65 @@ const PurchaseRequestsPage: React.FC = () => {
             } else if (pr.status_role === 'technicalDirector') {
               rejectionType = 'technical';
             }
-          } else if (pr.sender_latest_status === 'approved') {
-            status = 'approved';
           }
-          
-          return {
-            id: `PR-${pr.purchase_id}`,
-            purchase_id: pr.purchase_id,
-            project: pr.project_id ? `Project ${pr.project_id}` : 'N/A',
-            requestor: pr.requested_by || pr.created_by,
-            requestorId: pr.user_id,
-            department: 'Site Operations',
-            date: pr.date ? new Date(pr.date).toLocaleDateString() : new Date(pr.created_at).toLocaleDateString(),
-            status: status,
-            rejectionType: rejectionType,
-            amount: totalAmount,
-            items: pr.materials?.length || 0,
-            priority: priority.toLowerCase(),
-            site_location: pr.site_location,
-            purpose: pr.purpose,
-            materials: pr.materials || [],
-            currentApprover: pr.status_receiver,
-            statusComments: pr.status_comments,
-            statusRole: pr.status_role,
-            statusSender: pr.status_sender,
-            senderStatus: pr.sender_latest_status,
-            receiverStatus: pr.receiver_latest_status
-          };
-        });
-        
-        setPurchaseRequests(transformedRequests);
-      } else {
-        setError('Failed to fetch purchase requests');
-      }
-    } catch (err: any) {
-      console.error('Error fetching purchase requests:', err);
-      setError(err.response?.data?.error || 'Failed to fetch purchase requests');
+        }
+
+        return {
+          id: `PR-${pr.purchase_id}`,
+          purchase_id: pr.purchase_id,
+          project: pr.project_id ? `Project ${pr.project_id}` : 'N/A',
+          requestor: pr.requested_by || pr.created_by || 'Unknown',
+          requestorId: pr.user_id || pr.created_by_id,
+          department: 'Site Operations',
+          date: pr.date ? new Date(pr.date).toLocaleDateString() : new Date(pr.created_at || Date.now()).toLocaleDateString(),
+          status: status,
+          rejectionType: rejectionType,
+          amount: totalAmount,
+          items: pr.materials?.length || pr.material_count || 0,
+          priority: typeof priority === 'string' ? priority.toLowerCase() : 'medium',
+          site_location: pr.site_location,
+          purpose: pr.purpose,
+          materials: pr.materials || pr.material_details || [],
+          currentApprover: pr.latest_status?.receiver || pr.status_receiver,
+          statusComments: pr.status_comments,
+          statusRole: pr.latest_status?.sender || pr.status_role,
+          statusSender: pr.status_sender,
+          senderStatus: pr.sender_latest_status,
+          receiverStatus: pr.receiver_latest_status
+        };
+      });
+
+      setPurchaseRequests(transformedRequests);
+      setLoading(false);
+      setError(null);
+    } else if (!storeLoading) {
+      // Only set empty if not loading
       setPurchaseRequests([]);
-    } finally {
       setLoading(false);
     }
+
+    // Update loading and error states
+    setLoading(storeLoading);
+    if (storeError) {
+      setError(storeError);
+    }
+  }, [storePurchases, storeLoading, storeError]);
+
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchStorePurchases('procurement');
+    setIsRefreshing(false);
+    toast.success('Data refreshed');
+  };
+
+  // Check for real-time status
+  const isRealtime = lastFetchTime && Date.now() - lastFetchTime.getTime() < 15000;
+
+  // Legacy fetch function (kept for compatibility but uses store now)
+  const fetchPurchaseRequests = async () => {
+    // Now just refresh from store
+    await handleRefresh();
   };
 
   // Role-based permissions
@@ -151,25 +210,33 @@ const PurchaseRequestsPage: React.FC = () => {
   };
 
   const handleApprove = (requestId: string) => {
-    setPurchaseRequests(prev => 
-      prev.map(req => 
-        req.id === requestId 
+    setPurchaseRequests(prev =>
+      prev.map(req =>
+        req.id === requestId
           ? { ...req, status: 'approved', currentApprover: null }
           : req
       )
     );
     toast.success('Purchase request approved successfully');
+    // Refresh data after a moment to get backend updates
+    setTimeout(() => {
+      fetchStorePurchases('procurement');
+    }, 500);
   };
 
   const handleReject = (requestId: string) => {
-    setPurchaseRequests(prev => 
-      prev.map(req => 
-        req.id === requestId 
+    setPurchaseRequests(prev =>
+      prev.map(req =>
+        req.id === requestId
           ? { ...req, status: 'rejected', currentApprover: null }
           : req
       )
     );
     toast.error('Purchase request rejected');
+    // Refresh data after a moment to get backend updates
+    setTimeout(() => {
+      fetchStorePurchases('procurement');
+    }, 500);
   };
 
   const handleSendMail = async (requestId: string) => {
@@ -186,8 +253,8 @@ const PurchaseRequestsPage: React.FC = () => {
 
       if (response.data.success) {
         toast.success('Approval email sent successfully');
-        // Refresh the data to get updated status
-        await fetchPurchaseRequests();
+        // Immediately refresh data from store to show the update
+        await fetchStorePurchases('procurement');
       } else {
         toast.error('Failed to send approval email');
       }
@@ -424,7 +491,28 @@ const PurchaseRequestsPage: React.FC = () => {
               </p>
             </div>
           </div>
-          {canCreateRequest() && !isFormOpen && (
+          <div className="flex items-center gap-2">
+            {/* Real-time indicator */}
+            {isRealtime && (
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  Live
+                </div>
+              </Badge>
+            )}
+            {/* Refresh button */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="h-9 w-9"
+              title="Refresh data"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </Button>
+            {canCreateRequest() && !isFormOpen && (
             <Button 
               onClick={() => setIsFormOpen(true)}
               className="bg-red-600 hover:bg-red-700 text-white"
@@ -432,7 +520,8 @@ const PurchaseRequestsPage: React.FC = () => {
               <Plus className="w-4 h-4 mr-2" />
               New Purchase Request
             </Button>
-          )}
+            )}
+          </div>
         </div>
       </motion.div>
 
