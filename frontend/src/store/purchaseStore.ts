@@ -128,7 +128,7 @@ const usePurchaseStore = create<PurchaseStore>()(
           case 'sitesupervisor':
           case 'site supervisor':
           case 'site_supervisor':
-            endpoint = '/site_supervisor_dashboard';  // Backend: /site_supervisor_dashboard (underscore not slash)
+            endpoint = '/all_purchase';  // Changed to use /all_purchase for site supervisor
             break;
           default:
             endpoint = '/all_purchase';  // Backend: /all_purchase
