@@ -15,8 +15,9 @@ log = get_logger()
 supabase_url = os.environ.get('SUPABASE_URL')
 supabase_key = os.environ.get('SUPABASE_KEY')
 SUPABASE_BUCKET = "file_upload"
-ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'}
+ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx', 'gif', 'bmp', 'txt', 'xlsx', 'xls'}
 MAX_WORKERS = 12  # Increased for better parallelism
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB max file size
 
 # Role to folder mapping - defined once
 ROLE_FOLDER_MAP = {
@@ -29,8 +30,18 @@ ROLE_FOLDER_MAP = {
     "accounts": "accounts"
 }
 
+# Validate Supabase configuration
+if not supabase_url or not supabase_key:
+    log.error("Supabase URL or Key not configured in environment variables")
+    raise ValueError("Missing Supabase configuration. Please set SUPABASE_URL and SUPABASE_KEY environment variables")
+
 # Initialize single reusable client
-supabase: Client = create_client(supabase_url, supabase_key)
+try:
+    supabase: Client = create_client(supabase_url, supabase_key)
+    log.info("Supabase client initialized successfully")
+except Exception as e:
+    log.error(f"Failed to initialize Supabase client: {str(e)}")
+    raise
 
 # Pre-build base URL for public files
 PUBLIC_URL_BASE = f"{supabase_url}/storage/v1/object/public/{SUPABASE_BUCKET}/"
@@ -47,7 +58,7 @@ def upload_single_file(path, content, content_type):
     """Optimized single file upload"""
     try:
         # Direct upload with upsert
-        supabase.storage.from_(SUPABASE_BUCKET).upload(
+        response = supabase.storage.from_(SUPABASE_BUCKET).upload(
             path=path,
             file=content,
             file_options={
@@ -58,16 +69,20 @@ def upload_single_file(path, content, content_type):
         # Return URL immediately
         return f"{PUBLIC_URL_BASE}{path}"
     except Exception as e:
-        # Try once more on failure
+        error_msg = str(e)
+        # Try once more on failure with update
         try:
-            supabase.storage.from_(SUPABASE_BUCKET).update(
+            response = supabase.storage.from_(SUPABASE_BUCKET).update(
                 path=path,
                 file=content,
                 file_options={"content-type": content_type}
             )
             return f"{PUBLIC_URL_BASE}{path}"
-        except:
-            raise e
+        except Exception as update_error:
+            # Log the actual error for debugging
+            log.error(f"Upload failed for {path}: {error_msg}, Update failed: {str(update_error)}")
+            # Raise with more descriptive error
+            raise Exception(f"Upload failed: {error_msg}")
 
 def process_file_batch(files, purchase_id, storage_path_prefix=""):
     """Ultra-fast parallel batch processing"""
@@ -86,6 +101,12 @@ def process_file_batch(files, purchase_id, storage_path_prefix=""):
         try:
             # Quick filename processing
             filename = secure_filename(file.filename)
+
+            # Validate file extension
+            if not allowed_file(filename):
+                errors.append(f"{file.filename}: Invalid file type. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}")
+                continue
+
             name_part, ext_part = os.path.splitext(filename)
             unique_filename = f"{name_part}_{index}{ext_part}"
 
@@ -94,6 +115,17 @@ def process_file_batch(files, purchase_id, storage_path_prefix=""):
 
             # Read file
             file_content = file.read()
+            file_size = len(file_content)
+
+            # Validate file size
+            if file_size > MAX_FILE_SIZE:
+                errors.append(f"{file.filename}: File too large. Maximum size is {MAX_FILE_SIZE / (1024*1024):.1f}MB")
+                continue
+
+            if file_size == 0:
+                errors.append(f"{file.filename}: File is empty")
+                continue
+
             content_type = file.content_type or "application/octet-stream"
 
             # Submit upload task immediately
@@ -117,7 +149,7 @@ def process_file_batch(files, purchase_id, storage_path_prefix=""):
     # Collect results as they complete
     for future, file_info in futures:
         try:
-            public_url = future.result(timeout=2)  # 2 second timeout
+            public_url = future.result(timeout=5)  # Increased timeout to 5 seconds
             uploaded_files.append({
                 "fn": file_info["filename"],
                 "orig": file_info["original"],
@@ -127,7 +159,9 @@ def process_file_batch(files, purchase_id, storage_path_prefix=""):
                 "url": public_url
             })
         except Exception as e:
-            errors.append(f"{file_info['original']}: {str(e)}")
+            error_msg = str(e) if str(e) else "Unknown error occurred"
+            errors.append(f"{file_info['original']}: {error_msg}")
+            log.error(f"Failed to upload {file_info['original']}: {error_msg}")
 
     return uploaded_files, errors
 
@@ -150,26 +184,77 @@ def upload_files(key, id):
             storage_prefix = "accounts"
             field_name = "supporting_documents"
         else:
+            # For purchase entity
             entity = Purchase.query.filter_by(purchase_id=id).first()
             if not entity:
                 return jsonify({"error": "Purchase not found"}), 404
             storage_prefix = ""  # Purchase files go directly under purchase_id
             field_name = "file_path"
+
         # Process uploads concurrently
         uploaded_files, errors = process_file_batch(files, id, storage_prefix)
-        # Update entity with filenames
+
+        # Check if any files were successfully uploaded
+        if not uploaded_files and errors:
+            # All uploads failed
+            upload_time = time.time() - start_time
+            log.error(f"All file uploads failed for {key}/{id}: {errors}")
+            return jsonify({
+                "error": "All file uploads failed",
+                "message": "No files were uploaded successfully",
+                "uploaded_files": [],
+                "total_files": 0,
+                "upload_time": f"{upload_time:.2f}s",
+                "errors": errors,
+                "details": "Check file size, format, and storage permissions"
+            }), 400  # Return 400 Bad Request when all uploads fail
+
+        # Update entity with filenames only if we have successful uploads
         if uploaded_files:
             filenames = [f["fn"] for f in uploaded_files]
-            setattr(entity, field_name, ",".join(filenames))
-        db.session.commit()
+
+            # For Purchase entity, handle file_path updates properly
+            if isinstance(entity, Purchase):
+                # Get existing file paths if any
+                existing_files = []
+                if entity.file_path:
+                    existing_files = [f.strip() for f in entity.file_path.split(",") if f.strip()]
+
+                # Append new files to existing ones
+                all_files = existing_files + filenames
+                entity.file_path = ",".join(all_files)
+                log.info(f"Updated Purchase {id} file_path: {entity.file_path}")
+            else:
+                # For PaymentTransaction entity
+                setattr(entity, field_name, ",".join(filenames))
+
+            # Explicitly add entity to session and commit only if we have files to save
+            db.session.add(entity)
+            db.session.commit()
+
         upload_time = time.time() - start_time
+
+        # Determine status code based on results
+        status_code = 200 if uploaded_files else 207  # 207 for partial success
+
+        # Determine appropriate message
+        if uploaded_files and not errors:
+            message = "All files uploaded successfully"
+        elif uploaded_files and errors:
+            message = f"Partial success: {len(uploaded_files)} files uploaded, {len(errors)} failed"
+        else:
+            message = "Upload completed with errors"
+
         return jsonify({
-            "message": "Files uploaded successfully",
+            "message": message,
+            "success": len(uploaded_files) > 0,
             "uploaded_files": uploaded_files,
+            "failed_count": len(errors),
             "total_files": len(uploaded_files),
             "upload_time": f"{upload_time:.2f}s",
-            "errors": errors if errors else None
-        }), 200
+            "errors": errors if errors else None,
+            "file_path_updated": entity.file_path if isinstance(entity, Purchase) and uploaded_files else None
+        }), status_code
 
     except Exception as e:
         db.session.rollback()

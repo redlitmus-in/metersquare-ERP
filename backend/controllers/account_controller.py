@@ -203,11 +203,6 @@ def process_payment_transaction():
         if not purchase:
             return jsonify({'error': 'Purchase request not found'}), 404
 
-        # Check if Technical Director has approved
-        tech_director_status = PurchaseStatus.get_latest_status_by_role(purchase_id, 'technicalDirector')
-        if not tech_director_status or tech_director_status.status != 'approved':
-            return jsonify({'error': 'Purchase request must be approved by Technical Director before payment processing'}), 400
-
         # Check if payment already exists for this purchase
         existing_payment = PaymentTransaction.query.filter_by(
             purchase_id=purchase_id, 
@@ -241,7 +236,7 @@ def process_payment_transaction():
             existing_status = PurchaseStatus.get_latest_status(purchase_id)
             if existing_status:
                 existing_status.sender = 'accounts'
-                existing_status.receiver = 'technicalDirector'
+                existing_status.receiver = 'accounts'
                 existing_status.role = 'accounts'
                 existing_status.status = 'approved'
                 existing_status.decision_by_user_id = user_id
@@ -256,7 +251,7 @@ def process_payment_transaction():
                 new_status = PurchaseStatus(
                     purchase_id=purchase_id,
                     sender='accounts',
-                    receiver='technicalDirector',
+                    receiver='accounts',
                     role='accounts',
                     status='approved',
                     decision_by_user_id=user_id,
@@ -280,7 +275,7 @@ def process_payment_transaction():
                 'type': 'status_change',
                 'status': 'approved',
                 'sender': 'accounts',
-                'receiver': 'technicalDirector',
+                'receiver': 'accounts',
                 'comments': f'Payment transaction created by {user_name}',
                 'rejection_reason': None,
                 'reject_category': None,
