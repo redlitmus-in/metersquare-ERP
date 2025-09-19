@@ -46,6 +46,7 @@ interface Purchase {
   email_sent?: boolean;
   file_path?: string;
   is_deleted?: boolean;
+  procurement_status?: string;
   project_manager_status?: string;
   estimation_status?: string;
   technical_director_status?: string;
