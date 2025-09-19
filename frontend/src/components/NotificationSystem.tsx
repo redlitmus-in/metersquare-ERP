@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { formatRelativeTime } from '@/utils/dateFormatter';
 
 export interface Notification {
   id: string;
@@ -182,15 +183,8 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
   const urgentCount = notifications.filter(n => n.priority === 'urgent' && !n.read).length;
 
   const formatTimestamp = (date: Date) => {
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 60) return `${minutes} min ago`;
-    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    return `${days} day${days > 1 ? 's' : ''} ago`;
+    // Use the imported formatRelativeTime function for consistent timezone handling
+    return formatRelativeTime(date);
   };
 
   // Add notification to toast

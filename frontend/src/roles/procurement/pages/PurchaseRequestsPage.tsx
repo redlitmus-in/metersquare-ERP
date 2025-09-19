@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Filter, Download, Eye, Edit2, Trash2, CheckCircle, XCircle, FileText, Clock, AlertTriangle, Package, Mail, AlertCircle as AlertCircleIcon, SlidersHorizontal, Calendar, DollarSign, Building2, RefreshCw } from 'lucide-react';
+import { formatDate } from '@/utils/dateFormatter';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm';
 import { Button } from '@/components/ui/button';
@@ -131,7 +132,7 @@ const PurchaseRequestsPage: React.FC = () => {
           requestor: pr.requested_by || pr.created_by || 'Unknown',
           requestorId: pr.user_id || pr.created_by_id,
           department: 'Site Operations',
-          date: pr.date ? new Date(pr.date).toLocaleDateString() : new Date(pr.created_at || Date.now()).toLocaleDateString(),
+          date: formatDate(pr.date || pr.created_at || Date.now()),
           status: status,  // Backend provides correct display status
           rejectionType: rejectionType,
           amount: totalAmount,

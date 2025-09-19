@@ -1,5 +1,6 @@
 import React, { forwardRef } from 'react';
 import { motion } from 'framer-motion';
+import { formatDate } from '@/utils/dateFormatter';
 import {
   Package,
   Calendar,
@@ -230,7 +231,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
             <div className="flex items-center gap-2 text-xs">
               <Calendar className="h-3 w-3 text-gray-400 flex-shrink-0" />
               <span className="font-medium text-gray-900">
-                {new Date(purchase.date).toLocaleDateString()}
+                {formatDate(purchase.date)}
               </span>
             </div>
           </div>

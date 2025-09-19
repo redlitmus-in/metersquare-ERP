@@ -115,22 +115,37 @@ export const formatDateTimeLocal = (date: Date | string | null | undefined): str
   let dateObj: Date;
 
   if (typeof date === 'string') {
-    // Check if the string contains timezone info (Z or +/-offset)
-    if (date.includes('Z') || date.includes('+') || date.match(/[+-]\d{2}:\d{2}$/)) {
+    // Check if it's already in DD/MM/YYYY, HH:MM:SS AM/PM format (from backend)
+    const ddmmyyyyRegex = /^(\d{2})\/(\d{2})\/(\d{4}),\s+(\d{2}):(\d{2}):(\d{2})\s+(AM|PM)$/;
+    const match = date.match(ddmmyyyyRegex);
+
+    if (match) {
+      // Parse the backend format and treat it as UTC
+      const [, day, month, year, hourStr, minute, second, ampm] = match;
+      let hour = parseInt(hourStr);
+
+      // Convert 12-hour to 24-hour format
+      if (ampm === 'PM' && hour !== 12) hour += 12;
+      if (ampm === 'AM' && hour === 12) hour = 0;
+
+      // Create date in UTC
+      const utcDateStr = `${year}-${month}-${day}T${hour.toString().padStart(2, '0')}:${minute}:${second}Z`;
+      dateObj = new Date(utcDateStr);
+    } else if (date.includes('Z') || date.includes('+') || date.match(/[+-]\d{2}:\d{2}$/)) {
       // Already has timezone info, parse directly
       dateObj = new Date(date);
     } else if (date.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
       // ISO format without timezone - assume it's UTC
       dateObj = new Date(date + 'Z');
     } else {
-      // Other formats
+      // Other formats - try to parse directly
       dateObj = new Date(date);
     }
   } else {
     dateObj = date;
   }
 
-  if (isNaN(dateObj.getTime())) return '';
+  if (isNaN(dateObj.getTime())) return date?.toString() || '';
 
   // Format components individually for consistency
   const day = dateObj.getDate().toString().padStart(2, '0');
@@ -160,6 +175,37 @@ export const getUserTimezone = (): string => {
   const short = now.toLocaleTimeString('en-US', { timeZoneName: 'short' });
   const match = short.match(/[A-Z]{2,}/g);
   return match ? match[0] : timezone;
+};
+
+/**
+ * Get user's full timezone name
+ * @returns Full timezone name (e.g., "America/New_York", "Asia/Kolkata")
+ */
+export const getUserTimezoneFull = (): string => {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+};
+
+/**
+ * Format timestamp for display with local timezone
+ * @param timestamp - Timestamp string or Date object
+ * @returns Formatted timestamp with timezone indicator
+ */
+export const formatTimestamp = (timestamp: Date | string | null | undefined): string => {
+  if (!timestamp) return '';
+
+  const formatted = formatDateTimeLocal(timestamp);
+  const tz = getUserTimezone();
+
+  return formatted ? `${formatted} (${tz})` : '';
+};
+
+/**
+ * Format timestamp for display without timezone indicator
+ * @param timestamp - Timestamp string or Date object
+ * @returns Formatted timestamp in local time
+ */
+export const formatTimestampLocal = (timestamp: Date | string | null | undefined): string => {
+  return formatDateTimeLocal(timestamp);
 };
 
 /**

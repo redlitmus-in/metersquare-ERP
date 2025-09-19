@@ -1,6 +1,7 @@
 // Lazy load heavy libraries only when needed
 import { saveAs } from 'file-saver';
 import { Purchase, Material } from '@/roles/procurement/services/procurementService';
+import { formatDate as formatDateLocal, formatDateTimeLocal } from '@/utils/dateFormatter';
 
 // Extend jsPDF type for autoTable
 declare module 'jspdf' {
@@ -12,13 +13,9 @@ declare module 'jspdf' {
   }
 }
 
-// Format date for display
+// Format date for display - uses local timezone
 const formatDate = (date: string | Date) => {
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+  return formatDateLocal(date);
 };
 
 // Format currency
@@ -195,7 +192,7 @@ export const exportToExcel = async (purchases: Purchase[], title: string = 'Purc
     { 'Metric': 'Pending Requests', 'Value': purchases.filter(p => !p.latest_status || p.latest_status === 'pending').length },
     { 'Metric': 'Approved Requests', 'Value': purchases.filter(p => p.latest_status === 'approved').length },
     { 'Metric': 'Rejected Requests', 'Value': purchases.filter(p => p.latest_status === 'rejected').length },
-    { 'Metric': 'Report Generated', 'Value': new Date().toLocaleString() }
+    { 'Metric': 'Report Generated', 'Value': formatDateTimeLocal(new Date()) }
   ];
   const ws3 = XLSX.utils.json_to_sheet(summaryData);
   XLSX.utils.book_append_sheet(wb, ws3, 'Summary');

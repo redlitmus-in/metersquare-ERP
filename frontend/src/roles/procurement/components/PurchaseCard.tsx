@@ -1,5 +1,6 @@
 import React, { forwardRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { formatDate, formatDateTimeLocal } from '@/utils/dateFormatter';
 import {
   FileText,
   Building2,
@@ -290,7 +291,7 @@ const PurchaseCard = forwardRef<HTMLDivElement, PurchaseCardProps>(({
                   {purchase.prNumber || `PR-${purchase.purchase_id}`}
                 </h3>
                 <p className="text-xs text-gray-500">
-                  {new Date(purchase.date || purchase.created_at).toLocaleDateString()}
+                  {formatDate(purchase.date || purchase.created_at)}
                 </p>
               </div>
             </div>

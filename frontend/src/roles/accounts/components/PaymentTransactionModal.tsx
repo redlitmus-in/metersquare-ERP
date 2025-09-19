@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { formatDateTimeLocal } from '@/utils/dateFormatter';
 import {
   Dialog,
   DialogContent,
@@ -279,7 +280,7 @@ const PaymentTransactionModal: React.FC<PaymentTransactionModalProps> = ({
       if (transaction.created_at) {
         pdf.setFontSize(9);
         pdf.setTextColor(100, 100, 100);
-        pdf.text(`Created: ${new Date(transaction.created_at).toLocaleString()}`, 20, yPosition);
+        pdf.text(`Created: ${formatDateTimeLocal(transaction.created_at)}`, 20, yPosition);
         yPosition += 5;
       }
 
@@ -402,7 +403,7 @@ const PaymentTransactionModal: React.FC<PaymentTransactionModalProps> = ({
                             <Calendar className="h-4 w-4 text-gray-400" />
                             <span className="text-gray-500">Created:</span>
                             <span className="font-medium">
-                              {new Date(transaction.created_at).toLocaleString()}
+                              {formatDateTimeLocal(transaction.created_at)}
                             </span>
                           </div>
                         )}

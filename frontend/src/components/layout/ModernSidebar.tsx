@@ -1,4 +1,4 @@
-import React, { Fragment, useState } from 'react';
+import React, { Fragment, useState, useMemo, useCallback, memo } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -50,7 +50,127 @@ interface SidebarProps {
   setSidebarOpen: (open: boolean) => void;
 }
 
-const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
+// Memoized Navigation Item Component
+const NavigationItemComponent = memo<{
+  item: NavigationItem;
+  isActive: boolean;
+  isCollapsed: boolean;
+  isExpanded: boolean;
+  hasChildren: boolean;
+  onToggleSection: (name: string) => void;
+  onNavigate: () => void;
+}>(({ item, isActive, isCollapsed, isExpanded, hasChildren, onToggleSection, onNavigate }) => {
+  const IconComponent = isActive ? item.iconSolid : item.icon;
+
+  if (hasChildren) {
+    return (
+      <div className="flex items-center">
+        <Link
+          to={item.href}
+          onClick={() => {
+            onNavigate();
+            if (!isExpanded) {
+              onToggleSection(item.name.toLowerCase());
+            }
+          }}
+          title={isCollapsed ? item.name : ''}
+          className={clsx(
+            'flex-1 group flex items-center transition-colors duration-150 text-xs font-medium rounded-lg',
+            isCollapsed ? 'px-2 py-2 justify-center' : 'px-2.5 py-2',
+            isActive
+              ? item.name === 'Procurement'
+                ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-900 shadow-md border border-red-200'
+                : 'bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 text-[#243d8a] shadow-md border border-[#243d8a]/20'
+              : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+          )}
+        >
+          <div className="flex items-center">
+            <div className={clsx(
+              'rounded-md transition-colors duration-150',
+              isCollapsed ? 'p-1.5' : 'p-1.5 mr-2',
+              isActive
+                ? item.name === 'Procurement'
+                  ? 'bg-red-500 shadow-lg'
+                  : 'bg-[#243d8a] shadow-lg'
+                : 'bg-gray-100 group-hover:bg-gray-200'
+            )}>
+              <IconComponent className={clsx(
+                'w-4 h-4 transition-colors duration-150',
+                isActive ? 'text-white' : item.color || 'text-gray-500'
+              )} />
+            </div>
+            {!isCollapsed && <span className="font-semibold">{item.name}</span>}
+          </div>
+        </Link>
+        {!isCollapsed && (
+          <button
+            onClick={() => onToggleSection(item.name.toLowerCase())}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            title={`Toggle ${item.name} section`}
+            aria-label={`Toggle ${item.name} section`}
+          >
+            <ChevronRightIcon
+              className={clsx(
+                'w-4 h-4 transition-transform duration-200',
+                isExpanded ? 'transform rotate-90' : '',
+                isActive ? 'text-gray-700' : 'text-gray-400'
+              )}
+            />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={item.href}
+      onClick={onNavigate}
+      title={isCollapsed ? item.name : ''}
+      className={clsx(
+        'group flex items-center transition-colors duration-150 text-xs font-medium rounded-lg relative overflow-hidden',
+        isCollapsed ? 'px-2 py-2 justify-center' : 'px-2.5 py-2',
+        isActive
+          ? item.name === 'Procurement'
+            ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-900 shadow-md border border-red-200'
+            : 'bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 text-[#243d8a] shadow-md border border-[#243d8a]/20'
+          : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+      )}
+    >
+      {isActive && (
+        <div className={clsx(
+          "absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 rounded-r-full",
+          item.name === 'Procurement' ? 'bg-red-500' : 'bg-[#243d8a]'
+        )}></div>
+      )}
+      <div className={clsx(
+        'rounded-md transition-colors duration-150',
+        isCollapsed ? 'p-1.5' : 'p-1.5 mr-2',
+        isActive
+          ? item.name === 'Procurement'
+            ? 'bg-red-500 shadow-lg'
+            : 'bg-[#243d8a] shadow-lg'
+          : 'bg-gray-100 group-hover:bg-gray-200'
+      )}>
+        <IconComponent className={clsx(
+          'w-4 h-4 transition-colors duration-150',
+          isActive ? 'text-white' : item.color || 'text-gray-500'
+        )} />
+      </div>
+      {!isCollapsed && <span className="font-semibold">{item.name}</span>}
+      <div className={clsx(
+        "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-xl",
+        item.name === 'Procurement'
+          ? 'bg-gradient-to-r from-red-500/5 to-red-500/10'
+          : 'bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10'
+      )}></div>
+    </Link>
+  );
+});
+
+NavigationItemComponent.displayName = 'NavigationItemComponent';
+
+const ModernSidebar: React.FC<SidebarProps> = memo(({ sidebarOpen, setSidebarOpen }) => {
   const location = useLocation();
   const { user, getRoleDashboard } = useAuthStore();
   const roleName = getRoleDisplayName(user?.role_id || '');
@@ -79,29 +199,29 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
     };
   }, []);
 
-  const toggleSection = (sectionName: string) => {
-    setExpandedSections(prev => 
-      prev.includes(sectionName) 
+  const toggleSection = useCallback((sectionName: string) => {
+    setExpandedSections(prev =>
+      prev.includes(sectionName)
         ? prev.filter(name => name !== sectionName)
         : [...prev, sectionName]
     );
-  };
+  }, []);
 
-  const toggleSidebar = () => {
+  const toggleSidebar = useCallback(() => {
     const newState = !isCollapsed;
     setIsCollapsed(newState);
     localStorage.setItem('sidebarCollapsed', String(newState));
     // Dispatch event for same-tab updates
     window.dispatchEvent(new Event('sidebarToggle'));
-  };
+  }, [isCollapsed]);
 
-  // Enhanced navigation with sections and colors
-  const getNavigationItems = (): NavigationItem[] => {
+  // Memoized navigation items to prevent re-calculation on every render
+  const navigation = useMemo(() => {
     const roleId = user?.role_id;
-    
+
     // Build role-prefixed paths
     const buildPath = (path: string) => buildRolePath(roleId || '', path);
-    
+
     const baseItems: NavigationItem[] = [
       { 
         name: `Dashboard`, 
@@ -168,11 +288,9 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
 
     // Profile removed from sidebar - use header dropdown instead
     return navigation;
-  };
+  }, [user?.role_id]);
 
-  const navigation = getNavigationItems();
-
-  const isPathActive = (href: string) => {
+  const isPathActive = useCallback((href: string) => {
     // Extract the base path from both href and location
     const pathParts = location.pathname.split('/').filter(Boolean);
     const hrefParts = href.split('/').filter(Boolean);
@@ -189,10 +307,11 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
     }
     
     return false;
-  };
+  }, [location.pathname]);
 
-  const SidebarContent = () => (
-    <div className="flex flex-col h-full bg-white border-r border-gray-200 shadow-xl">
+  const SidebarContent = useCallback(() => {
+    return (
+      <div className="flex flex-col h-full bg-white border-r border-gray-200 shadow-xl will-change-auto">
       {/* Logo Section with Toggle Button */}
       <div className={clsx(
         "border-b border-gray-100 transition-all duration-300",
@@ -252,135 +371,38 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
 
       {/* Navigation */}
       <div className={clsx(
-        "flex-1 flex flex-col overflow-y-auto transition-all duration-300",
+        "flex-1 flex flex-col overflow-y-auto transition-[padding] duration-200",
         isCollapsed ? "py-2 px-1" : "py-3 px-2"
       )}>
         <nav className="flex-1 space-y-1">
-          {navigation.map((item, index) => {
+          {navigation.map((item) => {
             const isActive = isPathActive(item.href);
             const hasChildren = item.children && item.children.length > 0;
             const isExpanded = expandedSections.includes(item.name.toLowerCase());
-            const IconComponent = isActive ? item.iconSolid : item.icon;
 
             return (
               <div key={item.name}>
                 {/* Main Navigation Item */}
                 <div className="relative">
-                  {hasChildren ? (
-                    <div className="flex items-center">
-                      <Link
-                        to={item.href}
-                        onClick={() => {
-                          setSidebarOpen(false);
-                          // Auto-expand when navigating to parent
-                          if (!expandedSections.includes(item.name.toLowerCase())) {
-                            toggleSection(item.name.toLowerCase());
-                          }
-                        }}
-                        title={isCollapsed ? item.name : ''}
-                        className={clsx(
-                          'flex-1 group flex items-center transition-all duration-200 text-xs font-medium rounded-lg',
-                          isCollapsed ? 'px-2 py-2 justify-center' : 'px-2.5 py-2',
-                          isActive 
-                            ? item.name === 'Procurement' 
-                              ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-900 shadow-md border border-red-200'
-                              : 'bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 text-[#243d8a] shadow-md border border-[#243d8a]/20'
-                            : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                        )}
-                      >
-                        <div className="flex items-center">
-                          <div className={clsx(
-                            'rounded-md transition-colors duration-200',
-                            isCollapsed ? 'p-1.5' : 'p-1.5 mr-2',
-                            isActive 
-                              ? item.name === 'Procurement'
-                                ? 'bg-red-500 shadow-lg' 
-                                : 'bg-[#243d8a] shadow-lg'
-                              : 'bg-gray-100 group-hover:bg-gray-200'
-                          )}>
-                            <IconComponent className={clsx(
-                              'w-4 h-4 transition-colors duration-200',
-                              isActive ? 'text-white' : item.color || 'text-gray-500'
-                            )} />
-                          </div>
-                          {!isCollapsed && <span className="font-semibold">{item.name}</span>}
-                        </div>
-                      </Link>
-                      {!isCollapsed && (
-                        <button
-                          onClick={() => toggleSection(item.name.toLowerCase())}
-                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                          title={`Toggle ${item.name} section`}
-                          aria-label={`Toggle ${item.name} section`}
-                        >
-                          <ChevronRightIcon 
-                            className={clsx(
-                              'w-4 h-4 transition-transform duration-200',
-                              isExpanded ? 'transform rotate-90' : '',
-                              isActive ? 'text-gray-700' : 'text-gray-400'
-                            )} 
-                          />
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <Link
-                      to={item.href}
-                      onClick={() => setSidebarOpen(false)}
-                      title={isCollapsed ? item.name : ''}
-                      className={clsx(
-                        'group flex items-center transition-all duration-200 text-xs font-medium rounded-lg relative overflow-hidden',
-                        isCollapsed ? 'px-2 py-2 justify-center' : 'px-2.5 py-2',
-                        isActive 
-                          ? item.name === 'Procurement' 
-                            ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-900 shadow-md border border-red-200'
-                            : 'bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 text-[#243d8a] shadow-md border border-[#243d8a]/20'
-                          : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                      )}
-                    >
-                      {/* Active indicator */}
-                      {isActive && (
-                        <div className={clsx(
-                          "absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 rounded-r-full",
-                          item.name === 'Procurement' ? 'bg-red-500' : 'bg-[#243d8a]'
-                        )}></div>
-                      )}
-                      
-                      <div className={clsx(
-                        'rounded-md transition-colors duration-200',
-                        isCollapsed ? 'p-1.5' : 'p-1.5 mr-2',
-                        isActive 
-                          ? item.name === 'Procurement'
-                            ? 'bg-red-500 shadow-lg' 
-                            : 'bg-[#243d8a] shadow-lg'
-                          : 'bg-gray-100 group-hover:bg-gray-200'
-                      )}>
-                        <IconComponent className={clsx(
-                          'w-4 h-4 transition-colors duration-200',
-                          isActive ? 'text-white' : item.color || 'text-gray-500'
-                        )} />
-                      </div>
-                      {!isCollapsed && <span className="font-semibold">{item.name}</span>}
-                      
-                      {/* Hover glow effect */}
-                      <div className={clsx(
-                        "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl",
-                        item.name === 'Procurement' 
-                          ? 'bg-gradient-to-r from-red-500/5 to-red-500/10' 
-                          : 'bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10'
-                      )}></div>
-                    </Link>
-                  )}
+                  <NavigationItemComponent
+                    item={item}
+                    isActive={isActive}
+                    isCollapsed={isCollapsed}
+                    isExpanded={isExpanded}
+                    hasChildren={hasChildren || false}
+                    onToggleSection={toggleSection}
+                    onNavigate={() => setSidebarOpen(false)}
+                  />
                 </div>
 
                 {/* Submenu - Hide when collapsed */}
-                <AnimatePresence>
+                <AnimatePresence mode="wait">
                   {hasChildren && isExpanded && !isCollapsed && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2 }}
+                      transition={{ duration: 0.15, ease: 'easeInOut' }}
                       className="ml-6 mt-2 space-y-1 border-l-2 border-red-100 pl-3"
                     >
                       {item.children?.map((child) => {
@@ -465,13 +487,13 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
               </button>
 
               {/* Dropdown Menu */}
-              <AnimatePresence>
+              <AnimatePresence mode="wait">
                 {userDropdownOpen && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.15 }}
+                    transition={{ duration: 0.12, ease: 'easeInOut' }}
                     className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50"
                   >
                     <Link
@@ -509,8 +531,9 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
           <div className="mt-2 w-full h-0.5 bg-gradient-to-r from-transparent via-[#243d8a]/30 to-transparent"></div>
         </div>
       </div>
-    </div>
-  );
+      </div>
+    );
+  }, [navigation, isCollapsed, expandedSections, user, userDropdownOpen, toggleSection, toggleSidebar, isPathActive, setSidebarOpen]);
 
   return (
     <>
@@ -570,7 +593,7 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
 
       {/* Static sidebar for desktop */}
       <div className={clsx(
-        "hidden md:flex md:flex-col md:fixed md:inset-y-0 z-40 transition-all duration-300",
+        "hidden md:flex md:flex-col md:fixed md:inset-y-0 z-40 transition-[width] duration-200 ease-in-out",
         isCollapsed ? "md:w-16" : "md:w-56"
       )}>
         <div className="flex-1 flex flex-col min-h-0">
@@ -579,6 +602,11 @@ const ModernSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) 
       </div>
     </>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison to prevent unnecessary re-renders
+  return prevProps.sidebarOpen === nextProps.sidebarOpen;
+});
+
+ModernSidebar.displayName = 'ModernSidebar';
 
 export default ModernSidebar;

@@ -7,7 +7,7 @@ import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { apiClient } from '@/api/config';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import { format, formatDistance } from 'date-fns';
+import { formatDateTimeLocal, formatDate } from '@/utils/dateFormatter';
 
 interface PurchaseDetailsModalProps {
   isOpen: boolean;
@@ -282,11 +282,11 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({ isOpen, onC
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Date</p>
-                  <p className="font-medium">{purchaseDetails.date}</p>
+                  <p className="font-medium">{formatDateTimeLocal(purchaseDetails.date)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Created At</p>
-                  <p className="font-medium">{purchaseDetails.created_at}</p>
+                  <p className="font-medium">{formatDateTimeLocal(purchaseDetails.created_at)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">User</p>

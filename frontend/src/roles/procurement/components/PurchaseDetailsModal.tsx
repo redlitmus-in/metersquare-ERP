@@ -506,11 +506,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                 <div className="flex-1">
                                   <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Request Date</p>
                                   <p className="text-sm font-semibold text-gray-900 mt-0.5">
-                                    {new Date(purchase.date || purchase.created_at).toLocaleDateString('en-US', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric'
-                                    })}
+                                    {formatDateTimeLocal(purchase.date || purchase.created_at)}
                                   </p>
                                 </div>
                               </div>
@@ -641,7 +637,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                           </Badge>
                                         </div>
                                         <span className="text-xs text-gray-500">
-                                          {new Date(approval.timestamp).toLocaleString()}
+                                          {formatDateTimeLocal(approval.timestamp)}
                                         </span>
                                       </div>
                                       {approval.comments && (
@@ -898,14 +894,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                     <div>
                                       <p className="text-xs text-blue-600">Decision Date</p>
                                       <p className="text-sm font-semibold text-gray-900">
-                                        {latestStatus.decision_date ? 
-                                          new Date(latestStatus.decision_date).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            year: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit'
-                                          }) : 'N/A'}
+                                        {latestStatus.decision_date ?
+                                          formatDateTimeLocal(latestStatus.decision_date) : 'N/A'}
                                       </p>
                                     </div>
                                   </div>
@@ -1003,14 +993,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   <span className="text-sm text-gray-600">Created At</span>
                                 </div>
                                 <span className="text-sm font-semibold text-gray-900">
-                                  {latestStatus.created_at ? 
-                                    new Date(latestStatus.created_at).toLocaleString('en-US', {
-                                      month: 'short',
-                                      day: 'numeric',
-                                      year: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    }) : 'N/A'}
+                                  {latestStatus.created_at ?
+                                    formatDateTimeLocal(latestStatus.created_at) : 'N/A'}
                                 </span>
                               </div>
                               
@@ -1020,14 +1004,8 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                                   <span className="text-sm text-gray-600">Last Modified</span>
                                 </div>
                                 <span className="text-sm font-semibold text-gray-900">
-                                  {latestStatus.last_modified_at ? 
-                                    new Date(latestStatus.last_modified_at).toLocaleString('en-US', {
-                                      month: 'short',
-                                      day: 'numeric',
-                                      year: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    }) : 'N/A'}
+                                  {latestStatus.last_modified_at ?
+                                    formatDateTimeLocal(latestStatus.last_modified_at) : 'N/A'}
                                 </span>
                               </div>
                               
@@ -1120,14 +1098,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
                             <span className="text-gray-500">Date: </span>
                             <span className="text-gray-900">
                               {purchase?.date
-                                ? new Date(purchase.date).toLocaleString('en-US', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    year: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                    hour12: true
-                                  })
+                                ? formatDateTimeLocal(purchase.date)
                                 : 'N/A'}
                             </span>
                           </div>
