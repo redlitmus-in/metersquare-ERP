@@ -195,6 +195,14 @@ const EstimationHub: React.FC = () => {
   useEffect(() => {
     if (purchases.length > 0) {
         const allPurchases = purchases;
+
+        // Debug logging for rejected purchases
+        console.log('All purchases:', allPurchases.length);
+        allPurchases.forEach(p => {
+          if (p.status_info?.estimation_status === 'rejected') {
+            console.log(`Purchase ${p.purchase_id} - estimation_status: ${p.status_info.estimation_status}, sender: ${p.status_info.sender}`);
+          }
+        });
         
         // Extract unique categories from all purchases
         const categories = new Set<string>();
@@ -259,9 +267,8 @@ const EstimationHub: React.FC = () => {
               });
             }
 
-            // Check if estimation itself rejected (not TD rejection)
-            const isEstimationRejected = estimationStatus === 'rejected' &&
-                                         p.status_info?.sender === 'estimation';
+            // Check if estimation rejected (regardless of who the sender is in current status)
+            const isEstimationRejected = estimationStatus === 'rejected';
 
             // IMPORTANT: Check TD rejection FIRST before checking estimation status
             if (isTDRejected) {
@@ -383,18 +390,18 @@ const EstimationHub: React.FC = () => {
         
       case 'rejected':
         filtered = purchases.filter(p => {
-          const isCompleted = p.latest_status?.status === 'completed' || 
+          const isCompleted = p.latest_status?.status === 'completed' ||
                              p.latest_status?.status === 'complete' ||
                              p.status_info?.completed_status === 'completed' ||
                              p.accounts_acknowledgement === true ||
                              (p.status_info?.receiver === 'accounts' && p.status_info?.accounts_status === 'approved') ||
                              (p.status_info?.sender === 'accounts' && p.status_info?.status === 'approved');
           if (isCompleted) return false;
-          
+
           const estimationStatus = p.status_info?.estimation_status?.toLowerCase();
-          const isEstimationRejected = estimationStatus === 'rejected' && 
-                                       p.status_info?.sender === 'estimation';
-          return isEstimationRejected;
+          // Show any purchase where estimation status is rejected, regardless of sender
+          // This includes purchases that estimation has rejected (either sent back to procurement or PM)
+          return estimationStatus === 'rejected';
         });
         break;
         
@@ -560,6 +567,14 @@ const EstimationHub: React.FC = () => {
         return aValue < bValue ? 1 : -1;
       }
     });
+
+    // Debug logging for filtered results
+    if (activeTab === 'rejected') {
+      console.log(`Rejected tab filtering: ${filtered.length} purchases found`);
+      filtered.forEach(p => {
+        console.log(`- Purchase ${p.purchase_id}: estimation_status=${p.status_info?.estimation_status}, sender=${p.status_info?.sender}`);
+      });
+    }
 
     setFilteredPurchases(filtered);
   }, [purchases, activeTab, sortBy, sortOrder, filterByAmount, filterByPriority, filterByCategory, searchTerm, statusFilter, projectFilter, locationFilter, dateFilter]);

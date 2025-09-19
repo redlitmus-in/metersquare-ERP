@@ -807,189 +807,201 @@ def get_all_estimation_purchase_request():
 
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
+
         # Check if user is Estimation team
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
         if not role or role.role != 'estimation':
             return jsonify({'error': 'Only Estimation team can access purchase requests'}), 403
-        # Optimized query without ordering (will sort later)
+
+        # Import PurchaseHistory to check historical involvement
+        from models.purchase_history import PurchaseHistory
+
+        # Fetch all active statuses for estimation's view
         all_statuses = PurchaseStatus.query.filter(
-            and_(
-                PurchaseStatus.is_active == True,
-                ~PurchaseStatus.role.in_(['siteSupervisor', 'procurement'])
-            )
+            PurchaseStatus.is_active == True
         ).all()
 
-        latest_overall_status = {}  # Latest status record for display
-        estimation_decisions = {}  # Track estimation team's actual decisions
-        pm_decisions = {}  # Track PM's decisions
+        latest_overall_status = {}
+        estimation_decisions = {}
+        pm_decisions = {}
 
-        # Local storage for tracking estimation history
-        estimation_history = {}  # Store estimation's rejection/approval history
-        estimation_resubmission_tracker = {}  # Track if purchase returned after rejection
+        # Tracking structures
+        estimation_history = {}
+        estimation_resubmission_tracker = {}
 
-        # Group statuses by purchase_id using defaultdict for efficiency
         from collections import defaultdict
         purchase_status_map = defaultdict(list)
         for status in all_statuses:
             purchase_status_map[status.purchase_id].append(status)
-        
-        # Process each purchase to find relevant statuses
+
+        # Also get all purchase histories to check for estimation involvement
+        all_histories = PurchaseHistory.query.filter_by(is_active=True).all()
+        estimation_historical_involvement = {}
+
+        for history in all_histories:
+            if history.action:
+                actions = history.action if isinstance(history.action, list) else [history.action]
+                estimation_actions = []
+
+                for action in actions:
+                    if isinstance(action, dict):
+                        # Check if estimation was sender or receiver in any action
+                        if action.get('sender') == 'estimation' or action.get('receiver') == 'estimation':
+                            estimation_actions.append(action)
+
+                if estimation_actions:
+                    # Get the latest estimation action
+                    latest_estimation_action = None
+                    for action in reversed(actions):
+                        if isinstance(action, dict) and action.get('sender') == 'estimation':
+                            latest_estimation_action = action
+                            break
+
+                    estimation_historical_involvement[history.purchase_id] = {
+                        'involved': True,
+                        'latest_action': latest_estimation_action
+                    }
+
         for purchase_id, statuses in purchase_status_map.items():
-            # Sort statuses by created_at (oldest to newest) to process in order
             statuses.sort(key=lambda x: x.created_at)
 
-            # Track if estimation has ever been involved
             estimation_involved = False
-            last_estimation_action = None
-            estimation_has_decided = False
             estimation_rejection_timestamp = None
             received_after_rejection = False
-            is_back_with_estimation = False  # Track if purchase returned to estimation
+            is_back_with_estimation = False
+            accounts_involved = False
 
-            # Check all statuses to see if estimation is involved
-            accounts_involved = False  # Track if accounts role is present
+            # Check if estimation was historically involved (from purchase history)
+            if purchase_id in estimation_historical_involvement:
+                estimation_involved = True
+                hist_data = estimation_historical_involvement[purchase_id]
+                if hist_data.get('latest_action'):
+                    latest_action = hist_data['latest_action']
+                    if latest_action.get('status') == 'rejected':
+                        estimation_history[purchase_id] = {
+                            'status': 'rejected',
+                            'timestamp': latest_action.get('timestamp')
+                        }
 
             for status in statuses:
-                # Check if role is accounts - mark as completed
                 if status.role == 'accounts':
                     accounts_involved = True
-                    estimation_involved = True  # Include in estimation's view
-
-                # Check if estimation sent something (made a decision)
-                if status.sender == 'estimation':
                     estimation_involved = True
-                    estimation_has_decided = True
-                    last_estimation_action = status
 
-                    # Store estimation's decision in local history
+                # Check if estimation is involved as sender or receiver
+                if status.sender == 'estimation' or status.receiver == 'estimation':
+                    estimation_involved = True
+
+                if status.sender == 'estimation':
                     if status.status == 'rejected':
                         estimation_rejection_timestamp = status.created_at
-                        # Store rejection in history
-                        if purchase_id not in estimation_history:
-                            estimation_history[purchase_id] = {'status': 'rejected', 'timestamp': status.created_at, 'first_rejection': True}
-                        else:
-                            estimation_history[purchase_id]['status'] = 'rejected'
-                            estimation_history[purchase_id]['timestamp'] = status.created_at
+                        estimation_history[purchase_id] = {
+                            'status': 'rejected',
+                            'timestamp': status.created_at
+                        }
                     elif status.status == 'approved':
-                        estimation_history[purchase_id] = {'status': 'approved', 'timestamp': status.created_at, 'first_rejection': False}
+                        estimation_history[purchase_id] = {
+                            'status': 'approved',
+                            'timestamp': status.created_at
+                        }
 
-                # Check if estimation received something
                 elif status.receiver == 'estimation':
-                    estimation_involved = True
-
-                    # Check if this is AFTER a rejection (re-submission)
                     if estimation_rejection_timestamp and status.created_at > estimation_rejection_timestamp:
                         received_after_rejection = True
-                        is_back_with_estimation = True  # Purchase is back with estimation
+                        is_back_with_estimation = True
                         estimation_resubmission_tracker[purchase_id] = True
 
-                # Check if PM sent to estimation initially or in re-submission
-                elif status.sender == 'projectManager' and status.receiver == 'estimation':
+                # Check if projectManager sent to estimation (either approved or pending)
+                if status.sender == 'projectManager':
+                    if status.receiver == 'estimation' or (status.status == 'approved' and
+                                                           (len(statuses) > statuses.index(status) + 1 and
+                                                           any(s.receiver == 'estimation' for s in statuses[statuses.index(status) + 1:]))):
+                        estimation_involved = True
+                        if estimation_rejection_timestamp and status.created_at > estimation_rejection_timestamp:
+                            is_back_with_estimation = True
+
+                # IMPORTANT: If estimation previously acted on this purchase (approved/rejected),
+                # it should remain visible in estimation dashboard
+                if purchase_id in estimation_history:
                     estimation_involved = True
-                    # If this happens after estimation rejected, it's a re-submission
-                    if estimation_rejection_timestamp and status.created_at > estimation_rejection_timestamp:
-                        is_back_with_estimation = True
 
-            # Get the latest status
             latest_status = statuses[-1] if statuses else None
-
-            # Skip if estimation was never involved
             if not estimation_involved:
                 continue
 
-            # Initialize estimation status
             estimation_status_to_show = 'pending'
 
-            # Determine estimation_status based on the latest status and local tracking
             if latest_status:
-                # Priority rules based on requirements:
-
-                # Rule 0: If role is accounts OR accounts was involved, show completed
                 if latest_status.role == 'accounts' or accounts_involved:
                     estimation_status_to_show = 'completed'
 
-                # Rule 1: If receiver is accounts, show completed
                 elif latest_status.receiver == 'accounts':
                     estimation_status_to_show = 'completed'
 
-                # CRITICAL: Check if purchase is back with estimation after rejection
-                # This has highest priority after accounts check
                 elif is_back_with_estimation or (latest_status.receiver == 'estimation' and received_after_rejection):
-                    estimation_status_to_show = 'pending'  # Override to pending for re-review
+                    estimation_status_to_show = 'pending'
 
-                # Rule 2: If receiver is estimation AND status is rejected, show pending
                 elif latest_status.receiver == 'estimation' and latest_status.status == 'rejected':
                     estimation_status_to_show = 'pending'
 
-                # Rule 3: If receiver is estimation (any other case), show pending
                 elif latest_status.receiver == 'estimation':
-                    estimation_status_to_show = 'pending'  # Waiting for estimation action
+                    estimation_status_to_show = 'pending'
 
-                # Rule 4: If sender is estimation, show the original status
-                # BUT only if not back with estimation
-                elif latest_status.sender == 'estimation' and not is_back_with_estimation:
-                    estimation_status_to_show = latest_status.status
+                elif latest_status.sender == 'estimation':
+                    # Rule: If rejected, show rejected status
+                    if latest_status.status == 'rejected':
+                        # Check if it's sent back to procurement (cost rejection) or PM (PM flag)
+                        if latest_status.receiver in ['procurement', 'projectManager']:
+                            estimation_status_to_show = 'rejected'
+                        else:
+                            estimation_status_to_show = 'rejected'
+                    elif is_back_with_estimation or received_after_rejection:
+                        estimation_status_to_show = 'pending'
+                    else:
+                        estimation_status_to_show = latest_status.status
 
-                # Rule 5: If sender is projectManager and status is rejected, show rejected
                 elif latest_status.sender == 'projectManager' and latest_status.status == 'rejected':
                     estimation_status_to_show = 'rejected'
 
-                # Rule 6: If sender is procurement
                 elif latest_status.sender == 'procurement':
-                    # Check local history - if estimation had rejected
                     if purchase_id in estimation_history and estimation_history[purchase_id]['status'] == 'rejected':
-                        # If going back to PM (re-submission flow), show as pending
-                        if latest_status.receiver == 'projectManager':
-                            estimation_status_to_show = 'pending'  # Will come back to estimation
+                        if is_back_with_estimation or received_after_rejection:
+                            estimation_status_to_show = 'pending'
                         else:
-                            estimation_status_to_show = 'rejected'  # Still in rejection flow
-                    else:
-                        estimation_status_to_show = 'rejected'  # Default for procurement sender
-
-                # Rule 7: If sender is technicalDirector and status is approved
-                elif latest_status.sender == 'technicalDirector' and latest_status.status == 'approved':
-                    estimation_status_to_show = 'approved'
-
-                # Rule 8: If sender is technicalDirector and status is rejected
-                elif latest_status.sender == 'technicalDirector' and latest_status.status == 'rejected':
-                    if latest_status.receiver == 'estimation':
-                        estimation_status_to_show = 'pending'  # Back to estimation for re-work
+                            estimation_status_to_show = 'rejected'
                     else:
                         estimation_status_to_show = 'rejected'
 
-                # Default: Check local history for estimation's last action
-                elif purchase_id in estimation_history:
-                    # If we have a history, use it BUT check for re-submission
-                    # IMPORTANT: If purchase is back with estimation, always show pending
-                    if is_back_with_estimation or received_after_rejection:
-                        estimation_status_to_show = 'pending'  # Override to pending for re-submission
+                elif latest_status.sender == 'technicalDirector' and latest_status.status == 'approved':
+                    estimation_status_to_show = 'approved'
+
+                elif latest_status.sender == 'technicalDirector' and latest_status.status == 'rejected':
+                    if latest_status.receiver == 'estimation':
+                        estimation_status_to_show = 'pending'
                     else:
-                        # Use stored history only if purchase is NOT back with estimation
+                        estimation_status_to_show = 'rejected'
+
+                elif purchase_id in estimation_history:
+                    if is_back_with_estimation or received_after_rejection:
+                        estimation_status_to_show = 'pending'
+                    else:
                         estimation_status_to_show = estimation_history[purchase_id]['status']
 
-                # Final default
                 else:
                     estimation_status_to_show = 'pending'
 
-            # Since estimation is involved, always store this purchase
-            # Store the latest overall status for display
             latest_overall_status[purchase_id] = latest_status
 
-            # Store PM's decision - look for PM as sender in all statuses
+            # PM decision tracking
             pm_status = 'pending'
             for status in statuses:
                 if status.sender == 'projectManager':
                     pm_status = status.status
-                    # Don't break - get the latest PM decision
-
             pm_decisions[purchase_id] = {'status': pm_status}
 
-            # Store Estimation's decision using the new simplified logic
-            if estimation_status_to_show:
-                estimation_decisions[purchase_id] = {'status': estimation_status_to_show}
-            else:
-                estimation_decisions[purchase_id] = {'status': 'pending'}
-        # Get completed status information - optimized with set for O(1) lookups
+            estimation_decisions[purchase_id] = {'status': estimation_status_to_show}
+
+        # Completed check
         completed_status_records = PurchaseStatus.query.filter(
             and_(
                 PurchaseStatus.is_active == True,
@@ -998,37 +1010,34 @@ def get_all_estimation_purchase_request():
                 PurchaseStatus.receiver == 'accounts'
             )
         ).all()
-
-        # Use set for O(1) lookup performance
         completed_purchase_ids = {cs.purchase_id for cs in completed_status_records}
-        # Batch load all purchases at once to avoid N+1 queries
+
+        # Batch load purchases
         purchase_ids = list(latest_overall_status.keys())
         all_purchases = {p.purchase_id: p for p in
-                        Purchase.query.filter(
-                            and_(Purchase.purchase_id.in_(purchase_ids),
-                                Purchase.is_deleted == False)
-                        ).all()}
+                         Purchase.query.filter(
+                             and_(Purchase.purchase_id.in_(purchase_ids),
+                                  Purchase.is_deleted == False)
+                         ).all()}
 
-        # Collect all material IDs for batch loading
+        # Collect material ids
         all_material_ids = set()
         for p in all_purchases.values():
             if p.material_ids:
                 all_material_ids.update(p.material_ids)
 
-        # Batch load all materials at once
         all_materials = {}
         if all_material_ids:
             all_materials = {m.material_id: m for m in
-                           Material.query.filter(
-                               and_(Material.material_id.in_(list(all_material_ids)),
-                                   Material.is_deleted == False)
-                           ).all()}
+                             Material.query.filter(
+                                 and_(Material.material_id.in_(list(all_material_ids)),
+                                      Material.is_deleted == False)
+                             ).all()}
 
-        # Initialize statistics tracking for single-pass calculation
         stats = {'approved': {'count': 0, 'value': 0, 'quantity': 0},
-                'rejected': {'count': 0, 'value': 0, 'quantity': 0},
-                'pending': {'count': 0, 'value': 0, 'quantity': 0},
-                'completed': {'count': 0, 'value': 0, 'quantity': 0}}
+                 'rejected': {'count': 0, 'value': 0, 'quantity': 0},
+                 'pending': {'count': 0, 'value': 0, 'quantity': 0},
+                 'completed': {'count': 0, 'value': 0, 'quantity': 0}}
         total_value = 0
         total_quantity_sum = 0
 
@@ -1042,16 +1051,13 @@ def get_all_estimation_purchase_request():
             total_material_cost = 0
             total_quantity = 0
             if purchase.material_ids:
-                material_objects = [all_materials.get(mid) for mid in purchase.material_ids
-                                  if mid in all_materials]
-
+                material_objects = [all_materials.get(mid) for mid in purchase.material_ids if mid in all_materials]
                 for mat in material_objects:
                     if mat:
-                        material_cost = float(mat.cost or 0)  # Simplified null check
+                        material_cost = float(mat.cost or 0)
                         material_total = material_cost * mat.quantity
                         total_material_cost += material_total
                         total_quantity += mat.quantity
-
                         materials.append({
                             'material_id': mat.material_id,
                             'description': mat.description,
@@ -1064,13 +1070,12 @@ def get_all_estimation_purchase_request():
                             'priority': mat.priority,
                             'design_reference': mat.design_reference
                         })
+
             est_decision = estimation_decisions.get(purchase_id, {}).get('status', 'pending')
             pm_decision = pm_decisions.get(purchase_id, {}).get('status', 'pending')
-            
-            # Simplified completed status check using set for O(1) lookup
+
             completed_status_value = 'completed' if purchase_id in completed_purchase_ids else 'pending'
-            
-            # Create detailed purchase information
+
             purchase_detail = {
                 'purchase_id': purchase.purchase_id,
                 'project_id': purchase.project_id,
@@ -1089,8 +1094,8 @@ def get_all_estimation_purchase_request():
                 'last_modified_by': purchase.last_modified_by,
                 'status_info': {
                     'status_id': status.status_id,
-                    'pm_status': pm_decision,  # PM's actual decision
-                    'estimation_status': est_decision,  # Estimation's actual decision
+                    'pm_status': pm_decision,
+                    'estimation_status': est_decision,
                     'sender': status.sender,
                     'receiver': status.receiver,
                     'decision_date': status.decision_date.isoformat() if status.decision_date else None,
@@ -1105,17 +1110,15 @@ def get_all_estimation_purchase_request():
                     'completed_status': completed_status_value
                 }
             }
-            
+
             purchase_details.append(purchase_detail)
 
-            # Update statistics in single pass (avoiding multiple iterations)
             stats[est_decision]['count'] += 1
             stats[est_decision]['value'] += total_material_cost
             stats[est_decision]['quantity'] += total_quantity
             total_value += total_material_cost
             total_quantity_sum += total_quantity
 
-        # Sort by latest status creation date (newest first)
         purchase_details.sort(key=lambda x: x['status_info']['created_at'], reverse=True)
 
         total_count = len(purchase_details)
