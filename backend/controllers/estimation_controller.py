@@ -834,42 +834,102 @@ def get_all_estimation_purchase_request():
         for purchase_id, statuses in purchase_status_map.items():
             # Sort statuses by created_at (oldest to newest) to process in order
             statuses.sort(key=lambda x: x.created_at)
-            
-            # Track the latest decision from each role
-            latest_pm_status = None
-            latest_estimation_status = None
-            latest_status = None
-            
-            for status in statuses:
-                # Track PM's latest decision                  
-                if status.sender == 'projectManager' and status.receiver == 'estimation':
-                    latest_pm_status = status.status
 
-                if status.sender == 'projectManager' and status.receiver == 'estimation' and status.status == "approved":
-                    latest_estimation_status = 'pending'
-                # Track Estimation's latest decision (ONLY when estimation is the sender)
-                elif status.sender == 'estimation':
-                    latest_estimation_status = status.status
-                elif status.sender == 'technicalDirector' and status.receiver == 'estimation' and status.status == 'rejected':
-                    latest_estimation_status = 'pending'
-                elif status.sender == 'technicalDirector':
-                    latest_estimation_status = status.status
-                
-                # Track the overall latest status
-                latest_status = status
-            
+            # Track if estimation has ever been involved
+            estimation_involved = False
+            last_estimation_action = None
+            estimation_has_decided = False
+
+            # Check all statuses to see if estimation is involved
+            for status in statuses:
+                # Check if estimation sent something
+                if status.sender == 'estimation':
+                    estimation_involved = True
+                    estimation_has_decided = True
+                    last_estimation_action = status
+                # Check if estimation received something
+                elif status.receiver == 'estimation':
+                    estimation_involved = True
+                # Check if PM sent to estimation initially
+                elif status.sender == 'projectManager' and status.status == 'approved':
+                    estimation_involved = True
+
+            # Get the latest status
+            latest_status = statuses[-1] if statuses else None
+
+            # Skip if estimation was never involved
+            if not estimation_involved:
+                continue
+
+            # Initialize estimation status
+            estimation_status_to_show = 'pending'
+
+            # Determine estimation_status based on the latest status
+            if latest_status:
+                # Check if this is a re-submission (estimation rejected before, now back with estimation)
+                is_resubmission = (last_estimation_action and
+                                 last_estimation_action.status == 'rejected' and
+                                 latest_status.receiver == 'estimation' and
+                                 latest_status.created_at > last_estimation_action.created_at)
+
+                # Apply status rules
+                if latest_status.receiver == 'accounts':
+                    # Reached accounts, show completed
+                    estimation_status_to_show = 'completed'
+                elif is_resubmission:
+                    # Back with estimation for re-review after rejection
+                    estimation_status_to_show = 'pending'
+                elif latest_status.receiver == 'estimation':
+                    # Waiting for estimation action
+                    estimation_status_to_show = 'pending'
+                elif latest_status.sender == 'estimation':
+                    # Show estimation's actual decision
+                    estimation_status_to_show = latest_status.status
+                elif latest_status.sender == 'projectManager' and latest_status.status == 'rejected':
+                    # PM rejected
+                    estimation_status_to_show = 'rejected'
+                elif latest_status.sender == 'procurement':
+                    # Procurement handling - if after estimation rejection, keep rejected
+                    if last_estimation_action and last_estimation_action.status == 'rejected':
+                        # But if going back to PM, it might come back to estimation
+                        if latest_status.receiver == 'projectManager':
+                            estimation_status_to_show = 'pending'
+                        else:
+                            estimation_status_to_show = 'rejected'
+                    else:
+                        estimation_status_to_show = 'pending'
+                elif latest_status.sender == 'technicalDirector' and latest_status.status == 'approved':
+                    # TD approved
+                    estimation_status_to_show = 'approved'
+                elif latest_status.sender == 'technicalDirector' and latest_status.status == 'rejected':
+                    # TD rejected - might go back to estimation
+                    if latest_status.receiver == 'estimation':
+                        estimation_status_to_show = 'pending'
+                    else:
+                        estimation_status_to_show = 'rejected'
+                elif last_estimation_action:
+                    # Use last estimation action if nothing else matches
+                    estimation_status_to_show = last_estimation_action.status
+                else:
+                    # Default to pending
+                    estimation_status_to_show = 'pending'
+
+            # Since estimation is involved, always store this purchase
             # Store the latest overall status for display
             latest_overall_status[purchase_id] = latest_status
-            
-            # Store PM's decision
-            if latest_pm_status:
-                pm_decisions[purchase_id] = {'status': latest_pm_status}
-            else:
-                pm_decisions[purchase_id] = {'status': 'pending'}
-            
-            # Store Estimation's decision
-            if latest_estimation_status:
-                estimation_decisions[purchase_id] = {'status': latest_estimation_status}
+
+            # Store PM's decision - look for PM as sender in all statuses
+            pm_status = 'pending'
+            for status in statuses:
+                if status.sender == 'projectManager':
+                    pm_status = status.status
+                    # Don't break - get the latest PM decision
+
+            pm_decisions[purchase_id] = {'status': pm_status}
+
+            # Store Estimation's decision using the new simplified logic
+            if estimation_status_to_show:
+                estimation_decisions[purchase_id] = {'status': estimation_status_to_show}
             else:
                 estimation_decisions[purchase_id] = {'status': 'pending'}
         # Get completed status information - optimized with set for O(1) lookups
@@ -910,7 +970,8 @@ def get_all_estimation_purchase_request():
         # Initialize statistics tracking for single-pass calculation
         stats = {'approved': {'count': 0, 'value': 0, 'quantity': 0},
                 'rejected': {'count': 0, 'value': 0, 'quantity': 0},
-                'pending': {'count': 0, 'value': 0, 'quantity': 0}}
+                'pending': {'count': 0, 'value': 0, 'quantity': 0},
+                'completed': {'count': 0, 'value': 0, 'quantity': 0}}
         total_value = 0
         total_quantity_sum = 0
 
@@ -1011,14 +1072,17 @@ def get_all_estimation_purchase_request():
                 'approved_count': stats['approved']['count'],
                 'rejected_count': stats['rejected']['count'],
                 'pending_count': stats['pending']['count'],
+                'completed_count': stats['completed']['count'],
                 'total_value': round(total_value, 2),
                 'approved_value': round(stats['approved']['value'], 2),
                 'rejected_value': round(stats['rejected']['value'], 2),
                 'pending_value': round(stats['pending']['value'], 2),
+                'completed_value': round(stats['completed']['value'], 2),
                 'total_quantity': total_quantity_sum,
                 'approved_quantity': stats['approved']['quantity'],
                 'rejected_quantity': stats['rejected']['quantity'],
-                'pending_quantity': stats['pending']['quantity']
+                'pending_quantity': stats['pending']['quantity'],
+                'completed_quantity': stats['completed']['quantity']
             },
             'purchases': purchase_details,
             'user_info': {
