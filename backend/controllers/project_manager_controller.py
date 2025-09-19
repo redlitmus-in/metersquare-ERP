@@ -530,6 +530,12 @@ def get_procurement_approved_purchases():
             elif actual_status == 'rejected':
                 # Other rejections - show as approved
                 pm_value = 'approved'
+            elif receiver in ['technicalDirector', 'estimation'] and sender == 'estimation' and actual_status == 'approved':
+                # If estimation has sent approved to TD, it means PM already approved
+                pm_value = 'approved'
+            elif receiver == 'technicalDirector' and sender == 'technicalDirector' and actual_status == 'approved':
+                # If TD has approved and sent to accounts, PM must have approved
+                pm_value = 'approved'
             elif pm_status:
                 # PM has made a decision, use their actual status
                 pm_actual = pm_status[2] if isinstance(pm_status, tuple) else pm_status.status
