@@ -118,7 +118,7 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
               
               // Check for approvals
               if (response.data.purchase?.approvals) {
-                setPurchase(prev => ({ ...prev, approvals: response.data.purchase.approvals }));
+                setPurchase(prev => prev ? { ...prev, approvals: response.data.purchase.approvals } : prev);
               }
             }
           } else {
@@ -142,11 +142,11 @@ const PurchaseDetailsModal: React.FC<PurchaseDetailsModalProps> = ({
           
           // Check for approvals in different possible locations
           if (response.data.approvals) {
-            setPurchase(prev => ({ ...prev, approvals: response.data.approvals }));
+            setPurchase(prev => prev ? { ...prev, approvals: response.data.approvals } : prev);
           } else if (response.data.purchase?.approvals) {
             // Already included in purchase object
           } else if (response.data.statuses) {
-            setPurchase(prev => ({ ...prev, approvals: response.data.statuses }));
+            setPurchase(prev => prev ? { ...prev, approvals: response.data.statuses } : prev);
           }
         }
       }
