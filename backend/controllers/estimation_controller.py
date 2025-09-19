@@ -811,7 +811,6 @@ def get_all_estimation_purchase_request():
         role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
         if not role or role.role != 'estimation':
             return jsonify({'error': 'Only Estimation team can access purchase requests'}), 403
-
         # Optimized query without ordering (will sort later)
         all_statuses = PurchaseStatus.query.filter(
             and_(
