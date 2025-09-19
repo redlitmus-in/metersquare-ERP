@@ -76,7 +76,30 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
         text: 'Completed'
       };
     }
-    
+
+    // Check if estimation rejected with PM flag - this should show as rejected
+    const isEstimationPMFlagRejection = () => {
+      return (
+        purchase.rejected_status?.reject_category === 'pm_flag' ||
+        purchase.status_info?.reject_category === 'pm_flag' ||
+        purchase.reject_category === 'pm_flag' ||
+        purchase.approvals?.action?.some((a: any) =>
+          a.role === 'estimation' &&
+          a.status === 'rejected' &&
+          a.reject_category === 'pm_flag'
+        )
+      );
+    };
+
+    // If estimation rejected with PM flag, show as rejected
+    if (isEstimationPMFlagRejection()) {
+      return {
+        color: 'bg-red-100 text-red-700',
+        icon: <XCircle className="h-4 w-4" />,
+        text: 'Rejected by Est'
+      };
+    }
+
     const status = purchase.pm_status || 'pending';
     switch (status) {
       case 'approved':
@@ -264,11 +287,9 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                         setShowApproveDialog(true);
                       }
                     }}
-                    className={`${
-                      isEstimationRejected ? 'w-full' : 'flex-1'
-                    } h-6 text-[10px] px-2 ${
-                      isEstimationRejected 
-                        ? 'bg-blue-600 hover:bg-blue-700' 
+                    className={`flex-1 h-6 text-[10px] px-2 ${
+                      isEstimationRejected
+                        ? 'bg-blue-600 hover:bg-blue-700'
                         : 'bg-green-600 hover:bg-green-700'
                     }`}
                     disabled={isApproving || isResending}
@@ -297,28 +318,26 @@ export const PurchaseApprovalCard: React.FC<PurchaseApprovalCardProps> = ({
                       </>
                     )}
                   </Button>
-                  {/* Only show Reject button in Pending tab, not in Est. Rejected tab */}
-                  {!isEstimationRejected && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setShowRejectDialog(true)}
-                      className="flex-1 h-6 text-[10px] px-2"
-                      disabled={isRejecting}
-                    >
-                      {isRejecting ? (
-                        <>
-                          <ModernLoadingSpinners variant="pulse-wave" size="sm" />
-                          Rejecting...
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="h-2.5 w-2.5 mr-0.5" />
-                          Reject
-                        </>
-                      )}
-                    </Button>
-                  )}
+                  {/* Show Reject button in both Pending and Est. Rejected tabs */}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowRejectDialog(true)}
+                    className="flex-1 h-6 text-[10px] px-2"
+                    disabled={isRejecting}
+                  >
+                    {isRejecting ? (
+                      <>
+                        <ModernLoadingSpinners variant="pulse-wave" size="sm" />
+                        Rejecting...
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="h-2.5 w-2.5 mr-0.5" />
+                        Reject
+                      </>
+                    )}
+                  </Button>
                 </div>
               )}
 

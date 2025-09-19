@@ -142,10 +142,16 @@ const EstimationApprovalCard = React.forwardRef<HTMLDivElement, EstimationApprov
               ) : (
                 <>
                   {/* Show actual current workflow status instead of hardcoded "PM Approved" */}
-                  {!needsReview && currentWorkflowStatus.status === 'pending' && (
+                  {!needsReview && currentWorkflowStatus.status === 'pending' && estimationStatus !== 'rejected' && (
                     <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 max-w-32 truncate">
                       <Clock className="h-3 w-3 mr-1 flex-shrink-0" />
                       <span className="truncate">Pending TD</span>
+                    </Badge>
+                  )}
+                  {!needsReview && estimationStatus === 'rejected' && (
+                    <Badge className="bg-red-100 text-red-800 text-xs px-2 py-0.5 max-w-32 truncate">
+                      <XCircle className="h-3 w-3 mr-1 flex-shrink-0" />
+                      <span className="truncate">Rejected</span>
                     </Badge>
                   )}
                   {!needsReview && currentWorkflowStatus.status === 'approved' && (
