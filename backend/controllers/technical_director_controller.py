@@ -522,12 +522,13 @@ def get_all_technical_director_purchase_request():
         if not role:
             return jsonify({"error": "Invalid role"}), 400
 
-        # Optimized: Single query with eager loading and proper filtering
-        excluded_roles = ['siteSupervisor', 'procurement', 'projectManager']
+        # Import PurchaseHistory to check historical involvement
+        from models.purchase_history import PurchaseHistory
+        from datetime import datetime
 
-        # Get all statuses with eager loaded purchases
+        # Get all active statuses (no role exclusions to capture full workflow)
         purchase_statuses = PurchaseStatus.query.filter(
-            ~PurchaseStatus.role.in_(excluded_roles)
+            PurchaseStatus.is_active == True
         ).options(
             joinedload(PurchaseStatus.purchase)  # Eager load purchases using class-bound attribute
         ).all()
@@ -559,6 +560,34 @@ def get_all_technical_director_purchase_request():
         # Batch fetch all materials
         materials_dict = batch_fetch_materials(list(all_material_ids)) if all_material_ids else {}
 
+        # Check purchase history for technical director involvement
+        all_histories = PurchaseHistory.query.filter_by(is_active=True).all()
+        td_historical_involvement = {}
+
+        for history in all_histories:
+            if history.action:
+                actions = history.action if isinstance(history.action, list) else [history.action]
+                td_actions = []
+
+                for action in actions:
+                    if isinstance(action, dict):
+                        # Check if technical director was sender or receiver in any action
+                        if action.get('sender') == 'technicalDirector' or action.get('receiver') == 'technicalDirector':
+                            td_actions.append(action)
+
+                if td_actions:
+                    # Get the latest technical director action
+                    latest_td_action = None
+                    for action in reversed(actions):
+                        if isinstance(action, dict) and action.get('sender') == 'technicalDirector':
+                            latest_td_action = action
+                            break
+
+                    td_historical_involvement[history.purchase_id] = {
+                        'involved': True,
+                        'latest_action': latest_td_action
+                    }
+
         # Group statuses by purchase_id using defaultdict for efficiency
         from collections import defaultdict
         status_by_purchase = defaultdict(list)
@@ -573,10 +602,136 @@ def get_all_technical_director_purchase_request():
             if not purchase:
                 continue
 
+            # Check if technical director is involved (current status or historical)
+            td_involved = False
+
+            # Check current status involvement
+            for status in purchase_status_list:
+                if status.sender == 'technicalDirector' or status.receiver == 'technicalDirector':
+                    td_involved = True
+                    break
+                # Also check if estimation approved (which typically sends to TD)
+                if status.sender == 'estimation' and status.status == 'approved':
+                    td_involved = True
+                    break
+
+            # Check historical involvement
+            if purchase_id in td_historical_involvement:
+                td_involved = True
+
+            # Skip if technical director is not involved
+            if not td_involved:
+                continue
+
+            # Sort statuses by creation time for proper workflow analysis
+            purchase_status_list.sort(key=lambda x: x.created_at if x.created_at else datetime.min)
+
             # Efficiently find statuses
             latest_overall_status = max(purchase_status_list, key=lambda x: x.created_at) if purchase_status_list else None
             estimation_status = next((s for s in purchase_status_list if s.sender == 'estimation'), None)
-            technical_director_status = next((s for s in purchase_status_list if s.sender == 'technicalDirector'), None)
+            current_td_status = next((s for s in purchase_status_list if s.sender == 'technicalDirector'), None)
+
+            # Build TD history for this purchase
+            td_history = {}
+            td_rejection_timestamp = None
+            is_back_with_td = False
+            received_after_td_rejection = False
+
+            # Check TD's historical involvement from purchase history
+            if purchase_id in td_historical_involvement:
+                hist_data = td_historical_involvement[purchase_id]
+                if hist_data.get('latest_action'):
+                    latest_action = hist_data['latest_action']
+                    if latest_action.get('status') == 'rejected':
+                        td_history[purchase_id] = {
+                            'status': 'rejected',
+                            'timestamp': latest_action.get('timestamp')
+                        }
+                        # Parse timestamp for comparison
+                        timestamp_str = latest_action.get('timestamp')
+                        if isinstance(timestamp_str, str):
+                            try:
+                                td_rejection_timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                            except:
+                                pass
+
+            # Determine current TD status based on workflow state (similar to estimation logic)
+            td_status_to_show = 'pending'
+
+            if latest_overall_status:
+                # If TD is the current sender, show their actual status
+                if latest_overall_status.sender == 'technicalDirector':
+                    td_status_to_show = latest_overall_status.status
+
+                # If estimation approved and sent to TD, TD should be pending (even if they rejected before)
+                elif latest_overall_status.sender == 'estimation' and latest_overall_status.status == 'approved':
+                    if latest_overall_status.receiver == 'technicalDirector':
+                        td_status_to_show = 'pending'
+                        is_back_with_td = True
+                    elif td_rejection_timestamp and latest_overall_status.created_at > td_rejection_timestamp:
+                        td_status_to_show = 'pending'
+                        is_back_with_td = True
+                    elif purchase_id in td_history:
+                        td_status_to_show = td_history[purchase_id]['status']
+                    else:
+                        td_status_to_show = 'pending'
+
+                # If estimation rejected, TD doesn't need to act
+                elif latest_overall_status.sender == 'estimation' and latest_overall_status.status == 'rejected':
+                    if purchase_id in td_history:
+                        td_status_to_show = td_history[purchase_id]['status']
+                    else:
+                        td_status_to_show = 'pending'
+
+                # For other senders, check if TD previously acted and if the purchase came back
+                elif purchase_id in td_history:
+                    if td_rejection_timestamp and latest_overall_status.created_at > td_rejection_timestamp:
+                        # Purchase has been updated after TD rejection - show as pending
+                        td_status_to_show = 'pending'
+                        is_back_with_td = True
+                    else:
+                        td_status_to_show = td_history[purchase_id]['status']
+                else:
+                    td_status_to_show = 'pending'
+
+            # Create a status object for response consistency
+            technical_director_status = current_td_status
+            if not technical_director_status and purchase_id in td_history:
+                # Create a pseudo-status object from history, but use determined status
+                class DeterminedStatus:
+                    def __init__(self, determined_status, hist_action=None):
+                        self.status = determined_status
+                        if hist_action:
+                            timestamp = hist_action.get('timestamp')
+                            if isinstance(timestamp, str):
+                                try:
+                                    self.created_at = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                except:
+                                    self.created_at = None
+                            else:
+                                self.created_at = timestamp
+                            self.comments = hist_action.get('comments', '')
+                            self.rejection_reason = hist_action.get('rejection_reason', '') if determined_status == 'rejected' else ''
+                            self.created_by = hist_action.get('decision_by', '')
+                        else:
+                            self.created_at = None
+                            self.comments = ''
+                            self.rejection_reason = ''
+                            self.created_by = ''
+
+                hist_data = td_historical_involvement[purchase_id]
+                latest_action = hist_data.get('latest_action')
+                technical_director_status = DeterminedStatus(td_status_to_show, latest_action)
+            elif not technical_director_status:
+                # No current status and no history - create pending status
+                class DeterminedStatus:
+                    def __init__(self, determined_status):
+                        self.status = determined_status
+                        self.created_at = None
+                        self.comments = ''
+                        self.rejection_reason = ''
+                        self.created_by = ''
+                technical_director_status = DeterminedStatus(td_status_to_show)
 
             # Use helper function for materials processing
             materials, total_cost, total_qty = process_materials_data(
