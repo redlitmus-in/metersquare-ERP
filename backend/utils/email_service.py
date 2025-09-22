@@ -42,7 +42,6 @@ class EmailService:
         self.use_tls = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
 
         if not self.sender_email or not self.sender_password:
-            log.error("Email credentials not configured. Set SENDER_EMAIL and SENDER_EMAIL_PASSWORD environment variables.")
             raise ValueError("Email service not properly configured")
 
     def _create_connection(self):
@@ -65,15 +64,12 @@ class EmailService:
             return server
         except smtplib.SMTPAuthenticationError as e:
             log.error(f"SMTP Authentication failed: {str(e)}")
-            log.error(f"Server: {self.smtp_server}, Port: {self.smtp_port}, Email: {self.sender_email}")
             raise Exception("Email authentication failed. Check credentials.")
         except smtplib.SMTPConnectError as e:
             log.error(f"SMTP Connection failed: {str(e)}")
-            log.error(f"Server: {self.smtp_server}, Port: {self.smtp_port}")
             raise Exception("Failed to connect to email server. Check server and port settings.")
         except smtplib.SMTPException as e:
             log.error(f"SMTP error: {str(e)}")
-            log.error(f"Server: {self.smtp_server}, Port: {self.smtp_port}")
             raise Exception("Failed to connect to email server.")
         except Exception as e:
             log.error(f"Unexpected email connection error: {str(e)}")
@@ -118,7 +114,6 @@ class EmailService:
                             logo.add_header('Content-Disposition', 'inline', filename='logo.png')
                             msg.attach(logo)
                             logo_attached = True
-                            log.info(f"Logo attached from: {logo_path}")
                             break
                 
                 if not logo_attached:
@@ -141,7 +136,6 @@ class EmailService:
             server = self._create_connection()
             server.send_message(msg)
             server.quit()
-            log.info(f"Email sent successfully to {to_emails}")
             return True
         except smtplib.SMTPRecipientsRefused as e:
             log.error(f"Recipients refused: {str(e)}")
@@ -154,7 +148,6 @@ class EmailService:
             return False
         except Exception as e:
             log.error(f"Failed to send email to {to_emails}: {str(e)}")
-            log.error(f"Error type: {type(e).__name__}")
             return False
 
     def _prepare_attachments(self, attachments: List) -> List[Dict]:
@@ -180,7 +173,6 @@ class EmailService:
                 if isinstance(item, dict) and 'path' in item:
                     path = item.get('path')
                     if not path or not os.path.isfile(path):
-                        log.warning(f"Attachment path not found or invalid: {path}")
                         continue
                     filename = item.get('filename') or os.path.basename(path)
                     with open(path, 'rb') as f:
@@ -192,7 +184,6 @@ class EmailService:
                 if isinstance(item, str):
                     path = item
                     if not os.path.isfile(path):
-                        log.warning(f"Attachment file not found: {path}")
                         continue
                     filename = os.path.basename(path)
                     with open(path, 'rb') as f:
@@ -200,7 +191,6 @@ class EmailService:
                     normalized.append({'filename': filename, 'content': content})
                     continue
 
-                log.warning(f"Unsupported attachment format, skipping: {type(item)}")
             except Exception as e:
                 log.warning(f"Failed to load attachment {item}: {str(e)}")
 
@@ -227,8 +217,11 @@ class EmailService:
     def _generate_purchase_request_email_html(self, purchase_data: Dict, materials_data: List[Dict],
                                               requester_info: Dict) -> str:
         """Generate HTML email content for purchase request"""
-        project=Project.query.filter_by(project_id=purchase_data['project_id']).first()
-        
+        user_id = purchase_data.get('user_id')
+        project = Project.query.filter_by(project_id=purchase_data['project_id']).first()
+        user = None
+        if user_id:
+            user = User.query.filter_by(user_id=user_id).first()
         # Calculate total cost for each material and overall total
         material_rows = ""
         overall_total = 0
@@ -249,6 +242,9 @@ class EmailService:
                     <td>{total_cost:.2f}</td>
                 </tr>
             """
+
+        # Prepare variables for template
+        project_name = project.project_name if project else 'N/A'
         return f"""
             <html>
             <head>
@@ -606,7 +602,7 @@ class EmailService:
                         <h2>New Purchase Request</h2>
                     </div>
                     <div class="content">
-                        <p><span class="label">Project Name:</span> {project.project_name}</p>
+                        <p><span class="label">Project Name:</span> {project_name}</p>
                         <p><span class="label">Site Location:</span> {purchase_data['site_location']}</p>
                         <p><span class="label">Date:</span> {purchase_data['date']}</p>
                         <p><span class="label">Requested By:</span> {requester_info['full_name']} ({requester_info['role']})</p>
@@ -635,7 +631,7 @@ class EmailService:
 
                         <div class="signature">
                             <p>Best regards,</p>
-                            <strong>Site Supervisor Team</strong>
+                            <strong>{user.full_name if user else requester_info['full_name']} Team</strong>
                         </div>
                     </div>
                     <div class="footer">
@@ -699,44 +695,27 @@ class EmailService:
         try:
             pm_role = Role.query.filter_by(role='projectManager', is_deleted=False).first()
             if not pm_role:
-                log.error("Project Manager role not found in database")
                 return []
-
-            log.info(f"Found Project Manager role with role_id: {pm_role.role_id}")
-
             users = User.query.filter_by(
                 role_id=pm_role.role_id,
                 is_deleted=False,
                 is_active=True
             ).all()
-
-            log.info(f"Found {len(users)} Project Manager user(s)")
-
             emails = [u.email for u in users if u.email]
-
             if not emails:
-                log.warning("No valid email addresses found for Project Managers")
                 return []
-
-            log.info(f"Retrieved {len(emails)} Project Manager email(s): {emails}")
             return emails
         except Exception as e:
             log.error(f"Error fetching project manager emails: {str(e)}", exc_info=True)
             return []
 
-
-
     def send_procurement_to_project_manager_notification(self, purchase_data: Dict, materials_data: List[Dict],
                                                         requester_info: Dict, procurement_info: Dict) -> bool:
         """Send notification from procurement to project manager only"""
         try:
-            # Get project manager emails only
             recipients = self.get_project_manager_emails()
-            
             if not recipients:
-                log.error("No project manager emails found")
                 return False
-            
             subject = f"Purchase Request Ready for PM Approval - #{purchase_data.get('purchase_id')}"
             html_content = self._generate_procurement_to_pm_email_html(purchase_data, materials_data, requester_info, procurement_info)
             text_content = self._generate_procurement_to_pm_email_text(purchase_data, materials_data, requester_info, procurement_info)
@@ -2149,23 +2128,16 @@ Project Manager
             log.error(f"Error fetching estimation team emails: {str(e)}")
             return None
 
-
-
     def send_pm_to_estimation_notification(self, purchase_data: Dict, materials_data: List[Dict],
                                           requester_info: Dict, pm_info: Dict) -> bool:
         """Send notification from Project Manager to Estimation team"""
         try:
-            # Get estimation team emails
             recipients = self.get_estimation_team_emails()
-            
             if not recipients:
-                log.error("No estimation team emails found")
                 return False
-            
             subject = f"Purchase Request Approved by PM - Ready for Estimation - #{purchase_data.get('purchase_id')}"
             html_content = self._generate_pm_to_estimation_email_html(purchase_data, materials_data, requester_info, pm_info)
             text_content = self._generate_pm_to_estimation_email_text(purchase_data, materials_data, requester_info, pm_info)
-
             success = self._send_email(recipients, subject, html_content, text_content)
             if success:
                 print(f"Email sent to {len(recipients)} estimation team member(s)")
@@ -2178,17 +2150,12 @@ Project Manager
                                         requester_info: Dict, pm_info: Dict, rejection_reason: str) -> bool:
         """Send rejection notification from Project Manager back to Procurement"""
         try:
-            # Get procurement team emails
             recipients = self.get_procurement_team_emails()
-            
             if not recipients:
-                log.error("No procurement team emails found")
                 return False
-            
             subject = f"Purchase Request Rejected by PM - Requires Revision - #{purchase_data.get('purchase_id')}"
             html_content = self._generate_pm_rejection_email_html(purchase_data, materials_data, requester_info, pm_info, rejection_reason)
             text_content = self._generate_pm_rejection_email_text(purchase_data, materials_data, requester_info, pm_info, rejection_reason)
-
             success = self._send_email(recipients, subject, html_content, text_content)
             if success:
                 print(f"Rejection email sent to {len(recipients)} procurement member(s)")
@@ -2203,11 +2170,8 @@ Project Manager
         try:
             # Get technical director emails
             recipients = self.get_technical_director_emails()
-            
             if not recipients:
-                log.error("No technical director emails found")
                 return False
-            
             subject = f"Purchase Request Approved by Estimation - Ready for Technical Review - #{purchase_data.get('purchase_id')}"
             html_content = self._generate_estimation_to_td_email_html(purchase_data, materials_data, requester_info, estimation_info)
             text_content = self._generate_estimation_to_td_email_text(purchase_data, materials_data, requester_info, estimation_info)
@@ -2228,7 +2192,6 @@ Project Manager
             recipients = self.get_procurement_team_emails()
             
             if not recipients:
-                log.error("No procurement team emails found")
                 return False
             
             subject = f"Purchase Request Rejected by Estimation (Cost) - Requires Cost Revision - #{purchase_data.get('purchase_id')}"
@@ -2247,14 +2210,9 @@ Project Manager
                                                requester_info: Dict, estimation_info: Dict, rejection_reason: str) -> bool:
         """Send PM flag rejection notification from Estimation team back to Project Manager"""
         try:
-            log.info(f"Attempting to send PM flag rejection email for purchase #{purchase_data.get('purchase_id')}")
-
             # Get project manager emails
             recipients = self.get_project_manager_emails()
-
             if not recipients:
-                log.error("No project manager emails found - cannot send rejection notification")
-                # Try to get at least one PM email as fallback
                 from models.user import User
                 from models.role import Role
 
@@ -2263,16 +2221,11 @@ Project Manager
                     # Try to find any PM user even if not active
                     any_pm = User.query.filter_by(role_id=pm_role.role_id, is_deleted=False).first()
                     if any_pm and any_pm.email:
-                        log.warning(f"Using fallback PM email: {any_pm.email}")
                         recipients = [any_pm.email]
                     else:
-                        log.error("No Project Manager users found at all in database")
                         return False
                 else:
-                    log.error("Project Manager role not found in database")
                     return False
-
-            log.info(f"Sending PM flag rejection email to {len(recipients)} recipient(s): {recipients}")
 
             subject = f"Purchase Request Rejected by Estimation (PM Flag) - Requires PM Review - #{purchase_data.get('purchase_id')}"
             html_content = self._generate_estimation_pm_flag_rejection_email_html(purchase_data, materials_data, requester_info, estimation_info, rejection_reason)
@@ -2281,7 +2234,6 @@ Project Manager
             success = self._send_email(recipients, subject, html_content, text_content)
             if success:
                 log.info(f"PM flag rejection email sent successfully to {len(recipients)} project manager(s)")
-                print(f"PM flag rejection email sent to {len(recipients)} project manager(s)")
             else:
                 log.error("Failed to send PM flag rejection email")
             return success
@@ -3230,7 +3182,6 @@ Estimation Team
             recipients = self.get_accounts_team_emails()
             
             if not recipients:
-                log.error("No accounts team emails found")
                 return False
             
             subject = f"Purchase Request Approved by Technical Director - Ready for Payment Processing - #{purchase_data.get('purchase_id')}"
@@ -3249,13 +3200,9 @@ Estimation Team
                                                       requester_info: Dict, technical_director_info: Dict, rejection_reason: str) -> bool:
         """Send rejection notification from Technical Director back to Estimation team"""
         try:
-            # Get estimation team emails
             recipients = self.get_estimation_team_emails()
-            
             if not recipients:
-                log.error("No estimation team emails found")
                 return False
-            
             subject = f"Purchase Request Rejected by Technical Director - Requires Estimation Review - #{purchase_data.get('purchase_id')}"
             html_content = self._generate_technical_director_rejection_email_html(purchase_data, materials_data, requester_info, technical_director_info, rejection_reason)
             text_content = self._generate_technical_director_rejection_email_text(purchase_data, materials_data, requester_info, technical_director_info, rejection_reason)
@@ -3717,7 +3664,6 @@ Meter Square
             recipients = self.get_procurement_team_emails()
 
             if not recipients:
-                log.error("No procurement team emails found - cannot send purchase request notification")
                 return False
 
             subject = f"New Purchase Request"
@@ -3892,7 +3838,6 @@ Meter Square
 
             recipients = list({*(td_emails + pm_emails + pr_emails)})
             if not recipients:
-                log.error("No stakeholder emails found for acknowledgement notification")
                 return False
 
             subject = f"Acknowledgement Received - Purchase Request #{purchase_id}"
