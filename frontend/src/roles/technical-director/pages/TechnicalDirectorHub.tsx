@@ -17,15 +17,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { 
-  RefreshCw, Search, Shield, 
+import {
+  RefreshCw, Search, Shield,
   CheckSquare, XSquare, Clock, TrendingUp,
   DollarSign, FileText, BarChart3, AlertCircle,
-  Filter, X, Building2, MapPin
+  Filter, X, Building2, MapPin, Grid3X3, List,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import TechnicalDirectorApprovalCard from '../components/TechnicalDirectorApprovalCard';
 import TechnicalDirectorApprovalModal from '../components/TechnicalDirectorApprovalModal';
 import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
+import PurchaseListView from '@/components/shared/PurchaseListView';
 import { Purchase, technicalDirectorService } from '../services/technicalDirectorService';
 import { toast } from 'sonner';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
@@ -34,6 +36,11 @@ import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseSto
 const TechnicalDirectorHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState('pending');
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Use centralized store for real-time updates
   const {
@@ -50,6 +57,31 @@ const TechnicalDirectorHub: React.FC = () => {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredPurchases.length / itemsPerPage);
+  const paginatedPurchases = filteredPurchases.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Reset to first page when tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
+
+  // Pagination handlers
+  const goToPrevPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  };
+
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+  };
   
   // Search and Filter states
   const [showFilters, setShowFilters] = useState(false);
@@ -519,6 +551,26 @@ const TechnicalDirectorHub: React.FC = () => {
             />
           </div>
           <div className="flex gap-2">
+            {/* View Toggle Buttons */}
+            <div className="flex items-center border rounded-lg overflow-hidden">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+                className="rounded-none border-0"
+              >
+                <Grid3X3 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="rounded-none border-0"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
+
             <Button
               onClick={() => setShowFilters(!showFilters)}
               variant="outline"
@@ -699,7 +751,7 @@ const TechnicalDirectorHub: React.FC = () => {
                 <AlertCircle className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mb-3 sm:mb-4" />
                 <p className="text-base sm:text-lg font-medium text-gray-900">No purchases found</p>
                 <p className="text-xs sm:text-sm text-gray-500 mt-1 text-center px-4">
-                  {searchTerm 
+                  {searchTerm
                     ? 'Try adjusting your search criteria'
                     : 'No purchases require technical review at this time'
                   }
@@ -707,21 +759,111 @@ const TechnicalDirectorHub: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              <AnimatePresence mode="popLayout">
-                {filteredPurchases.map((purchase) => (
-                  <TechnicalDirectorApprovalCard
-                    key={purchase.purchase_id}
-                    purchase={purchase}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                    onViewDetails={handleViewDetails}
-                    onViewHistory={handleViewHistory}
-                    isLoading={isLoading}
-                  />
-                ))}
-              </AnimatePresence>
-            </div>
+            <>
+              {viewMode === 'grid' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  <AnimatePresence mode="popLayout">
+                    {paginatedPurchases.map((purchase) => (
+                      <TechnicalDirectorApprovalCard
+                        key={purchase.purchase_id}
+                        purchase={purchase}
+                        onApprove={handleApprove}
+                        onReject={handleReject}
+                        onViewDetails={handleViewDetails}
+                        onViewHistory={handleViewHistory}
+                        isLoading={isLoading}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <PurchaseListView
+                  purchases={paginatedPurchases}
+                  activeTab={activeTab}
+                  onViewDetails={handleViewDetails}
+                  onViewHistory={handleViewHistory}
+                  onApprove={handleApprove}
+                  onReject={(id, reason) => handleReject(id)}
+                  processingPurchases={{
+                    approving: new Set(),
+                    rejecting: new Set()
+                  }}
+                  roleConfig={{
+                    role: 'technicalDirector',
+                    statusField: 'technical_director_status',
+                    showActions: activeTab === 'pending',
+                    actionType: 'approve-reject'
+                  }}
+                />
+              )}
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6 pt-6 border-t">
+                  <div className="text-sm text-gray-600">
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredPurchases.length)} of {filteredPurchases.length} purchases
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Previous Button */}
+                    <Button
+                      onClick={goToPrevPage}
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-1"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Previous
+                    </Button>
+
+                    {/* Page Numbers */}
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }).map((_, index) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = index + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = index + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + index;
+                        } else {
+                          pageNum = currentPage - 2 + index;
+                        }
+
+                        if (pageNum > totalPages) return null;
+
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => goToPage(pageNum)}
+                            className={`w-8 h-8 rounded text-sm font-medium transition-colors ${
+                              pageNum === currentPage
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Next Button */}
+                    <Button
+                      onClick={goToNextPage}
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-1"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -745,21 +887,111 @@ const TechnicalDirectorHub: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              <AnimatePresence mode="popLayout">
-                {filteredPurchases.map((purchase) => (
-                  <TechnicalDirectorApprovalCard
-                    key={purchase.purchase_id}
-                    purchase={purchase}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                    onViewDetails={handleViewDetails}
-                    onViewHistory={handleViewHistory}
-                    isLoading={isLoading}
-                  />
-                ))}
-              </AnimatePresence>
-            </div>
+            <>
+              {viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                <AnimatePresence mode="popLayout">
+                  {paginatedPurchases.map((purchase) => (
+                    <TechnicalDirectorApprovalCard
+                      key={purchase.purchase_id}
+                      purchase={purchase}
+                      onApprove={handleApprove}
+                      onReject={handleReject}
+                      onViewDetails={handleViewDetails}
+                      onViewHistory={handleViewHistory}
+                      isLoading={isLoading}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <PurchaseListView
+                purchases={paginatedPurchases}
+                activeTab={activeTab}
+                onViewDetails={handleViewDetails}
+                onViewHistory={handleViewHistory}
+                onApprove={handleApprove}
+                onReject={(id, reason) => handleReject(id)}
+                processingPurchases={{
+                  approving: new Set(),
+                  rejecting: new Set()
+                }}
+                roleConfig={{
+                  role: 'technicalDirector',
+                  statusField: 'technical_director_status',
+                  showActions: false,
+                  actionType: 'approve-reject'
+                }}
+              />
+            )}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6 pt-6 border-t">
+                <div className="text-sm text-gray-600">
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredPurchases.length)} of {filteredPurchases.length} purchases
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Previous Button */}
+                  <Button
+                    onClick={goToPrevPage}
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === 1}
+                    className="flex items-center gap-1"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </Button>
+
+                  {/* Page Numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }).map((_, index) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = index + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = index + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + index;
+                      } else {
+                        pageNum = currentPage - 2 + index;
+                      }
+
+                      if (pageNum > totalPages) return null;
+
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => goToPage(pageNum)}
+                          className={`w-8 h-8 rounded text-sm font-medium transition-colors ${
+                            pageNum === currentPage
+                              ? 'bg-indigo-600 text-white'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Next Button */}
+                  <Button
+                    onClick={goToNextPage}
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === totalPages}
+                    className="flex items-center gap-1"
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </TabsContent>
 
@@ -783,21 +1015,111 @@ const TechnicalDirectorHub: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              <AnimatePresence mode="popLayout">
-                {filteredPurchases.map((purchase) => (
-                  <TechnicalDirectorApprovalCard
-                    key={purchase.purchase_id}
-                    purchase={purchase}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                    onViewDetails={handleViewDetails}
-                    onViewHistory={handleViewHistory}
-                    isLoading={isLoading}
-                  />
-                ))}
-              </AnimatePresence>
-            </div>
+            <>
+              {viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                <AnimatePresence mode="popLayout">
+                  {paginatedPurchases.map((purchase) => (
+                    <TechnicalDirectorApprovalCard
+                      key={purchase.purchase_id}
+                      purchase={purchase}
+                      onApprove={handleApprove}
+                      onReject={handleReject}
+                      onViewDetails={handleViewDetails}
+                      onViewHistory={handleViewHistory}
+                      isLoading={isLoading}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <PurchaseListView
+                purchases={paginatedPurchases}
+                activeTab={activeTab}
+                onViewDetails={handleViewDetails}
+                onViewHistory={handleViewHistory}
+                onApprove={handleApprove}
+                onReject={(id, reason) => handleReject(id)}
+                processingPurchases={{
+                  approving: new Set(),
+                  rejecting: new Set()
+                }}
+                roleConfig={{
+                  role: 'technicalDirector',
+                  statusField: 'technical_director_status',
+                  showActions: false,
+                  actionType: 'approve-reject'
+                }}
+              />
+            )}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6 pt-6 border-t">
+                <div className="text-sm text-gray-600">
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredPurchases.length)} of {filteredPurchases.length} purchases
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Previous Button */}
+                  <Button
+                    onClick={goToPrevPage}
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === 1}
+                    className="flex items-center gap-1"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </Button>
+
+                  {/* Page Numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }).map((_, index) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = index + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = index + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + index;
+                      } else {
+                        pageNum = currentPage - 2 + index;
+                      }
+
+                      if (pageNum > totalPages) return null;
+
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => goToPage(pageNum)}
+                          className={`w-8 h-8 rounded text-sm font-medium transition-colors ${
+                            pageNum === currentPage
+                              ? 'bg-indigo-600 text-white'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Next Button */}
+                  <Button
+                    onClick={goToNextPage}
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === totalPages}
+                    className="flex items-center gap-1"
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </TabsContent>
 
@@ -821,21 +1143,111 @@ const TechnicalDirectorHub: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              <AnimatePresence mode="popLayout">
-                {filteredPurchases.map((purchase) => (
-                  <TechnicalDirectorApprovalCard
-                    key={purchase.purchase_id}
-                    purchase={purchase}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                    onViewDetails={handleViewDetails}
-                    onViewHistory={handleViewHistory}
-                    isLoading={isLoading}
-                  />
-                ))}
-              </AnimatePresence>
-            </div>
+            <>
+              {viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                <AnimatePresence mode="popLayout">
+                  {paginatedPurchases.map((purchase) => (
+                    <TechnicalDirectorApprovalCard
+                      key={purchase.purchase_id}
+                      purchase={purchase}
+                      onApprove={handleApprove}
+                      onReject={handleReject}
+                      onViewDetails={handleViewDetails}
+                      onViewHistory={handleViewHistory}
+                      isLoading={isLoading}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <PurchaseListView
+                purchases={paginatedPurchases}
+                activeTab={activeTab}
+                onViewDetails={handleViewDetails}
+                onViewHistory={handleViewHistory}
+                onApprove={handleApprove}
+                onReject={(id, reason) => handleReject(id)}
+                processingPurchases={{
+                  approving: new Set(),
+                  rejecting: new Set()
+                }}
+                roleConfig={{
+                  role: 'technicalDirector',
+                  statusField: 'technical_director_status',
+                  showActions: false,
+                  actionType: 'approve-reject'
+                }}
+              />
+            )}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6 pt-6 border-t">
+                <div className="text-sm text-gray-600">
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredPurchases.length)} of {filteredPurchases.length} purchases
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Previous Button */}
+                  <Button
+                    onClick={goToPrevPage}
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === 1}
+                    className="flex items-center gap-1"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </Button>
+
+                  {/* Page Numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }).map((_, index) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = index + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = index + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + index;
+                      } else {
+                        pageNum = currentPage - 2 + index;
+                      }
+
+                      if (pageNum > totalPages) return null;
+
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => goToPage(pageNum)}
+                          className={`w-8 h-8 rounded text-sm font-medium transition-colors ${
+                            pageNum === currentPage
+                              ? 'bg-indigo-600 text-white'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Next Button */}
+                  <Button
+                    onClick={goToNextPage}
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === totalPages}
+                    className="flex items-center gap-1"
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </TabsContent>
       </Tabs>

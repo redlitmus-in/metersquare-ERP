@@ -10,15 +10,24 @@ import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
-  RefreshCw, Download, Search, Filter, LayoutDashboard, 
+import {
+  RefreshCw, Download, Search, Filter, LayoutDashboard,
   Package, CheckSquare, BarChart3, Bell, Settings,
   Clock, CheckCircle, XCircle, AlertTriangle, FileText,
-  TrendingUp, Users, Calendar, X
+  TrendingUp, Users, Calendar, X, Grid3X3, List,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -47,11 +56,7 @@ interface MetricCard {
 }
 
 const MetricCardComponent: React.FC<{ metric: MetricCard }> = ({ metric }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    className={`${metric.bgColor} rounded-lg p-4 border border-gray-100`}
-  >
+  <div className={`${metric.bgColor} rounded-lg p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-300`}>
     <div className="flex items-center justify-between">
       <div>
         <p className="text-sm font-medium text-gray-600">{metric.title}</p>
@@ -59,13 +64,13 @@ const MetricCardComponent: React.FC<{ metric: MetricCard }> = ({ metric }) => (
         {metric.trend && (
           <div className="flex items-center mt-1">
             <TrendingUp className={`h-4 w-4 ${
-              metric.trendType === 'up' ? 'text-green-600' : 
-              metric.trendType === 'down' ? 'text-red-600' : 
+              metric.trendType === 'up' ? 'text-green-600' :
+              metric.trendType === 'down' ? 'text-red-600' :
               'text-gray-600'
             }`} />
             <span className={`text-sm ml-1 ${
-              metric.trendType === 'up' ? 'text-green-600' : 
-              metric.trendType === 'down' ? 'text-red-600' : 
+              metric.trendType === 'up' ? 'text-green-600' :
+              metric.trendType === 'down' ? 'text-red-600' :
               'text-gray-600'
             }`}>
               {metric.trend}
@@ -77,8 +82,195 @@ const MetricCardComponent: React.FC<{ metric: MetricCard }> = ({ metric }) => (
         {metric.icon}
       </div>
     </div>
-  </motion.div>
+  </div>
 );
+
+// List view component for purchases
+interface PurchaseListViewProps {
+  purchases: ProcurementPurchase[];
+  activeTab: string;
+  onViewDetails: (id: number) => void;
+  onViewHistory: (id: number) => void;
+  onApprove: (id: number) => void;
+  onReject: (id: number, reason: string) => void;
+  onSendToEstimation: (id: number) => void;
+  processingPurchases: {
+    approving: Set<number>;
+    rejecting: Set<number>;
+    resending: Set<number>;
+  };
+}
+
+const PurchaseListView: React.FC<PurchaseListViewProps> = ({
+  purchases,
+  activeTab,
+  onViewDetails,
+  onViewHistory,
+  onApprove,
+  onReject,
+  onSendToEstimation,
+  processingPurchases
+}) => {
+  const getStatusBadge = (purchase: ProcurementPurchase) => {
+    const status = purchase.pm_status || purchase.current_workflow_status || 'pending';
+    const statusColors: Record<string, string> = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      approved: 'bg-green-100 text-green-800',
+      rejected: 'bg-red-100 text-red-800',
+      completed: 'bg-blue-100 text-blue-800'
+    };
+    return statusColors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const handleQuickReject = (id: number) => {
+    onReject(id, 'Quick rejection from list view');
+  };
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-gray-200">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-gray-50">
+            <TableHead className="font-semibold">Purchase ID</TableHead>
+            <TableHead className="font-semibold">Purpose</TableHead>
+            <TableHead className="font-semibold">Location</TableHead>
+            <TableHead className="font-semibold">Quantity</TableHead>
+            <TableHead className="font-semibold">Total Cost</TableHead>
+            <TableHead className="font-semibold">Status</TableHead>
+            <TableHead className="font-semibold">Date</TableHead>
+            <TableHead className="font-semibold text-center">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {purchases.map((purchase) => (
+            <TableRow
+              key={purchase.purchase_id}
+              className="hover:bg-gray-50 transition-colors"
+            >
+              <TableCell className="font-medium">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-blue-600" />
+                  PR #{purchase.purchase_id}
+                </div>
+              </TableCell>
+              <TableCell>
+                <div className="max-w-xs">
+                  <p className="text-sm font-medium truncate">{purchase.purpose}</p>
+                  {purchase.materials_summary?.total_materials > 0 && (
+                    <p className="text-xs text-gray-500">
+                      {purchase.materials_summary.total_materials} materials
+                    </p>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell>
+                <span className="text-sm">{purchase.site_location}</span>
+              </TableCell>
+              <TableCell>
+                <span className="text-sm font-medium">
+                  {purchase.total_quantity?.toLocaleString() || 0}
+                </span>
+              </TableCell>
+              <TableCell>
+                <span className="text-sm font-medium">
+                  AED {purchase.total_cost?.toLocaleString() || 0}
+                </span>
+              </TableCell>
+              <TableCell>
+                <Badge
+                  className={`${getStatusBadge(purchase)} text-xs`}
+                  variant="secondary"
+                >
+                  {(purchase.pm_status || purchase.current_workflow_status || 'pending').charAt(0).toUpperCase() +
+                   (purchase.pm_status || purchase.current_workflow_status || 'pending').slice(1)}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <span className="text-sm text-gray-600">
+                  {formatDate(purchase.created_at || purchase.date)}
+                </span>
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center justify-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onViewDetails(purchase.purchase_id)}
+                    className="h-8 px-2 text-xs"
+                  >
+                    <FileText className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onViewHistory(purchase.purchase_id)}
+                    className="h-8 px-2 text-xs"
+                  >
+                    <Clock className="h-3 w-3" />
+                  </Button>
+
+                  {/* Action buttons based on tab */}
+                  {activeTab === 'pending' && (
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() => onApprove(purchase.purchase_id)}
+                        disabled={processingPurchases.approving.has(purchase.purchase_id)}
+                        className="h-8 px-3 text-xs bg-green-600 hover:bg-green-700"
+                      >
+                        {processingPurchases.approving.has(purchase.purchase_id) ? (
+                          <RefreshCw className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-3 w-3" />
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleQuickReject(purchase.purchase_id)}
+                        disabled={processingPurchases.rejecting.has(purchase.purchase_id)}
+                        className="h-8 px-3 text-xs"
+                      >
+                        {processingPurchases.rejecting.has(purchase.purchase_id) ? (
+                          <RefreshCw className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <XCircle className="h-3 w-3" />
+                        )}
+                      </Button>
+                    </>
+                  )}
+
+                  {activeTab === 'estimation_rejected' && (
+                    <Button
+                      size="sm"
+                      onClick={() => onSendToEstimation(purchase.purchase_id)}
+                      disabled={processingPurchases.resending.has(purchase.purchase_id)}
+                      className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700"
+                    >
+                      {processingPurchases.resending.has(purchase.purchase_id) ? (
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                      ) : (
+                        'Resend'
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+};
 
 const ProjectManagerHub: React.FC = () => {
   const navigate = useNavigate();
@@ -86,6 +278,11 @@ const ProjectManagerHub: React.FC = () => {
   // State management
   const [activeTab, setActiveTab] = useState('pending');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  // Pagination state for purchase cards
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10; // Show 10 purchase cards per page
 
   // Use centralized store for real-time updates - EXACTLY like ProcurementHub
   const {
@@ -175,6 +372,32 @@ const ProjectManagerHub: React.FC = () => {
     })) || [];
   const [filteredPurchases, setFilteredPurchases] = useState<ProcurementPurchase[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredPurchases.length / itemsPerPage);
+  const paginatedPurchases = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredPurchases.slice(startIndex, endIndex);
+  }, [filteredPurchases, currentPage, itemsPerPage]);
+
+  // Reset to first page when tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
+
+  // Pagination handlers
+  const goToPrevPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  };
+
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+  };
   
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
@@ -216,8 +439,194 @@ const ProjectManagerHub: React.FC = () => {
   // Check for real-time status
   const isRealtime = lastFetchTime && Date.now() - lastFetchTime.getTime() < 15000;
 
-  // Calculate metrics from current data
+  // Calculate metrics from current data - multiple sets for auto-swap
   const calculateMetrics = useCallback(() => {
+    const pendingPurchases = purchases.filter(p => !p.pm_status || p.pm_status === 'pending');
+    const approvedPurchases = purchases.filter(p => p.pm_status === 'approved');
+    const rejectedPurchases = purchases.filter(p => p.pm_status === 'rejected');
+
+    const totalQuantity = allStorePurchases.reduce((sum, p) => sum + (p.total_quantity || 0), 0);
+    const totalValue = allStorePurchases.reduce((sum, p) => sum + (p.total_cost || 0), 0);
+
+    // Calculate additional metrics for different sets
+    const todayPurchases = allStorePurchases.filter(p => {
+      const today = new Date().toDateString();
+      const purchaseDate = new Date(p.created_at || p.date).toDateString();
+      return purchaseDate === today;
+    });
+
+    const thisWeekPurchases = allStorePurchases.filter(p => {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const purchaseDate = new Date(p.created_at || p.date);
+      return purchaseDate >= weekAgo;
+    });
+
+    const avgValue = allStorePurchases.length > 0 ? totalValue / allStorePurchases.length : 0;
+    const materialTypes = [...new Set(allStorePurchases.flatMap(p => p.materials?.map(m => m.material_name) || []))].length;
+
+    // Create different metric sets for auto-swapping
+    const metricSets: MetricCard[][] = [
+      // Set 1: Overview Metrics
+      [
+        {
+          title: 'Total Purchases',
+          value: allStorePurchases.length,
+          icon: <Package className="h-5 w-5 text-blue-600" />,
+          bgColor: 'bg-blue-50',
+          iconColor: 'bg-blue-100',
+          trend: '+12%',
+          trendType: 'up'
+        },
+        {
+          title: 'Pending Approvals',
+          value: pendingPurchases.length,
+          icon: <Clock className="h-5 w-5 text-yellow-600" />,
+          bgColor: 'bg-yellow-50',
+          iconColor: 'bg-yellow-100',
+          trend: '-5%',
+          trendType: 'down'
+        },
+        {
+          title: 'Approved',
+          value: approvedPurchases.length,
+          icon: <CheckCircle className="h-5 w-5 text-green-600" />,
+          bgColor: 'bg-green-50',
+          iconColor: 'bg-green-100',
+          trend: '+8%',
+          trendType: 'up'
+        },
+        {
+          title: 'Rejected',
+          value: rejectedPurchases.length,
+          icon: <XCircle className="h-5 w-5 text-red-600" />,
+          bgColor: 'bg-red-50',
+          iconColor: 'bg-red-100',
+          trend: '-2%',
+          trendType: 'down'
+        },
+        {
+          title: 'Completed',
+          value: completedPurchases.length,
+          icon: <FileText className="h-5 w-5 text-blue-600" />,
+          bgColor: 'bg-blue-50',
+          iconColor: 'bg-blue-100',
+          trend: '+10%',
+          trendType: 'up'
+        },
+        {
+          title: 'Est. Rejected',
+          value: estimationRejectedPurchases.length,
+          icon: <AlertTriangle className="h-5 w-5 text-orange-600" />,
+          bgColor: 'bg-orange-50',
+          iconColor: 'bg-orange-100',
+          trend: '-3%',
+          trendType: 'down'
+        },
+        {
+          title: 'Total Value',
+          value: `AED ${totalValue.toLocaleString()}`,
+          icon: <TrendingUp className="h-5 w-5 text-indigo-600" />,
+          bgColor: 'bg-indigo-50',
+          iconColor: 'bg-indigo-100',
+          trend: '+15%',
+          trendType: 'up'
+        }
+      ],
+      // Set 2: Financial Metrics
+      [
+        {
+          title: 'Total Value',
+          value: `AED ${totalValue.toLocaleString()}`,
+          icon: <TrendingUp className="h-5 w-5 text-indigo-600" />,
+          bgColor: 'bg-indigo-50',
+          iconColor: 'bg-indigo-100',
+          trend: '+15%',
+          trendType: 'up'
+        },
+        {
+          title: 'Average Cost',
+          value: `AED ${Math.round(avgValue).toLocaleString()}`,
+          icon: <BarChart3 className="h-5 w-5 text-purple-600" />,
+          bgColor: 'bg-purple-50',
+          iconColor: 'bg-purple-100',
+          trend: '+5%',
+          trendType: 'up'
+        },
+        {
+          title: 'Today\'s Purchases',
+          value: todayPurchases.length,
+          icon: <Calendar className="h-5 w-5 text-green-600" />,
+          bgColor: 'bg-green-50',
+          iconColor: 'bg-green-100',
+          trend: '+20%',
+          trendType: 'up'
+        },
+        {
+          title: 'This Week',
+          value: thisWeekPurchases.length,
+          icon: <Users className="h-5 w-5 text-blue-600" />,
+          bgColor: 'bg-blue-50',
+          iconColor: 'bg-blue-100',
+          trend: '+18%',
+          trendType: 'up'
+        },
+        {
+          title: 'Material Types',
+          value: materialTypes,
+          icon: <Settings className="h-5 w-5 text-gray-600" />,
+          bgColor: 'bg-gray-50',
+          iconColor: 'bg-gray-100',
+          trend: '+2%',
+          trendType: 'up'
+        },
+        {
+          title: 'Total Quantity',
+          value: totalQuantity.toLocaleString(),
+          icon: <Package className="h-5 w-5 text-purple-600" />,
+          bgColor: 'bg-purple-50',
+          iconColor: 'bg-purple-100',
+          trend: '+7%',
+          trendType: 'up'
+        },
+        {
+          title: 'Efficiency Rate',
+          value: `${Math.round((approvedPurchases.length / Math.max(allStorePurchases.length, 1)) * 100)}%`,
+          icon: <TrendingUp className="h-5 w-5 text-emerald-600" />,
+          bgColor: 'bg-emerald-50',
+          iconColor: 'bg-emerald-100',
+          trend: '+12%',
+          trendType: 'up'
+        }
+      ]
+    ];
+
+    return metricSets;
+  }, [purchases, allStorePurchases, completedPurchases, estimationRejectedPurchases]);
+
+  // Initialize real-time updates on mount - EXACTLY like ProcurementHub
+  useEffect(() => {
+    // Store user role for the purchase store
+    localStorage.setItem('userRole', 'projectManager');
+
+    // Setup real-time subscriptions
+    setupRealtimeSubscription();
+
+    // Start polling for updates
+    startPolling('projectManager');
+
+    // Initial fetch
+    storeFetchPurchases('projectManager');
+
+    // Cleanup on unmount
+    return () => {
+      stopPolling();
+      cleanupRealtimeSubscription();
+    };
+  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, storeFetchPurchases]);
+
+  // Calculate metrics whenever purchases change - keep it simple, just one set
+  const metrics = useMemo(() => {
     const pendingPurchases = purchases.filter(p => !p.pm_status || p.pm_status === 'pending');
     const approvedPurchases = purchases.filter(p => p.pm_status === 'approved');
     const rejectedPurchases = purchases.filter(p => p.pm_status === 'rejected');
@@ -292,31 +701,8 @@ const ProjectManagerHub: React.FC = () => {
     ];
 
     return metricsData;
-  }, [purchases, allStorePurchases, completedPurchases]);
+  }, [purchases, allStorePurchases, completedPurchases, estimationRejectedPurchases]);
 
-  // Initialize real-time updates on mount - EXACTLY like ProcurementHub
-  useEffect(() => {
-    // Store user role for the purchase store
-    localStorage.setItem('userRole', 'projectManager');
-
-    // Setup real-time subscriptions
-    setupRealtimeSubscription();
-
-    // Start polling for updates
-    startPolling('projectManager');
-
-    // Initial fetch
-    storeFetchPurchases('projectManager');
-
-    // Cleanup on unmount
-    return () => {
-      stopPolling();
-      cleanupRealtimeSubscription();
-    };
-  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, storeFetchPurchases]);
-
-  // Calculate metrics whenever purchases change
-  const metrics = useMemo(() => calculateMetrics(), [calculateMetrics]);
 
   // Filter purchases based on active tab and search
   useEffect(() => {
@@ -754,6 +1140,27 @@ const ProjectManagerHub: React.FC = () => {
                     className="pl-9 w-64"
                   />
                 </div>
+
+                {/* View Toggle Buttons */}
+                <div className="flex items-center border rounded-lg overflow-hidden">
+                  <Button
+                    variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('grid')}
+                    className="rounded-none border-0"
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === 'list' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('list')}
+                    className="rounded-none border-0"
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                </div>
+
                 <Button
                   onClick={() => setShowFilters(!showFilters)}
                   variant={hasActiveFilters() ? "default" : "outline"}
@@ -932,25 +1339,107 @@ const ProjectManagerHub: React.FC = () => {
                     <p className="text-gray-500">No purchases found</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {filteredPurchases.map((purchase) => (
-                      <PurchaseApprovalCard
-                        key={purchase.purchase_id}
-                        purchase={purchase}
+                  <>
+                    {viewMode === 'grid' ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {paginatedPurchases.map((purchase) => (
+                          <PurchaseApprovalCard
+                            key={purchase.purchase_id}
+                            purchase={purchase}
+                            onViewDetails={handleViewDetails}
+                            onViewHistory={handleViewHistory}
+                            onEdit={() => handleEdit(purchase.purchase_id)}
+                            onApprove={() => handleApprove(purchase.purchase_id)}
+                            onReject={(reason) => handleReject(purchase.purchase_id, reason)}
+                            onSendToEstimation={() => handleSendToEstimation(purchase.purchase_id)}
+                            isLoading={processingPurchases.approving.has(purchase.purchase_id) || processingPurchases.rejecting.has(purchase.purchase_id) || processingPurchases.resending.has(purchase.purchase_id)}
+                            isApproving={processingPurchases.approving.has(purchase.purchase_id)}
+                            isRejecting={processingPurchases.rejecting.has(purchase.purchase_id)}
+                            isResending={processingPurchases.resending.has(purchase.purchase_id)}
+                            isEstimationRejected={activeTab === 'estimation_rejected'}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <PurchaseListView
+                        purchases={paginatedPurchases}
+                        activeTab={activeTab}
                         onViewDetails={handleViewDetails}
                         onViewHistory={handleViewHistory}
-                        onEdit={() => handleEdit(purchase.purchase_id)}
-                        onApprove={() => handleApprove(purchase.purchase_id)}
-                        onReject={(reason) => handleReject(purchase.purchase_id, reason)}
-                        onSendToEstimation={() => handleSendToEstimation(purchase.purchase_id)}
-                        isLoading={processingPurchases.approving.has(purchase.purchase_id) || processingPurchases.rejecting.has(purchase.purchase_id) || processingPurchases.resending.has(purchase.purchase_id)}
-                        isApproving={processingPurchases.approving.has(purchase.purchase_id)}
-                        isRejecting={processingPurchases.rejecting.has(purchase.purchase_id)}
-                        isResending={processingPurchases.resending.has(purchase.purchase_id)}
-                        isEstimationRejected={activeTab === 'estimation_rejected'}
+                        onApprove={handleApprove}
+                        onReject={handleReject}
+                        onSendToEstimation={handleSendToEstimation}
+                        processingPurchases={processingPurchases}
                       />
-                    ))}
-                  </div>
+                    )}
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-6 pt-6 border-t">
+                        <div className="text-sm text-gray-600">
+                          Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredPurchases.length)} of {filteredPurchases.length} purchases
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {/* Previous Button */}
+                          <Button
+                            onClick={goToPrevPage}
+                            variant="outline"
+                            size="sm"
+                            disabled={currentPage === 1}
+                            className="flex items-center gap-1"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                            Previous
+                          </Button>
+
+                          {/* Page Numbers */}
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: Math.min(5, totalPages) }).map((_, index) => {
+                              let pageNum;
+                              if (totalPages <= 5) {
+                                pageNum = index + 1;
+                              } else if (currentPage <= 3) {
+                                pageNum = index + 1;
+                              } else if (currentPage >= totalPages - 2) {
+                                pageNum = totalPages - 4 + index;
+                              } else {
+                                pageNum = currentPage - 2 + index;
+                              }
+
+                              if (pageNum > totalPages) return null;
+
+                              return (
+                                <button
+                                  key={pageNum}
+                                  onClick={() => goToPage(pageNum)}
+                                  className={`w-8 h-8 rounded text-sm font-medium transition-colors ${
+                                    pageNum === currentPage
+                                      ? 'bg-blue-600 text-white'
+                                      : 'text-gray-700 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  {pageNum}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Next Button */}
+                          <Button
+                            onClick={goToNextPage}
+                            variant="outline"
+                            size="sm"
+                            disabled={currentPage === totalPages}
+                            className="flex items-center gap-1"
+                          >
+                            Next
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </TabsContent>
             </Tabs>

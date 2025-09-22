@@ -98,6 +98,36 @@ const ProcurementHub: React.FC = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [pmEmailedPRs, setPmEmailedPRs] = useState<Set<number>>(new Set());
   const [showEditModal, setShowEditModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredPurchases.length / itemsPerPage);
+  const paginatedPurchases = filteredPurchases.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Reset to first page when tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
+
+  // Pagination handlers
+  const goToPrevPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  };
+
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+  };
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [sendingEmailIds, setSendingEmailIds] = useState<Set<number>>(new Set());
   const [resendingToPMIds, setResendingToPMIds] = useState<Set<number>>(new Set());
@@ -786,8 +816,27 @@ const ProcurementHub: React.FC = () => {
               Purchase Requisitions
             </CardTitle>
             
-            {/* Filter and Sort Controls */}
+            {/* Filter, Sort and View Controls */}
             <div className="flex items-center gap-2 flex-wrap">
+              {/* View Toggle Buttons */}
+              <div className="flex items-center border rounded-lg overflow-hidden">
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                  className="rounded-none border-0"
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                  className="rounded-none border-0"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
               <Select value={filterPriority} onValueChange={setFilterPriority}>
                 <SelectTrigger className="w-32">
                   <SelectValue placeholder="Priority" />
@@ -1162,23 +1211,111 @@ const ProcurementHub: React.FC = () => {
               )}
               
               {filteredPurchases.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {filteredPurchases.map((purchase) => (
-                    <PurchaseCard
-                      key={purchase.purchase_id}
-                      purchase={purchase}
+                <>
+                  {viewMode === 'grid' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {paginatedPurchases.map((purchase) => (
+                        <PurchaseCard
+                          key={purchase.purchase_id}
+                          purchase={purchase}
+                          onViewDetails={handleViewDetails}
+                          onViewHistory={handleViewHistory}
+                          onEdit={handleEdit}
+                          onSendEmail={handleSendEmail}
+                          onResendToPM={handleResendToPM}
+                          onResendToEst={handleResendToPM}
+                          emailSent={pmEmailedPRs.has(purchase.purchase_id)}
+                          sendingEmail={sendingEmailIds.has(purchase.purchase_id)}
+                          isLoading={resendingToPMIds.has(purchase.purchase_id)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <PurchaseListView
+                      purchases={paginatedPurchases}
+                      activeTab={activeTab}
                       onViewDetails={handleViewDetails}
                       onViewHistory={handleViewHistory}
-                      onEdit={handleEdit}
-                      onSendEmail={handleSendEmail}
-                      onResendToPM={handleResendToPM}
-                      onResendToEst={handleResendToPM}
-                      emailSent={pmEmailedPRs.has(purchase.purchase_id)}
-                      sendingEmail={sendingEmailIds.has(purchase.purchase_id)}
-                      isLoading={resendingToPMIds.has(purchase.purchase_id)}
+                      processingPurchases={{
+                        approving: new Set(),
+                        rejecting: new Set()
+                      }}
+                      roleConfig={{
+                        role: 'procurement',
+                        statusField: 'status',
+                        showActions: false,
+                        actionType: 'approve-reject'
+                      }}
                     />
-                  ))}
-                </div>
+                  )}
+
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-6 pt-6 border-t">
+                      <div className="text-sm text-gray-600">
+                        Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredPurchases.length)} of {filteredPurchases.length} purchases
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Previous Button */}
+                        <Button
+                          onClick={goToPrevPage}
+                          variant="outline"
+                          size="sm"
+                          disabled={currentPage === 1}
+                          className="flex items-center gap-1"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                          Previous
+                        </Button>
+
+                        {/* Page Numbers */}
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(5, totalPages) }).map((_, index) => {
+                            let pageNum;
+                            if (totalPages <= 5) {
+                              pageNum = index + 1;
+                            } else if (currentPage <= 3) {
+                              pageNum = index + 1;
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + index;
+                            } else {
+                              pageNum = currentPage - 2 + index;
+                            }
+
+                            if (pageNum > totalPages) return null;
+
+                            return (
+                              <button
+                                key={pageNum}
+                                onClick={() => goToPage(pageNum)}
+                                className={`w-8 h-8 rounded text-sm font-medium transition-colors ${
+                                  pageNum === currentPage
+                                    ? 'bg-red-600 text-white'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Next Button */}
+                        <Button
+                          onClick={goToNextPage}
+                          variant="outline"
+                          size="sm"
+                          disabled={currentPage === totalPages}
+                          className="flex items-center gap-1"
+                        >
+                          Next
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-12 text-gray-500">
                   <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
