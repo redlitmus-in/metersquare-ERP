@@ -1,10 +1,9 @@
 /**
  * Technical Director Hub Page
  * Main workspace for Technical Director to review and approve/reject purchases
- * Updated with new UI alternatives (DataTable, Kanban, Split View, BentoGrid)
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -18,11 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  RefreshCw, Search, Shield,
+import { 
+  RefreshCw, Search, Shield, 
   CheckSquare, XSquare, Clock, TrendingUp,
   DollarSign, FileText, BarChart3, AlertCircle,
-  Filter, X, Building2, MapPin, Package, Users
+  Filter, X, Building2, MapPin
 } from 'lucide-react';
 import TechnicalDirectorApprovalCard from '../components/TechnicalDirectorApprovalCard';
 import TechnicalDirectorApprovalModal from '../components/TechnicalDirectorApprovalModal';
@@ -32,213 +31,9 @@ import { toast } from 'sonner';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseStore';
 
-// Import new UI components
-import DataTableView from '@/components/ui/DataTableView';
-import KanbanView from '@/components/ui/KanbanView';
-import SplitView from '@/components/ui/SplitView';
-import BentoGrid, { BentoGridPresets } from '@/components/ui/BentoGrid';
-import ViewToggle, { ViewType } from '@/components/ui/ViewToggle';
-
-// Technical Director Metrics Carousel Component
-const TechnicalMetricsCarousel: React.FC<{ metrics: any; formatCurrency: (amount: number) => string }> = ({ metrics, formatCurrency }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const intervalRef = useRef<NodeJS.Timeout>();
-
-  const metricCards = [
-    {
-      title: 'Pending',
-      value: metrics.pendingCount,
-      icon: Clock,
-      color: 'bg-indigo-50 border-indigo-200 text-indigo-700',
-      bgIcon: 'bg-indigo-100',
-      change: metrics.pendingCount > 0 ? '+5' : '0',
-      changeColor: 'text-indigo-600'
-    },
-    {
-      title: 'Approved',
-      value: metrics.approvedCount,
-      icon: CheckSquare,
-      color: 'bg-green-50 border-green-200 text-green-700',
-      bgIcon: 'bg-green-100',
-      change: '+12%',
-      changeColor: 'text-green-600'
-    },
-    {
-      title: 'Rejected',
-      value: metrics.rejectedCount,
-      icon: XSquare,
-      color: 'bg-red-50 border-red-200 text-red-700',
-      bgIcon: 'bg-red-100',
-      change: '-3%',
-      changeColor: 'text-red-600'
-    },
-    {
-      title: 'Value',
-      value: formatCurrency(metrics.totalValue),
-      icon: DollarSign,
-      color: 'bg-emerald-50 border-emerald-200 text-emerald-700',
-      bgIcon: 'bg-emerald-100',
-      change: '+8%',
-      changeColor: 'text-emerald-600',
-      isLarge: true
-    },
-    {
-      title: 'Items',
-      value: metrics.totalQuantity,
-      icon: Package,
-      color: 'bg-purple-50 border-purple-200 text-purple-700',
-      bgIcon: 'bg-purple-100',
-      change: '+23',
-      changeColor: 'text-purple-600'
-    },
-    {
-      title: 'Processing',
-      value: `${metrics.avgProcessingTime}d`,
-      icon: TrendingUp,
-      color: 'bg-orange-50 border-orange-200 text-orange-700',
-      bgIcon: 'bg-orange-100',
-      change: '-15%',
-      changeColor: 'text-orange-600'
-    },
-    {
-      title: 'Completed',
-      value: metrics.completedCount,
-      icon: FileText,
-      color: 'bg-blue-50 border-blue-200 text-blue-700',
-      bgIcon: 'bg-blue-100',
-      change: '+88',
-      changeColor: 'text-blue-600'
-    }
-  ];
-
-  // Auto-rotate carousel
-  useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 4));
-    }, 3000);
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [metricCards.length]);
-
-  // Handle manual navigation
-  const handleNext = () => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    setCurrentIndex((prev) => (prev + 1) % Math.max(1, metricCards.length - 4));
-    // Restart auto-rotation after manual interaction
-    intervalRef.current = setInterval(() => {
-      setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 4));
-    }, 3000);
-  };
-
-  const handlePrev = () => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    setCurrentIndex((prev) => (prev - 1 + Math.max(1, metricCards.length - 4)) % Math.max(1, metricCards.length - 4));
-    // Restart auto-rotation after manual interaction
-    intervalRef.current = setInterval(() => {
-      setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 4));
-    }, 3000);
-  };
-
-  // Get visible cards (show 5 at a time on desktop, 3 on tablet, 2 on mobile)
-  const visibleCards = metricCards.slice(currentIndex, currentIndex + 5);
-  if (visibleCards.length < 5) {
-    visibleCards.push(...metricCards.slice(0, 5 - visibleCards.length));
-  }
-
-  return (
-    <div className="mb-6">
-      <div className="relative">
-        {/* Navigation Buttons */}
-        <button
-          onClick={handlePrev}
-          className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow border border-gray-200"
-          aria-label="Previous metrics"
-        >
-          <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <button
-          onClick={handleNext}
-          className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow border border-gray-200"
-          aria-label="Next metrics"
-        >
-          <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-
-        {/* Metrics Cards */}
-        <div className="overflow-hidden px-1">
-          <motion.div
-            className="flex gap-3"
-            animate={{ x: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          >
-            {visibleCards.map((metric, index) => {
-              const Icon = metric.icon;
-              return (
-                <motion.div
-                  key={`${metric.title}-${index}`}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className={`flex-1 min-w-0 ${metric.isLarge ? 'col-span-2' : ''}`}
-                >
-                  <div className={`relative overflow-hidden border rounded-lg p-3 ${metric.color} transition-all hover:shadow-md`}>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gray-600 truncate">{metric.title}</p>
-                        <p className="text-lg font-bold mt-1 truncate">{metric.value}</p>
-                        <div className="flex items-center gap-1 mt-1">
-                          <span className={`text-xs font-medium ${metric.changeColor}`}>
-                            {metric.change}
-                          </span>
-                        </div>
-                      </div>
-                      <div className={`p-2 rounded-lg ${metric.bgIcon}`}>
-                        <Icon className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        </div>
-
-        {/* Dot Indicators */}
-        <div className="flex justify-center gap-1 mt-3">
-          {Array.from({ length: Math.max(1, metricCards.length - 4) }).map((_, index) => (
-            <button
-              key={index}
-              onClick={() => {
-                if (intervalRef.current) clearInterval(intervalRef.current);
-                setCurrentIndex(index);
-                intervalRef.current = setInterval(() => {
-                  setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 4));
-                }, 3000);
-              }}
-              className={`transition-all ${index === currentIndex
-                ? 'w-6 h-1.5 bg-indigo-500 rounded-full'
-                : 'w-1.5 h-1.5 bg-gray-300 rounded-full hover:bg-gray-400'
-              }`}
-              aria-label={`Go to metrics page ${index + 1}`}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const TechnicalDirectorHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState('pending');
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
-  const [viewType, setViewType] = useState<ViewType>('kanban'); // Default to kanban for workflow
 
   // Use centralized store for real-time updates
   const {
@@ -252,16 +47,17 @@ const TechnicalDirectorHub: React.FC = () => {
   } = usePurchaseStore();
 
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-
+  
   // Search and Filter states
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [projectFilter, setProjectFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
-
+  
   // Modal states
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -277,7 +73,7 @@ const TechnicalDirectorHub: React.FC = () => {
     rejectedCount: 0,
     completedCount: 0,
     totalValue: 0,
-    avgProcessingTime: 2.5,
+    avgProcessingTime: 0,
     totalQuantity: 0
   });
 
@@ -294,11 +90,19 @@ const TechnicalDirectorHub: React.FC = () => {
 
   // Initialize real-time updates on mount
   useEffect(() => {
+    // Store user role for the purchase store
     localStorage.setItem('userRole', 'technicalDirector');
+
+    // Setup real-time subscriptions
     setupRealtimeSubscription();
+
+    // Start polling for updates
     startPolling('technicalDirector');
+
+    // Initial fetch
     storeFetchPurchases('technicalDirector');
 
+    // Cleanup on unmount
     return () => {
       stopPolling();
       cleanupRealtimeSubscription();
@@ -313,48 +117,53 @@ const TechnicalDirectorHub: React.FC = () => {
   // Calculate metrics whenever purchases change
   useEffect(() => {
     if (purchases.length > 0) {
-      let pendingPurchases: Purchase[] = [];
-      let approvedPurchases: Purchase[] = [];
-      let rejectedPurchases: Purchase[] = [];
-      let completedPurchases: Purchase[] = [];
+        
+        // Calculate metrics based on actual technical_director_status in each purchase
+        let pendingPurchases: Purchase[] = [];
+        let approvedPurchases: Purchase[] = [];
+        let rejectedPurchases: Purchase[] = [];
+        let completedPurchases: Purchase[] = [];
 
-      purchases.forEach(p => {
-        const isCompleted = p.latest_status?.status === 'completed' ||
-                           p.latest_status?.status === 'complete' ||
-                           p.accounts_acknowledgement === true;
-
-        if (isCompleted) {
-          completedPurchases.push(p);
-        } else {
-          const tdStatus = p.technical_director_status?.toLowerCase();
-
-          if (tdStatus === 'pending' || !tdStatus) {
-            if (p.estimation_status === 'approved') {
-              pendingPurchases.push(p);
+        purchases.forEach(p => {
+          // Check if purchase is completed (accounts has acknowledged)
+          const isCompleted = p.latest_status?.status === 'completed' || 
+                             p.latest_status?.status === 'complete' ||
+                             p.accounts_acknowledgement === true;
+          
+          if (isCompleted) {
+            completedPurchases.push(p);
+          } else {
+            // Check technical_director_status field directly
+            const tdStatus = p.technical_director_status?.toLowerCase();
+            
+            if (tdStatus === 'pending' || !tdStatus) {
+              // Also check if estimation approved (TD is next)
+              if (p.estimation_status === 'approved') {
+                pendingPurchases.push(p);
+              }
+            } else if (tdStatus === 'approved') {
+              approvedPurchases.push(p);
+            } else if (tdStatus === 'rejected') {
+              rejectedPurchases.push(p);
             }
-          } else if (tdStatus === 'approved') {
-            approvedPurchases.push(p);
-          } else if (tdStatus === 'rejected') {
-            rejectedPurchases.push(p);
           }
-        }
-      });
+        });
+        
+        const pendingValue = pendingPurchases.reduce((sum, p) => 
+          sum + (p.total_cost || 0), 0
+        );
+        
+        const totalQuantity = pendingPurchases.reduce((sum, p) => 
+          sum + (p.total_quantity || 0), 0
+        );
 
-      const pendingValue = pendingPurchases.reduce((sum, p) =>
-        sum + (p.total_cost || 0), 0
-      );
-
-      const totalQuantity = pendingPurchases.reduce((sum, p) =>
-        sum + (p.total_quantity || 0), 0
-      );
-
-      setMetrics({
-        pendingCount: pendingPurchases.length,
-        approvedCount: approvedPurchases.length,
-        rejectedCount: rejectedPurchases.length,
+        setMetrics({
+          pendingCount: pendingPurchases.length,
+          approvedCount: approvedPurchases.length,
+          rejectedCount: rejectedPurchases.length,
         completedCount: completedPurchases.length,
         totalValue: pendingValue,
-        avgProcessingTime: 2.5,
+        avgProcessingTime: 0,
         totalQuantity: totalQuantity
       });
     }
@@ -364,48 +173,52 @@ const TechnicalDirectorHub: React.FC = () => {
   useEffect(() => {
     let filtered = [...purchases];
 
-    // Tab filter
+    // Tab filter - Check technical_director_status field and completion status
     switch (activeTab) {
       case 'pending':
+        // Show purchases where TD hasn't acted yet and estimation approved (exclude completed)
         filtered = purchases.filter(p => {
-          const isCompleted = p.latest_status?.status === 'completed' ||
+          const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
                              p.accounts_acknowledgement === true;
           if (isCompleted) return false;
-
+          
           const tdStatus = p.technical_director_status?.toLowerCase();
           const estimationStatus = p.estimation_status?.toLowerCase();
           return (!tdStatus || tdStatus === 'pending') && estimationStatus === 'approved';
         });
         break;
-
+        
       case 'approved':
+        // Show purchases where technical_director_status is approved (exclude completed)
         filtered = purchases.filter(p => {
-          const isCompleted = p.latest_status?.status === 'completed' ||
+          const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
                              p.accounts_acknowledgement === true;
           if (isCompleted) return false;
-
+          
           const tdStatus = p.technical_director_status?.toLowerCase();
           return tdStatus === 'approved';
         });
         break;
-
+        
       case 'rejected':
+        // Show purchases where technical_director_status is rejected (exclude completed)
         filtered = purchases.filter(p => {
-          const isCompleted = p.latest_status?.status === 'completed' ||
+          const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
                              p.accounts_acknowledgement === true;
           if (isCompleted) return false;
-
+          
           const tdStatus = p.technical_director_status?.toLowerCase();
           return tdStatus === 'rejected';
         });
         break;
-
+        
       case 'completed':
+        // Show completed purchases only
         filtered = purchases.filter(p => {
-          const isCompleted = p.latest_status?.status === 'completed' ||
+          const isCompleted = p.latest_status?.status === 'completed' || 
                              p.latest_status?.status === 'complete' ||
                              p.accounts_acknowledgement === true;
           return isCompleted;
@@ -415,10 +228,10 @@ const TechnicalDirectorHub: React.FC = () => {
 
     // Search filter
     if (searchTerm) {
-      filtered = filtered.filter(p =>
+      filtered = filtered.filter(p => 
         p.purchase_id.toString().includes(searchTerm) ||
-        p.site_location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.purpose?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.site_location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.purpose.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.project_id?.toString().includes(searchTerm)
       );
     }
@@ -436,7 +249,7 @@ const TechnicalDirectorHub: React.FC = () => {
       filtered = filtered.filter(p => p.project_id === projectFilter);
     }
 
-    // Location filter
+    // Location filter  
     if (locationFilter !== 'all') {
       filtered = filtered.filter(p => p.site_location === locationFilter);
     }
@@ -465,119 +278,103 @@ const TechnicalDirectorHub: React.FC = () => {
       filtered = filtered.filter(p => filterDate(p.date || p.created_at));
     }
 
-    // Apply sorting
+    // Apply sorting - prioritize most recent activity
     filtered.sort((a, b) => {
+      // For sorting, use the most recent date available:
+      // 1. latest_status.date (if exists) - shows most recent approval/action
+      // 2. last_modified_at (if exists) - shows recent edits
+      // 3. created_at (if exists)
+      // 4. date (fallback)
+      
       const getMostRecentDate = (purchase: Purchase) => {
+        // If there's a latest status with date, use it (most recent workflow action)
         if (purchase.latest_status?.date) {
           return new Date(purchase.latest_status.date).getTime();
         }
+        // If last modified, use it (recent edits/updates)
         if (purchase.last_modified_at) {
           return new Date(purchase.last_modified_at).getTime();
         }
+        // If created at, use it
         if (purchase.created_at) {
           return new Date(purchase.created_at).getTime();
         }
-        if (purchase.date) {
-          return new Date(purchase.date).getTime();
-        }
-        return 0;
+        // Fallback to date field
+        return new Date(purchase.date).getTime();
       };
-
-      return getMostRecentDate(b) - getMostRecentDate(a);
+      
+      const dateA = getMostRecentDate(a);
+      const dateB = getMostRecentDate(b);
+      
+      // Sort by most recent first (newest activity at top)
+      return dateB - dateA;
     });
 
     setFilteredPurchases(filtered);
   }, [purchases, activeTab, searchTerm, statusFilter, projectFilter, locationFilter, dateFilter]);
 
-  // Transform data for different views
-  const getTableColumns = () => [
-    { key: 'purchase_id', label: 'PR #', sortable: true, width: '80px' },
-    { key: 'purpose', label: 'Purpose', sortable: true },
-    { key: 'site_location', label: 'Location', sortable: true },
-    { key: 'technical_director_status', label: 'Status', sortable: true, width: '120px' },
-    { key: 'priority', label: 'Priority', sortable: true, width: '100px' },
-    { key: 'total_cost', label: 'Amount', sortable: true, width: '120px',
-      render: (value: number) => `AED ${value?.toLocaleString() || 0}` },
-    { key: 'date', label: 'Date', sortable: true, width: '120px' },
-    { key: 'project_id', label: 'Project', sortable: false, width: '80px',
-      render: (value: any) => value ? `P-${value}` : '-' }
-  ];
-
-  const transformToKanbanData = (purchases: Purchase[]) => {
-    return purchases.map(p => ({
-      id: p.purchase_id,
-      title: `PR #${p.purchase_id}`,
-      subtitle: p.purpose,
-      status: p.technical_director_status?.toLowerCase() || 'pending',
-      priority: p.materials?.[0]?.priority || 'medium',
-      assignee: p.created_by || 'Unknown',
-      date: p.date ? new Date(p.date).toLocaleDateString() : undefined,
-      location: p.site_location,
-      amount: p.total_cost,
-      itemCount: p.materials?.length || 0,
-      tags: p.project_id ? [`Project ${p.project_id}`] : []
-    }));
-  };
-
-  const transformToSplitData = (purchases: Purchase[]) => {
-    return purchases.map(p => ({
-      id: p.purchase_id,
-      title: `PR #${p.purchase_id}`,
-      subtitle: p.purpose,
-      status: p.technical_director_status?.toLowerCase() || 'pending',
-      priority: p.materials?.[0]?.priority || 'medium',
-      date: p.date ? new Date(p.date).toLocaleDateString() : undefined,
-      amount: p.total_cost,
-      location: p.site_location,
-      assignee: p.created_by || 'Unknown',
-      project_id: p.project_id,
-      materials: p.materials
-    }));
-  };
-
-  // Handlers
+  // Handle approve button click
   const handleApprove = (purchaseId: number) => {
     setSelectedPurchaseId(purchaseId);
     setModalMode('approve');
     setApprovalModalOpen(true);
   };
 
+  // Handle reject button click
   const handleReject = (purchaseId: number) => {
     setSelectedPurchaseId(purchaseId);
     setModalMode('reject');
     setApprovalModalOpen(true);
   };
 
+  // Handle view details button click
   const handleViewDetails = (purchaseId: number) => {
     const purchase = purchases.find(p => p.purchase_id === purchaseId);
     if (purchase) {
       setSelectedPurchase(purchase);
+      setSelectedPurchaseId(purchaseId);
       setDetailsModalOpen(true);
     }
   };
 
+  // Handle view history button click
   const handleViewHistory = (purchaseId: number) => {
-    setSelectedPurchaseId(purchaseId);
-    setHistoryModalOpen(true);
+    const purchase = purchases.find(p => p.purchase_id === purchaseId);
+    if (purchase) {
+      setSelectedPurchase(purchase);
+      setSelectedPurchaseId(purchaseId);
+      setHistoryModalOpen(true);
+    }
   };
 
-  const handleApprovalSuccess = () => {
-    storeFetchPurchases('technicalDirector');
-    setApprovalModalOpen(false);
+  // Handle success after approval/rejection
+  const handleApprovalSuccess = async () => {
+    // Wait for backend to properly update
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Refresh the list to get updated data
+    await storeFetchPurchases('technicalDirector');
+
+    // Move to appropriate tab after action
+    if (modalMode === 'approve') {
+      setActiveTab('approved');
+      toast.success('Purchase approved successfully');
+    } else if (modalMode === 'reject') {
+      setActiveTab('rejected');
+      toast.success('Purchase rejected successfully');
+    }
   };
 
+  // Format currency
   const formatCurrency = (amount: number) => {
-    return `AED ${amount.toLocaleString('en-AE', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    })}`;
+    return `AED ${amount.toLocaleString()}`;
   };
 
   // Helper functions for filters
   const getUniqueProjects = () => {
     const projects = purchases
       .map(p => p.project_id)
-      .filter((project, index, self) =>
+      .filter((project, index, self) => 
         project && self.indexOf(project) === index
       );
     return projects;
@@ -586,16 +383,16 @@ const TechnicalDirectorHub: React.FC = () => {
   const getUniqueLocations = () => {
     const locations = purchases
       .map(p => p.site_location)
-      .filter((location, index, self) =>
+      .filter((location, index, self) => 
         location && self.indexOf(location) === index
       );
     return locations;
   };
 
   const hasActiveFilters = () => {
-    return statusFilter !== 'all' ||
-           projectFilter !== 'all' ||
-           locationFilter !== 'all' ||
+    return statusFilter !== 'all' || 
+           projectFilter !== 'all' || 
+           locationFilter !== 'all' || 
            dateFilter !== 'all';
   };
 
@@ -604,140 +401,6 @@ const TechnicalDirectorHub: React.FC = () => {
     setProjectFilter('all');
     setLocationFilter('all');
     setDateFilter('all');
-  };
-
-  // Render different views
-  const renderPurchaseView = () => {
-    if (isLoading) {
-      return (
-        <div className="flex items-center justify-center py-12">
-          <div className="flex flex-col items-center gap-2">
-            <ModernLoadingSpinners variant="pulse-wave" size="lg" />
-            <p className="text-sm text-gray-600">Loading purchases...</p>
-          </div>
-        </div>
-      );
-    }
-
-    if (filteredPurchases.length === 0) {
-      return (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <AlertCircle className="h-12 w-12 text-gray-400 mb-4" />
-            <p className="text-lg font-medium text-gray-900">No purchases found</p>
-            <p className="text-sm text-gray-500 mt-1">
-              {searchTerm
-                ? 'Try adjusting your search criteria'
-                : `No ${activeTab} purchases at this time`
-              }
-            </p>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    switch (viewType) {
-      case 'table':
-        return (
-          <DataTableView
-            data={filteredPurchases}
-            columns={getTableColumns()}
-            onApprove={handleApprove}
-            onReject={handleReject}
-            onViewDetails={handleViewDetails}
-            onViewHistory={handleViewHistory}
-            selectable={true}
-            pageSize={10}
-            sticky={true}
-          />
-        );
-
-      case 'kanban':
-        return (
-          <KanbanView
-            data={transformToKanbanData(filteredPurchases)}
-            columns={[
-              { id: 'pending', title: 'Pending Review', color: 'bg-yellow-100 border-yellow-300', icon: Clock },
-              { id: 'approved', title: 'Approved', color: 'bg-green-100 border-green-300', icon: CheckSquare },
-              { id: 'rejected', title: 'Rejected', color: 'bg-red-100 border-red-300', icon: XSquare },
-              { id: 'under_review', title: 'Under Review', color: 'bg-purple-100 border-purple-300', icon: BarChart3 }
-            ]}
-            onApprove={handleApprove}
-            onReject={handleReject}
-            onViewDetails={handleViewDetails}
-            onViewHistory={handleViewHistory}
-            onStatusChange={(itemId, newStatus) => {
-              // Handle status change if needed
-              console.log(`Status change: ${itemId} -> ${newStatus}`);
-            }}
-            draggable={false} // Disable drag for approval workflow
-          />
-        );
-
-      case 'split':
-        return (
-          <SplitView
-            data={transformToSplitData(filteredPurchases)}
-            onApprove={handleApprove}
-            onReject={handleReject}
-            onViewDetails={handleViewDetails}
-            onViewHistory={handleViewHistory}
-            resizable={true}
-            renderDetails={(item) => (
-              <div className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Purchase Details</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2 text-sm">
-                      <div><strong>Purpose:</strong> {item.subtitle}</div>
-                      <div><strong>Location:</strong> {item.location}</div>
-                      <div><strong>Project:</strong> {item.project_id ? `Project ${item.project_id}` : 'N/A'}</div>
-                      <div><strong>Total Amount:</strong> AED {item.amount?.toLocaleString() || 0}</div>
-                      <div><strong>Items:</strong> {item.materials?.length || 0}</div>
-                    </div>
-                  </CardContent>
-                </Card>
-                {item.materials && item.materials.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm">Materials</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ul className="space-y-1 text-sm">
-                        {item.materials.map((mat: any, idx: number) => (
-                          <li key={idx}>{mat.item_name} - Qty: {mat.quantity}</li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            )}
-          />
-        );
-
-      case 'cards':
-      default:
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            <AnimatePresence mode="popLayout">
-              {filteredPurchases.map((purchase) => (
-                <TechnicalDirectorApprovalCard
-                  key={purchase.purchase_id}
-                  purchase={purchase}
-                  onApprove={handleApprove}
-                  onReject={handleReject}
-                  onViewDetails={handleViewDetails}
-                  onViewHistory={handleViewHistory}
-                  isLoading={isLoading}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-        );
-    }
   };
 
   // Show loading state
@@ -754,59 +417,108 @@ const TechnicalDirectorHub: React.FC = () => {
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
-      {/* Page Header */}
+      {/* Page Header - Responsive */}
       <div className="mb-4">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 rounded-xl shadow-xl p-6 border border-[#243d8a]/20"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-[#243d8a] rounded-lg shadow-lg">
-                <Shield className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-[#243d8a]">Technical Director Hub</h1>
-                <p className="text-[#243d8a]/80 mt-1">Review and approve technical specifications</p>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-[#243d8a] rounded-lg shadow-lg">
+              <Shield className="w-8 h-8 text-white" />
             </div>
-            <Button
-              onClick={handleRefresh}
-              variant="outline"
-              size="sm"
-              disabled={isRefreshing}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
+            <div>
+              <h1 className="text-2xl font-bold text-[#243d8a]">Technical Director Hub</h1>
+              <p className="text-[#243d8a]/80 mt-1">Review and approve technical specifications</p>
+            </div>
           </div>
         </motion.div>
       </div>
 
-      {/* Metrics Display - Compact Carousel */}
-      <TechnicalMetricsCarousel metrics={metrics} formatCurrency={formatCurrency} />
+      {/* Metrics Cards - Responsive Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 mb-6">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <Clock className="h-3 w-3 text-indigo-500 flex-shrink-0" />
+              <span className="truncate">Pending Review</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-indigo-600">{metrics.pendingCount}</p>
+            <p className="text-xs text-gray-500 truncate">Awaiting approval</p>
+          </CardContent>
+        </Card>
 
-      {/* Search Bar with View Toggle and Filters */}
-      <div className="mb-6 space-y-4">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <CheckSquare className="h-3 w-3 text-green-500 flex-shrink-0" />
+              <span className="truncate">Approved</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-green-600">{metrics.approvedCount}</p>
+            <p className="text-xs text-gray-500 truncate">Sent to Accounts</p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <XSquare className="h-3 w-3 text-red-500 flex-shrink-0" />
+              <span className="truncate">Rejected</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-red-600">{metrics.rejectedCount}</p>
+            <p className="text-xs text-gray-500 truncate">Sent back</p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <DollarSign className="h-3 w-3 text-green-500 flex-shrink-0" />
+              <span className="truncate">Total Value</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <p className="text-sm font-bold text-green-600 truncate">
+              {formatCurrency(metrics.totalValue)}
+            </p>
+            <p className="text-xs text-gray-500 truncate">Pending value</p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-1 px-3">
+            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
+              <TrendingUp className="h-3 w-3 text-purple-500 flex-shrink-0" />
+              <span className="truncate">Total Quantity</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <p className="text-lg font-bold text-purple-600">{metrics.totalQuantity}</p>
+            <p className="text-xs text-gray-500 truncate">Pending items</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search Bar with Filters */}
+      <div className="mb-4 sm:mb-6 space-y-4">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1 lg:max-w-2xl">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5 sm:h-4 sm:w-4" />
             <Input
               placeholder="Search purchases..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-8 sm:pl-10 h-9 sm:h-10 text-sm sm:text-base bg-white border-gray-200 focus:border-indigo-500 focus:ring-indigo-500"
             />
           </div>
           <div className="flex gap-2">
-            <ViewToggle
-              currentView={viewType}
-              onViewChange={setViewType}
-              availableViews={['cards', 'table', 'kanban', 'split']}
-              variant="buttons"
-            />
             <Button
               onClick={() => setShowFilters(!showFilters)}
               variant="outline"
@@ -933,38 +645,202 @@ const TechnicalDirectorHub: React.FC = () => {
         </AnimatePresence>
       </div>
 
-      {/* Tabs with Content */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <div className="overflow-x-auto">
-          <TabsList className="grid w-full min-w-[360px] max-w-none lg:max-w-3xl grid-cols-4">
-            <TabsTrigger value="pending" className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Pending ({metrics.pendingCount})
+      {/* Tabs - Responsive */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <TabsList className="grid w-full min-w-[360px] max-w-none lg:max-w-3xl grid-cols-4 bg-gray-100 h-auto">
+            <TabsTrigger 
+              value="pending" 
+              className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-indigo-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
+            >
+              <Clock className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="hidden xs:inline">Pending</span>
+              <span className="text-[10px] xs:text-xs sm:text-sm">({metrics.pendingCount})</span>
             </TabsTrigger>
-            <TabsTrigger value="approved" className="flex items-center gap-2">
-              <CheckSquare className="h-4 w-4" />
-              Approved ({metrics.approvedCount})
+            <TabsTrigger 
+              value="approved" 
+              className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-green-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
+            >
+              <CheckSquare className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="hidden xs:inline">Approved</span>
+              <span className="text-[10px] xs:text-xs sm:text-sm">({metrics.approvedCount})</span>
             </TabsTrigger>
-            <TabsTrigger value="rejected" className="flex items-center gap-2">
-              <XSquare className="h-4 w-4" />
-              Rejected ({metrics.rejectedCount})
+            <TabsTrigger 
+              value="rejected" 
+              className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-red-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
+            >
+              <XSquare className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="hidden xs:inline">Rejected</span>
+              <span className="text-[10px] xs:text-xs sm:text-sm">({metrics.rejectedCount})</span>
             </TabsTrigger>
-            <TabsTrigger value="completed" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Completed ({metrics.completedCount})
+            <TabsTrigger 
+              value="completed" 
+              className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-white data-[state=active]:text-blue-600 text-xs sm:text-sm py-2 sm:py-2.5 whitespace-nowrap"
+            >
+              <FileText className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="hidden xs:inline">Completed</span>
+              <span className="text-[10px] xs:text-xs sm:text-sm">({metrics.completedCount})</span>
             </TabsTrigger>
           </TabsList>
         </div>
 
-        {/* Render the same view for all tabs */}
-        {['pending', 'approved', 'rejected', 'completed'].map((tab) => (
-          <TabsContent key={tab} value={tab} className="mt-4">
-            {renderPurchaseView()}
-          </TabsContent>
-        ))}
+        {/* Pending Tab */}
+        <TabsContent value="pending" className="space-y-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+                <p className="text-sm text-gray-600">Loading purchases...</p>
+              </div>
+            </div>
+          ) : filteredPurchases.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
+                <AlertCircle className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mb-3 sm:mb-4" />
+                <p className="text-base sm:text-lg font-medium text-gray-900">No purchases found</p>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1 text-center px-4">
+                  {searchTerm 
+                    ? 'Try adjusting your search criteria'
+                    : 'No purchases require technical review at this time'
+                  }
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <AnimatePresence mode="popLayout">
+                {filteredPurchases.map((purchase) => (
+                  <TechnicalDirectorApprovalCard
+                    key={purchase.purchase_id}
+                    purchase={purchase}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                    onViewDetails={handleViewDetails}
+                    onViewHistory={handleViewHistory}
+                    isLoading={isLoading}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Approved Tab */}
+        <TabsContent value="approved" className="space-y-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+                <p className="text-sm text-gray-600">Loading purchases...</p>
+              </div>
+            </div>
+          ) : filteredPurchases.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
+                <CheckSquare className="h-10 w-10 sm:h-12 sm:w-12 text-green-500 mb-3 sm:mb-4" />
+                <p className="text-base sm:text-lg font-medium text-gray-900">No approved purchases</p>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1 text-center px-4">
+                  Approved purchases will appear here
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <AnimatePresence mode="popLayout">
+                {filteredPurchases.map((purchase) => (
+                  <TechnicalDirectorApprovalCard
+                    key={purchase.purchase_id}
+                    purchase={purchase}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                    onViewDetails={handleViewDetails}
+                    onViewHistory={handleViewHistory}
+                    isLoading={isLoading}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Rejected Tab */}
+        <TabsContent value="rejected" className="space-y-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+                <p className="text-sm text-gray-600">Loading purchases...</p>
+              </div>
+            </div>
+          ) : filteredPurchases.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
+                <XSquare className="h-10 w-10 sm:h-12 sm:w-12 text-red-500 mb-3 sm:mb-4" />
+                <p className="text-base sm:text-lg font-medium text-gray-900">No rejected purchases</p>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1 text-center px-4">
+                  Rejected purchases will appear here
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <AnimatePresence mode="popLayout">
+                {filteredPurchases.map((purchase) => (
+                  <TechnicalDirectorApprovalCard
+                    key={purchase.purchase_id}
+                    purchase={purchase}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                    onViewDetails={handleViewDetails}
+                    onViewHistory={handleViewHistory}
+                    isLoading={isLoading}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Completed Tab */}
+        <TabsContent value="completed" className="space-y-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+                <p className="text-sm text-gray-600">Loading purchases...</p>
+              </div>
+            </div>
+          ) : filteredPurchases.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
+                <FileText className="h-10 w-10 sm:h-12 sm:w-12 text-blue-500 mb-3 sm:mb-4" />
+                <p className="text-base sm:text-lg font-medium text-gray-900">No completed purchases</p>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1 text-center px-4">
+                  Completed purchases will appear here
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <AnimatePresence mode="popLayout">
+                {filteredPurchases.map((purchase) => (
+                  <TechnicalDirectorApprovalCard
+                    key={purchase.purchase_id}
+                    purchase={purchase}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                    onViewDetails={handleViewDetails}
+                    onViewHistory={handleViewHistory}
+                    isLoading={isLoading}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
 
-      {/* Modals */}
+      {/* Approval/Rejection Modal */}
       <TechnicalDirectorApprovalModal
         isOpen={approvalModalOpen}
         onClose={() => setApprovalModalOpen(false)}
@@ -972,11 +848,26 @@ const TechnicalDirectorHub: React.FC = () => {
         mode={modalMode}
         onSuccess={handleApprovalSuccess}
       />
-
+      
+      {/* Purchase Details Modal */}
       <PurchaseDetailsModal
         isOpen={detailsModalOpen}
-        onClose={() => setDetailsModalOpen(false)}
-        purchase={selectedPurchase}
+        onClose={() => {
+          setDetailsModalOpen(false);
+          setSelectedPurchase(null);
+        }}
+        purchaseId={selectedPurchaseId}
+      />
+      
+      {/* Purchase History Modal */}
+      <PurchaseDetailsModal
+        isOpen={historyModalOpen}
+        onClose={() => {
+          setHistoryModalOpen(false);
+          setSelectedPurchase(null);
+        }}
+        purchaseId={selectedPurchaseId}
+        showHistoryOnly={true}
       />
     </div>
   );

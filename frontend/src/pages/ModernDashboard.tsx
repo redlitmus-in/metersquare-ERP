@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { SimpleHorizontalCards } from '@/components/ui/SimpleHorizontalCards';
 import {
   Package,
   Users,
@@ -265,87 +266,45 @@ const ModernDashboard: React.FC = () => {
 
   return (
     <div className="p-2 sm:p-3 md:p-4 space-y-3 md:space-y-4 bg-gray-50 min-h-screen w-full overflow-x-hidden">
-      {/* Modern Header with Glass Effect */}
-      <div className="bg-white/80 backdrop-blur-lg rounded-xl shadow-sm border border-gray-200/50 p-4 mb-6">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-              Executive Dashboard
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Real-time business intelligence and analytics
-            </p>
-          </div>
-          <div className="flex items-center gap-3 mt-4 lg:mt-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.location.reload()}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Refresh
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => navigate('/analytics')}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700"
-            >
-              <BarChart3 className="w-3 h-3 mr-2" />
-              Full Analytics
-            </Button>
-          </div>
+      {/* Compact Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">
+            Projects Overview
+          </h1>
+          <p className="text-xs text-gray-600 mt-0.5">
+            Monitor your active projects and recent activity
+          </p>
+        </div>
+        <div className="flex items-center gap-2 mt-3 md:mt-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/analytics')}
+            className="flex items-center gap-1 text-xs px-3 py-1"
+          >
+            <BarChart3 className="w-3 h-3" />
+            Analytics
+          </Button>
         </div>
       </div>
 
-      {/* Animated Metrics Grid with Hover Effects */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-        {[
-          { title: 'Total Revenue', value: 'AED 3.2M', change: 12.5, icon: Banknote, color: 'from-emerald-500 to-teal-600', trend: 'up' },
-          { title: 'Active Projects', value: 24, change: 8.3, icon: Briefcase, color: 'from-blue-500 to-indigo-600', trend: 'up' },
-          { title: 'Pending Tasks', value: 15, change: -25.0, icon: Clock, color: 'from-amber-500 to-orange-600', trend: 'down' },
-          { title: 'Team Members', value: 48, change: 4.2, icon: Users, color: 'from-purple-500 to-pink-600', trend: 'up' },
-          { title: 'Efficiency', value: '94%', change: 3.2, icon: Award, color: 'from-red-500 to-rose-600', trend: 'up' },
-          { title: 'Deliveries', value: 127, change: 15.8, icon: Truck, color: 'from-cyan-500 to-blue-600', trend: 'up' }
-        ].map((metric, index) => {
-          const Icon = metric.icon;
-          return (
-            <motion.div
-              key={metric.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              whileHover={{ scale: 1.02, translateY: -2 }}
-              className="group"
-            >
-              <Card className="relative overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300">
-                <div className={`absolute inset-0 bg-gradient-to-br ${metric.color} opacity-5 group-hover:opacity-10 transition-opacity`} />
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className={`p-2 rounded-lg bg-gradient-to-br ${metric.color} shadow-lg`}>
-                      <Icon className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {metric.trend === 'up' ? (
-                        <TrendingUp className="w-3 h-3 text-green-500" />
-                      ) : (
-                        <TrendingDown className="w-3 h-3 text-red-500" />
-                      )}
-                      <span className={`text-xs font-bold ${
-                        metric.trend === 'up' ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {Math.abs(metric.change)}%
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-2xl font-bold text-gray-900">{metric.value}</p>
-                  <p className="text-xs text-gray-600 mt-1">{metric.title}</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          );
-        })}
-      </div>
+      {/* Compact Metrics - Horizontal scroll on mobile */}
+      <SimpleHorizontalCards 
+        cards={metrics.map((metric, index) => ({
+          id: `metric-${index}`,
+          title: metric.title,
+          value: metric.value,
+          subtitle: metric.subtitle,
+          icon: <metric.icon className={`w-4 h-4 ${metric.color}`} />,
+          bgColor: 'bg-gray-100',
+          trend: metric.change ? {
+            value: Math.abs(metric.change),
+            isUp: metric.trend === 'up'
+          } : undefined
+        }))}
+        className="mb-4"
+      />
 
       {/* Remove the old grid implementation */}
       <div className="hidden">
