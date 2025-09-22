@@ -23,9 +23,24 @@ import {
   Zap,
   Droplets,
   Wind,
-  Activity
+  Activity,
+  Grid3X3,
+  List,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Edit2,
+  Send
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -206,6 +221,11 @@ const MEPSupervisorHub: React.FC = () => {
   // Use purchase store for MEP purchases
   const { purchases: storePurchases, fetchPurchases, getPurchasesForRole } = usePurchaseStore();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+
+  // View mode and pagination
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const [metrics, setMetrics] = useState({
     totalPurchases: 0,
@@ -388,6 +408,31 @@ const MEPSupervisorHub: React.FC = () => {
 
   const filteredPurchases = getFilteredPurchases();
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredPurchases.length / itemsPerPage);
+  const paginatedPurchases = filteredPurchases.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Reset to first page when tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
+
+  // Pagination handlers
+  const goToPrevPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  };
+
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -513,17 +558,39 @@ const MEPSupervisorHub: React.FC = () => {
 
       {/* Purchases Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="pending">
-            Pending ({filteredPurchases.filter(p => p.status === 'pending').length})
-          </TabsTrigger>
-          <TabsTrigger value="email_sent">
-            Send Mail ({filteredPurchases.filter(p => p.email_sent || p.status === 'email_sent').length})
-          </TabsTrigger>
-          <TabsTrigger value="approved">
-            Completed ({filteredPurchases.filter(p => p.status === 'approved' || p.status === 'completed').length})
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between mb-4">
+          <TabsList className="grid w-full grid-cols-3 max-w-lg">
+            <TabsTrigger value="pending">
+              Pending ({filteredPurchases.filter(p => p.status === 'pending').length})
+            </TabsTrigger>
+            <TabsTrigger value="email_sent">
+              Send Mail ({filteredPurchases.filter(p => p.email_sent || p.status === 'email_sent').length})
+            </TabsTrigger>
+            <TabsTrigger value="approved">
+              Completed ({filteredPurchases.filter(p => p.status === 'approved' || p.status === 'completed').length})
+            </TabsTrigger>
+          </TabsList>
+
+          {/* View Toggle */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+              className="h-8 px-2"
+            >
+              <Grid3X3 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              className="h-8 px-2"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
 
         <TabsContent value={activeTab} className="mt-6">
           {filteredPurchases.length === 0 ? (
@@ -539,9 +606,11 @@ const MEPSupervisorHub: React.FC = () => {
               </div>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredPurchases
-                .filter(p => {
+            <>
+              {viewMode === 'grid' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {paginatedPurchases
+                    .filter(p => {
                   switch (activeTab) {
                     case 'pending':
                       return p.status === 'pending';
@@ -586,7 +655,201 @@ const MEPSupervisorHub: React.FC = () => {
                   );
                 })
               }
-            </div>
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-lg border border-gray-200">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50">
+                        <TableHead className="font-semibold">Purchase ID</TableHead>
+                        <TableHead className="font-semibold">Purpose</TableHead>
+                        <TableHead className="font-semibold">Location</TableHead>
+                        <TableHead className="font-semibold">MEP Type</TableHead>
+                        <TableHead className="font-semibold">Quantity</TableHead>
+                        <TableHead className="font-semibold">Total Cost</TableHead>
+                        <TableHead className="font-semibold">Status</TableHead>
+                        <TableHead className="font-semibold">Date</TableHead>
+                        <TableHead className="font-semibold text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedPurchases
+                        .filter(p => {
+                          switch (activeTab) {
+                            case 'pending':
+                              return p.status === 'pending';
+                            case 'email_sent':
+                              return p.email_sent ||
+                                     p.status === 'email_sent' ||
+                                     p.current_workflow_status === 'email_sent' ||
+                                     p.procurement_status === 'approved' ||
+                                     (p.status === 'approved' && p.email_sent !== false);
+                            case 'approved':
+                              return p.status === 'approved' || p.status === 'completed';
+                            default:
+                              return true;
+                          }
+                        })
+                        .map((purchase) => (
+                          <TableRow key={purchase.purchase_id} className="hover:bg-gray-50 transition-colors">
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                <Package className="h-4 w-4 text-gray-500" />
+                                PR-{purchase.purchase_id.toString().padStart(4, '0')}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm">{purchase.purpose}</span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <MapPin className="h-3 w-3 text-gray-500" />
+                                <span className="text-sm">{purchase.site_location}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm capitalize">
+                                {(purchase as any).mep_category || 'General'}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm">{purchase.materials?.length || 0} items</span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm font-medium">
+                                AED {(purchase.total_cost || 0).toLocaleString()}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              {purchase.status && (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                  purchase.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                  purchase.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                  purchase.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {purchase.status.charAt(0).toUpperCase() + purchase.status.slice(1)}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm text-gray-600">
+                                {new Date(purchase.created_at || purchase.date).toLocaleDateString()}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setSelectedPurchase(purchase)}
+                                  className="h-8 px-2 text-xs hover:bg-gray-100"
+                                  title="View Details"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
+                                {activeTab === 'pending' && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        setSelectedPurchase(purchase);
+                                        setShowPurchaseForm(true);
+                                      }}
+                                      className="h-8 px-2 text-xs hover:bg-gray-100"
+                                      title="Edit"
+                                    >
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleSendToProcurement(purchase.purchase_id)}
+                                      className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                                      title="Send to Procurement"
+                                    >
+                                      <Send className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6 pt-6 border-t">
+                  <div className="text-sm text-gray-600">
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredPurchases.length)} of {filteredPurchases.length} purchases
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Previous Button */}
+                    <Button
+                      onClick={goToPrevPage}
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-1"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </Button>
+
+                    {/* Page Numbers */}
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }).map((_, index) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = index + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = index + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + index;
+                        } else {
+                          pageNum = currentPage - 2 + index;
+                        }
+
+                        if (pageNum > totalPages) return null;
+
+                        return (
+                          <Button
+                            key={pageNum}
+                            onClick={() => goToPage(pageNum)}
+                            variant="ghost"
+                            size="sm"
+                            className={`w-8 h-8 rounded text-sm font-medium transition-colors ${
+                              pageNum === currentPage
+                                ? 'bg-blue-600 text-white'
+                                : 'hover:bg-gray-100'
+                            }`}
+                          >
+                            {pageNum}
+                          </Button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Next Button */}
+                    <Button
+                      onClick={goToNextPage}
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-1"
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
       </Tabs>
