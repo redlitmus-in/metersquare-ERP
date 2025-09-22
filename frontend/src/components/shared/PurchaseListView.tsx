@@ -23,7 +23,7 @@ import {
   RefreshCw,
   Eye,
   History,
-  DollarSign,
+  ArrowRightLeft,
   Calendar
 } from 'lucide-react';
 
@@ -65,6 +65,7 @@ interface PurchaseListViewProps<T extends BasePurchase> {
   onReject?: (id: number, reason?: string) => void;
   onProcess?: (id: number) => void; // For accounts processing
   onAcknowledge?: (id: number) => void; // For accounts acknowledgement
+  onViewTransactionDetails?: (id: number) => void; // For viewing transaction details
   onSendToEstimation?: (id: number) => void; // For PM resending to estimation
   // Processing states
   processingPurchases?: {
@@ -92,6 +93,7 @@ export function PurchaseListView<T extends BasePurchase>({
   onReject,
   onProcess,
   onAcknowledge,
+  onViewTransactionDetails,
   onSendToEstimation,
   processingPurchases = {},
   roleConfig
@@ -188,7 +190,7 @@ export function PurchaseListView<T extends BasePurchase>({
               size="sm"
               onClick={() => onProcess(purchase.purchase_id)}
               disabled={isProcessing('processing')}
-              className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700"
+              className="h-8 px-3 text-xs bg-green-600 hover:bg-green-700 text-white"
             >
               {isProcessing('processing') ? (
                 <RefreshCw className="h-3 w-3 animate-spin" />
@@ -201,20 +203,45 @@ export function PurchaseListView<T extends BasePurchase>({
         break;
 
       case 'acknowledge':
-        if (activeTab === 'processed' && onAcknowledge) {
+        if (activeTab === 'processed') {
+          const hasAcknowledgement = (purchase as any).acknowledgement || (purchase as any).acknowledgement_sent;
           return (
-            <Button
-              size="sm"
-              onClick={() => onAcknowledge(purchase.purchase_id)}
-              disabled={isProcessing('acknowledging')}
-              className="h-8 px-3 text-xs bg-purple-600 hover:bg-purple-700"
-            >
-              {isProcessing('acknowledging') ? (
-                <RefreshCw className="h-3 w-3 animate-spin" />
-              ) : (
-                'Acknowledge'
+            <>
+              {onViewTransactionDetails && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onViewTransactionDetails(purchase.purchase_id)}
+                  className="h-8 px-3 text-xs border-blue-600 text-blue-600 hover:bg-blue-50"
+                >
+                  <ArrowRightLeft className="h-3 w-3 mr-1" />
+                  Transaction
+                </Button>
               )}
-            </Button>
+              {onAcknowledge && (
+                <Button
+                  size="sm"
+                  onClick={() => onAcknowledge(purchase.purchase_id)}
+                  disabled={hasAcknowledgement || isProcessing('acknowledging')}
+                  className={`h-8 px-3 text-xs ${
+                    hasAcknowledgement
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-purple-600 hover:bg-purple-700 text-white'
+                  }`}
+                >
+                  {isProcessing('acknowledging') ? (
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                  ) : hasAcknowledgement ? (
+                    <>
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Acknowledged
+                    </>
+                  ) : (
+                    'Acknowledge'
+                  )}
+                </Button>
+              )}
+            </>
           );
         }
         break;

@@ -44,7 +44,11 @@ import {
   ArrowUpDown,
   MapPin,
   Grid3X3,
-  List
+  List,
+  Mail,
+  Send,
+  Edit2,
+  Eye
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1310,28 +1314,41 @@ const ProcurementHub: React.FC = () => {
                                     size="sm"
                                     variant="ghost"
                                     onClick={() => handleViewDetails(purchase.purchase_id)}
-                                    className="h-8 px-2 text-xs"
+                                    className="h-8 px-2 text-xs hover:bg-gray-100"
+                                    title="View Details"
                                   >
-                                    <FileText className="h-3 w-3" />
+                                    <Eye className="h-3.5 w-3.5" />
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="ghost"
                                     onClick={() => handleViewHistory(purchase.purchase_id)}
-                                    className="h-8 px-2 text-xs"
+                                    className="h-8 px-2 text-xs hover:bg-gray-100"
+                                    title="View History"
                                   >
-                                    <Clock className="h-3 w-3" />
+                                    <Clock className="h-3.5 w-3.5" />
                                   </Button>
-                                  {activeTab === 'pending' && !pmEmailedPRs.has(purchase.purchase_id) && (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => handleSendEmail(purchase.purchase_id)}
-                                      disabled={sendingEmailIds.has(purchase.purchase_id)}
-                                      className="h-8 px-2 text-xs"
-                                    >
-                                      <AlertCircle className="h-3 w-3" />
-                                    </Button>
+                                  {(activeTab === 'pending' || activeTab === 'pm_rejected' || activeTab === 'est_rejected') && !pmEmailedPRs.has(purchase.purchase_id) && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleEdit(purchase.purchase_id)}
+                                        className="h-8 px-2 text-xs hover:bg-gray-100"
+                                        title="Edit"
+                                      >
+                                        <Edit2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleSendEmail(purchase.purchase_id)}
+                                        disabled={sendingEmailIds.has(purchase.purchase_id)}
+                                        className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                                        title="Send to PM"
+                                      >
+                                        <Send className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </>
                                   )}
                                 </div>
                               </TableCell>

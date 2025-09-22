@@ -913,6 +913,7 @@ const AccountsHub: React.FC = () => {
                   onViewHistory={(id) => handleViewDetails(id)} // Use handleViewDetails for now
                   onProcess={handleProcessPayment}
                   onAcknowledge={handleSendAcknowledgement}
+                  onViewTransactionDetails={handleViewTransactionDetails}
                   processingPurchases={{
                     processing: new Set(),
                     acknowledging: new Set()
