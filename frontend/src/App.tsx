@@ -33,6 +33,7 @@ const PurchaseApprovalsPage = lazy(() => import('@/roles/project-manager/pages/P
 const EstimationHub = lazy(() => import('@/roles/estimation/pages/EstimationHub'));
 const TechnicalDirectorHub = lazy(() => import('@/roles/technical-director/pages/TechnicalDirectorHub'));
 const SiteSupervisorHub = lazy(() => import('@/roles/site-supervisor/pages/SiteSupervisorHub'));
+const MEPSupervisorHub = lazy(() => import('@/roles/mep-supervisor/pages/MEPSupervisorHub'));
 const AccountsHub = lazy(() => import('@/roles/accounts/pages/AccountsHub'));
 
 // Lazy load workflow pages
@@ -72,7 +73,12 @@ const RoleSpecificProcurementHub: React.FC = () => {
   if (userRole === 'siteSupervisor' || userRoleLower === 'site supervisor' || userRoleLower === 'site_supervisor' || userRoleLower === 'sitesupervisor') {
     return <SiteSupervisorHub />;
   }
-  
+
+  // Check if user is MEP Supervisor
+  if (userRole === 'mepSupervisor' || userRoleLower === 'mep supervisor' || userRoleLower === 'mep_supervisor' || userRoleLower === 'mepsupervisor') {
+    return <MEPSupervisorHub />;
+  }
+
   // Check if user is Accounts
   if (userRoleLower === 'accounts' || userRoleLower === 'account') {
     return <AccountsHub />;
@@ -267,6 +273,7 @@ function App() {
             <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
             <Route path="purchase/:purchaseId" element={<PurchaseApprovalsPage />} />
             <Route path="site-supervisor" element={<SiteSupervisorHub />} />
+            <Route path="mep-supervisor" element={<MEPSupervisorHub />} />
             <Route path="tasks" element={<TasksPage />} />
             <Route path="projects" element={<ProjectsPage />} />
             <Route path="projects/:id" element={<ProjectsPage />} />

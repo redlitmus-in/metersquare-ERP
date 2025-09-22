@@ -153,8 +153,7 @@ interface ApprovalStep {
 - **Design**
 - **Site Supervisor**
 - **MEP Supervisor**
-- **Factory Supervisor**
-- **Store In Charge**
+
 
 ### Role-Based UI Features
 - Dynamic navigation based on user role

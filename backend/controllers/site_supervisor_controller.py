@@ -35,15 +35,110 @@ def get_site_supervisor_dashboard():
         return jsonify({'error': str(e)}), 500
 
 
-def _get_recent_purchase_requests(user_id):
-    """Get recent purchase requests (limit 5)"""
+def get_site_supervisor_purchases():
+    """Get all site supervisor purchases (filtered to exclude MEP)"""
     try:
-        recent_purchases = (
+        current_user = g.user
+        if not current_user:
+            return jsonify({'error': 'Not logged in'}), 401
+
+        # Verify user is site supervisor
+        role = Role.query.filter_by(role_id=current_user['role_id'], is_deleted=False).first()
+        if not role or role.role != 'siteSupervisor':
+            return jsonify({'error': 'Access denied. Site supervisor role required'}), 403
+
+        # Get all purchases
+        all_purchases = Purchase.query.filter(Purchase.is_deleted == False).order_by(desc(Purchase.created_at)).all()
+
+        # Filter out MEP purchases
+        site_purchases = []
+        for purchase in all_purchases:
+            if not _is_mep_related_purchase(purchase):
+                # Get materials for this purchase
+                materials = Material.query.filter(
+                    and_(
+                        Material.is_deleted == False,
+                        Material.material_id.in_(purchase.material_ids or [])
+                    )
+                ).all()
+
+                # Get latest status
+                latest_status = PurchaseStatus.get_latest_status(purchase.purchase_id)
+
+                # Calculate totals
+                total_cost = sum((m.cost or 0) * (m.quantity or 0) for m in materials)
+
+                purchase_data = {
+                    'purchase_id': purchase.purchase_id,
+                    'user_id': purchase.user_id,
+                    'requested_by': purchase.requested_by,
+                    'site_location': purchase.site_location,
+                    'date': purchase.date,
+                    'project_id': purchase.project_id,
+                    'purpose': purchase.purpose,
+                    'materials': [material.to_dict() for material in materials],
+                    'email_sent': purchase.email_sent,
+                    'created_at': purchase.created_at.isoformat() if purchase.created_at else None,
+                    'created_by': purchase.created_by,
+                    'current_status': {
+                        'status': latest_status.status if latest_status else 'pending',
+                        'updated_at': latest_status.created_at.isoformat() if latest_status else None,
+                        'updated_by': latest_status.sender if latest_status else None
+                    },
+                    'total_cost': round(total_cost, 2),
+                    'materials_count': len(materials)
+                }
+
+                site_purchases.append(purchase_data)
+
+        return jsonify({
+            'success': True,
+            'data': site_purchases,
+            'total': len(site_purchases)
+        }), 200
+
+    except Exception as e:
+        log.error(f"Error fetching site supervisor purchases: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+def _is_mep_related_purchase(purchase):
+    """Check if a purchase is MEP-related and should be excluded from site supervisor view"""
+    purpose = (purchase.purpose or '').lower()
+    requested_by = (purchase.requested_by or '').lower()
+
+    # MEP keywords
+    mep_keywords = [
+        'electrical', 'mechanical', 'plumbing', 'hvac', 'mep',
+        'wiring', 'cable', 'circuit', 'transformer', 'panel', 'generator',
+        'air conditioning', 'ventilation', 'chiller', 'ahu', 'fan', 'duct',
+        'pipe', 'pump', 'valve', 'drainage', 'sewage', 'water heater'
+    ]
+
+    # Check if requested by MEP supervisor
+    if 'mep supervisor' in requested_by or 'mep' in requested_by:
+        return True
+
+    # Check purpose for MEP-specific keywords
+    for keyword in mep_keywords:
+        if keyword in purpose:
+            return True
+
+    return False
+
+
+def _get_recent_purchase_requests(user_id):
+    """Get recent purchase requests (limit 5) - filtered for site supervisor"""
+    try:
+        all_recent_purchases = (
             Purchase.query.filter(Purchase.is_deleted == False)
             .order_by(desc(Purchase.created_at))
-            .limit(5)
+            .limit(20)  # Get more to filter from
             .all()
         )
+
+        # Filter out MEP purchases
+        recent_purchases = [p for p in all_recent_purchases if not _is_mep_related_purchase(p)][:5]
 
         material_cache = _get_materials_for_purchases(recent_purchases)
 

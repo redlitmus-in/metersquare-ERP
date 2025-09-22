@@ -127,6 +127,9 @@ const usePurchaseStore = create<PurchaseStore>()(
       // REMOVED debouncing - we want instant updates!
       const currentStore = get();
 
+      // Debug log to track what role is being passed
+      console.log('[PurchaseStore] fetchPurchases called with role:', role);
+
       try {
         // Only show loading on initial fetch, not on refresh
         if (!currentStore.lastFetchTime) {
@@ -162,11 +165,26 @@ const usePurchaseStore = create<PurchaseStore>()(
           case 'sitesupervisor':
           case 'site supervisor':
           case 'site_supervisor':
-            endpoint = '/all_purchase';  // Changed to use /all_purchase for site supervisor
+            endpoint = '/all_purchase';  // Site supervisor uses /all_purchase endpoint
+            break;
+          case 'mepsupervisor':
+          case 'mep supervisor':
+          case 'mep_supervisor':
+          case 'mep':  // Add 'mep' as an alias
+            endpoint = '/mep_purchases';  // Use MEP-specific endpoint
             break;
           default:
-            endpoint = '/all_purchase';  // Backend: /all_purchase
+            // IMPORTANT: For MEP supervisor, NEVER fall back to /all_purchase
+            // Check if the role contains 'mep' to catch any variations
+            if (role?.toLowerCase().includes('mep')) {
+              endpoint = '/mep_purchases';
+            } else {
+              endpoint = '/all_purchase';  // Backend: /all_purchase
+            }
         }
+
+        // Debug log to track which endpoint is being called
+        console.log('[PurchaseStore] Using endpoint:', endpoint);
 
         response = await apiClient.get(endpoint);
 
@@ -178,6 +196,28 @@ const usePurchaseStore = create<PurchaseStore>()(
           if (response.data.procurement) {
             // For /all_procurement endpoint
             purchaseData = response.data.procurement;
+          } else if (endpoint === '/mep_purchases') {
+            // For MEP supervisor endpoint - the response has data array directly in response.data.data
+            console.log('[PurchaseStore] MEP endpoint response structure:', Object.keys(response.data));
+
+            if (response.data.data && Array.isArray(response.data.data)) {
+              purchaseData = response.data.data;
+              console.log('[PurchaseStore] Found MEP purchases:', purchaseData.length, 'items');
+            } else if (response.data.purchase_requests) {
+              purchaseData = response.data.purchase_requests;
+            } else if (response.data.purchases) {
+              purchaseData = response.data.purchases;
+            } else {
+              // If no standard key, try to find an array in the response
+              const keys = Object.keys(response.data);
+              for (const key of keys) {
+                if (Array.isArray(response.data[key]) && key !== 'pagination' && key !== 'filters') {
+                  purchaseData = response.data[key];
+                  console.log('[PurchaseStore] Found MEP data in key:', key);
+                  break;
+                }
+              }
+            }
           } else if (response.data.approved_procurement_purchases || response.data.estimation_pm_rejections) {
             // For project manager endpoint - combine approved purchases and estimation rejections
             const approved = response.data.approved_procurement_purchases || [];
@@ -214,10 +254,19 @@ const usePurchaseStore = create<PurchaseStore>()(
 
           // Normalize materials field (only if we have data)
           if (purchaseData && purchaseData.length > 0) {
+            console.log('[PurchaseStore] Processing', purchaseData.length, 'purchases for role:', role);
             purchaseData = purchaseData.map(purchase => {
             const materials = purchase.material_details || purchase.materials || [];
+
+            // Normalize status field - check for current_status object
+            let normalizedStatus = purchase.status;
+            if (purchase.current_status && purchase.current_status.status) {
+              normalizedStatus = purchase.current_status.status;
+            }
+
             return {
               ...purchase,
+              status: normalizedStatus, // Ensure status field is always available
               materials,
               total_cost: materials.reduce((sum: number, m: any) =>
                 sum + (m.cost || 0) * (m.quantity || 1), 0
@@ -228,6 +277,7 @@ const usePurchaseStore = create<PurchaseStore>()(
               material_count: materials.length || purchase.material_count || 0
             };
           });
+          console.log('[PurchaseStore] Normalized purchases:', purchaseData);
           }
 
           // Only update if data has changed
@@ -435,11 +485,31 @@ const usePurchaseStore = create<PurchaseStore>()(
         case 'sitesupervisor':
         case 'site supervisor':
         case 'site_supervisor':
-          // Purchases created by site supervisor
-          return purchases.filter(p =>
-            p.requested_by?.toLowerCase().includes('site') ||
-            p.requested_by?.toLowerCase().includes('supervisor')
-          );
+          // Only show purchases created by site supervisor, exclude MEP supervisor PRs
+          return purchases.filter(p => {
+            const requestedBy = p.requested_by?.toLowerCase() || '';
+            const createdBy = p.created_by?.toLowerCase() || '';
+
+            // Include if requested by Site supervisor
+            const isSiteRequest = requestedBy.includes('site supervisor') ||
+                                createdBy.includes('site supervisor') ||
+                                requestedBy.includes('sitesupervisor') ||
+                                createdBy.includes('sitesupervisor');
+
+            // Exclude if requested by MEP supervisor
+            const isMepRequest = requestedBy.includes('mep') ||
+                               createdBy.includes('mep') ||
+                               requestedBy.includes('mepsupervisor') ||
+                               createdBy.includes('mepsupervisor');
+
+            return isSiteRequest && !isMepRequest;
+          });
+
+        case 'mepsupervisor':
+        case 'mep supervisor':
+        case 'mep_supervisor':
+          // All purchases from /mep_purchases endpoint are MEP purchases, no filtering needed
+          return purchases;
 
         default:
           return purchases;
@@ -459,10 +529,21 @@ export const startPolling = (role?: string) => {
     clearInterval(pollingIntervalId);
   }
 
+  // Ensure proper role mapping for MEP supervisor
+  let mappedRole = role;
+  if (role) {
+    const roleLower = role.toLowerCase();
+    if (roleLower.includes('mep')) {
+      mappedRole = 'mepsupervisor';
+    } else if (roleLower === 'procurement') {
+      mappedRole = 'procurement';
+    }
+  }
+
   // Start new polling interval for REAL-TIME updates
   if (store.isPollingEnabled) {
-    // Initial fetch
-    store.fetchPurchases(role);
+    // Initial fetch with mapped role
+    store.fetchPurchases(mappedRole);
 
     // Setup real-time subscription for instant updates
     store.setupRealtimeSubscription();
@@ -472,7 +553,7 @@ export const startPolling = (role?: string) => {
       const currentStore = usePurchaseStore.getState();
       // Always poll when tab is visible - no conditions
       if (document.visibilityState === 'visible') {
-        currentStore.fetchPurchases(role);
+        currentStore.fetchPurchases(mappedRole);
       }
     }, store.pollingInterval);
 
@@ -493,7 +574,34 @@ document.addEventListener('visibilitychange', () => {
     const store = usePurchaseStore.getState();
     const userRole = localStorage.getItem('userRole');
 
-    store.fetchPurchases(userRole || undefined);
+
+    // Fix role mapping - localStorage might have different format
+    let mappedRole = userRole;
+    if (userRole) {
+      // Map common role variations
+      if (userRole.toLowerCase().includes('mep')) {
+        mappedRole = 'mepsupervisor';
+      } else if (userRole.toLowerCase().includes('site') && !userRole.toLowerCase().includes('mep')) {
+        mappedRole = 'sitesupervisor';
+      } else if (userRole.toLowerCase().includes('procurement')) {
+        mappedRole = 'procurement';
+      } else if (userRole.toLowerCase().includes('project')) {
+        mappedRole = 'projectmanager';
+      } else if (userRole.toLowerCase().includes('estimation')) {
+        mappedRole = 'estimation';
+      } else if (userRole.toLowerCase().includes('technical')) {
+        mappedRole = 'technicaldirector';
+      } else if (userRole.toLowerCase().includes('account')) {
+        mappedRole = 'accounts';
+      } else {
+        // Keep original role if no mapping found
+        mappedRole = userRole;
+      }
+    }
+
+    if (mappedRole) {
+      store.fetchPurchases(mappedRole);
+    }
   }
 });
 
