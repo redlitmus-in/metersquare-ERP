@@ -180,6 +180,8 @@ def get_all_purchase_request():
         if not current_user:
             return jsonify({"error": "Not logged in"}), 401
 
+        current_user_id = current_user['user_id']
+
         # Pagination params
         page = request.args.get('page', 1, type=int)
         per_page = min(request.args.get('per_page', 20, type=int), 50)  # Max 50 items
@@ -207,6 +209,7 @@ def get_all_purchase_request():
                 CROSS JOIN roles r
                 WHERE p.is_deleted = false
                     AND r.role_id = :role_id
+                    AND p.user_id = :current_user_id
                     AND r.is_deleted = false
                     AND r.role IN ('siteSupervisor','mepSupervisor','procurement','projectManager','estimation','technicalDirector')
                 ORDER BY p.created_at DESC
@@ -217,6 +220,7 @@ def get_all_purchase_request():
 
         result = db.session.execute(query, {
             'role_id': current_user['role_id'],
+            'current_user_id': current_user_id,
             'limit': per_page,
             'offset': offset
         }).fetchall()
@@ -678,7 +682,7 @@ def send_purchase_request_email(purchase_id):
             SELECT
                 r.role,
                 p.purchase_id, p.site_location, p.date, p.project_id,
-                p.purpose, p.file_path, p.material_ids, p.requested_by
+                p.purpose, p.file_path, p.material_ids, p.requested_by, p.user_id
             FROM purchase p
             CROSS JOIN roles r
             WHERE p.purchase_id = :pid
@@ -702,7 +706,8 @@ def send_purchase_request_email(purchase_id):
             'date': result[3],
             'project_id': result[4],
             'purpose': result[5],
-            'file_path': result[6]
+            'file_path': result[6],
+            'user_id': result[9],
         }
         material_ids = result[7]
         requested_by = result[8]

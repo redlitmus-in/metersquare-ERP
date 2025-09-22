@@ -634,8 +634,6 @@ def get_all_technical_director_purchase_request():
             # Build TD history for this purchase
             td_history = {}
             td_rejection_timestamp = None
-            is_back_with_td = False
-            received_after_td_rejection = False
 
             # Check TD's historical involvement from purchase history
             if purchase_id in td_historical_involvement:
@@ -667,10 +665,8 @@ def get_all_technical_director_purchase_request():
                 elif latest_overall_status.sender == 'estimation' and latest_overall_status.status == 'approved':
                     if latest_overall_status.receiver == 'technicalDirector':
                         td_status_to_show = 'pending'
-                        is_back_with_td = True
                     elif td_rejection_timestamp and latest_overall_status.created_at > td_rejection_timestamp:
                         td_status_to_show = 'pending'
-                        is_back_with_td = True
                     elif purchase_id in td_history:
                         td_status_to_show = td_history[purchase_id]['status']
                     else:
@@ -688,7 +684,6 @@ def get_all_technical_director_purchase_request():
                     if td_rejection_timestamp and latest_overall_status.created_at > td_rejection_timestamp:
                         # Purchase has been updated after TD rejection - show as pending
                         td_status_to_show = 'pending'
-                        is_back_with_td = True
                     else:
                         td_status_to_show = td_history[purchase_id]['status']
                 else:
