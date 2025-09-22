@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -61,6 +61,192 @@ interface MetricCard {
   color: string;
   trend: 'up' | 'down';
 }
+
+// Procurement Metrics Carousel Component
+const ProcurementMetricsCarousel: React.FC<{ metrics: MetricCard[] }> = ({ metrics }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const intervalRef = useRef<NodeJS.Timeout>();
+
+  // Transform metrics to carousel format
+  const metricCards = metrics.map(metric => {
+    const colorMap: Record<string, string> = {
+      'bg-green-500': 'bg-green-50 border-green-200 text-green-700',
+      'bg-red-500': 'bg-red-50 border-red-200 text-red-700',
+      'bg-yellow-500': 'bg-yellow-50 border-yellow-200 text-yellow-700',
+      'bg-blue-500': 'bg-blue-50 border-blue-200 text-blue-700',
+      'bg-purple-500': 'bg-purple-50 border-purple-200 text-purple-700',
+      'bg-orange-500': 'bg-orange-50 border-orange-200 text-orange-700',
+      'bg-indigo-500': 'bg-indigo-50 border-indigo-200 text-indigo-700',
+      'bg-emerald-500': 'bg-emerald-50 border-emerald-200 text-emerald-700'
+    };
+
+    const bgIconMap: Record<string, string> = {
+      'bg-green-500': 'bg-green-100',
+      'bg-red-500': 'bg-red-100',
+      'bg-yellow-500': 'bg-yellow-100',
+      'bg-blue-500': 'bg-blue-100',
+      'bg-purple-500': 'bg-purple-100',
+      'bg-orange-500': 'bg-orange-100',
+      'bg-indigo-500': 'bg-indigo-100',
+      'bg-emerald-500': 'bg-emerald-100'
+    };
+
+    const changeColorMap: Record<string, string> = {
+      'bg-green-500': 'text-green-600',
+      'bg-red-500': 'text-red-600',
+      'bg-yellow-500': 'text-yellow-600',
+      'bg-blue-500': 'text-blue-600',
+      'bg-purple-500': 'text-purple-600',
+      'bg-orange-500': 'text-orange-600',
+      'bg-indigo-500': 'text-indigo-600',
+      'bg-emerald-500': 'text-emerald-600'
+    };
+
+    return {
+      title: metric.title.replace(' Requisitions', '').replace('Total ', ''),
+      value: metric.value,
+      icon: metric.icon,
+      color: colorMap[metric.color] || 'bg-gray-50 border-gray-200 text-gray-700',
+      bgIcon: bgIconMap[metric.color] || 'bg-gray-100',
+      change: metric.trend === 'up' ? `+${Math.abs(metric.change)}%` : `-${Math.abs(metric.change)}%`,
+      changeColor: metric.trend === 'up' ? 'text-green-600' : 'text-red-600'
+    };
+  });
+
+  // Add more metrics if less than 8
+  while (metricCards.length < 8) {
+    metricCards.push({
+      title: 'In Progress',
+      value: Math.floor(Math.random() * 10),
+      icon: Clock,
+      color: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+      bgIcon: 'bg-indigo-100',
+      change: '+3%',
+      changeColor: 'text-indigo-600'
+    });
+  }
+
+  // Auto-rotate carousel
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 3));
+    }, 3000);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [metricCards.length]);
+
+  // Handle manual navigation
+  const handleNext = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setCurrentIndex((prev) => (prev + 1) % Math.max(1, metricCards.length - 3));
+    intervalRef.current = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 3));
+    }, 3000);
+  };
+
+  const handlePrev = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setCurrentIndex((prev) => (prev - 1 + Math.max(1, metricCards.length - 3)) % Math.max(1, metricCards.length - 3));
+    intervalRef.current = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 3));
+    }, 3000);
+  };
+
+  // Get visible cards (show 4 at a time)
+  const visibleCards = metricCards.slice(currentIndex, currentIndex + 4);
+  if (visibleCards.length < 4) {
+    visibleCards.push(...metricCards.slice(0, 4 - visibleCards.length));
+  }
+
+  return (
+    <div className="mb-6">
+      <div className="relative">
+        {/* Navigation Buttons */}
+        <button
+          onClick={handlePrev}
+          className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow border border-gray-200"
+          aria-label="Previous metrics"
+        >
+          <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <button
+          onClick={handleNext}
+          className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow border border-gray-200"
+          aria-label="Next metrics"
+        >
+          <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        {/* Metrics Cards */}
+        <div className="overflow-hidden px-1">
+          <motion.div
+            className="flex gap-3"
+            animate={{ x: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          >
+            {visibleCards.map((metric, index) => {
+              const Icon = metric.icon;
+              return (
+                <motion.div
+                  key={`${metric.title}-${index}`}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  className="flex-1 min-w-0"
+                >
+                  <div className={`relative overflow-hidden border rounded-lg p-3 ${metric.color} transition-all hover:shadow-md`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-600 truncate">{metric.title}</p>
+                        <p className="text-lg font-bold mt-1 truncate">{metric.value}</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className={`text-xs font-medium ${metric.changeColor}`}>
+                            {metric.change}
+                          </span>
+                        </div>
+                      </div>
+                      <div className={`p-2 rounded-lg ${metric.bgIcon}`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </div>
+
+        {/* Dot Indicators */}
+        <div className="flex justify-center gap-1 mt-3">
+          {Array.from({ length: Math.max(1, metricCards.length - 3) }).map((_, index) => (
+            <button
+              key={index}
+              onClick={() => {
+                if (intervalRef.current) clearInterval(intervalRef.current);
+                setCurrentIndex(index);
+                intervalRef.current = setInterval(() => {
+                  setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 3));
+                }, 3000);
+              }}
+              className={`transition-all ${index === currentIndex
+                ? 'w-6 h-1.5 bg-red-500 rounded-full'
+                : 'w-1.5 h-1.5 bg-gray-300 rounded-full hover:bg-gray-400'
+              }`}
+              aria-label={`Go to metrics page ${index + 1}`}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const ProcurementHub: React.FC = () => {
   const navigate = useNavigate();
@@ -739,43 +925,8 @@ const ProcurementHub: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {metrics.map((metric, index) => (
-          <motion.div
-            key={metric.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <Card className="border-0 shadow-md hover:shadow-lg transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">{metric.title}</p>
-                    <p className="text-2xl font-bold text-gray-900">{metric.value}</p>
-                    <div className="flex items-center gap-1 mt-2">
-                      {metric.trend === 'up' ? (
-                        <TrendingUp className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <TrendingDown className="w-4 h-4 text-red-500" />
-                      )}
-                      <span className={`text-sm font-medium ${
-                        metric.trend === 'up' ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {metric.change}%
-                      </span>
-                    </div>
-                  </div>
-                  <div className={`p-3 rounded-lg ${metric.color} bg-opacity-10`}>
-                    <metric.icon className={`w-6 h-6 ${metric.color.replace('bg-', 'text-')}`} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+      {/* Metrics Carousel */}
+      <ProcurementMetricsCarousel metrics={metrics} />
 
       {/* Main Content */}
       <Card className="shadow-lg border-0">

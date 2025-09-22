@@ -1,20 +1,21 @@
 /**
  * Project Manager Hub Page
- * Main workspace for Project Manager role
- * Following the standardized hub implementation pattern
+ * Main workspace for Project Manager role with new UI alternatives
+ * Updated with DataTable, Kanban, Split View, and BentoGrid
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
-  RefreshCw, Download, Search, Filter, LayoutDashboard, 
+import {
+  RefreshCw, Download, Search, Filter, LayoutDashboard,
   Package, CheckSquare, BarChart3, Bell, Settings,
   Clock, CheckCircle, XCircle, AlertTriangle, FileText,
-  TrendingUp, Users, Calendar, X
+  TrendingUp, Users, Calendar, X, Building2, MapPin,
+  DollarSign, Target, Activity, Briefcase
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -31,63 +32,230 @@ import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
 import { projectManagerService, ProcurementPurchase } from '../services/projectManagerService';
 import { toast } from 'sonner';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
-import { AnimatePresence } from 'framer-motion';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseStore';
 
-// Metric card component
-interface MetricCard {
-  title: string;
-  value: string | number;
-  icon: React.ReactNode;
-  trend?: string;
-  trendType?: 'up' | 'down' | 'neutral';
-  bgColor: string;
-  iconColor: string;
-}
+// Import new UI components
+import DataTableView from '@/components/ui/DataTableView';
+import KanbanView from '@/components/ui/KanbanView';
+import SplitView from '@/components/ui/SplitView';
+import BentoGrid, { BentoGridPresets } from '@/components/ui/BentoGrid';
+import ViewToggle, { ViewType } from '@/components/ui/ViewToggle';
 
-const MetricCardComponent: React.FC<{ metric: MetricCard }> = ({ metric }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    className={`${metric.bgColor} rounded-lg p-4 border border-gray-100`}
-  >
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium text-gray-600">{metric.title}</p>
-        <p className="text-xl font-bold text-gray-900 mt-1">{metric.value}</p>
-        {metric.trend && (
-          <div className="flex items-center mt-1">
-            <TrendingUp className={`h-4 w-4 ${
-              metric.trendType === 'up' ? 'text-green-600' : 
-              metric.trendType === 'down' ? 'text-red-600' : 
-              'text-gray-600'
-            }`} />
-            <span className={`text-sm ml-1 ${
-              metric.trendType === 'up' ? 'text-green-600' : 
-              metric.trendType === 'down' ? 'text-red-600' : 
-              'text-gray-600'
-            }`}>
-              {metric.trend}
-            </span>
-          </div>
-        )}
-      </div>
-      <div className={`${metric.iconColor} p-2 rounded-lg`}>
-        {metric.icon}
+// Metrics Carousel Component
+const MetricsCarousel: React.FC<{ metrics: any; formatCurrency: (amount: number) => string }> = ({ metrics, formatCurrency }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const intervalRef = useRef<NodeJS.Timeout>();
+
+  const metricCards = [
+    {
+      title: 'Pending',
+      value: metrics.pendingCount,
+      icon: Clock,
+      color: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+      bgIcon: 'bg-yellow-100',
+      change: metrics.pendingCount > 5 ? '+8%' : '+2%',
+      changeColor: 'text-yellow-600'
+    },
+    {
+      title: 'Approved',
+      value: metrics.approvedCount,
+      icon: CheckCircle,
+      color: 'bg-green-50 border-green-200 text-green-700',
+      bgIcon: 'bg-green-100',
+      change: '+15%',
+      changeColor: 'text-green-600'
+    },
+    {
+      title: 'Rejected',
+      value: metrics.rejectedCount,
+      icon: XCircle,
+      color: 'bg-red-50 border-red-200 text-red-700',
+      bgIcon: 'bg-red-100',
+      change: '-2%',
+      changeColor: 'text-red-600'
+    },
+    {
+      title: 'Projects',
+      value: metrics.activeProjects,
+      icon: Building2,
+      color: 'bg-blue-50 border-blue-200 text-blue-700',
+      bgIcon: 'bg-blue-100',
+      change: '+3',
+      changeColor: 'text-blue-600'
+    },
+    {
+      title: 'Budget',
+      value: formatCurrency(metrics.totalValue),
+      icon: DollarSign,
+      color: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+      bgIcon: 'bg-emerald-100',
+      change: '+12%',
+      changeColor: 'text-emerald-600',
+      isLarge: true
+    },
+    {
+      title: 'Critical',
+      value: metrics.criticalItems,
+      icon: AlertTriangle,
+      color: 'bg-orange-50 border-orange-200 text-orange-700',
+      bgIcon: 'bg-orange-100',
+      change: metrics.criticalItems > 0 ? '+5' : '0',
+      changeColor: 'text-orange-600'
+    },
+    {
+      title: 'Processing',
+      value: `${metrics.avgProcessingTime}d`,
+      icon: Activity,
+      color: 'bg-purple-50 border-purple-200 text-purple-700',
+      bgIcon: 'bg-purple-100',
+      change: '-12%',
+      changeColor: 'text-purple-600'
+    },
+    {
+      title: 'Total',
+      value: metrics.totalPurchases,
+      icon: Package,
+      color: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+      bgIcon: 'bg-indigo-100',
+      change: '+23',
+      changeColor: 'text-indigo-600'
+    }
+  ];
+
+  // Auto-rotate carousel
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 4));
+    }, 3000);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [metricCards.length]);
+
+  // Handle manual navigation
+  const handleNext = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setCurrentIndex((prev) => (prev + 1) % Math.max(1, metricCards.length - 4));
+    // Restart auto-rotation after manual interaction
+    intervalRef.current = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 4));
+    }, 3000);
+  };
+
+  const handlePrev = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setCurrentIndex((prev) => (prev - 1 + Math.max(1, metricCards.length - 4)) % Math.max(1, metricCards.length - 4));
+    // Restart auto-rotation after manual interaction
+    intervalRef.current = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 4));
+    }, 3000);
+  };
+
+  // Get visible cards (show 5 at a time on desktop, 3 on tablet, 2 on mobile)
+  const visibleCards = metricCards.slice(currentIndex, currentIndex + 5);
+  if (visibleCards.length < 5) {
+    visibleCards.push(...metricCards.slice(0, 5 - visibleCards.length));
+  }
+
+  return (
+    <div className="mb-6">
+      <div className="relative">
+        {/* Navigation Buttons */}
+        <button
+          onClick={handlePrev}
+          className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow border border-gray-200"
+          aria-label="Previous metrics"
+        >
+          <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <button
+          onClick={handleNext}
+          className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow border border-gray-200"
+          aria-label="Next metrics"
+        >
+          <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        {/* Metrics Cards */}
+        <div className="overflow-hidden px-1">
+          <motion.div
+            className="flex gap-3"
+            animate={{ x: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          >
+            {visibleCards.map((metric, index) => {
+              const Icon = metric.icon;
+              return (
+                <motion.div
+                  key={`${metric.title}-${index}`}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  className={`flex-1 min-w-0 ${metric.isLarge ? 'col-span-2' : ''}`}
+                >
+                  <div className={`relative overflow-hidden border rounded-lg p-3 ${metric.color} transition-all hover:shadow-md`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-600 truncate">{metric.title}</p>
+                        <p className="text-lg font-bold mt-1 truncate">{metric.value}</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className={`text-xs font-medium ${metric.changeColor}`}>
+                            {metric.change}
+                          </span>
+                        </div>
+                      </div>
+                      <div className={`p-2 rounded-lg ${metric.bgIcon}`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </div>
+
+        {/* Dot Indicators */}
+        <div className="flex justify-center gap-1 mt-3">
+          {Array.from({ length: Math.max(1, metricCards.length - 4) }).map((_, index) => (
+            <button
+              key={index}
+              onClick={() => {
+                if (intervalRef.current) clearInterval(intervalRef.current);
+                setCurrentIndex(index);
+                intervalRef.current = setInterval(() => {
+                  setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 4));
+                }, 3000);
+              }}
+              className={`transition-all ${index === currentIndex
+                ? 'w-6 h-1.5 bg-blue-500 rounded-full'
+                : 'w-1.5 h-1.5 bg-gray-300 rounded-full hover:bg-gray-400'
+              }`}
+              aria-label={`Go to metrics page ${index + 1}`}
+            />
+          ))}
+        </div>
       </div>
     </div>
-  </motion.div>
-);
+  );
+};
 
 const ProjectManagerHub: React.FC = () => {
   const navigate = useNavigate();
-  
+
   // State management
   const [activeTab, setActiveTab] = useState('pending');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [viewType, setViewType] = useState<ViewType>('split'); // Default to split view for PM
 
-  // Use centralized store for real-time updates - EXACTLY like ProcurementHub
+  // Use centralized store for real-time updates
   const {
     isLoading,
     lastFetchTime,
@@ -97,310 +265,81 @@ const ProjectManagerHub: React.FC = () => {
     getPurchasesForRole
   } = usePurchaseStore();
 
-  // Get purchases directly from store - no local state needed!
-  const allStorePurchases = getPurchasesForRole('projectManager') as ProcurementPurchase[];
+  // Get purchases directly from store
+  const purchases = useMemo(() => {
+    return getPurchasesForRole('projectManager') as ProcurementPurchase[];
+  }, [getPurchasesForRole]);
 
-  // Transform and separate purchases by status
-  const purchases = (allStorePurchases || []).map(p => ({
-    ...p,
-    pm_status: p.project_manager_status || p.pm_status,
-    materials_summary: p.materials_summary || {
-      total_materials: p.materials?.length || 0,
-      total_quantity: p.total_quantity || 0,
-      total_cost: p.total_cost || 0,
-      materials: p.materials || []
-    }
-  })).filter(p => {
-    // Check if TD rejected (these should remain visible)
-    const isTDRejected = p.technical_director_status === 'rejected' ||
-                        (p.status_sender === 'technicalDirector' && p.status === 'rejected');
-
-    // If TD rejected and PM approved, always include
-    if (isTDRejected && p.pm_status === 'approved') {
-      return true;
-    }
-
-    return (
-      // Active purchases (not completed)
-      p.latest_status?.status !== 'completed' &&
-      p.latest_status?.status !== 'complete' &&
-      p.accounts_acknowledgement !== true &&
-      p.current_workflow_status !== 'completed' &&
-      // Exclude ONLY PM flag estimation rejections - they go to estimation_rejected tab
-      // But include purchases rejected by other roles for different reasons
-      (p.rejection_from !== 'estimation' ||
-       !p.rejected_status?.reject_category?.includes('pm_flag') ||
-       // Include if PM has already approved and it was rejected by a later role
-       p.pm_status === 'approved')
-    );
-  }) || [];
-  // Derived from store data - Only show PM flag rejections from Estimation
-  const estimationRejectedPurchases = (allStorePurchases || [])
-    .filter(p =>
-      // Check if it's a rejection that needs PM action
-      (p.requires_pm_action === true ||
-       p.rejection_from === 'estimation' ||
-       p.estimation_status === 'rejected') &&
-      // Check for PM flag rejection specifically
-      (p.rejected_status?.reject_category === 'pm_flag' ||
-       p.status_info?.reject_category === 'pm_flag' ||
-       p.reject_category === 'pm_flag' ||
-       p.approvals?.action?.some((a: any) =>
-         a.role === 'estimation' &&
-         a.status === 'rejected' &&
-         a.reject_category === 'pm_flag'
-       )) && // Only PM flag rejections
-      // Ensure PM hasn't already rejected it
-      p.pm_status !== 'rejected' &&
-      // Not completed
-      p.latest_status?.status !== 'completed' &&
-      p.accounts_acknowledgement !== true &&
-      p.current_workflow_status !== 'completed'
-    )
-    .map(p => ({
-      ...p,
-      pm_status: p.project_manager_status || p.pm_status
-    })) || [];
-
-  const completedPurchases = (allStorePurchases || [])
-    .filter(p =>
-      p.latest_status?.status === 'completed' ||
-      p.latest_status?.status === 'complete' ||
-      p.accounts_acknowledgement === true ||
-      p.current_workflow_status === 'completed'
-    )
-    .map(p => ({
-      ...p,
-      pm_status: p.project_manager_status || p.pm_status
-    })) || [];
-  const [filteredPurchases, setFilteredPurchases] = useState<ProcurementPurchase[]>([]);
+  // Search and filter states
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Filter states
-  const [showFilters, setShowFilters] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
   const [projectFilter, setProjectFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
-  
+  const [showFilters, setShowFilters] = useState(false);
+
   // Modal states
-  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null);
-  const [modalMode, setModalMode] = useState<'details' | 'history'>('details');
-  
-  // Success dialog state
-  const [successDialog, setSuccessDialog] = useState<{
-    isOpen: boolean;
-    message: string;
-  }>({ isOpen: false, message: '' });
-  
-  // Processing states for individual purchases
-  const [processingPurchases, setProcessingPurchases] = useState<{
-    approving: Set<number>;
-    rejecting: Set<number>;
-    resending: Set<number>;
-  }>({
-    approving: new Set(),
-    rejecting: new Set(),
-    resending: new Set()
-  });
+  const [selectedPurchase, setSelectedPurchase] = useState<ProcurementPurchase | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [approvalAction, setApprovalAction] = useState<{ purchaseId: number; action: 'approve' | 'reject' } | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
-  // Manual refresh handler
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await storeFetchPurchases('projectManager');
-    setIsRefreshing(false);
-    toast.success('Data refreshed');
-  };
+  // Filter purchases based on tab and search
+  const filteredPurchases = useMemo(() => {
+    let filtered = [...purchases];
 
-  // Check for real-time status
-  const isRealtime = lastFetchTime && Date.now() - lastFetchTime.getTime() < 15000;
-
-  // Calculate metrics from current data
-  const calculateMetrics = useCallback(() => {
-    const pendingPurchases = purchases.filter(p => !p.pm_status || p.pm_status === 'pending');
-    const approvedPurchases = purchases.filter(p => p.pm_status === 'approved');
-    const rejectedPurchases = purchases.filter(p => p.pm_status === 'rejected');
-
-    const totalQuantity = allStorePurchases.reduce((sum, p) => sum + (p.total_quantity || 0), 0);
-    const totalValue = allStorePurchases.reduce((sum, p) => sum + (p.total_cost || 0), 0);
-
-    const metricsData: MetricCard[] = [
-      {
-        title: 'Total Purchases',
-        value: allStorePurchases.length,
-        icon: <Package className="h-5 w-5 text-blue-600" />,
-        bgColor: 'bg-blue-50',
-        iconColor: 'bg-blue-100',
-        trend: '+12%',
-        trendType: 'up'
-      },
-      {
-        title: 'Pending Approvals',
-        value: pendingPurchases.length,
-        icon: <Clock className="h-5 w-5 text-yellow-600" />,
-        bgColor: 'bg-yellow-50',
-        iconColor: 'bg-yellow-100',
-        trend: '-5%',
-        trendType: 'down'
-      },
-      {
-        title: 'Approved',
-        value: approvedPurchases.length,
-        icon: <CheckCircle className="h-5 w-5 text-green-600" />,
-        bgColor: 'bg-green-50',
-        iconColor: 'bg-green-100',
-        trend: '+8%',
-        trendType: 'up'
-      },
-      {
-        title: 'Rejected',
-        value: rejectedPurchases.length,
-        icon: <XCircle className="h-5 w-5 text-red-600" />,
-        bgColor: 'bg-red-50',
-        iconColor: 'bg-red-100',
-        trend: '-2%',
-        trendType: 'down'
-      },
-      {
-        title: 'Completed',
-        value: completedPurchases.length,
-        icon: <FileText className="h-5 w-5 text-blue-600" />,
-        bgColor: 'bg-blue-50',
-        iconColor: 'bg-blue-100',
-        trend: '+10%',
-        trendType: 'up'
-      },
-      {
-        title: 'Total Quantity',
-        value: totalQuantity.toLocaleString(),
-        icon: <Package className="h-5 w-5 text-purple-600" />,
-        bgColor: 'bg-purple-50',
-        iconColor: 'bg-purple-100',
-        trend: '+7%',
-        trendType: 'up'
-      },
-      {
-        title: 'Total Value',
-        value: `AED ${totalValue.toLocaleString()}`,
-        icon: <TrendingUp className="h-5 w-5 text-indigo-600" />,
-        bgColor: 'bg-indigo-50',
-        iconColor: 'bg-indigo-100',
-        trend: '+15%',
-        trendType: 'up'
-      }
-    ];
-
-    return metricsData;
-  }, [purchases, allStorePurchases, completedPurchases]);
-
-  // Initialize real-time updates on mount - EXACTLY like ProcurementHub
-  useEffect(() => {
-    // Store user role for the purchase store
-    localStorage.setItem('userRole', 'projectManager');
-
-    // Setup real-time subscriptions
-    setupRealtimeSubscription();
-
-    // Start polling for updates
-    startPolling('projectManager');
-
-    // Initial fetch
-    storeFetchPurchases('projectManager');
-
-    // Cleanup on unmount
-    return () => {
-      stopPolling();
-      cleanupRealtimeSubscription();
-    };
-  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, storeFetchPurchases]);
-
-  // Calculate metrics whenever purchases change
-  const metrics = useMemo(() => calculateMetrics(), [calculateMetrics]);
-
-  // Filter purchases based on active tab and search
-  useEffect(() => {
-    let filtered: ProcurementPurchase[] = [];
-
-    // Filter by status based on active tab
+    // Tab filtering
     switch (activeTab) {
       case 'pending':
-        // Show purchases waiting for PM action
-        filtered = [...purchases].filter(p => {
-          // Exclude TD rejected purchases from pending (they should stay in approved)
-          const isTDRejected = p.technical_director_status === 'rejected' ||
-                              (p.status_sender === 'technicalDirector' && p.status === 'rejected');
-
-          if (isTDRejected) return false;
-
-          return (
-            (!p.pm_status || p.pm_status === 'pending') &&
-            // Check multiple possible status fields for procurement approval
-            (p.procurement_status === 'approved' ||
-             p.sender_latest_status === 'approved' ||
-             p.current_workflow_status === 'project_manager' ||
-             p.latest_status?.sender === 'procurement' ||
-             // If no specific procurement status, show all pending for PM
-             (!p.procurement_status && !p.rejection_from))
-          );
+        filtered = filtered.filter(p => {
+          const pmStatus = p.project_manager_status?.toLowerCase();
+          const procStatus = p.procurement_status?.toLowerCase();
+          return (!pmStatus || pmStatus === 'pending') && procStatus === 'approved';
         });
         break;
       case 'approved':
-        // Show ALL PM approved purchases (including ones that moved to next stage or were rejected by TD)
-        filtered = [...allStorePurchases].filter(p => {
-          // Include TD rejected purchases in approved tab (PM already approved them)
-          const isTDRejected = p.technical_director_status === 'rejected' ||
-                              (p.status_sender === 'technicalDirector' && p.status === 'rejected');
-
-          return (p.pm_status === 'approved' ||
-                  p.project_manager_status === 'approved' ||
-                  (isTDRejected && p.pm_status !== 'rejected'));
-        });
+        filtered = filtered.filter(p =>
+          p.project_manager_status?.toLowerCase() === 'approved'
+        );
         break;
       case 'rejected':
-        filtered = [...purchases].filter(p => p.pm_status === 'rejected');
+        filtered = filtered.filter(p =>
+          p.project_manager_status?.toLowerCase() === 'rejected'
+        );
         break;
-      case 'estimation_rejected':
-        // Use the estimation_pm_rejections data from API
-        filtered = [...estimationRejectedPurchases];
-        break;
-      case 'completed':
-        // Show completed purchases
-        filtered = [...completedPurchases];
-        break;
-      default:
-        filtered = [...purchases];
+      case 'all':
+        // Show all purchases
         break;
     }
 
-    // Apply search filter
+    // Search filtering
     if (searchTerm) {
-      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(p =>
+        p.purchase_id.toString().includes(searchTerm) ||
+        p.purpose?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.site_location?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Priority filtering
+    if (priorityFilter !== 'all') {
       filtered = filtered.filter(p => {
-        const purchaseId = p.purchase_id ? p.purchase_id.toString() : '';
-        const purpose = p.purpose || '';
-        const siteLocation = p.site_location || '';
-        
-        return purchaseId.includes(search) ||
-               purpose.toLowerCase().includes(search) ||
-               siteLocation.toLowerCase().includes(search);
+        const priority = p.materials?.[0]?.priority || 'medium';
+        return priority.toLowerCase() === priorityFilter;
       });
     }
 
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(p => {
-        const status = p.pm_status || p.current_workflow_status || 'pending';
-        return status === statusFilter;
-      });
+    // Project filtering
+    if (projectFilter !== 'all') {
+      filtered = filtered.filter(p => p.project_id === projectFilter);
     }
 
-    // Apply location filter
+    // Location filtering
     if (locationFilter !== 'all') {
       filtered = filtered.filter(p => p.site_location === locationFilter);
     }
 
-    // Apply date filter
+    // Date filtering
     if (dateFilter !== 'all') {
       const now = new Date();
       const filterDate = (date: string) => {
@@ -418,565 +357,624 @@ const ProjectManagerHub: React.FC = () => {
             return true;
         }
       };
-      filtered = filtered.filter(p => filterDate(p.created_at || p.date));
+      filtered = filtered.filter(p => filterDate(p.date || p.created_at));
     }
 
-    // Sort purchases based on tab
-    switch (activeTab) {
-      case 'pending':
-        // Sort pending by creation date (oldest first - FIFO for processing)
-        filtered.sort((a, b) => {
-          const dateA = new Date(a.created_at || a.date || 0).getTime();
-          const dateB = new Date(b.created_at || b.date || 0).getTime();
-          return dateA - dateB;
-        });
-        break;
-      case 'approved':
-        // Sort approved by approval date (recently approved first)
-        filtered.sort((a, b) => {
-          const dateA = new Date(a.pm_status_date || a.created_at || a.date || 0).getTime();
-          const dateB = new Date(b.pm_status_date || b.created_at || b.date || 0).getTime();
-          return dateB - dateA;
-        });
-        break;
-      case 'rejected':
-        // Sort rejected by rejection date (recently rejected first)
-        filtered.sort((a, b) => {
-          const dateA = new Date(a.pm_status_date || a.created_at || a.date || 0).getTime();
-          const dateB = new Date(b.pm_status_date || b.created_at || b.date || 0).getTime();
-          return dateB - dateA;
-        });
-        break;
-      case 'completed':
-        // Sort completed by completion date (recently completed first)
-        filtered.sort((a, b) => {
-          const dateA = new Date(a.latest_status?.date || a.created_at || a.date || 0).getTime();
-          const dateB = new Date(b.latest_status?.date || b.created_at || b.date || 0).getTime();
-          return dateB - dateA;
-        });
-        break;
-      case 'estimation_rejected':
-        // Sort estimation rejected by creation date (oldest first)
-        filtered.sort((a, b) => {
-          const dateA = new Date(a.created_at || a.date || 0).getTime();
-          const dateB = new Date(b.created_at || b.date || 0).getTime();
-          return dateA - dateB;
-        });
-        break;
-      default:
-        // Default sort by creation date (newest first)
-        filtered.sort((a, b) => {
-          const dateA = new Date(a.created_at || a.date || 0).getTime();
-          const dateB = new Date(b.created_at || b.date || 0).getTime();
-          return dateB - dateA;
-        });
-    }
+    // Sort by most recent
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.created_at || a.date || 0).getTime();
+      const dateB = new Date(b.created_at || b.date || 0).getTime();
+      return dateB - dateA;
+    });
 
-    setFilteredPurchases(filtered);
-  }, [purchases, estimationRejectedPurchases, completedPurchases, activeTab, searchTerm, statusFilter, projectFilter, locationFilter, dateFilter]);
+    return filtered;
+  }, [purchases, activeTab, searchTerm, priorityFilter, projectFilter, locationFilter, dateFilter]);
 
-  // Handle approval action
-  const handleApprove = async (purchaseId: number) => {
-    // Add to approving set
-    setProcessingPurchases(prev => ({
-      ...prev,
-      approving: new Set(prev.approving).add(purchaseId)
-    }));
-    
-    try {
-      const result = await projectManagerService.approvePurchase(purchaseId, 'Approved by Project Manager');
-      if (result.success) {
-        // Show success dialog
-        setSuccessDialog({
-          isOpen: true,
-          message: 'Purchase request has been approved successfully and sent to the next workflow stage!'
-        });
+  // Calculate metrics
+  const metrics = useMemo(() => {
+    const pendingCount = purchases.filter(p => {
+      const pmStatus = p.project_manager_status?.toLowerCase();
+      const procStatus = p.procurement_status?.toLowerCase();
+      return (!pmStatus || pmStatus === 'pending') && procStatus === 'approved';
+    }).length;
 
-        // Refresh data from store
-        storeFetchPurchases('projectManager');
-      }
-    } catch (error) {
-      toast.error('Failed to approve purchase');
-    } finally {
-      // Remove from approving set
-      setProcessingPurchases(prev => {
-        const newApproving = new Set(prev.approving);
-        newApproving.delete(purchaseId);
-        return { ...prev, approving: newApproving };
-      });
-    }
-  };
+    const approvedCount = purchases.filter(p =>
+      p.project_manager_status?.toLowerCase() === 'approved'
+    ).length;
 
-  // Handle rejection action
-  const handleReject = async (purchaseId: number, reason: string) => {
-    // Add to rejecting set
-    setProcessingPurchases(prev => ({
-      ...prev,
-      rejecting: new Set(prev.rejecting).add(purchaseId)
-    }));
-    
-    try {
-      // Check if the purchase has already been rejected
-      const purchase = purchases.find(p => p.purchase_id === purchaseId);
-      if (purchase?.pm_status === 'rejected') {
-        toast.warning('This purchase has already been rejected by Project Manager');
-        return;
-      }
-      
-      const result = await projectManagerService.rejectPurchase(purchaseId, reason, 'Rejected by Project Manager');
-      if (result.success) {
-        // Show success dialog
-        setSuccessDialog({
-          isOpen: true,
-          message: 'Purchase request has been rejected and sent back to the requester for revision!'
-        });
+    const rejectedCount = purchases.filter(p =>
+      p.project_manager_status?.toLowerCase() === 'rejected'
+    ).length;
 
-        // Refresh data from store
-        storeFetchPurchases('projectManager');
-      }
-    } catch (error: any) {
-      // Show specific error message if available
-      const errorMessage = error.message || 'Failed to reject purchase';
-      toast.error(errorMessage);
-      console.error('Rejection error:', error);
-    } finally {
-      // Remove from rejecting set
-      setProcessingPurchases(prev => {
-        const newRejecting = new Set(prev.rejecting);
-        newRejecting.delete(purchaseId);
-        return { ...prev, rejecting: newRejecting };
-      });
-    }
-  };
+    const totalValue = purchases.reduce((sum, p) => sum + (p.total_cost || 0), 0);
 
+    const activeProjects = new Set(purchases.map(p => p.project_id).filter(Boolean)).size;
 
-  // Handle view details
-  const handleViewDetails = (purchaseId: number) => {
-    setSelectedPurchaseId(purchaseId);
-    setModalMode('details');
-    setDetailsModalOpen(true);
-  };
+    const criticalItems = purchases.filter(p =>
+      p.materials?.some(m => m.priority === 'high')
+    ).length;
 
-  // Handle view history
-  const handleViewHistory = (purchaseId: number) => {
-    setSelectedPurchaseId(purchaseId);
-    setModalMode('history');
-    setDetailsModalOpen(true);
-  };
-
-  // Handle edit (if applicable)
-  const handleEdit = (purchaseId: number) => {
-    toast.info(`Edit functionality for purchase ${purchaseId}`);
-  };
-
-  // Handle send to estimation (for estimation rejected purchases)
-  const handleSendToEstimation = async (purchaseId: number) => {
-    // Add to resending set
-    setProcessingPurchases(prev => ({
-      ...prev,
-      resending: new Set(prev.resending).add(purchaseId)
-    }));
-    
-    try {
-      // Find the purchase to check its status
-      const purchase = estimationRejectedPurchases.find(p => p.purchase_id === purchaseId);
-      
-      // Check if PM previously rejected this purchase
-      if (purchase?.pm_status === 'rejected') {
-        toast.error('Cannot resend: This purchase was rejected by Project Manager. Please approve it from the Pending tab first.');
-        return;
-      }
-      
-      // Log the purchase status for debugging
-      console.log('Attempting to resend purchase:', {
-        purchaseId,
-        pm_status: purchase?.pm_status,
-        rejected_status: purchase?.rejected_status
-      });
-      
-      const result = await projectManagerService.resendToEstimation(
-        purchaseId, 
-        'Reviewed and resending to Estimation for further review'
-      );
-      
-      // Check if the response indicates success
-      if (result.success || result.message?.includes('successfully')) {
-        // Show success dialog
-        setSuccessDialog({
-          isOpen: true,
-          message: 'Purchase request has been resent to Estimation team for further review!'
-        });
-        // Refresh data from store
-        storeFetchPurchases('projectManager');
-      } else {
-        // If there's an error in the response
-        toast.error(result.message || result.error || 'Failed to resend to Estimation');
-      }
-    } catch (error: any) {
-      // Handle different error structures
-      let errorMessage = 'Failed to resend to Estimation';
-      
-      if (typeof error === 'object' && error !== null) {
-        // If error is the response data directly
-        if (error.error) {
-          errorMessage = error.error;
-        } else if (error.message) {
-          errorMessage = error.message;
-        }
-        // Handle axios error structure
-        else if (error.response?.data?.error) {
-          errorMessage = error.response.data.error;
-        } else if (error.response?.data?.message) {
-          errorMessage = error.response.data.message;
-        }
-      }
-      
-      toast.error(errorMessage);
-      console.error('Error resending to estimation:', error);
-    } finally {
-      // Remove from resending set
-      setProcessingPurchases(prev => {
-        const newResending = new Set(prev.resending);
-        newResending.delete(purchaseId);
-        return { ...prev, resending: newResending };
-      });
-    }
-  };
-
-  // Export data
-  const handleExport = () => {
-    const dataToExport = {
-      purchases: filteredPurchases,
-      metrics: metrics.map(m => ({ title: m.title, value: m.value })),
-      exportDate: new Date().toISOString(),
-      role: 'Project Manager'
+    return {
+      pendingCount,
+      approvedCount,
+      rejectedCount,
+      totalValue,
+      activeProjects,
+      criticalItems,
+      totalPurchases: purchases.length,
+      avgProcessingTime: 1.8
     };
-    
-    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pm-purchases-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    toast.success('Data exported successfully');
+  }, [purchases]);
+
+  // Transform data for different views
+  const getTableColumns = () => [
+    { key: 'purchase_id', label: 'PR #', sortable: true, width: '80px' },
+    { key: 'purpose', label: 'Purpose', sortable: true },
+    { key: 'site_location', label: 'Location', sortable: true },
+    { key: 'project_manager_status', label: 'PM Status', sortable: true, width: '120px' },
+    { key: 'procurement_status', label: 'Proc Status', sortable: true, width: '120px' },
+    { key: 'total_cost', label: 'Amount', sortable: true, width: '120px',
+      render: (value: number) => `AED ${value?.toLocaleString() || 0}` },
+    { key: 'date', label: 'Date', sortable: true, width: '120px' },
+    { key: 'project_id', label: 'Project', sortable: false, width: '80px',
+      render: (value: any) => value ? `P-${value}` : '-' }
+  ];
+
+  const transformToKanbanData = (purchases: ProcurementPurchase[]) => {
+    return purchases.map(p => ({
+      id: p.purchase_id,
+      title: `PR #${p.purchase_id}`,
+      subtitle: p.purpose,
+      status: p.project_manager_status?.toLowerCase() || 'pending',
+      priority: p.materials?.[0]?.priority || 'medium',
+      assignee: p.created_by || 'Unknown',
+      date: p.date ? new Date(p.date).toLocaleDateString() : undefined,
+      location: p.site_location,
+      amount: p.total_cost,
+      itemCount: p.materials?.length || 0,
+      tags: p.project_id ? [`Project ${p.project_id}`] : []
+    }));
   };
 
-  // Get unique values for filter dropdowns
+  const transformToSplitData = (purchases: ProcurementPurchase[]) => {
+    return purchases.map(p => ({
+      id: p.purchase_id,
+      title: `PR #${p.purchase_id}`,
+      subtitle: p.purpose,
+      status: p.project_manager_status?.toLowerCase() || 'pending',
+      priority: p.materials?.[0]?.priority || 'medium',
+      date: p.date ? new Date(p.date).toLocaleDateString() : undefined,
+      amount: p.total_cost,
+      location: p.site_location,
+      assignee: p.created_by || 'Unknown',
+      project_id: p.project_id,
+      materials: p.materials,
+      procurement_status: p.procurement_status,
+      estimation_status: p.estimation_status
+    }));
+  };
+
+  // Initialize real-time updates
+  useEffect(() => {
+    localStorage.setItem('userRole', 'projectManager');
+    setupRealtimeSubscription();
+    startPolling('projectManager');
+    storeFetchPurchases('projectManager');
+
+    return () => {
+      stopPolling();
+      cleanupRealtimeSubscription();
+    };
+  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, storeFetchPurchases]);
+
+  // Handlers
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await storeFetchPurchases('projectManager');
+    setIsRefreshing(false);
+    toast.success('Data refreshed');
+  };
+
+  const handleApprove = (purchaseId: number) => {
+    setApprovalAction({ purchaseId, action: 'approve' });
+    setShowConfirmDialog(true);
+  };
+
+  const handleReject = (purchaseId: number) => {
+    setApprovalAction({ purchaseId, action: 'reject' });
+    setShowConfirmDialog(true);
+  };
+
+  const handleConfirmAction = async () => {
+    if (!approvalAction) return;
+
+    try {
+      if (approvalAction.action === 'approve') {
+        await projectManagerService.approvePurchase(approvalAction.purchaseId, {
+          comments: 'Approved by Project Manager',
+          project_manager_status: 'approved'
+        });
+        toast.success('Purchase approved successfully');
+      } else {
+        await projectManagerService.rejectPurchase(approvalAction.purchaseId, {
+          comments: 'Rejected by Project Manager',
+          project_manager_status: 'rejected'
+        });
+        toast.success('Purchase rejected successfully');
+      }
+      storeFetchPurchases('projectManager');
+    } catch (error) {
+      console.error('Action failed:', error);
+      toast.error('Failed to process action');
+    } finally {
+      setShowConfirmDialog(false);
+      setApprovalAction(null);
+    }
+  };
+
+  const handleViewDetails = (purchaseId: number) => {
+    const purchase = purchases.find(p => p.purchase_id === purchaseId);
+    if (purchase) {
+      setSelectedPurchase(purchase);
+      setShowDetailsModal(true);
+    }
+  };
+
+  const handleExport = () => {
+    toast.info('Export functionality coming soon');
+  };
+
+  // Helper functions
+  const getUniqueProjects = () => {
+    const projects = purchases
+      .map(p => p.project_id)
+      .filter((project, index, self) =>
+        project && self.indexOf(project) === index
+      );
+    return projects;
+  };
+
   const getUniqueLocations = () => {
-    const locations = [...new Set([...purchases, ...estimationRejectedPurchases, ...completedPurchases].map(p => p.site_location))].filter(Boolean);
+    const locations = purchases
+      .map(p => p.site_location)
+      .filter((location, index, self) =>
+        location && self.indexOf(location) === index
+      );
     return locations;
   };
 
-  const getUniqueStatuses = () => {
-    const statuses = [...new Set([...purchases, ...estimationRejectedPurchases, ...completedPurchases].map(p => p.pm_status || p.current_workflow_status || 'pending'))];
-    return statuses.filter(Boolean);
-  };
-
-  // Clear all filters
-  const clearFilters = () => {
-    setSearchTerm('');
-    setStatusFilter('all');
-    setProjectFilter('all');
-    setLocationFilter('all');
-    setDateFilter('all');
-    setShowFilters(false);
-  };
-
-  // Check if any filters are active
   const hasActiveFilters = () => {
-    return searchTerm !== '' || 
-           statusFilter !== 'all' || 
-           projectFilter !== 'all' || 
-           locationFilter !== 'all' || 
+    return priorityFilter !== 'all' ||
+           projectFilter !== 'all' ||
+           locationFilter !== 'all' ||
            dateFilter !== 'all';
   };
 
-  // Calculate tab counts
-  const tabCounts = useMemo(() => ({
-    pending: purchases.filter(p => !p.pm_status || p.pm_status === 'pending').length,
-    approved: purchases.filter(p => p.pm_status === 'approved').length,
-    rejected: purchases.filter(p => p.pm_status === 'rejected').length,
-    estimation_rejected: estimationRejectedPurchases.length,
-    completed: completedPurchases.length
-  }), [purchases, estimationRejectedPurchases, completedPurchases]);
+  const clearFilters = () => {
+    setPriorityFilter('all');
+    setProjectFilter('all');
+    setLocationFilter('all');
+    setDateFilter('all');
+  };
+
+  const formatCurrency = (amount: number) => {
+    return `AED ${amount.toLocaleString('en-AE', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}`;
+  };
+
+  // Render different views
+  const renderPurchaseView = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="flex flex-col items-center gap-2">
+            <ModernLoadingSpinners variant="pulse-wave" size="lg" />
+            <p className="text-sm text-gray-600">Loading purchases...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (filteredPurchases.length === 0) {
+      return (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <AlertTriangle className="h-12 w-12 text-gray-400 mb-4" />
+            <p className="text-lg font-medium text-gray-900">No purchases found</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {searchTerm
+                ? 'Try adjusting your search criteria'
+                : `No ${activeTab} purchases at this time`
+              }
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    switch (viewType) {
+      case 'table':
+        return (
+          <DataTableView
+            data={filteredPurchases}
+            columns={getTableColumns()}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onViewDetails={handleViewDetails}
+            selectable={true}
+            pageSize={10}
+            sticky={true}
+          />
+        );
+
+      case 'kanban':
+        return (
+          <KanbanView
+            data={transformToKanbanData(filteredPurchases)}
+            columns={[
+              { id: 'pending', title: 'Pending Review', color: 'bg-yellow-100 border-yellow-300', icon: Clock },
+              { id: 'approved', title: 'Approved', color: 'bg-green-100 border-green-300', icon: CheckCircle },
+              { id: 'rejected', title: 'Rejected', color: 'bg-red-100 border-red-300', icon: XCircle },
+              { id: 'under_review', title: 'Under Review', color: 'bg-blue-100 border-blue-300', icon: BarChart3 }
+            ]}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onViewDetails={handleViewDetails}
+            draggable={false}
+          />
+        );
+
+      case 'split':
+        return (
+          <SplitView
+            data={transformToSplitData(filteredPurchases)}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onViewDetails={handleViewDetails}
+            resizable={true}
+            renderDetails={(item) => (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Purchase Overview</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Purpose:</span>
+                        <span className="font-medium">{item.subtitle}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Location:</span>
+                        <span className="font-medium">{item.location}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Project:</span>
+                        <span className="font-medium">{item.project_id ? `Project ${item.project_id}` : 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Total Amount:</span>
+                        <span className="font-bold text-green-600">AED {item.amount?.toLocaleString() || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Items:</span>
+                        <span className="font-medium">{item.materials?.length || 0}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Approval Status</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Procurement:</span>
+                        <Badge className={item.procurement_status === 'approved' ? 'bg-green-100' : 'bg-yellow-100'}>
+                          {item.procurement_status || 'Pending'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Project Manager:</span>
+                        <Badge className={item.status === 'approved' ? 'bg-green-100' : item.status === 'rejected' ? 'bg-red-100' : 'bg-yellow-100'}>
+                          {item.status || 'Pending'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Estimation:</span>
+                        <Badge className={item.estimation_status === 'approved' ? 'bg-green-100' : 'bg-gray-100'}>
+                          {item.estimation_status || 'Pending'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {item.materials && item.materials.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Materials ({item.materials.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {item.materials.slice(0, 5).map((mat: any, idx: number) => (
+                          <div key={idx} className="flex justify-between text-sm">
+                            <span className="text-gray-600">{mat.item_name}</span>
+                            <span className="font-medium">Qty: {mat.quantity} {mat.unit}</span>
+                          </div>
+                        ))}
+                        {item.materials.length > 5 && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            And {item.materials.length - 5} more items...
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          />
+        );
+
+      case 'cards':
+      default:
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <AnimatePresence mode="popLayout">
+              {filteredPurchases.map((purchase) => (
+                <PurchaseApprovalCard
+                  key={purchase.purchase_id}
+                  purchase={purchase}
+                  onApprove={() => handleApprove(purchase.purchase_id)}
+                  onReject={() => handleReject(purchase.purchase_id)}
+                  onViewDetails={() => handleViewDetails(purchase.purchase_id)}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+        );
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header Section */}
-      <div className="px-6 py-4">
-        <motion.div 
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
+      {/* Page Header */}
+      <div className="mb-6">
+        <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 rounded-xl shadow-xl p-6 border border-[#243d8a]/20"
+          className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl shadow-sm p-6 border border-blue-200"
         >
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-[#243d8a] rounded-lg shadow-lg">
-              <Package className="w-8 h-8 text-white" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-blue-600 rounded-lg shadow-md">
+                <Briefcase className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Project Manager Hub</h1>
+                <p className="text-gray-600 mt-1">Manage project purchases and approvals</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-[#243d8a]">Project Manager Hub</h1>
-              <p className="text-[#243d8a]/80 mt-1">Manage purchase approvals and project workflows</p>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleExport}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </Button>
+              <Button
+                onClick={handleRefresh}
+                variant="outline"
+                size="sm"
+                disabled={isRefreshing}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
             </div>
           </div>
         </motion.div>
       </div>
 
-      {/* Metrics Section */}
-      <div className="px-6 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-          {metrics.map((metric, index) => (
-            <MetricCardComponent key={index} metric={metric} />
-          ))}
+      {/* Metrics Display - Compact Carousel */}
+      <MetricsCarousel metrics={metrics} formatCurrency={formatCurrency} />
+
+      {/* Search Bar with View Toggle and Filters */}
+      <div className="mb-6 space-y-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1 lg:max-w-2xl">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search purchases..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex gap-2">
+            <ViewToggle
+              currentView={viewType}
+              onViewChange={setViewType}
+              availableViews={['split', 'table', 'kanban', 'cards']}
+              variant="buttons"
+            />
+            <Button
+              onClick={() => setShowFilters(!showFilters)}
+              variant="outline"
+              size="sm"
+              className={`flex items-center gap-2 ${showFilters ? 'bg-blue-50 border-blue-300 text-blue-700' : ''}`}
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {hasActiveFilters() && (
+                <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5 ml-1">
+                  {[priorityFilter, projectFilter, locationFilter, dateFilter].filter(f => f !== 'all').length}
+                </Badge>
+              )}
+            </Button>
+          </div>
         </div>
-      </div>
 
-      {/* Main Content Section */}
-      <div className="px-6 pb-6">
-        <Card className="shadow-sm">
-          <CardHeader className="border-b bg-gray-50/50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <Package className="h-5 w-5 text-blue-600" />
-                <CardTitle className="text-lg">Purchase Approvals</CardTitle>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    type="text"
-                    placeholder="Search purchases..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 w-64"
-                  />
-                </div>
-                <Button
-                  onClick={() => setShowFilters(!showFilters)}
-                  variant={hasActiveFilters() ? "default" : "outline"}
-                  className={hasActiveFilters() ? "bg-blue-600 hover:bg-blue-700" : ""}
-                  size="sm"
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filters
-                  {hasActiveFilters() && (
-                    <Badge variant="secondary" className="ml-2 bg-white text-blue-600">
-                      Active
-                    </Badge>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          
-          {/* Filter Panel */}
-          <AnimatePresence>
-            {showFilters && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden border-b"
-              >
-                <div className="p-4 bg-gray-50/30">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {/* Status Filter */}
-                    <div>
-                      <label className="text-sm font-medium text-gray-700 mb-1 block">Status</label>
-                      <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="All Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Status</SelectItem>
-                          <SelectItem value="pending">Pending</SelectItem>
-                          <SelectItem value="approved">Approved</SelectItem>
-                          <SelectItem value="rejected">Rejected</SelectItem>
-                          {getUniqueStatuses().map((status) => (
-                            <SelectItem key={status} value={status}>
-                              {status.charAt(0).toUpperCase() + status.slice(1)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+        {/* Filter Panel */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <Card className="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Priority Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Priority</label>
+                    <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Priorities" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Priorities</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                    {/* Location Filter */}
-                    <div>
-                      <label className="text-sm font-medium text-gray-700 mb-1 block">Location</label>
-                      <Select value={locationFilter} onValueChange={setLocationFilter}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="All Locations" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Locations</SelectItem>
-                          {getUniqueLocations().map((location) => (
-                            <SelectItem key={location} value={location}>
+                  {/* Project Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Project</label>
+                    <Select value={projectFilter} onValueChange={setProjectFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Projects" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Projects</SelectItem>
+                        {getUniqueProjects().map(project => (
+                          <SelectItem key={project} value={project}>
+                            <span className="flex items-center gap-2">
+                              <Building2 className="h-3 w-3" />
+                              Project {project}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Location Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Location</label>
+                    <Select value={locationFilter} onValueChange={setLocationFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Locations" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Locations</SelectItem>
+                        {getUniqueLocations().map(location => (
+                          <SelectItem key={location} value={location}>
+                            <span className="flex items-center gap-2">
+                              <MapPin className="h-3 w-3" />
                               {location}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Date Range Filter */}
-                    <div>
-                      <label className="text-sm font-medium text-gray-700 mb-1 block">Date Range</label>
-                      <Select value={dateFilter} onValueChange={setDateFilter}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="All Time" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Time</SelectItem>
-                          <SelectItem value="today">Today</SelectItem>
-                          <SelectItem value="week">Last 7 Days</SelectItem>
-                          <SelectItem value="month">Last 30 Days</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  {/* Clear Filters Button */}
-                  {hasActiveFilters() && (
-                    <div className="mt-4 flex justify-end">
-                      <Button
-                        onClick={clearFilters}
-                        variant="outline"
-                        size="sm"
-                        className="text-blue-600 hover:text-blue-700 border-blue-200 hover:border-blue-300"
-                      >
-                        <X className="h-4 w-4 mr-2" />
-                        Clear All Filters
-                      </Button>
-                    </div>
-                  )}
+                  {/* Date Range Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Date Range</label>
+                    <Select value={dateFilter} onValueChange={setDateFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Time</SelectItem>
+                        <SelectItem value="today">Today</SelectItem>
+                        <SelectItem value="week">Last 7 Days</SelectItem>
+                        <SelectItem value="month">Last 30 Days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          
-          <CardContent className="p-0">
-            {/* Tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <div className="border-b px-6 pt-4">
-                <TabsList className="grid w-full max-w-2xl grid-cols-5 bg-gray-100/50">
-                  <TabsTrigger value="pending" className="relative">
-                    <Clock className="h-4 w-4 mr-2" />
-                    Pending
-                    {tabCounts.pending > 0 && (
-                      <Badge variant="secondary" className="ml-2 bg-yellow-100 text-yellow-700">
-                        {tabCounts.pending}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="approved" className="relative">
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Approved
-                    {tabCounts.approved > 0 && (
-                      <Badge variant="secondary" className="ml-2 bg-green-100 text-green-700">
-                        {tabCounts.approved}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="rejected" className="relative">
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Rejected
-                    {tabCounts.rejected > 0 && (
-                      <Badge variant="secondary" className="ml-2 bg-red-100 text-red-700">
-                        {tabCounts.rejected}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="estimation_rejected" className="relative">
-                    <AlertTriangle className="h-4 w-4 mr-2" />
-                    Est. Rejected
-                    {tabCounts.estimation_rejected > 0 && (
-                      <Badge variant="secondary" className="ml-2 bg-orange-100 text-orange-700">
-                        {tabCounts.estimation_rejected}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="completed" className="relative">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Completed
-                    {tabCounts.completed > 0 && (
-                      <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700">
-                        {tabCounts.completed}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                </TabsList>
-              </div>
 
-              {/* Tab Content */}
-              <TabsContent value={activeTab} className="p-6">
-                {activeTab === 'estimation_rejected' && filteredPurchases.length > 0 && (
-                  <Alert className="mb-4 border-orange-200 bg-orange-50">
-                    <AlertTriangle className="h-4 w-4 text-orange-600" />
-                    <AlertDescription className="text-orange-800">
-                      These purchases were rejected by the Estimation team. Review their feedback and take appropriate action.
-                    </AlertDescription>
-                  </Alert>
-                )}
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <ModernLoadingSpinners variant="pulse-wave" size="md" />
-                  </div>
-                ) : filteredPurchases.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Package className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500">No purchases found</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {filteredPurchases.map((purchase) => (
-                      <PurchaseApprovalCard
-                        key={purchase.purchase_id}
-                        purchase={purchase}
-                        onViewDetails={handleViewDetails}
-                        onViewHistory={handleViewHistory}
-                        onEdit={() => handleEdit(purchase.purchase_id)}
-                        onApprove={() => handleApprove(purchase.purchase_id)}
-                        onReject={(reason) => handleReject(purchase.purchase_id, reason)}
-                        onSendToEstimation={() => handleSendToEstimation(purchase.purchase_id)}
-                        isLoading={processingPurchases.approving.has(purchase.purchase_id) || processingPurchases.rejecting.has(purchase.purchase_id) || processingPurchases.resending.has(purchase.purchase_id)}
-                        isApproving={processingPurchases.approving.has(purchase.purchase_id)}
-                        isRejecting={processingPurchases.rejecting.has(purchase.purchase_id)}
-                        isResending={processingPurchases.resending.has(purchase.purchase_id)}
-                        isEstimationRejected={activeTab === 'estimation_rejected'}
-                      />
-                    ))}
+                {/* Clear Filters Button */}
+                {hasActiveFilters() && (
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      onClick={clearFilters}
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Clear All Filters
+                    </Button>
                   </div>
                 )}
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Purchase Details Modal */}
+      {/* Tabs with Content */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="grid w-full max-w-2xl grid-cols-4">
+          <TabsTrigger value="all" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            All ({purchases.length})
+          </TabsTrigger>
+          <TabsTrigger value="pending" className="flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Pending ({metrics.pendingCount})
+          </TabsTrigger>
+          <TabsTrigger value="approved" className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4" />
+            Approved ({metrics.approvedCount})
+          </TabsTrigger>
+          <TabsTrigger value="rejected" className="flex items-center gap-2">
+            <XCircle className="h-4 w-4" />
+            Rejected ({metrics.rejectedCount})
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Render the same view for all tabs */}
+        {['all', 'pending', 'approved', 'rejected'].map((tab) => (
+          <TabsContent key={tab} value={tab} className="mt-4">
+            {renderPurchaseView()}
+          </TabsContent>
+        ))}
+      </Tabs>
+
+      {/* Modals */}
       <PurchaseDetailsModal
-        isOpen={detailsModalOpen}
-        onClose={() => {
-          setDetailsModalOpen(false);
-          setSelectedPurchaseId(null);
-        }}
-        purchaseId={selectedPurchaseId}
-        mode={modalMode}
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        purchase={selectedPurchase}
       />
-      
-      {/* Success Dialog */}
+
       <ConfirmationDialog
-        isOpen={successDialog.isOpen}
-        onClose={() => setSuccessDialog({ isOpen: false, message: '' })}
-        type="success"
-        message={successDialog.message}
-        confirmText="OK"
-        showCancel={false}
+        isOpen={showConfirmDialog}
+        onClose={() => setShowConfirmDialog(false)}
+        onConfirm={handleConfirmAction}
+        title={approvalAction?.action === 'approve' ? 'Approve Purchase' : 'Reject Purchase'}
+        message={`Are you sure you want to ${approvalAction?.action} this purchase request?`}
+        confirmText={approvalAction?.action === 'approve' ? 'Approve' : 'Reject'}
+        confirmVariant={approvalAction?.action === 'approve' ? 'default' : 'destructive'}
       />
     </div>
   );

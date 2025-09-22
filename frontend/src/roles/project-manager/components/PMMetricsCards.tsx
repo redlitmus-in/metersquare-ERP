@@ -3,7 +3,7 @@
  * Displays key performance metrics for Project Manager
  */
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { 
@@ -16,153 +16,209 @@ interface PMMetricsCardsProps {
   data: PMDashboardData;
 }
 
-export const PMMetricsCards: React.FC<PMMetricsCardsProps> = ({ data }) => {
-  const calculateTrend = (current: number, previous: number) => {
-    if (previous === 0) return { value: 0, direction: 'neutral' as const };
-    const change = ((current - previous) / previous) * 100;
-    return {
-      value: Math.abs(change),
-      direction: change > 0 ? 'up' as const : change < 0 ? 'down' as const : 'neutral' as const
-    };
-  };
-
-  // Calculate trends (using mock previous values for now)
-  const previousMonth = {
-    approved: Math.max(0, data.approvedThisMonth - 3),
-    rejected: Math.max(0, data.rejectedThisMonth - 1),
-    pending: Math.max(0, data.pendingApprovals - 2)
-  };
-
-  const metrics = [
+// Metrics Carousel Component - Same as PM Hub
+const MetricsCarousel: React.FC<{ data: PMDashboardData }> = ({ data }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const intervalRef = useRef<NodeJS.Timeout>();
+  const metricCards = [
     {
-      title: 'Total Purchases',
-      value: data.totalPurchases,
-      icon: Package,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      trend: calculateTrend(data.totalPurchases, data.totalPurchases - 5),
-      description: 'All time'
-    },
-    {
-      title: 'Pending Approvals',
+      title: 'Pending',
       value: data.pendingApprovals,
       icon: Clock,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
-      trend: calculateTrend(data.pendingApprovals, previousMonth.pending),
-      description: 'Awaiting review'
+      color: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+      bgIcon: 'bg-yellow-100',
+      change: data.pendingApprovals > 5 ? '+8%' : '+2%',
+      changeColor: 'text-yellow-600'
     },
     {
-      title: 'Approved This Month',
+      title: 'Approved',
       value: data.approvedThisMonth,
       icon: CheckCircle,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-      trend: calculateTrend(data.approvedThisMonth, previousMonth.approved),
-      description: 'Current month'
+      color: 'bg-green-50 border-green-200 text-green-700',
+      bgIcon: 'bg-green-100',
+      change: '+15%',
+      changeColor: 'text-green-600'
     },
     {
-      title: 'Rejected This Month',
+      title: 'Rejected',
       value: data.rejectedThisMonth,
       icon: XCircle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      trend: calculateTrend(data.rejectedThisMonth, previousMonth.rejected),
-      description: 'Current month'
+      color: 'bg-red-50 border-red-200 text-red-700',
+      bgIcon: 'bg-red-100',
+      change: '-2%',
+      changeColor: 'text-red-600'
     },
     {
-      title: 'Avg. Approval Time',
-      value: `${data.averageApprovalTime}`,
-      unit: 'days',
+      title: 'Total',
+      value: data.totalPurchases,
+      icon: Package,
+      color: 'bg-blue-50 border-blue-200 text-blue-700',
+      bgIcon: 'bg-blue-100',
+      change: '+23',
+      changeColor: 'text-blue-600'
+    },
+    {
+      title: 'Processing',
+      value: `${data.averageApprovalTime}d`,
       icon: Activity,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      trend: calculateTrend(data.averageApprovalTime, data.averageApprovalTime + 0.5),
-      description: 'Processing time'
+      color: 'bg-purple-50 border-purple-200 text-purple-700',
+      bgIcon: 'bg-purple-100',
+      change: '-12%',
+      changeColor: 'text-purple-600'
     },
     {
-      title: 'Approval Rate',
-      value: data.totalPurchases > 0 
+      title: 'Rate',
+      value: `${data.totalPurchases > 0
         ? Math.round((data.approvedThisMonth / (data.approvedThisMonth + data.rejectedThisMonth || 1)) * 100)
-        : 0,
-      unit: '%',
+        : 0}%`,
       icon: TrendingUp,
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-50',
-      trend: { value: 5, direction: 'up' as const },
-      description: 'This month'
+      color: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+      bgIcon: 'bg-indigo-100',
+      change: '+5%',
+      changeColor: 'text-indigo-600'
+    },
+    {
+      title: 'Critical',
+      value: Math.floor(data.pendingApprovals * 0.3),
+      icon: TrendingUp,
+      color: 'bg-orange-50 border-orange-200 text-orange-700',
+      bgIcon: 'bg-orange-100',
+      change: data.pendingApprovals > 0 ? '+5' : '0',
+      changeColor: 'text-orange-600'
+    },
+    {
+      title: 'Projects',
+      value: data.recentPurchases?.length || 0,
+      icon: Package,
+      color: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+      bgIcon: 'bg-emerald-100',
+      change: '+3',
+      changeColor: 'text-emerald-600'
     }
   ];
 
-  const getTrendIcon = (direction: 'up' | 'down' | 'neutral') => {
-    switch (direction) {
-      case 'up':
-        return <TrendingUp className="h-4 w-4" />;
-      case 'down':
-        return <TrendingDown className="h-4 w-4" />;
-      default:
-        return <Minus className="h-4 w-4" />;
-    }
+  // Auto-rotate carousel
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 4));
+    }, 3000);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [metricCards.length]);
+
+  // Handle manual navigation
+  const handleNext = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setCurrentIndex((prev) => (prev + 1) % Math.max(1, metricCards.length - 4));
+    // Restart auto-rotation after manual interaction
+    intervalRef.current = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 4));
+    }, 3000);
   };
 
-  const getTrendColor = (direction: 'up' | 'down' | 'neutral', isPositiveMetric: boolean = true) => {
-    if (direction === 'neutral') return 'text-gray-500';
-    if (direction === 'up') return isPositiveMetric ? 'text-green-600' : 'text-red-600';
-    return isPositiveMetric ? 'text-red-600' : 'text-green-600';
+  const handlePrev = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setCurrentIndex((prev) => (prev - 1 + Math.max(1, metricCards.length - 4)) % Math.max(1, metricCards.length - 4));
+    // Restart auto-rotation after manual interaction
+    intervalRef.current = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 4));
+    }, 3000);
   };
+
+  // Get visible cards (show 5 at a time on desktop, 3 on tablet, 2 on mobile)
+  const visibleCards = metricCards.slice(currentIndex, currentIndex + 5);
+  if (visibleCards.length < 5) {
+    visibleCards.push(...metricCards.slice(0, 5 - visibleCards.length));
+  }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-      {metrics.map((metric, index) => (
-        <motion.div
-          key={metric.title}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.05 }}
+    <div className="mb-6">
+      <div className="relative">
+        {/* Navigation Buttons */}
+        <button
+          onClick={handlePrev}
+          className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow border border-gray-200"
+          aria-label="Previous metrics"
         >
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className={`${metric.bgColor} p-3 rounded-lg`}>
-                  <metric.icon className={`h-6 w-6 ${metric.color}`} />
-                </div>
-                {metric.trend && (
-                  <div className={`flex items-center gap-1 ${
-                    getTrendColor(
-                      metric.trend.direction, 
-                      !metric.title.includes('Rejected') && !metric.title.includes('Time')
-                    )
-                  }`}>
-                    {getTrendIcon(metric.trend.direction)}
-                    <span className="text-sm font-medium">
-                      {metric.trend.value.toFixed(1)}%
-                    </span>
+          <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <button
+          onClick={handleNext}
+          className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow border border-gray-200"
+          aria-label="Next metrics"
+        >
+          <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        {/* Metrics Cards */}
+        <div className="overflow-hidden px-1">
+          <motion.div
+            className="flex gap-3"
+            animate={{ x: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          >
+            {visibleCards.map((metric, index) => {
+              const Icon = metric.icon;
+              return (
+                <motion.div
+                  key={`${metric.title}-${index}`}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  className="flex-1 min-w-0"
+                >
+                  <div className={`relative overflow-hidden border rounded-lg p-3 ${metric.color} transition-all hover:shadow-md`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-600 truncate">{metric.title}</p>
+                        <p className="text-lg font-bold mt-1 truncate">{metric.value}</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className={`text-xs font-medium ${metric.changeColor}`}>
+                            {metric.change}
+                          </span>
+                        </div>
+                      </div>
+                      <div className={`p-2 rounded-lg ${metric.bgIcon}`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-              
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-gray-600">
-                  {metric.title}
-                </p>
-                <div className="flex items-baseline gap-1">
-                  <p className="text-2xl font-bold text-gray-900">
-                    {metric.value}
-                  </p>
-                  {metric.unit && (
-                    <span className="text-sm text-gray-600">
-                      {metric.unit}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500">
-                  {metric.description}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      ))}
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </div>
+
+        {/* Dot Indicators */}
+        <div className="flex justify-center gap-1 mt-3">
+          {Array.from({ length: Math.max(1, metricCards.length - 4) }).map((_, index) => (
+            <button
+              key={index}
+              onClick={() => {
+                if (intervalRef.current) clearInterval(intervalRef.current);
+                setCurrentIndex(index);
+                intervalRef.current = setInterval(() => {
+                  setCurrentIndex(prev => (prev + 1) % Math.max(1, metricCards.length - 4));
+                }, 3000);
+              }}
+              className={`transition-all ${index === currentIndex
+                ? 'w-6 h-1.5 bg-blue-500 rounded-full'
+                : 'w-1.5 h-1.5 bg-gray-300 rounded-full hover:bg-gray-400'
+              }`}
+              aria-label={`Go to metrics page ${index + 1}`}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
+
+export const PMMetricsCards = MetricsCarousel;
