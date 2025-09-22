@@ -9,6 +9,14 @@ import PurchaseDetailsModal from '../components/PurchaseDetailsModal';
 import EditPurchaseModal from '../components/EditPurchaseModal';
 import { procurementService, Purchase } from '../services/procurementService';
 import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseStore';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 import {
   Package,
@@ -34,7 +42,9 @@ import {
   DollarSign,
   Calendar,
   ArrowUpDown,
-  MapPin
+  MapPin,
+  Grid3X3,
+  List
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1231,22 +1241,105 @@ const ProcurementHub: React.FC = () => {
                       ))}
                     </div>
                   ) : (
-                    <PurchaseListView
-                      purchases={paginatedPurchases}
-                      activeTab={activeTab}
-                      onViewDetails={handleViewDetails}
-                      onViewHistory={handleViewHistory}
-                      processingPurchases={{
-                        approving: new Set(),
-                        rejecting: new Set()
-                      }}
-                      roleConfig={{
-                        role: 'procurement',
-                        statusField: 'status',
-                        showActions: false,
-                        actionType: 'approve-reject'
-                      }}
-                    />
+                    <div className="overflow-hidden rounded-lg border border-gray-200">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50">
+                            <TableHead className="font-semibold">Purchase ID</TableHead>
+                            <TableHead className="font-semibold">Purpose</TableHead>
+                            <TableHead className="font-semibold">Location</TableHead>
+                            <TableHead className="font-semibold">Quantity</TableHead>
+                            <TableHead className="font-semibold">Total Cost</TableHead>
+                            <TableHead className="font-semibold">Status</TableHead>
+                            <TableHead className="font-semibold">Date</TableHead>
+                            <TableHead className="font-semibold text-center">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paginatedPurchases.map((purchase) => (
+                            <TableRow key={purchase.purchase_id} className="hover:bg-gray-50 transition-colors">
+                              <TableCell className="font-medium">
+                                <div className="flex items-center gap-2">
+                                  <Package className="h-4 w-4 text-red-600" />
+                                  PR #{purchase.purchase_id}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="max-w-xs">
+                                  <p className="text-sm font-medium truncate">{purchase.purpose}</p>
+                                  {purchase.materials_summary?.total_materials > 0 && (
+                                    <p className="text-xs text-gray-500">
+                                      {purchase.materials_summary.total_materials} materials
+                                    </p>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm">{purchase.site_location || 'N/A'}</span>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm font-medium">
+                                  {purchase.total_quantity?.toLocaleString() || 0}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm font-medium">
+                                  AED {purchase.total_cost?.toLocaleString() || 0}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                {purchase.status && (
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    purchase.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                    purchase.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                    purchase.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {purchase.status.charAt(0).toUpperCase() + purchase.status.slice(1)}
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm text-gray-600">
+                                  {new Date(purchase.created_at || purchase.date).toLocaleDateString()}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center justify-center gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleViewDetails(purchase.purchase_id)}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    <FileText className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleViewHistory(purchase.purchase_id)}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    <Clock className="h-3 w-3" />
+                                  </Button>
+                                  {activeTab === 'pending' && !pmEmailedPRs.has(purchase.purchase_id) && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleSendEmail(purchase.purchase_id)}
+                                      disabled={sendingEmailIds.has(purchase.purchase_id)}
+                                      className="h-8 px-2 text-xs"
+                                    >
+                                      <AlertCircle className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   )}
 
                   {/* Pagination Controls */}
