@@ -177,6 +177,7 @@ const MEPSupervisorMetricsCarousel: React.FC<{ metrics: any; formatCurrency: (am
           <button
             key={index}
             onClick={() => setCurrentIndex(index)}
+            aria-label={`Go to metric slide ${index + 1}`}
             className={`h-2 transition-all rounded-full ${
               index === currentIndex ? 'w-8 bg-blue-500' : 'w-2 bg-gray-300'
             }`}

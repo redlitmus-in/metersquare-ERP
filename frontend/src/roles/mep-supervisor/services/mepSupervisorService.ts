@@ -40,7 +40,13 @@ export interface Purchase {
   last_modified_by?: string;
   approvals?: any[];
   status?: string;
+  current_status?: {
+    status: string;
+    updated_at?: string;
+    updated_by?: string;
+  };
   current_workflow_status?: string;
+  procurement_status?: string;
   latest_status?: any;
   total_cost?: number;
 }

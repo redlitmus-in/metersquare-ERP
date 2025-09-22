@@ -28,6 +28,11 @@ interface Purchase {
   priority?: string;
   status?: string;
   current_workflow_status?: string;
+  current_status?: {
+    status: string;
+    updated_at?: string;
+    updated_by?: string;
+  };
   pm_status?: string;
   latest_status?: {
     sender: string;
