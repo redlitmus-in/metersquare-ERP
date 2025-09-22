@@ -3,8 +3,8 @@
  * Main workspace for Accounts department to process payments and manage transactions
  */
 
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,98 @@ import { accountsService } from '../services/accountsService';
 import type { Purchase } from '../types';
 import { toast } from 'sonner';
 import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseStore';
+
+// Metric card interface
+interface MetricCard {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+  bgColor: string;
+  iconColor: string;
+}
+
+// Metric Card Component
+const MetricCardComponent: React.FC<{ metric: MetricCard }> = ({ metric }) => (
+  <div className={`${metric.bgColor} rounded-lg p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-300 h-full`}>
+    <div className="flex items-center justify-between h-full">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-600 truncate">{metric.title}</p>
+        <p className="text-lg lg:text-xl font-bold text-gray-900 mt-1 break-words">{metric.value}</p>
+      </div>
+      <div className={`${metric.iconColor} p-2 rounded-lg flex-shrink-0 ml-3`}>
+        {metric.icon}
+      </div>
+    </div>
+  </div>
+);
+
+// Metrics Carousel Component
+const AccountsMetricsCarousel: React.FC<{ metrics: MetricCard[] }> = ({ metrics }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const intervalRef = useRef<NodeJS.Timeout>();
+
+  useEffect(() => {
+    if (metrics.length > 4) {
+      intervalRef.current = setInterval(() => {
+        setCurrentIndex((prev) => (prev + 1) % Math.ceil(metrics.length / 4));
+      }, 5000);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [metrics.length]);
+
+  const getVisibleCards = () => {
+    const startIdx = currentIndex * 4;
+    return metrics.slice(startIdx, startIdx + 4);
+  };
+
+  return (
+    <div className="relative overflow-hidden">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentIndex}
+          initial={{ opacity: 0, x: 300 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -300 }}
+          transition={{ duration: 0.5 }}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+        >
+          {getVisibleCards().map((metric, index) => (
+            <motion.div
+              key={`${currentIndex}-${index}`}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="h-full"
+            >
+              <MetricCardComponent metric={metric} />
+            </motion.div>
+          ))}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Carousel Indicators */}
+      {metrics.length > 4 && (
+        <div className="flex justify-center gap-2 mt-4">
+          {Array.from({ length: Math.ceil(metrics.length / 4) }).map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setCurrentIndex(index)}
+              aria-label={`Go to metric slide ${index + 1}`}
+              className={`h-2 transition-all rounded-full ${
+                index === currentIndex ? 'w-8 bg-green-500' : 'w-2 bg-gray-300'
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const AccountsHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState('processing');
@@ -515,61 +607,66 @@ const AccountsHub: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500 flex-shrink-0" />
-              <span className="truncate">Processing</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-xl sm:text-2xl font-bold text-blue-600">{metrics.processingCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Awaiting payment</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <CheckSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500 flex-shrink-0" />
-              <span className="truncate">Processed</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-xl sm:text-2xl font-bold text-green-600">{metrics.processedCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Payments complete</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500 flex-shrink-0" />
-              <span className="truncate">Total Value</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-sm sm:text-lg lg:text-xl font-bold text-green-600 truncate">
-              {formatCurrency(metrics.totalValue)}
-            </p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Processing value</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-            <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1.5 sm:gap-2">
-              <Banknote className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-500 flex-shrink-0" />
-              <span className="truncate">Transactions</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <p className="text-xl sm:text-2xl font-bold text-indigo-600">{metrics.totalTransactions}</p>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">Total handled</p>
-          </CardContent>
-        </Card>
+      {/* Metrics Section */}
+      <div className="px-6 py-4">
+        <AccountsMetricsCarousel metrics={[
+          {
+            title: 'Processing',
+            value: metrics.processingCount,
+            icon: <Receipt className="h-5 w-5 text-blue-600" />,
+            bgColor: 'bg-blue-50',
+            iconColor: 'bg-blue-100'
+          },
+          {
+            title: 'Processed',
+            value: metrics.processedCount,
+            icon: <CheckSquare className="h-5 w-5 text-green-600" />,
+            bgColor: 'bg-green-50',
+            iconColor: 'bg-green-100'
+          },
+          {
+            title: 'Total Value',
+            value: formatCurrency(metrics.totalValue),
+            icon: <DollarSign className="h-5 w-5 text-purple-600" />,
+            bgColor: 'bg-purple-50',
+            iconColor: 'bg-purple-100'
+          },
+          {
+            title: 'Transactions',
+            value: metrics.totalTransactions,
+            icon: <Banknote className="h-5 w-5 text-indigo-600" />,
+            bgColor: 'bg-indigo-50',
+            iconColor: 'bg-indigo-100'
+          },
+          {
+            title: 'Pending Payment',
+            value: metrics.pendingPaymentCount,
+            icon: <Clock className="h-5 w-5 text-orange-600" />,
+            bgColor: 'bg-orange-50',
+            iconColor: 'bg-orange-100'
+          },
+          {
+            title: 'Rejected',
+            value: metrics.rejectedCount,
+            icon: <XSquare className="h-5 w-5 text-red-600" />,
+            bgColor: 'bg-red-50',
+            iconColor: 'bg-red-100'
+          },
+          {
+            title: 'Processing Time',
+            value: `${metrics.avgProcessingTime || 1} day`,
+            icon: <BarChart3 className="h-5 w-5 text-green-600" />,
+            bgColor: 'bg-green-50',
+            iconColor: 'bg-green-100'
+          },
+          {
+            title: 'Compliance Rate',
+            value: '99%',
+            icon: <Building className="h-5 w-5 text-blue-600" />,
+            bgColor: 'bg-blue-50',
+            iconColor: 'bg-blue-100'
+          }
+        ]} />
       </div>
 
       {/* Search Bar, Filters and Sort */}

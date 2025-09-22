@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -58,6 +58,98 @@ import PurchaseRequisitionForm from '@/components/forms/PurchaseRequisitionForm'
 import { siteSupervisorService, Purchase } from '../services/siteSupervisorService';
 import ModernLoadingSpinners from '@/components/ui/ModernLoadingSpinners';
 import usePurchaseStore, { startPolling, stopPolling } from '@/store/purchaseStore';
+
+// Metric card interface
+interface MetricCard {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+  bgColor: string;
+  iconColor: string;
+}
+
+// Metric Card Component
+const MetricCardComponent: React.FC<{ metric: MetricCard }> = ({ metric }) => (
+  <div className={`${metric.bgColor} rounded-lg p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-300 h-full`}>
+    <div className="flex items-center justify-between h-full">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-600 truncate">{metric.title}</p>
+        <p className="text-lg lg:text-xl font-bold text-gray-900 mt-1 break-words">{metric.value}</p>
+      </div>
+      <div className={`${metric.iconColor} p-2 rounded-lg flex-shrink-0 ml-3`}>
+        {metric.icon}
+      </div>
+    </div>
+  </div>
+);
+
+// Metrics Carousel Component
+const SiteSupervisorMetricsCarousel: React.FC<{ metrics: MetricCard[] }> = ({ metrics }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const intervalRef = useRef<NodeJS.Timeout>();
+
+  useEffect(() => {
+    if (metrics.length > 4) {
+      intervalRef.current = setInterval(() => {
+        setCurrentIndex((prev) => (prev + 1) % Math.ceil(metrics.length / 4));
+      }, 5000);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [metrics.length]);
+
+  const getVisibleCards = () => {
+    const startIdx = currentIndex * 4;
+    return metrics.slice(startIdx, startIdx + 4);
+  };
+
+  return (
+    <div className="relative overflow-hidden">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentIndex}
+          initial={{ opacity: 0, x: 300 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -300 }}
+          transition={{ duration: 0.5 }}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+        >
+          {getVisibleCards().map((metric, index) => (
+            <motion.div
+              key={`${currentIndex}-${index}`}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="h-full"
+            >
+              <MetricCardComponent metric={metric} />
+            </motion.div>
+          ))}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Carousel Indicators */}
+      {metrics.length > 4 && (
+        <div className="flex justify-center gap-2 mt-4">
+          {Array.from({ length: Math.ceil(metrics.length / 4) }).map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setCurrentIndex(index)}
+              aria-label={`Go to metric slide ${index + 1}`}
+              className={`h-2 transition-all rounded-full ${
+                index === currentIndex ? 'w-8 bg-red-500' : 'w-2 bg-gray-300'
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const SiteSupervisorHub: React.FC = () => {
   const navigate = useNavigate();
@@ -590,79 +682,66 @@ const SiteSupervisorHub: React.FC = () => {
         </motion.div>
       </div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <Package className="h-4 w-4 text-red-500" />
-              Total Purchases
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-gray-900">{metrics.totalPurchases}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-yellow-500" />
-              Pending
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-yellow-600">{metrics.pendingCount}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <CheckSquare className="h-4 w-4 text-green-500" />
-              Approved
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-green-600">{metrics.approvedCount}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <XSquare className="h-4 w-4 text-red-500" />
-              Rejected
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-red-600">{metrics.rejectedCount}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <Mail className="h-4 w-4 text-blue-500" />
-              Email Sent
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-blue-600">{metrics.emailSentCount}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-green-500" />
-              Total Value
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-bold text-green-600">{formatCurrency(metrics.totalValue)}</p>
-          </CardContent>
-        </Card>
+      {/* Metrics Section */}
+      <div className="px-6 py-4">
+        <SiteSupervisorMetricsCarousel metrics={[
+          {
+            title: 'Total Purchases',
+            value: metrics.totalPurchases,
+            icon: <Package className="h-5 w-5 text-red-600" />,
+            bgColor: 'bg-red-50',
+            iconColor: 'bg-red-100'
+          },
+          {
+            title: 'Pending',
+            value: metrics.pendingCount,
+            icon: <Clock className="h-5 w-5 text-yellow-600" />,
+            bgColor: 'bg-yellow-50',
+            iconColor: 'bg-yellow-100'
+          },
+          {
+            title: 'Approved',
+            value: metrics.approvedCount,
+            icon: <CheckSquare className="h-5 w-5 text-green-600" />,
+            bgColor: 'bg-green-50',
+            iconColor: 'bg-green-100'
+          },
+          {
+            title: 'Rejected',
+            value: metrics.rejectedCount,
+            icon: <XSquare className="h-5 w-5 text-red-600" />,
+            bgColor: 'bg-red-50',
+            iconColor: 'bg-red-100'
+          },
+          {
+            title: 'Email Sent',
+            value: metrics.emailSentCount,
+            icon: <Mail className="h-5 w-5 text-blue-600" />,
+            bgColor: 'bg-blue-50',
+            iconColor: 'bg-blue-100'
+          },
+          {
+            title: 'Total Value',
+            value: formatCurrency(metrics.totalValue),
+            icon: <DollarSign className="h-5 w-5 text-green-600" />,
+            bgColor: 'bg-green-50',
+            iconColor: 'bg-green-100'
+          },
+          {
+            title: 'Completed',
+            value: metrics.completedCount,
+            icon: <FileText className="h-5 w-5 text-purple-600" />,
+            bgColor: 'bg-purple-50',
+            iconColor: 'bg-purple-100'
+          },
+          {
+            title: 'Processing Time',
+            value: '1.5 days',
+            icon: <TrendingUp className="h-5 w-5 text-indigo-600" />,
+            bgColor: 'bg-indigo-50',
+            iconColor: 'bg-indigo-100'
+          }
+        ]} />
       </div>
 
       {/* Search and Filter Bar */}

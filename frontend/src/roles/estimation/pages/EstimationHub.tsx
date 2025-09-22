@@ -3,7 +3,7 @@
  * Main workspace for Estimation team to review and approve/reject purchases
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -96,6 +96,98 @@ interface Material {
   priority?: string;
   design_reference?: string;
 }
+
+// Metric card interface
+interface MetricCard {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+  bgColor: string;
+  iconColor: string;
+}
+
+// Metric Card Component
+const MetricCardComponent: React.FC<{ metric: MetricCard }> = ({ metric }) => (
+  <div className={`${metric.bgColor} rounded-lg p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-300 h-full`}>
+    <div className="flex items-center justify-between h-full">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-600 truncate">{metric.title}</p>
+        <p className="text-lg lg:text-xl font-bold text-gray-900 mt-1 break-words">{metric.value}</p>
+      </div>
+      <div className={`${metric.iconColor} p-2 rounded-lg flex-shrink-0 ml-3`}>
+        {metric.icon}
+      </div>
+    </div>
+  </div>
+);
+
+// Metrics Carousel Component
+const EstimationMetricsCarousel: React.FC<{ metrics: MetricCard[] }> = ({ metrics }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const intervalRef = useRef<NodeJS.Timeout>();
+
+  useEffect(() => {
+    if (metrics.length > 4) {
+      intervalRef.current = setInterval(() => {
+        setCurrentIndex((prev) => (prev + 1) % Math.ceil(metrics.length / 4));
+      }, 5000);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [metrics.length]);
+
+  const getVisibleCards = () => {
+    const startIdx = currentIndex * 4;
+    return metrics.slice(startIdx, startIdx + 4);
+  };
+
+  return (
+    <div className="relative overflow-hidden">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentIndex}
+          initial={{ opacity: 0, x: 300 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -300 }}
+          transition={{ duration: 0.5 }}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+        >
+          {getVisibleCards().map((metric, index) => (
+            <motion.div
+              key={`${currentIndex}-${index}`}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="h-full"
+            >
+              <MetricCardComponent metric={metric} />
+            </motion.div>
+          ))}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Carousel Indicators */}
+      {metrics.length > 4 && (
+        <div className="flex justify-center gap-2 mt-4">
+          {Array.from({ length: Math.ceil(metrics.length / 4) }).map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setCurrentIndex(index)}
+              aria-label={`Go to metric slide ${index + 1}`}
+              className={`h-2 transition-all rounded-full ${
+                index === currentIndex ? 'w-8 bg-blue-500' : 'w-2 bg-gray-300'
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const EstimationHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -709,90 +801,66 @@ const EstimationHub: React.FC = () => {
         </motion.div>
       </div>
 
-      {/* Metrics Cards - Compact Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3 mb-4">
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-1 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
-              <Clock className="h-3 w-3 text-amber-500 flex-shrink-0" />
-              <span className="truncate">Pending Review</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-lg sm:text-xl font-bold text-amber-600">{metrics.pendingCount}</p>
-            <p className="text-xs text-gray-500 truncate">Awaiting analysis</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-1 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
-              <CheckSquare className="h-3 w-3 text-green-500 flex-shrink-0" />
-              <span className="truncate">Approved</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-lg sm:text-xl font-bold text-green-600">{metrics.approvedCount}</p>
-            <p className="text-xs text-gray-500 truncate">Sent to TD</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-1 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
-              <XSquare className="h-3 w-3 text-red-500 flex-shrink-0" />
-              <span className="truncate">Rejected</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-lg sm:text-xl font-bold text-red-600">{metrics.rejectedCount}</p>
-            <div className="text-xs text-gray-500 space-y-0.5">
-              <p className="truncate">Cost: {metrics.costRejections}</p>
-              <p className="truncate">PM Flag: {metrics.pmFlagRejections}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-1 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
-              <AlertCircle className="h-3 w-3 text-orange-500 flex-shrink-0" />
-              <span className="truncate">TD Rejected</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-lg sm:text-xl font-bold text-orange-600">{metrics.tdRejectedCount}</p>
-            <p className="text-xs text-gray-500 truncate">Sent back by TD</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-1 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
-              <DollarSign className="h-3 w-3 text-green-500 flex-shrink-0" />
-              <span className="truncate">Total Value</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-sm sm:text-base font-bold text-green-600 truncate">
-              {formatCurrency(metrics.totalValue)}
-            </p>
-            <p className="text-xs text-gray-500 truncate">Pending value</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow sm:col-span-2 lg:col-span-1">
-          <CardHeader className="pb-1 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-gray-600 flex items-center gap-1">
-              <TrendingUp className="h-3 w-3 text-purple-500 flex-shrink-0" />
-              <span className="truncate">Total Quantity</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <p className="text-lg sm:text-xl font-bold text-purple-600">{metrics.totalQuantity}</p>
-            <p className="text-xs text-gray-500 truncate">Pending items</p>
-          </CardContent>
-        </Card>
+      {/* Metrics Section */}
+      <div className="px-6 py-4">
+        <EstimationMetricsCarousel metrics={[
+          {
+            title: 'Pending Review',
+            value: metrics.pendingCount,
+            icon: <Clock className="h-5 w-5 text-amber-600" />,
+            bgColor: 'bg-amber-50',
+            iconColor: 'bg-amber-100'
+          },
+          {
+            title: 'Approved',
+            value: metrics.approvedCount,
+            icon: <CheckSquare className="h-5 w-5 text-green-600" />,
+            bgColor: 'bg-green-50',
+            iconColor: 'bg-green-100'
+          },
+          {
+            title: 'Rejected',
+            value: metrics.rejectedCount,
+            icon: <XSquare className="h-5 w-5 text-red-600" />,
+            bgColor: 'bg-red-50',
+            iconColor: 'bg-red-100'
+          },
+          {
+            title: 'TD Rejected',
+            value: metrics.tdRejectedCount,
+            icon: <AlertCircle className="h-5 w-5 text-orange-600" />,
+            bgColor: 'bg-orange-50',
+            iconColor: 'bg-orange-100'
+          },
+          {
+            title: 'Total Value',
+            value: formatCurrency(metrics.totalValue),
+            icon: <DollarSign className="h-5 w-5 text-green-600" />,
+            bgColor: 'bg-green-50',
+            iconColor: 'bg-green-100'
+          },
+          {
+            title: 'Total Quantity',
+            value: metrics.totalQuantity.toLocaleString(),
+            icon: <TrendingUp className="h-5 w-5 text-purple-600" />,
+            bgColor: 'bg-purple-50',
+            iconColor: 'bg-purple-100'
+          },
+          {
+            title: 'Cost Rejections',
+            value: metrics.costRejections,
+            icon: <BarChart3 className="h-5 w-5 text-indigo-600" />,
+            bgColor: 'bg-indigo-50',
+            iconColor: 'bg-indigo-100'
+          },
+          {
+            title: 'PM Flag Rejections',
+            value: metrics.pmFlagRejections,
+            icon: <FileText className="h-5 w-5 text-blue-600" />,
+            bgColor: 'bg-blue-50',
+            iconColor: 'bg-blue-100'
+          }
+        ]} />
       </div>
 
       {/* Search and Filter Bar */}

@@ -74,61 +74,63 @@ const MEPSupervisorMetricsCarousel: React.FC<{ metrics: any; formatCurrency: (am
       value: metrics.totalPurchases,
       icon: Activity,
       color: 'bg-blue-50 border-blue-200 text-blue-700',
-      bgIcon: 'bg-blue-100',
-      change: '+12%',
-      changeColor: 'text-blue-600'
+      bgIcon: 'bg-blue-100'
     },
     {
       title: 'Electrical',
       value: metrics.electricalCount || 0,
       icon: Zap,
       color: 'bg-yellow-50 border-yellow-200 text-yellow-700',
-      bgIcon: 'bg-yellow-100',
-      change: '+8%',
-      changeColor: 'text-yellow-600'
+      bgIcon: 'bg-yellow-100'
     },
     {
       title: 'Mechanical',
       value: metrics.mechanicalCount || 0,
       icon: Wind,
       color: 'bg-green-50 border-green-200 text-green-700',
-      bgIcon: 'bg-green-100',
-      change: '+15%',
-      changeColor: 'text-green-600'
+      bgIcon: 'bg-green-100'
     },
     {
       title: 'Plumbing',
       value: metrics.plumbingCount || 0,
       icon: Droplets,
       color: 'bg-cyan-50 border-cyan-200 text-cyan-700',
-      bgIcon: 'bg-cyan-100',
-      change: '+5%',
-      changeColor: 'text-cyan-600'
+      bgIcon: 'bg-cyan-100'
     },
     {
       title: 'Pending',
       value: metrics.pendingCount,
       icon: Clock,
       color: 'bg-orange-50 border-orange-200 text-orange-700',
-      bgIcon: 'bg-orange-100',
-      change: metrics.pendingCount > 5 ? '+8%' : '+2%',
-      changeColor: 'text-orange-600'
+      bgIcon: 'bg-orange-100'
     },
     {
       title: 'Total Value',
       value: formatCurrency(metrics.totalValue),
       icon: DollarSign,
       color: 'bg-purple-50 border-purple-200 text-purple-700',
-      bgIcon: 'bg-purple-100',
-      change: '+20%',
-      changeColor: 'text-purple-600'
+      bgIcon: 'bg-purple-100'
+    },
+    {
+      title: 'Approved',
+      value: metrics.approvedCount || 0,
+      icon: CheckSquare,
+      color: 'bg-green-50 border-green-200 text-green-700',
+      bgIcon: 'bg-green-100'
+    },
+    {
+      title: 'Rejected',
+      value: metrics.rejectedCount || 0,
+      icon: XSquare,
+      color: 'bg-red-50 border-red-200 text-red-700',
+      bgIcon: 'bg-red-100'
     }
   ];
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % Math.ceil(metricCards.length / 3));
-    }, 4000);
+      setCurrentIndex((prev) => (prev + 1) % Math.ceil(metricCards.length / 4));
+    }, 5000);
 
     return () => {
       if (intervalRef.current) {
@@ -138,8 +140,8 @@ const MEPSupervisorMetricsCarousel: React.FC<{ metrics: any; formatCurrency: (am
   }, [metricCards.length]);
 
   const getVisibleCards = () => {
-    const startIdx = currentIndex * 3;
-    return metricCards.slice(startIdx, startIdx + 3);
+    const startIdx = currentIndex * 4;
+    return metricCards.slice(startIdx, startIdx + 4);
   };
 
   return (
@@ -151,7 +153,7 @@ const MEPSupervisorMetricsCarousel: React.FC<{ metrics: any; formatCurrency: (am
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -300 }}
           transition={{ duration: 0.5 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
         >
           {getVisibleCards().map((metric, index) => {
             const Icon = metric.icon;
@@ -169,9 +171,6 @@ const MEPSupervisorMetricsCarousel: React.FC<{ metrics: any; formatCurrency: (am
                         <p className="text-sm font-medium opacity-80">{metric.title}</p>
                         <div className="flex items-center gap-2 mt-2">
                           <p className="text-2xl font-bold">{metric.value}</p>
-                          <span className={`text-xs font-medium ${metric.changeColor} ${metric.bgIcon} px-2 py-1 rounded-full`}>
-                            {metric.change}
-                          </span>
                         </div>
                       </div>
                       <div className={`${metric.bgIcon} p-3 rounded-lg`}>
@@ -188,7 +187,7 @@ const MEPSupervisorMetricsCarousel: React.FC<{ metrics: any; formatCurrency: (am
 
       {/* Carousel Indicators */}
       <div className="flex justify-center gap-2 mt-4">
-        {Array.from({ length: Math.ceil(metricCards.length / 3) }).map((_, index) => (
+        {Array.from({ length: Math.ceil(metricCards.length / 4) }).map((_, index) => (
           <button
             key={index}
             onClick={() => setCurrentIndex(index)}
@@ -564,7 +563,7 @@ const MEPSupervisorHub: React.FC = () => {
               Pending ({filteredPurchases.filter(p => p.status === 'pending').length})
             </TabsTrigger>
             <TabsTrigger value="email_sent">
-              Send Mail ({filteredPurchases.filter(p => p.email_sent || p.status === 'email_sent').length})
+              Send Mail ({filteredPurchases.filter(p => p.status !== 'completed' && p.status !== 'approved' && (p.email_sent || p.status === 'email_sent' || p.current_workflow_status === 'email_sent' || p.procurement_status === 'approved')).length})
             </TabsTrigger>
             <TabsTrigger value="approved">
               Completed ({filteredPurchases.filter(p => p.status === 'approved' || p.status === 'completed').length})
@@ -615,13 +614,13 @@ const MEPSupervisorHub: React.FC = () => {
                     case 'pending':
                       return p.status === 'pending';
                     case 'email_sent':
-                      return p.email_sent ||
+                      return p.status !== 'completed' && p.status !== 'approved' &&
+                             (p.email_sent ||
                              p.status === 'email_sent' ||
                              p.current_workflow_status === 'email_sent' ||
-                             p.procurement_status === 'approved' ||
-                             (p.status === 'approved' && p.email_sent !== false);
+                             p.procurement_status === 'approved');
                     case 'approved':
-                      // Check for both 'approved' and 'completed' status
+                      // Only show completed items in the completed tab
                       return p.status === 'approved' || p.status === 'completed';
                     default:
                       return true;
@@ -679,11 +678,11 @@ const MEPSupervisorHub: React.FC = () => {
                             case 'pending':
                               return p.status === 'pending';
                             case 'email_sent':
-                              return p.email_sent ||
+                              return p.status !== 'completed' && p.status !== 'approved' &&
+                                     (p.email_sent ||
                                      p.status === 'email_sent' ||
                                      p.current_workflow_status === 'email_sent' ||
-                                     p.procurement_status === 'approved' ||
-                                     (p.status === 'approved' && p.email_sent !== false);
+                                     p.procurement_status === 'approved');
                             case 'approved':
                               return p.status === 'approved' || p.status === 'completed';
                             default:
@@ -764,7 +763,7 @@ const MEPSupervisorHub: React.FC = () => {
                                     </Button>
                                     <Button
                                       size="sm"
-                                      onClick={() => handleSendToProcurement(purchase.purchase_id)}
+                                      onClick={() => handleSendToProcurement(purchase)}
                                       className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white"
                                       title="Send to Procurement"
                                     >
