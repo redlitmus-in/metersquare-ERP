@@ -243,7 +243,6 @@ const AccountsHub: React.FC = () => {
     const accountsPurchases = getPurchasesForRole('accounts');
 
     if (accountsPurchases) {
-      console.log('🔄 Auto-updating from store:', accountsPurchases.length, 'purchases');
       // Update local state with store data
       setPurchases(accountsPurchases);
     }

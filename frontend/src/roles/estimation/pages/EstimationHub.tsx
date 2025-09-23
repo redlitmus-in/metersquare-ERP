@@ -319,13 +319,6 @@ const EstimationHub: React.FC = () => {
     if (purchases.length > 0) {
         const allPurchases = purchases;
 
-        // Debug logging for rejected purchases
-        console.log('All purchases:', allPurchases.length);
-        allPurchases.forEach(p => {
-          if (p.status_info?.estimation_status === 'rejected') {
-            console.log(`Purchase ${p.purchase_id} - estimation_status: ${p.status_info.estimation_status}, sender: ${p.status_info.sender}`);
-          }
-        });
         
         // Extract unique categories from all purchases
         const categories = new Set<string>();
@@ -376,19 +369,6 @@ const EstimationHub: React.FC = () => {
                                  (p.rejected_status && p.rejection_from === 'technicalDirector') ||
                                  (p.status === 'rejected' && p.status_info?.receiver === 'estimation');
 
-            // Debug logging to see the actual data
-            if (p.purchase_id === 74 || p.purchase_id === 80) {
-              console.log(`Purchase ${p.purchase_id} TD rejection check:`, {
-                statusInfo: p.status_info,
-                tdStatus: p.technical_director_status,
-                latestStatus: p.latest_status,
-                statusSender: p.status_sender,
-                status: p.status,
-                rejectedStatus: p.rejected_status,
-                rejectionFrom: p.rejection_from,
-                isTDRejected
-              });
-            }
 
             // Check if estimation rejected (regardless of who the sender is in current status)
             const isEstimationRejected = estimationStatus === 'rejected';
@@ -691,13 +671,6 @@ const EstimationHub: React.FC = () => {
       }
     });
 
-    // Debug logging for filtered results
-    if (activeTab === 'rejected') {
-      console.log(`Rejected tab filtering: ${filtered.length} purchases found`);
-      filtered.forEach(p => {
-        console.log(`- Purchase ${p.purchase_id}: estimation_status=${p.status_info?.estimation_status}, sender=${p.status_info?.sender}`);
-      });
-    }
 
     setFilteredPurchases(filtered);
   }, [purchases, activeTab, sortBy, sortOrder, filterByAmount, filterByPriority, filterByCategory, searchTerm, statusFilter, projectFilter, locationFilter, dateFilter]);
