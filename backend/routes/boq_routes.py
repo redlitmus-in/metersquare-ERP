@@ -17,10 +17,10 @@ def create_boq_route():
 def get_all_boqs_route():
     return get_all_boqs()
 
-# Get All boq Purchase Requests
+# Get single BOQ by ID
 @boq_routes.route('/boq/<int:boq_id>', methods=['GET'])
 @jwt_required
-def get_boq_route(boq_id):
+def get_boq_id_route(boq_id):
     return get_boq(boq_id)
 
 @boq_routes.route('/update_boq/<int:boq_id>', methods=['PUT'])

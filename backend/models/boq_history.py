@@ -1,4 +1,5 @@
 from datetime import datetime
+from sqlalchemy.dialects.postgresql import JSONB
 from config.db import db
 
 class BOQHistory(db.Model):
@@ -8,7 +9,7 @@ class BOQHistory(db.Model):
     boq_history_id = db.Column(db.Integer, primary_key=True)
     boq_id = db.Column(db.Integer, nullable=True)
     action_by = db.Column(db.String(255), nullable=True)
-    action =  db.Column(db.String(255), nullable=True)
+    action =  db.Column(JSONB, nullable=False)
     action_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     created_by = db.Column(db.String(255), nullable=False)
@@ -39,7 +40,6 @@ class BOQSummary(db.Model):
     summary_id = db.Column(db.Integer, primary_key=True)
     boq_id = db.Column(db.Integer, nullable=True)
     sub_total = db.Column(db.Float, nullable=True)
-    section_id =  db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     created_by = db.Column(db.String(255), nullable=False)
     last_modified_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
@@ -54,7 +54,6 @@ class BOQSummary(db.Model):
             'summary_id': self.summary_id,
             'boq_id': self.boq_id,
             'sub_total': self.sub_total,
-            'section_id': self.section_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             'created_by': self.created_by,
             "last_modified_at": self.last_modified_at.isoformat() if self.last_modified_at else None,
@@ -66,8 +65,7 @@ class BOQTerm(db.Model):
 
     boq_term_id = db.Column(db.Integer, primary_key=True)
     boq_id = db.Column(db.Integer, nullable=True)
-    clause = db.Column(db.String(255), nullable=True)
-    details =  db.Column(db.String(255), nullable=True)
+    term = db.Column(JSONB, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     created_by = db.Column(db.String(255), nullable=False)
     last_modified_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
@@ -81,8 +79,7 @@ class BOQTerm(db.Model):
         return {
             'boq_term_id': self.boq_term_id,
             'boq_id': self.boq_id,
-            'clause': self.clause,
-            'details': self.details,
+            'term': self.term,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             'created_by': self.created_by,
             "last_modified_at": self.last_modified_at.isoformat() if self.last_modified_at else None,
