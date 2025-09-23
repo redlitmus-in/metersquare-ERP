@@ -3,7 +3,7 @@ import { getSecureUserData, getDebugLogger } from '@/utils/notificationSecurity'
 
 /**
  * Service to handle Purchase Requisition specific notifications
- * Only sends notifications to relevant roles to avoid spam
+ * Sends both system and toast notifications for PR events
  */
 export class PurchaseNotificationService {
   // When a new PR is submitted by Site Supervisor
@@ -17,6 +17,7 @@ export class PurchaseNotificationService {
     const debug = getDebugLogger();
     debug.info('New PR submitted, notifying Procurement team');
 
+    // Send main approval notification
     await notificationService.sendApprovalNotification({
       type: 'received',
       documentType: 'Purchase Requisition',
@@ -26,6 +27,19 @@ export class PurchaseNotificationService {
       project: prData.project,
       amount: prData.amount,
       targetRole: 'procurement' // Only Procurement should see new PR submissions
+    });
+
+    // Also trigger system notification for immediate visibility
+    await notificationService.sendSystemNotification({
+      type: 'info',
+      title: 'New Purchase Requisition',
+      message: `PR ${prData.documentId} received from ${prData.sender}`,
+      priority: prData.amount && prData.amount > 50000 ? 'urgent' : 'high',
+      metadata: {
+        project: prData.project,
+        amount: prData.amount,
+        link: `/procurement/purchase-requests/${prData.documentId}`
+      }
     });
   }
 

@@ -18,17 +18,28 @@ import {
   Trash2,
   ChevronRight,
   Mail,
-  BellRing
+  BellRing,
+  Search,
+  Folder,
+  Tag,
+  Eye,
+  Archive,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+// ScrollArea component not available - using div with overflow
+import { Separator } from '@/components/ui/separator';
 import { formatRelativeTime } from '@/utils/dateFormatter';
 import { useNotificationStore } from '@/store/notificationStore';
 import { NotificationData } from '@/services/notificationService';
 import { sanitizeNotification, sanitizeText } from '@/utils/sanitizer';
+import { cn } from '@/lib/utils';
 
 // Using NotificationData interface from the service
 
@@ -54,9 +65,11 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
   } = useNotificationStore();
 
   const [showPanel, setShowPanel] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'unread' | 'urgent'>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'pr' | 'system'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedPriority, setSelectedPriority] = useState<string>('all');
   const [toastNotifications, setToastNotifications] = useState<NotificationData[]>([]);
+  const [expandedView, setExpandedView] = useState(false);
   
   // Refs for click outside detection
   const panelRef = useRef<HTMLDivElement>(null);
@@ -93,6 +106,8 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
 
       return () => clearTimeout(timer);
     }
+    // Return undefined for the else case
+    return undefined;
   }, [isPermissionRequested, requestPermission]);
 
   // Clean up all toast timeouts on unmount
@@ -206,23 +221,41 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
     }
   }, []);
 
-  // Functions are now provided by the store
+  // Notification counts
+  const counts = useMemo(() => {
+    const all = notifications.length;
+    const unread = notifications.filter(n => !n.read).length;
+    const pr = notifications.filter(n => n.category === 'approval').length;
+    const system = notifications.filter(n => n.category === 'system').length;
+    const urgent = notifications.filter(n => n.priority === 'urgent' && !n.read).length;
+    return { all, unread, pr, system, urgent };
+  }, [notifications]);
 
   const filteredNotifications = useMemo(() => {
     return notifications
-      .map(n => sanitizeNotification(n)) // Sanitize all notifications
+      .map(n => sanitizeNotification(n))
       .filter(n => {
-        if (filter === 'unread' && n.read) return false;
-        if (filter === 'urgent' && n.priority !== 'urgent') return false;
-        if (categoryFilter !== 'all' && n.category !== categoryFilter) return false;
+        // Tab filtering
+        if (activeTab === 'unread' && n.read) return false;
+        if (activeTab === 'pr' && n.category !== 'approval') return false;
+        if (activeTab === 'system' && n.category !== 'system') return false;
+
+        // Priority filtering
+        if (selectedPriority !== 'all' && n.priority !== selectedPriority) return false;
+
+        // Search filtering
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase();
+          return (
+            n.title.toLowerCase().includes(query) ||
+            n.message.toLowerCase().includes(query) ||
+            n.metadata?.project?.toLowerCase().includes(query) ||
+            n.metadata?.sender?.toLowerCase().includes(query)
+          );
+        }
         return true;
       });
-  }, [notifications, filter, categoryFilter]);
-
-  const urgentCount = useMemo(
-    () => notifications.filter(n => n.priority === 'urgent' && !n.read).length,
-    [notifications]
-  );
+  }, [notifications, activeTab, selectedPriority, searchQuery]);
 
   const formatTimestamp = useCallback((date: Date) => {
     // Use the imported formatRelativeTime function for consistent timezone handling
@@ -239,6 +272,14 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
       toastTimeoutRefs.current.delete(notificationId);
     }
   }, []);
+
+  // Handle PR notification action
+  const handleNotificationAction = useCallback((notification: NotificationData) => {
+    if (notification.actionRequired && notification.metadata?.link) {
+      window.location.href = notification.metadata.link;
+    }
+    markAsRead(notification.id);
+  }, [markAsRead]);
 
   // Position classes for toast notifications
   const positionClasses = {
@@ -261,12 +302,16 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
         >
           <Bell className="w-4 h-4" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
               {unreadCount}
             </span>
           )}
-          {urgentCount > 0 && (
-            <span className="absolute -top-1 -left-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+          {counts.urgent > 0 && (
+            <motion.span
+              className="absolute -top-1 -left-1 w-2 h-2 bg-orange-500 rounded-full"
+              animate={{ scale: [1, 1.2, 1] }}
+              transition={{ repeat: Infinity, duration: 2 }}
+            />
           )}
         </Button>
       </div>
@@ -279,48 +324,125 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="absolute right-0 top-full mt-2 w-[320px] sm:w-[420px] max-h-[500px] sm:max-h-[600px] bg-white rounded-lg shadow-xl border z-[9999] overflow-hidden"
+            className={cn(
+              "absolute right-0 top-full mt-2 bg-white rounded-lg shadow-2xl border z-[9999] overflow-hidden transition-all duration-300",
+              expandedView ? "w-[600px] max-h-[700px]" : "w-[420px] max-h-[600px]"
+            )}
           >
-            {/* Header */}
-            <div className="bg-gradient-to-r from-red-50 to-red-100 border-b border-red-200 p-3">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-base flex items-center gap-2 text-gray-800">
-                  <Bell className="w-4 h-4 text-red-600" />
-                  Notifications
-                </h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowPanel(false)}
-                  className="text-gray-600 hover:bg-red-100"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
+            {/* Enhanced Header */}
+            <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-red-100 text-red-700 border-red-300">
-                    {unreadCount} unread
-                  </Badge>
-                  {urgentCount > 0 && (
-                    <Badge className="bg-orange-100 text-orange-700 border-orange-300">
-                      {urgentCount} urgent
-                    </Badge>
-                  )}
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                    <Bell className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Notification Center</h3>
+                    <p className="text-sm text-white/80 mt-0.5">
+                      {counts.unread} unread • {counts.pr} PR • {counts.urgent} urgent
+                    </p>
+                  </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={markAllAsRead}
-                  className="text-xs px-2 text-red-600 hover:bg-red-100"
-                >
-                  Mark all read
-                </Button>
+                <div className="flex items-center gap-2">
+                  {!isPermissionGranted && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={requestPermission}
+                      className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                    >
+                      <BellRing className="w-4 h-4 mr-1" />
+                      Enable
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setExpandedView(!expandedView)}
+                    className="text-white hover:bg-white/20"
+                    title={expandedView ? "Compact View" : "Expanded View"}
+                  >
+                    {expandedView ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowPanel(false)}
+                    className="text-white hover:bg-white/20"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </div>
 
+            {/* Search and Filters */}
+            <div className="p-3 border-b bg-gray-50">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    placeholder="Search notifications..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 h-9"
+                  />
+                </div>
+                <Select value={selectedPriority} onValueChange={setSelectedPriority}>
+                  <SelectTrigger className="w-[140px] h-9">
+                    <SelectValue placeholder="Priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Priorities</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Tabs for PR and System notifications */}
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+              <TabsList className="w-full rounded-none border-b bg-white grid grid-cols-4">
+                <TabsTrigger value="all" className="data-[state=active]:bg-red-50">
+                  All
+                  {counts.all > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1">
+                      {counts.all}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="unread" className="data-[state=active]:bg-red-50">
+                  Unread
+                  {counts.unread > 0 && (
+                    <Badge className="bg-red-500 text-white ml-1 h-5 px-1">
+                      {counts.unread}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="pr" className="data-[state=active]:bg-red-50">
+                  PR
+                  {counts.pr > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1">
+                      {counts.pr}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="system" className="data-[state=active]:bg-red-50">
+                  System
+                  {counts.system > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1">
+                      {counts.system}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value={activeTab} className="mt-0">
             {/* Notifications List */}
-            <div className="max-h-[400px] overflow-y-auto">
+            <div className="h-[400px] overflow-y-auto">
               {filteredNotifications.length === 0 ? (
                 <div className="p-8 text-center">
                   <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -420,24 +542,55 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
                 </div>
               )}
             </div>
-
+              </TabsContent>
+            </Tabs>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Toast Notifications */}
-      <div className={`fixed ${positionClasses[position]} z-50 space-y-2`}>
+      {/* Enhanced Toast Notifications with PR Support */}
+      <div className={cn(
+        "fixed z-[10000] space-y-2 pointer-events-none",
+        positionClasses[position]
+      )}>
         <AnimatePresence>
-          {toastNotifications.map((notification) => (
+          {toastNotifications.map((notification, index) => (
             <motion.div
               key={notification.id}
-              initial={{ opacity: 0, x: position.includes('right') ? 100 : -100 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: position.includes('right') ? 100 : -100 }}
-              className="bg-white rounded-lg shadow-lg border p-4 w-80"
+              initial={{
+                opacity: 0,
+                x: position.includes('right') ? 100 : -100,
+                scale: 0.9
+              }}
+              animate={{
+                opacity: 1,
+                x: 0,
+                scale: 1
+              }}
+              exit={{
+                opacity: 0,
+                x: position.includes('right') ? 100 : -100,
+                scale: 0.9
+              }}
+              transition={{
+                type: "spring",
+                damping: 20,
+                stiffness: 300
+              }}
+              style={{
+                zIndex: 10000 - index // Ensure proper stacking without overlapping
+              }}
+              className={cn(
+                "bg-white rounded-lg shadow-2xl border p-4 w-80 pointer-events-auto",
+                notification.priority === 'urgent' && "border-red-500 border-2 animate-pulse",
+                notification.category === 'approval' && "border-l-4 border-amber-500"
+              )}
             >
               <div className="flex items-start gap-3">
-                <div className={`p-2 rounded-lg ${getNotificationColor(notification.type)}`}>
+                <div className={cn(
+                  "p-2 rounded-lg flex-shrink-0",
+                  getNotificationColor(notification.type)
+                )}>
                   {getNotificationIcon(notification.type)}
                 </div>
                 <div className="flex-1">
@@ -447,12 +600,40 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
                   <p className="text-xs text-gray-600 mt-1">
                     {notification.message}
                   </p>
+                  {notification.category === 'approval' && notification.metadata && (
+                    <div className="mt-2 flex items-center gap-2">
+                      {notification.metadata.project && (
+                        <Badge variant="outline" className="text-[10px]">
+                          <FileText className="w-3 h-3 mr-1" />
+                          {notification.metadata.project}
+                        </Badge>
+                      )}
+                      {notification.metadata.amount && (
+                        <Badge variant="outline" className="text-[10px]">
+                          AED {notification.metadata.amount.toLocaleString()}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  {notification.actionRequired && (
+                    <Button
+                      size="sm"
+                      className="h-6 px-2 text-[11px] mt-2 bg-red-500 hover:bg-red-600 text-white"
+                      onClick={() => {
+                        handleNotificationAction(notification);
+                        removeToast(notification.id);
+                      }}
+                    >
+                      View PR
+                      <ChevronRight className="w-3 h-3 ml-0.5" />
+                    </Button>
+                  )}
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => removeToast(notification.id)}
-                  className="h-6 w-6 p-0"
+                  className="h-6 w-6 p-0 hover:bg-gray-100"
                 >
                   <X className="w-3 h-3" />
                 </Button>

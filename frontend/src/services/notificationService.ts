@@ -29,6 +29,7 @@ export interface NotificationData {
     project?: string;
     emailId?: string;
     recipient?: string;
+    link?: string;
   };
 }
 
