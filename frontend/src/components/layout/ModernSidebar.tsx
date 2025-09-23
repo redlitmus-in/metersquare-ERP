@@ -80,6 +80,8 @@ const NavigationItemComponent = memo<{
             isActive
               ? item.name === 'Procurement'
                 ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-900 shadow-md border border-red-200'
+                : item.name === 'Vendor Management'
+                ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-900 shadow-md border border-blue-200'
                 : 'bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 text-[#243d8a] shadow-md border border-[#243d8a]/20'
               : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
           )}
@@ -91,6 +93,8 @@ const NavigationItemComponent = memo<{
               isActive
                 ? item.name === 'Procurement'
                   ? 'bg-red-500 shadow-lg'
+                  : item.name === 'Vendor Management'
+                  ? 'bg-blue-500 shadow-lg'
                   : 'bg-[#243d8a] shadow-lg'
                 : 'bg-gray-100 group-hover:bg-gray-200'
             )}>
@@ -133,6 +137,8 @@ const NavigationItemComponent = memo<{
         isActive
           ? item.name === 'Procurement'
             ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-900 shadow-md border border-red-200'
+            : item.name === 'Vendor Management'
+            ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-900 shadow-md border border-blue-200'
             : 'bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10 text-[#243d8a] shadow-md border border-[#243d8a]/20'
           : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
       )}
@@ -140,7 +146,8 @@ const NavigationItemComponent = memo<{
       {isActive && (
         <div className={clsx(
           "absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 rounded-r-full",
-          item.name === 'Procurement' ? 'bg-red-500' : 'bg-[#243d8a]'
+          item.name === 'Procurement' ? 'bg-red-500' :
+          item.name === 'Vendor Management' ? 'bg-blue-500' : 'bg-[#243d8a]'
         )}></div>
       )}
       <div className={clsx(
@@ -149,6 +156,8 @@ const NavigationItemComponent = memo<{
         isActive
           ? item.name === 'Procurement'
             ? 'bg-red-500 shadow-lg'
+            : item.name === 'Vendor Management'
+            ? 'bg-blue-500 shadow-lg'
             : 'bg-[#243d8a] shadow-lg'
           : 'bg-gray-100 group-hover:bg-gray-200'
       )}>
@@ -162,6 +171,8 @@ const NavigationItemComponent = memo<{
         "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-xl",
         item.name === 'Procurement'
           ? 'bg-gradient-to-r from-red-500/5 to-red-500/10'
+          : item.name === 'Vendor Management'
+          ? 'bg-gradient-to-r from-blue-500/5 to-blue-500/10'
           : 'bg-gradient-to-r from-[#243d8a]/5 to-[#243d8a]/10'
       )}></div>
     </Link>
@@ -176,7 +187,7 @@ const ModernSidebar: React.FC<SidebarProps> = memo(({ sidebarOpen, setSidebarOpe
   const roleName = getRoleDisplayName(user?.role_id || '');
   const roleColor = getRoleThemeColor(user?.role_id || '');
   const dashboardPath = getRoleDashboard();
-  const [expandedSections, setExpandedSections] = useState<string[]>(['procurement']);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['vendor management']);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
     return saved === 'true';
@@ -223,36 +234,31 @@ const ModernSidebar: React.FC<SidebarProps> = memo(({ sidebarOpen, setSidebarOpe
     const buildPath = (path: string) => buildRolePath(roleId || '', path);
 
     const baseItems: NavigationItem[] = [
-      { 
-        name: `Dashboard`, 
-        href: buildPath('/dashboard'), 
-        icon: HomeIcon, 
+      {
+        name: `Dashboard`,
+        href: buildPath('/dashboard'),
+        icon: HomeIcon,
         iconSolid: HomeSolid,
         color: 'text-[#243d8a]'
       },
-      { 
-        name: 'Procurement', 
-        href: buildPath('/procurement'), 
-        icon: ShoppingCartIcon, 
+      {
+        name: 'Procurement',
+        href: buildPath('/procurement'),
+        icon: ShoppingCartIcon,
         iconSolid: ShoppingSolid,
-        color: 'text-red-600',
+        color: 'text-red-600'
+      },
+      {
+        name: 'Vendor Management',
+        href: buildPath('/vendors'),
+        icon: UsersIcon,
+        iconSolid: UsersSolid,
+        color: 'text-blue-600',
         children: [
-          { name: 'Deliveries', href: buildPath('/procurement/deliveries'), icon: TruckIcon, iconSolid: TruckIcon }
+          { name: 'Vendor List', href: buildPath('/vendors/list'), icon: ClipboardDocumentCheckIcon, iconSolid: ClipboardDocumentCheckIcon },
+          { name: 'Scope of Work', href: buildPath('/vendors/scope-of-work'), icon: DocumentTextIcon, iconSolid: DocumentTextIcon },
+          { name: 'Quotations', href: buildPath('/vendors/quotations'), icon: CurrencyDollarIcon, iconSolid: CurrencyDollarIcon }
         ]
-      },
-      { 
-        name: 'Pending Actions', 
-        href: buildPath('/tasks'), 
-        icon: CheckCircleIcon, 
-        iconSolid: CheckCircleIcon,
-        color: 'text-green-600'
-      },
-      { 
-        name: 'Workflow Status', 
-        href: buildPath('/workflow-status'), 
-        icon: ArrowPathIcon, 
-        iconSolid: ArrowPathIcon,
-        color: 'text-purple-600'
       },
     ];
 

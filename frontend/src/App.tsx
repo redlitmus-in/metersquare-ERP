@@ -29,6 +29,12 @@ const CreativeErrorPage = lazy(() => import('@/components/ui/CreativeErrorPage')
 const ProcurementHub = lazy(() => import('@/roles/procurement/pages/ProcurementHub'));
 const DeliveriesPage = lazy(() => import('@/roles/procurement/pages/DeliveriesPage'));
 
+// Lazy load vendor management pages
+const VendorDashboard = lazy(() => import('@/pages/vendors/VendorDashboard'));
+const VendorListPage = lazy(() => import('@/pages/vendors/VendorListPage'));
+const VendorScopeOfWorkPage = lazy(() => import('@/pages/vendors/VendorScopeOfWorkPage'));
+const VendorQuotationsPage = lazy(() => import('@/pages/vendors/VendorQuotationsPage'));
+
 // Lazy load role hubs - Direct import for better code splitting
 const ProjectManagerHub = lazy(() => import('@/roles/project-manager/pages/ProjectManagerHub'));
 const PurchaseApprovalsPage = lazy(() => import('@/roles/project-manager/pages/PurchaseApprovalsPage'));
@@ -41,6 +47,13 @@ const AccountsHub = lazy(() => import('@/roles/accounts/pages/AccountsHub'));
 // Lazy load workflow pages
 const MaterialDispatchProductionPage = lazy(() => import('@/pages/workflows/MaterialDispatchProductionPage'));
 const MaterialDispatchSitePage = lazy(() => import('@/pages/workflows/MaterialDispatchSitePage'));
+
+// Lazy load role-specific vendor management pages
+const PMVendorManagement = lazy(() => import('@/roles/project-manager/pages/PMVendorManagement'));
+const ProcurementVendorReview = lazy(() => import('@/roles/procurement/pages/ProcurementVendorReview'));
+const EstimationVendorCheck = lazy(() => import('@/roles/estimation/pages/EstimationVendorCheck'));
+const TDVendorApproval = lazy(() => import('@/roles/technical-director/pages/TDVendorApproval'));
+const AccountsVendorPayment = lazy(() => import('@/roles/accounts/pages/AccountsVendorPayment'));
 
 // Other components
 const RoleRouteWrapper = lazy(() => import('@/components/routing/RoleRouteWrapper'));
@@ -88,6 +101,43 @@ const RoleSpecificProcurementHub: React.FC = () => {
   
   // Default to ProcurementHub for all other roles
   return <ProcurementHub />;
+};
+
+// Role-specific Vendor Management Hub Component
+const RoleSpecificVendorHub: React.FC = () => {
+  const { user } = useAuthStore();
+
+  // Get user role (backend sends camelCase: technicalDirector)
+  const userRole = (user as any)?.role || '';
+  const userRoleLower = userRole.toLowerCase();
+
+  // Check if user is Project Manager - they initiate vendor SOWs
+  if (userRoleLower === 'project manager' || userRoleLower === 'project_manager' || userRoleLower === 'projectmanager') {
+    return <PMVendorManagement />;
+  }
+
+  // Check if user is Procurement - they review and select vendors
+  if (userRoleLower === 'procurement') {
+    return <ProcurementVendorReview />;
+  }
+
+  // Check if user is Estimation - they verify vendor list and costs
+  if (userRoleLower === 'estimation') {
+    return <EstimationVendorCheck />;
+  }
+
+  // Check if user is Technical Director - they provide final approval
+  if (userRole === 'technicalDirector' || userRoleLower === 'technical director' || userRoleLower === 'technical_director' || userRoleLower === 'technicaldirector') {
+    return <TDVendorApproval />;
+  }
+
+  // Check if user is Accounts - they process payments
+  if (userRoleLower === 'accounts' || userRoleLower === 'account') {
+    return <AccountsVendorPayment />;
+  }
+
+  // Default to VendorDashboard for other roles
+  return <VendorDashboard />;
 };
 
 // Protected Route Component
@@ -274,8 +324,13 @@ function App() {
             <Route path="procurement" element={
               <RoleSpecificProcurementHub />
             } />
-            <Route path="procurement/deliveries" element={<DeliveriesPage />} />
-            <Route path="procurement/deliveries/edit/:id" element={<DeliveriesPage />} />
+
+            {/* Vendor Management Routes - Role-specific views */}
+            <Route path="vendors" element={<RoleSpecificVendorHub />} />
+            <Route path="vendors/list" element={<VendorListPage />} />
+            <Route path="vendors/scope-of-work" element={<VendorScopeOfWorkPage />} />
+            <Route path="vendors/quotations" element={<VendorQuotationsPage />} />
+
             <Route path="purchase/:purchaseId" element={<PurchaseApprovalsPage />} />
             <Route path="site-supervisor" element={<SiteSupervisorHub />} />
             <Route path="mep-supervisor" element={<MEPSupervisorHub />} />
