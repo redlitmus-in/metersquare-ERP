@@ -15,7 +15,8 @@ import {
   TrendingUp,
   Package,
   DollarSign,
-  Calendar
+  Calendar,
+  XCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,16 @@ import { buildRolePath } from '@/utils/roleRouting';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiClient } from '@/api/config';
 import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 interface VendorSOW {
   id: string;
@@ -57,6 +68,12 @@ const PMVendorManagement: React.FC = () => {
     rejected: 1,
     totalValue: 2450000
   });
+
+  // Approval dialog state
+  const [selectedSOW, setSelectedSOW] = useState<VendorSOW | null>(null);
+  const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
+  const [approvalNotes, setApprovalNotes] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Sample SOW data
   useEffect(() => {
@@ -136,6 +153,70 @@ const PMVendorManagement: React.FC = () => {
       approved: 5
     };
     return steps[status] || 0;
+  };
+
+  // Handle SOW approval
+  const handleSOWReview = (sow: VendorSOW) => {
+    setSelectedSOW(sow);
+    setApprovalNotes('');
+    setIsApprovalDialogOpen(true);
+  };
+
+  // Submit PM approval
+  const submitPMApproval = async (approved: boolean) => {
+    if (!selectedSOW) return;
+
+    if (!approved && !approvalNotes.trim()) {
+      toast.error('Please provide rejection notes');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      // Update SOW status
+      const updatedSOWs = sows.map(sow => {
+        if (sow.id === selectedSOW.id) {
+          return {
+            ...sow,
+            status: approved ? 'pm_approved' : 'rejected',
+            approvalStage: approved
+              ? 'PM FLAG Approved - Sent to Estimation'
+              : 'Rejected by Project Manager',
+            rejectionReason: approved ? undefined : approvalNotes.trim()
+          };
+        }
+        return sow;
+      });
+
+      setSows(updatedSOWs);
+
+      // Update stats
+      const newStats = {
+        ...stats,
+        approved: updatedSOWs.filter(s => s.status === 'pm_approved' || s.status === 'approved').length,
+        rejected: updatedSOWs.filter(s => s.status === 'rejected').length,
+        pendingApproval: updatedSOWs.filter(s => s.status === 'qty_scope_review').length
+      };
+      setStats(newStats);
+
+      const message = approved
+        ? `SOW ${selectedSOW.sowNumber} approved and sent to Estimation for verification`
+        : `SOW ${selectedSOW.sowNumber} rejected and sent back to Procurement`;
+
+      toast.success(message);
+
+      // Close dialog
+      setIsApprovalDialogOpen(false);
+      setSelectedSOW(null);
+      setApprovalNotes('');
+
+    } catch (error) {
+      toast.error('Failed to process SOW approval');
+      console.error('SOW approval error:', error);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -335,7 +416,11 @@ const PMVendorManagement: React.FC = () => {
                         <p className="text-sm text-gray-600">Amount</p>
                         <p className="text-xl font-bold text-blue-600">AED {sow.totalAmount.toLocaleString()}</p>
                         {sow.status === 'qty_scope_review' && (
-                          <Button size="sm" className="mt-2 bg-blue-600 hover:bg-blue-700">
+                          <Button
+                            size="sm"
+                            className="mt-2 bg-blue-600 hover:bg-blue-700"
+                            onClick={() => handleSOWReview(sow)}
+                          >
                             Review & Approve
                           </Button>
                         )}
@@ -377,6 +462,91 @@ const PMVendorManagement: React.FC = () => {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* PM Approval Dialog */}
+      <Dialog open={isApprovalDialogOpen} onOpenChange={setIsApprovalDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-blue-600" />
+              PM Review - {selectedSOW?.sowNumber}
+            </DialogTitle>
+            <DialogDescription>
+              Review and approve/reject this vendor scope of work for estimation.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedSOW && (
+            <div className="space-y-4">
+              {/* SOW Details */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Project</p>
+                  <p className="text-sm text-gray-900">{selectedSOW.projectName}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Vendor</p>
+                  <p className="text-sm text-gray-900">{selectedSOW.vendorName}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Category</p>
+                  <p className="text-sm text-gray-900">{selectedSOW.category}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Amount</p>
+                  <p className="text-sm font-semibold text-blue-600">
+                    AED {selectedSOW.totalAmount.toLocaleString()}
+                  </p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-sm font-medium text-gray-700">BOQ Reference</p>
+                  <p className="text-sm text-gray-900">{selectedSOW.boqReference}</p>
+                </div>
+              </div>
+
+              {/* Approval Notes */}
+              <div className="space-y-2">
+                <Label htmlFor="approval-notes">
+                  PM Review Notes <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  id="approval-notes"
+                  placeholder="Enter your approval/rejection notes..."
+                  value={approvalNotes}
+                  onChange={(e) => setApprovalNotes(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsApprovalDialogOpen(false)}
+              disabled={isProcessing}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => submitPMApproval(false)}
+              disabled={isProcessing}
+            >
+              <XCircle className="w-4 h-4 mr-2" />
+              {isProcessing ? 'Processing...' : 'Reject'}
+            </Button>
+            <Button
+              onClick={() => submitPMApproval(true)}
+              disabled={isProcessing}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <CheckCircle className="w-4 h-4 mr-2" />
+              {isProcessing ? 'Processing...' : 'Approve PM FLAG'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
