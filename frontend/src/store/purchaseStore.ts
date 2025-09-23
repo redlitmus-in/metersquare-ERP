@@ -132,8 +132,6 @@ const usePurchaseStore = create<PurchaseStore>()(
       // REMOVED debouncing - we want instant updates!
       const currentStore = get();
 
-      // Debug log to track what role is being passed
-      console.log('[PurchaseStore] fetchPurchases called with role:', role);
 
       try {
         // Only show loading on initial fetch, not on refresh
@@ -188,8 +186,6 @@ const usePurchaseStore = create<PurchaseStore>()(
             }
         }
 
-        // Debug log to track which endpoint is being called
-        console.log('[PurchaseStore] Using endpoint:', endpoint);
 
         response = await apiClient.get(endpoint);
 
@@ -259,8 +255,7 @@ const usePurchaseStore = create<PurchaseStore>()(
 
           // Normalize materials field (only if we have data)
           if (purchaseData && purchaseData.length > 0) {
-            console.log('[PurchaseStore] Processing', purchaseData.length, 'purchases for role:', role);
-            purchaseData = purchaseData.map(purchase => {
+              purchaseData = purchaseData.map(purchase => {
             const materials = purchase.material_details || purchase.materials || [];
 
             // Normalize status field - check for current_status object
@@ -282,7 +277,6 @@ const usePurchaseStore = create<PurchaseStore>()(
               material_count: materials.length || purchase.material_count || 0
             };
           });
-          console.log('[PurchaseStore] Normalized purchases:', purchaseData);
           }
 
           // Only update if data has changed

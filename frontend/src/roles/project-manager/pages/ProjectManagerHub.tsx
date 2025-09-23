@@ -699,7 +699,7 @@ const ProjectManagerHub: React.FC = () => {
       stopPolling();
       cleanupRealtimeSubscription();
     };
-  }, [setupRealtimeSubscription, cleanupRealtimeSubscription, storeFetchPurchases]);
+  }, [setupRealtimeSubscription, cleanupRealtimeSubscription]);
 
   // Calculate metrics whenever purchases change - keep it simple, just one set
   const metrics = useMemo(() => {
@@ -1065,12 +1065,6 @@ const ProjectManagerHub: React.FC = () => {
         return;
       }
       
-      // Log the purchase status for debugging
-      console.log('Attempting to resend purchase:', {
-        purchaseId,
-        pm_status: purchase?.pm_status,
-        rejected_status: purchase?.rejected_status
-      });
       
       const result = await projectManagerService.resendToEstimation(
         purchaseId, 
