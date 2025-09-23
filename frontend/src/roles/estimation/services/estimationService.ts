@@ -5,6 +5,7 @@
  */
 
 import { apiClient, API_ENDPOINTS } from '@/api/config';
+import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
 import type {
   EstimationApprovalRequest,
   EstimationApprovalResponse,
@@ -69,7 +70,7 @@ class EstimationService {
    * Submit approval for a purchase request
    */
   async submitApproval(
-    purchaseId: number, 
+    purchaseId: number,
     comments: string = ''
   ): Promise<EstimationApprovalResponse> {
     try {
@@ -83,6 +84,20 @@ class EstimationService {
         API_ENDPOINTS.ESTIMATION.APPROVAL,
         request
       );
+
+      if (response.data.success) {
+        // Get purchase details for notification
+        const purchaseDetails = await this.getPurchaseDetails(purchaseId);
+        const purchase = purchaseDetails.purchase_details || purchaseDetails;
+
+        // Send notification about Estimation approval - forwards to Technical Director
+        await PurchaseNotificationService.notifyPRApprovedByProjectManager({
+          documentId: String(purchaseId),
+          project: purchase.project_id,
+          amount: purchase.materials_summary?.total_cost || 0,
+          nextRole: 'technical director'
+        });
+      }
 
       return response.data;
     } catch (error) {
@@ -113,6 +128,21 @@ class EstimationService {
         API_ENDPOINTS.ESTIMATION.APPROVAL,
         request
       );
+
+      if (response.data.success) {
+        // Get purchase details for notification
+        const purchaseDetails = await this.getPurchaseDetails(purchaseId);
+        const purchase = purchaseDetails.purchase_details || purchaseDetails;
+
+        // Send rejection notification back to project manager
+        await PurchaseNotificationService.notifyPRRejected({
+          documentId: String(purchaseId),
+          rejectedBy: 'Estimation Team',
+          reason: rejectionReason,
+          project: purchase.project_id,
+          backToRole: 'project manager'
+        });
+      }
 
       return response.data;
     } catch (error) {

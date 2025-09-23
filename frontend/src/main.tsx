@@ -5,6 +5,19 @@ import App from './App.tsx'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 import './index.css'
 
+// Import debug utilities for development
+import { debugNotifications } from './utils/debugNotifications'
+
+// Make debug utilities available globally for development
+if (import.meta.env.DEV) {
+  (window as any).debugNotifications = debugNotifications;
+
+  // Import test utilities
+  import('./utils/testNotifications');
+  import('./utils/testPRWorkflow');
+  import('./utils/testAllRolesNotifications');
+}
+
 // Register service worker for aggressive caching (production only)
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {

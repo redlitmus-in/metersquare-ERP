@@ -5,6 +5,7 @@
  */
 
 import { apiClient, API_ENDPOINTS } from '@/api/config';
+import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
 import type {
   TechnicalDirectorApprovalRequest,
   TechnicalDirectorApprovalResponse,
@@ -17,7 +18,7 @@ class TechnicalDirectorService {
    * Submit approval for a purchase request
    */
   async submitApproval(
-    purchaseId: number, 
+    purchaseId: number,
     comments: string = ''
   ): Promise<TechnicalDirectorApprovalResponse> {
     try {
@@ -31,6 +32,20 @@ class TechnicalDirectorService {
         API_ENDPOINTS.TECHNICAL_DIRECTOR.APPROVAL,
         request
       );
+
+      if (response.data.success) {
+        // Get purchase details for notification
+        const purchaseDetails = await this.getPurchaseDetails(purchaseId);
+        const purchase = purchaseDetails.purchase_details || purchaseDetails;
+
+        // Send final approval notification - this completes the workflow
+        await PurchaseNotificationService.notifyPRFinallyApproved({
+          documentId: String(purchaseId),
+          project: purchase.project_id,
+          amount: purchase.materials_summary?.total_cost || 0,
+          approvedBy: 'Technical Director'
+        });
+      }
 
       return response.data;
     } catch (error) {
@@ -59,6 +74,21 @@ class TechnicalDirectorService {
         API_ENDPOINTS.TECHNICAL_DIRECTOR.APPROVAL,
         request
       );
+
+      if (response.data.success) {
+        // Get purchase details for notification
+        const purchaseDetails = await this.getPurchaseDetails(purchaseId);
+        const purchase = purchaseDetails.purchase_details || purchaseDetails;
+
+        // Send rejection notification back to estimation
+        await PurchaseNotificationService.notifyPRRejected({
+          documentId: String(purchaseId),
+          rejectedBy: 'Technical Director',
+          reason: rejectionReason,
+          project: purchase.project_id,
+          backToRole: 'estimation'
+        });
+      }
 
       return response.data;
     } catch (error) {

@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import ModernSidebar from './ModernSidebar';
 import NotificationSystem from '@/components/NotificationSystem';
 import { useAuthStore } from '@/store/authStore';
+import { useNotificationStore } from '@/store/notificationStore';
 import { getRoleDisplayName } from '@/utils/roleRouting';
 import { MobileMenuButton } from './MobileMenuButton';
 import { Clock } from 'lucide-react';
+import { sanitizeDocumentTitle } from '@/utils/sanitizer';
 
 const DashboardLayout: React.FC = React.memo(() => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -15,29 +17,38 @@ const DashboardLayout: React.FC = React.memo(() => {
   });
   const [currentTime, setCurrentTime] = useState(new Date());
   const { user } = useAuthStore();
+  const { unreadCount } = useNotificationStore();
   const location = useLocation();
 
-  // Update browser title with user role
-  useEffect(() => {
-    const getPageName = () => {
-      const path = location.pathname;
-      switch (path) {
-        case '/dashboard': return 'Dashboard';
-        case '/procurement': return 'Procurement';
-        case '/tasks': return 'Tasks';
-        case '/process-flow': return 'Process Flow';
-        case '/analytics': return 'Analytics';
-        case '/profile': return 'Profile';
-        default:
-          if (path.startsWith('/procurement')) return 'Procurement';
-          return 'MeterSquare ERP';
-      }
-    };
+  // Memoize page name calculation
+  const getPageName = useCallback(() => {
+    const path = location.pathname;
+    switch (path) {
+      case '/dashboard': return 'Dashboard';
+      case '/procurement': return 'Procurement';
+      case '/tasks': return 'Tasks';
+      case '/process-flow': return 'Process Flow';
+      case '/analytics': return 'Analytics';
+      case '/profile': return 'Profile';
+      default:
+        if (path.startsWith('/procurement')) return 'Procurement';
+        return 'MeterSquare ERP';
+    }
+  }, [location.pathname]);
 
+  // Update browser title with user role and notification count
+  useEffect(() => {
     const roleName = user?.role_id ? getRoleDisplayName(String(user.role_id)) : 'User';
     const pageName = getPageName();
-    document.title = `[${roleName}] ${pageName} - MeterSquare ERP`;
-  }, [user, location]);
+    const baseTitle = `[${roleName}] ${pageName} - MeterSquare ERP`;
+
+    // Sanitize title to prevent injection
+    const sanitizedTitle = unreadCount > 0
+      ? sanitizeDocumentTitle(`(${unreadCount}) ${baseTitle}`)
+      : sanitizeDocumentTitle(baseTitle);
+
+    document.title = sanitizedTitle;
+  }, [user, getPageName, unreadCount]);
 
   // Listen for storage changes to sync sidebar state
   useEffect(() => {
@@ -56,27 +67,14 @@ const DashboardLayout: React.FC = React.memo(() => {
     };
   }, []);
 
-  // Update current time every second - optimized with RAF
+  // Use interval instead of RAF for time updates to reduce CPU usage
   useEffect(() => {
-    let animationFrameId: number;
-    let lastUpdate = Date.now();
-
-    const updateTime = () => {
-      const now = Date.now();
-      // Only update every second to reduce re-renders
-      if (now - lastUpdate >= 1000) {
-        setCurrentTime(new Date());
-        lastUpdate = now;
-      }
-      animationFrameId = requestAnimationFrame(updateTime);
-    };
-
-    animationFrameId = requestAnimationFrame(updateTime);
+    const intervalId = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000); // Update every second
 
     return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -111,20 +109,20 @@ const DashboardLayout: React.FC = React.memo(() => {
           <Clock className="w-4 h-4 text-gray-500" />
           <div className="flex items-center gap-2.5">
             <span className="font-semibold text-gray-800">
-              {currentTime.toLocaleTimeString('en-US', {
+              {useMemo(() => currentTime.toLocaleTimeString('en-US', {
                 hour: '2-digit',
                 minute: '2-digit',
                 second: '2-digit',
                 hour12: true
-              })}
+              }), [currentTime])}
             </span>
             <span className="text-gray-300">|</span>
             <span className="text-gray-600 font-medium">
-              {currentTime.toLocaleDateString('en-US', {
+              {useMemo(() => currentTime.toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric',
                 year: 'numeric'
-              })}
+              }), [currentTime])}
             </span>
           </div>
         </div>

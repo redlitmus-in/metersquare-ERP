@@ -5,6 +5,7 @@
 
 import { apiClient } from '@/api/config';
 import { requestDeduplicator } from '@/utils/requestDeduplication';
+import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
 
 export interface PurchaseApproval {
   purchase_id: number;
@@ -265,6 +266,21 @@ class ProjectManagerService {
         purchase_status: 'approved',
         comments: comments || ''
       });
+
+      if (response.data.success) {
+        // Get purchase details for notification
+        const purchaseDetails = await this.getPurchaseDetails(purchaseId);
+        const purchase = purchaseDetails.purchase || purchaseDetails;
+
+        // Send notification about PM approval - forwards to estimation
+        await PurchaseNotificationService.notifyPRApprovedByProjectManager({
+          documentId: String(purchaseId),
+          project: purchase.project_id,
+          amount: purchase.materials_summary?.total_cost || 0,
+          nextRole: 'estimation'
+        });
+      }
+
       return response.data;
     } catch (error) {
       console.error('Error approving purchase:', error);
@@ -276,8 +292,8 @@ class ProjectManagerService {
    * Reject a purchase request
    */
   async rejectPurchase(
-    purchaseId: number, 
-    rejectionReason: string, 
+    purchaseId: number,
+    rejectionReason: string,
     comments?: string
   ): Promise<any> {
     try {
@@ -287,28 +303,44 @@ class ProjectManagerService {
         rejection_reason: rejectionReason,
         comments: comments || ''
       });
+
+      if (response.data.success) {
+        // Get purchase details for notification
+        const purchaseDetails = await this.getPurchaseDetails(purchaseId);
+        const purchase = purchaseDetails.purchase || purchaseDetails;
+
+        // Send rejection notification back to procurement
+        await PurchaseNotificationService.notifyPRRejected({
+          documentId: String(purchaseId),
+          rejectedBy: 'Project Manager',
+          reason: rejectionReason,
+          project: purchase.project_id,
+          backToRole: 'procurement'
+        });
+      }
+
       return response.data;
     } catch (error: any) {
       // Handle specific error cases
       if (error.response?.data?.error) {
         const errorMessage = error.response.data.error;
-        
+
         // Check for various forms of "already rejected" error
-        if (errorMessage.toLowerCase().includes('already rejected') || 
+        if (errorMessage.toLowerCase().includes('already rejected') ||
             errorMessage.toLowerCase().includes('has already rejected')) {
           // Return a standardized error message
           throw new Error('This purchase has already been rejected by Project Manager. No further action needed.');
         }
-        
+
         // Check for "already approved" error (happens in Est. Rejected tab)
         if (errorMessage.toLowerCase().includes('already approved')) {
           throw new Error('Cannot reject: This purchase was already approved and is awaiting estimation review. Use "Resend to Est" instead.');
         }
-        
+
         // Pass through other specific error messages
         throw new Error(errorMessage);
       }
-      
+
       console.error('Error rejecting purchase:', error);
       throw error;
     }

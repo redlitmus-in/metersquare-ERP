@@ -1,4 +1,5 @@
 import { apiClient } from '@/api/config';
+import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
 
 export interface Material {
   material_id: number;
@@ -210,6 +211,22 @@ class MEPSupervisorService {
     try {
       const response = await apiClient.post(`/mep_send_to_procurement/${purchaseId}`);
       if (response.data.success) {
+        // Get purchase details for notification
+        const purchaseDetails = await this.getPurchaseDetails(purchaseId);
+
+        // Calculate total amount
+        const totalAmount = purchaseDetails.materials?.reduce((sum: number, m: Material) =>
+          sum + (m.quantity * m.cost), 0) || purchaseDetails.total_cost || 0;
+
+        // Send notification to procurement about new MEP PR submission
+        await PurchaseNotificationService.notifyPRSubmitted({
+          documentId: String(purchaseId),
+          sender: 'MEP Supervisor',
+          project: purchaseDetails.project_id,
+          amount: totalAmount,
+          description: purchaseDetails.purpose + ' (MEP)'
+        });
+
         return response.data;
       }
       throw new Error(response.data.message || 'Failed to send to procurement');

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell,
@@ -15,9 +15,10 @@ import {
   TrendingUp,
   AlertTriangle,
   Calendar,
-  Settings,
   Trash2,
-  ChevronRight
+  ChevronRight,
+  Mail,
+  BellRing
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,27 +26,11 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatRelativeTime } from '@/utils/dateFormatter';
+import { useNotificationStore } from '@/store/notificationStore';
+import { NotificationData } from '@/services/notificationService';
+import { sanitizeNotification, sanitizeText } from '@/utils/sanitizer';
 
-export interface Notification {
-  id: string;
-  type: 'approval' | 'alert' | 'info' | 'success' | 'error' | 'update' | 'reminder';
-  title: string;
-  message: string;
-  timestamp: Date;
-  read: boolean;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  category: 'procurement' | 'approval' | 'vendor' | 'system' | 'project';
-  actionRequired?: boolean;
-  actionUrl?: string;
-  actionLabel?: string;
-  metadata?: {
-    documentId?: string;
-    documentType?: string;
-    amount?: number;
-    sender?: string;
-    project?: string;
-  };
-}
+// Using NotificationData interface from the service
 
 interface NotificationSystemProps {
   position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
@@ -56,21 +41,34 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
   position = 'top-right',
   maxNotifications = 5
 }) => {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const {
+    notifications,
+    unreadCount,
+    isPermissionGranted,
+    isPermissionRequested,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+    clearAll,
+    requestPermission
+  } = useNotificationStore();
+
   const [showPanel, setShowPanel] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread' | 'urgent'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [toastNotifications, setToastNotifications] = useState<Notification[]>([]);
+  const [toastNotifications, setToastNotifications] = useState<NotificationData[]>([]);
   
   // Refs for click outside detection
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const toastTimeoutRefs = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
-  // Handle click outside
+  // Handle click outside with proper cleanup
   useEffect(() => {
+    if (!showPanel) return;
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (showPanel &&
-          panelRef.current && 
+      if (panelRef.current &&
           buttonRef.current &&
           !panelRef.current.contains(event.target as Node) &&
           !buttonRef.current.contains(event.target as Node)) {
@@ -78,27 +76,79 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
       }
     };
 
-    if (showPanel) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    document.addEventListener('mousedown', handleClickOutside);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showPanel]);
 
-  // Initialize empty notifications - will be fetched from API
+  // Request notification permission on first load
   useEffect(() => {
-    // TODO: Fetch notifications from API
-    // const fetchNotifications = async () => {
-    //   const response = await apiClient.get('/notifications');
-    //   setNotifications(response.data);
-    // };
-    // fetchNotifications();
+    if (!isPermissionRequested) {
+      // Show permission request after a brief delay
+      const timer = setTimeout(() => {
+        requestPermission();
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isPermissionRequested, requestPermission]);
+
+  // Clean up all toast timeouts on unmount
+  useEffect(() => {
+    return () => {
+      toastTimeoutRefs.current.forEach(timeout => clearTimeout(timeout));
+      toastTimeoutRefs.current.clear();
+    };
   }, []);
 
-  const getNotificationIcon = (type: Notification['type']) => {
+  // Update toast notifications when new notifications arrive
+  useEffect(() => {
+    if (notifications.length === 0) return;
+
+    const latestNotification = notifications[0];
+
+    // Only show toast for new notifications (less than 10 seconds old)
+    const notificationTime = latestNotification.timestamp instanceof Date
+      ? latestNotification.timestamp.getTime()
+      : new Date(latestNotification.timestamp).getTime();
+    const isRecent = new Date().getTime() - notificationTime < 10000;
+
+    if (isRecent && !latestNotification.read) {
+      setToastNotifications(prev => {
+        const exists = prev.find(n => n.id === latestNotification.id);
+        if (exists) return prev;
+
+        // Sanitize the notification before adding to toast
+        const sanitized = sanitizeNotification(latestNotification);
+        const newToasts = [sanitized, ...prev.slice(0, maxNotifications - 1)];
+
+        // Clear existing timeout for this notification if it exists
+        const existingTimeout = toastTimeoutRefs.current.get(latestNotification.id);
+        if (existingTimeout) {
+          clearTimeout(existingTimeout);
+        }
+
+        // Auto-remove toast after 5 seconds with proper cleanup
+        const timeoutId = setTimeout(() => {
+          setToastNotifications(current =>
+            current.filter(n => n.id !== latestNotification.id)
+          );
+          toastTimeoutRefs.current.delete(latestNotification.id);
+        }, 5000);
+
+        toastTimeoutRefs.current.set(latestNotification.id, timeoutId);
+
+        return newToasts;
+      });
+    }
+  }, [notifications, maxNotifications]);
+
+  const getNotificationIcon = useCallback((type: NotificationData['type']) => {
     switch (type) {
+      case 'email':
+        return <Mail className="w-5 h-5" />;
       case 'approval':
         return <Clock className="w-5 h-5" />;
       case 'alert':
@@ -116,10 +166,12 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
       default:
         return <Bell className="w-5 h-5" />;
     }
-  };
+  }, []);
 
-  const getNotificationColor = (type: Notification['type']) => {
+  const getNotificationColor = useCallback((type: NotificationData['type']) => {
     switch (type) {
+      case 'email':
+        return 'text-blue-600 bg-blue-100';
       case 'approval':
         return 'text-[#243d8a] bg-[#243d8a]/10';
       case 'alert':
@@ -137,9 +189,9 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
       default:
         return 'text-gray-600 bg-gray-100';
     }
-  };
+  }, []);
 
-  const getPriorityColor = (priority: Notification['priority']) => {
+  const getPriorityColor = useCallback((priority: NotificationData['priority']) => {
     switch (priority) {
       case 'urgent':
         return 'bg-red-100 text-red-700 border-red-300';
@@ -152,48 +204,41 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
       default:
         return 'bg-gray-100 text-gray-600 border-gray-300';
     }
-  };
+  }, []);
 
-  const markAsRead = (id: string) => {
-    setNotifications(notifications.map(n => 
-      n.id === id ? { ...n, read: true } : n
-    ));
-  };
+  // Functions are now provided by the store
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
-  };
+  const filteredNotifications = useMemo(() => {
+    return notifications
+      .map(n => sanitizeNotification(n)) // Sanitize all notifications
+      .filter(n => {
+        if (filter === 'unread' && n.read) return false;
+        if (filter === 'urgent' && n.priority !== 'urgent') return false;
+        if (categoryFilter !== 'all' && n.category !== categoryFilter) return false;
+        return true;
+      });
+  }, [notifications, filter, categoryFilter]);
 
-  const deleteNotification = (id: string) => {
-    setNotifications(notifications.filter(n => n.id !== id));
-  };
+  const urgentCount = useMemo(
+    () => notifications.filter(n => n.priority === 'urgent' && !n.read).length,
+    [notifications]
+  );
 
-  const clearAll = () => {
-    setNotifications([]);
-  };
-
-  const filteredNotifications = notifications.filter(n => {
-    if (filter === 'unread' && n.read) return false;
-    if (filter === 'urgent' && n.priority !== 'urgent') return false;
-    if (categoryFilter !== 'all' && n.category !== categoryFilter) return false;
-    return true;
-  });
-
-  const unreadCount = notifications.filter(n => !n.read).length;
-  const urgentCount = notifications.filter(n => n.priority === 'urgent' && !n.read).length;
-
-  const formatTimestamp = (date: Date) => {
+  const formatTimestamp = useCallback((date: Date) => {
     // Use the imported formatRelativeTime function for consistent timezone handling
     return formatRelativeTime(date);
-  };
+  }, []);
 
-  // Add notification to toast
-  const showToast = (notification: Notification) => {
-    setToastNotifications(prev => [...prev.slice(-maxNotifications + 1), notification]);
-    setTimeout(() => {
-      setToastNotifications(prev => prev.filter(n => n.id !== notification.id));
-    }, 5000);
-  };
+  // Remove individual toast with cleanup
+  const removeToast = useCallback((notificationId: string) => {
+    setToastNotifications(prev => prev.filter(n => n.id !== notificationId));
+
+    const timeout = toastTimeoutRefs.current.get(notificationId);
+    if (timeout) {
+      clearTimeout(timeout);
+      toastTimeoutRefs.current.delete(notificationId);
+    }
+  }, []);
 
   // Position classes for toast notifications
   const positionClasses = {
@@ -234,7 +279,7 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="absolute right-0 top-full mt-2 w-[420px] max-h-[600px] bg-white rounded-lg shadow-xl border z-50 overflow-hidden"
+            className="absolute right-0 top-full mt-2 w-[320px] sm:w-[420px] max-h-[500px] sm:max-h-[600px] bg-white rounded-lg shadow-xl border z-[9999] overflow-hidden"
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-red-50 to-red-100 border-b border-red-200 p-3">
@@ -376,19 +421,6 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
               )}
             </div>
 
-            {/* Footer */}
-            <div className="p-3 border-t bg-gray-50">
-              <div className="flex items-center justify-between gap-2">
-                <Button variant="ghost" size="sm" className="text-xs px-2 py-1">
-                  <Settings className="w-3 h-3 mr-1" />
-                  Settings
-                </Button>
-                <Button variant="ghost" size="sm" onClick={clearAll} className="text-xs text-red-600 hover:text-red-700 px-2 py-1">
-                  <Trash2 className="w-3 h-3 mr-1" />
-                  Clear All
-                </Button>
-              </div>
-            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -419,9 +451,7 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setToastNotifications(prev => 
-                    prev.filter(n => n.id !== notification.id)
-                  )}
+                  onClick={() => removeToast(notification.id)}
                   className="h-6 w-6 p-0"
                 >
                   <X className="w-3 h-3" />

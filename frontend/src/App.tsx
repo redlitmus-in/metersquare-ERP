@@ -7,6 +7,8 @@ import { validateSupabaseConnection } from '@/utils/environment';
 import { setupCacheValidator } from '@/utils/clearCache';
 import { queryClient } from '@/lib/queryClient';
 import { setupRealtimeSubscriptions } from '@/lib/realtimeSubscriptions';
+import { initializeNotificationService } from '@/store/notificationStore';
+import '@/utils/testNotifications';
 
 // Critical components loaded immediately
 import { LoginPage } from '@/pages/auth/LoginPage';
@@ -146,7 +148,10 @@ function App() {
   useEffect(() => {
     // Setup cache validation for role mismatches
     setupCacheValidator();
-    
+
+    // Initialize notification service
+    initializeNotificationService();
+
     // Quick initialization - don't block on environment validation
     const initialize = async () => {
       try {

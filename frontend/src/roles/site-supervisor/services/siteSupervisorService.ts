@@ -1,4 +1,5 @@
 import { apiClient } from '@/api/config';
+import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
 
 export interface Material {
   material_id: number;
@@ -145,6 +146,22 @@ class SiteSupervisorService {
     try {
       const response = await apiClient.get(`/purchase_email/${purchaseId}`);
       if (response.data.success) {
+        // Get purchase details for notification
+        const purchaseDetails = await this.getPurchaseDetails(purchaseId);
+
+        // Calculate total amount
+        const totalAmount = purchaseDetails.materials?.reduce((sum: number, m: Material) =>
+          sum + (m.quantity * m.cost), 0) || 0;
+
+        // Send notification to procurement about new PR submission
+        await PurchaseNotificationService.notifyPRSubmitted({
+          documentId: String(purchaseId),
+          sender: 'Site Supervisor',
+          project: purchaseDetails.project_id,
+          amount: totalAmount,
+          description: purchaseDetails.purpose
+        });
+
         return response.data;
       }
       throw new Error(response.data.message || 'Failed to send email');

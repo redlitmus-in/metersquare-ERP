@@ -1,4 +1,6 @@
 import { apiClient } from '@/api/config';
+import { notificationService } from '@/services/notificationService';
+import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
 
 export interface Material {
   material_id: number;
@@ -258,6 +260,25 @@ class ProcurementService {
     try {
       const response = await apiClient.get(`/purchase_email/${purchaseId}`);
       if (response.data.success) {
+        // Get purchase details for notification
+        const purchaseDetails = await this.getPurchaseDetails(purchaseId);
+        const purchase = purchaseDetails.purchase || purchaseDetails;
+
+        // Calculate total amount
+        const totalAmount = purchase.materials?.reduce((sum: number, m: Material) =>
+          sum + (m.quantity * m.cost), 0) || 0;
+
+        // Send email notification
+        await notificationService.sendEmailNotification({
+          recipient: 'Project Manager',
+          subject: `Purchase Requisition #${purchaseId} - Approval Required`,
+          documentType: 'Purchase Requisition',
+          documentId: String(purchaseId),
+          amount: totalAmount,
+          project: purchase.project_id,
+          sender: 'Procurement Team'
+        });
+
         return response.data;
       }
       throw new Error(response.data.message || 'Failed to send email');
@@ -272,6 +293,21 @@ class ProcurementService {
     try {
       const response = await apiClient.get(`/purchase_email/${purchaseId}`);
       if (response.data.success) {
+        // Get purchase details for notification
+        const purchaseDetails = await this.getPurchaseDetails(purchaseId);
+        const purchase = purchaseDetails.purchase || purchaseDetails;
+
+        // Calculate total amount
+        const totalAmount = purchase.materials?.reduce((sum: number, m: Material) =>
+          sum + (m.quantity * m.cost), 0) || 0;
+
+        // Send notification using PurchaseNotificationService
+        await PurchaseNotificationService.notifyPRForwardedToProjectManager({
+          documentId: String(purchaseId),
+          project: purchase.project_id,
+          amount: totalAmount
+        });
+
         return response.data;
       }
       throw new Error(response.data.message || 'Failed to approve purchase');
@@ -286,7 +322,7 @@ class ProcurementService {
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       const userName = user.full_name || user.name || 'Procurement Team';
-      
+
       const rejectionData = {
         status: 'rejected',
         sender_latest_status: 'rejected',
@@ -302,6 +338,19 @@ class ProcurementService {
 
       const response = await apiClient.put(`/purchase/${purchaseId}`, rejectionData);
       if (response.data.success) {
+        // Get purchase details for notification
+        const purchaseDetails = await this.getPurchaseDetails(purchaseId);
+        const purchase = purchaseDetails.purchase || purchaseDetails;
+
+        // Send rejection notification using PurchaseNotificationService
+        await PurchaseNotificationService.notifyPRRejected({
+          documentId: String(purchaseId),
+          rejectedBy: 'Procurement Team',
+          reason: reason || 'Rejected by Procurement',
+          project: purchase.project_id,
+          backToRole: 'site supervisor'
+        });
+
         return response.data;
       }
       throw new Error(response.data.message || 'Failed to reject purchase');
