@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate, useLocation } from 'react-router-dom'; // Add router imports
 import {
   Bell,
   Check,
@@ -33,7 +34,6 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-// ScrollArea component not available - using div with overflow
 import { Separator } from '@/components/ui/separator';
 import { formatRelativeTime } from '@/utils/dateFormatter';
 import { useNotificationStore } from '@/store/notificationStore';
@@ -41,17 +41,20 @@ import { NotificationData } from '@/services/notificationService';
 import { sanitizeNotification, sanitizeText } from '@/utils/sanitizer';
 import { cn } from '@/lib/utils';
 
-// Using NotificationData interface from the service
-
 interface NotificationSystemProps {
   position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
   maxNotifications?: number;
+  onNavigate?: (path: string) => void; // Optional custom navigation handler
 }
 
 const NotificationSystem: React.FC<NotificationSystemProps> = ({
   position = 'top-right',
-  maxNotifications = 5
+  maxNotifications = 5,
+  onNavigate
 }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
   const {
     notifications,
     unreadCount,
@@ -99,14 +102,12 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
   // Request notification permission on first load
   useEffect(() => {
     if (!isPermissionRequested) {
-      // Show permission request after a brief delay
       const timer = setTimeout(() => {
         requestPermission();
       }, 2000);
 
       return () => clearTimeout(timer);
     }
-    // Return undefined for the else case
     return undefined;
   }, [isPermissionRequested, requestPermission]);
 
@@ -135,17 +136,14 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
         const exists = prev.find(n => n.id === latestNotification.id);
         if (exists) return prev;
 
-        // Sanitize the notification before adding to toast
         const sanitized = sanitizeNotification(latestNotification);
         const newToasts = [sanitized, ...prev.slice(0, maxNotifications - 1)];
 
-        // Clear existing timeout for this notification if it exists
         const existingTimeout = toastTimeoutRefs.current.get(latestNotification.id);
         if (existingTimeout) {
           clearTimeout(existingTimeout);
         }
 
-        // Auto-remove toast after 5 seconds with proper cleanup
         const timeoutId = setTimeout(() => {
           setToastNotifications(current =>
             current.filter(n => n.id !== latestNotification.id)
@@ -235,15 +233,12 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
     return notifications
       .map(n => sanitizeNotification(n))
       .filter(n => {
-        // Tab filtering
         if (activeTab === 'unread' && n.read) return false;
         if (activeTab === 'pr' && n.category !== 'approval') return false;
         if (activeTab === 'system' && n.category !== 'system') return false;
 
-        // Priority filtering
         if (selectedPriority !== 'all' && n.priority !== selectedPriority) return false;
 
-        // Search filtering
         if (searchQuery) {
           const query = searchQuery.toLowerCase();
           return (
@@ -258,7 +253,6 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
   }, [notifications, activeTab, selectedPriority, searchQuery]);
 
   const formatTimestamp = useCallback((date: Date) => {
-    // Use the imported formatRelativeTime function for consistent timezone handling
     return formatRelativeTime(date);
   }, []);
 
@@ -273,13 +267,59 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
     }
   }, []);
 
-  // Handle PR notification action
+  // FIXED: Handle PR notification action with proper navigation
   const handleNotificationAction = useCallback((notification: NotificationData) => {
     if (notification.actionRequired && notification.metadata?.link) {
-      window.location.href = notification.metadata.link;
+      try {
+        // Use custom navigation handler if provided
+        if (onNavigate) {
+          onNavigate(notification.metadata.link);
+        } 
+        // Check if it's an internal route (starts with /)
+        else if (notification.metadata.link.startsWith('/')) {
+          // Use React Router navigation for internal routes
+          navigate(notification.metadata.link, { 
+            replace: false,
+            state: { from: location.pathname } // Pass current location for back navigation
+          });
+        } 
+        // Handle external links
+        else if (notification.metadata.link.startsWith('http')) {
+          window.open(notification.metadata.link, '_blank', 'noopener,noreferrer');
+        }
+        // Handle relative paths
+        else {
+          navigate(`/${notification.metadata.link}`, { 
+            replace: false,
+            state: { from: location.pathname }
+          });
+        }
+      } catch (error) {
+        console.error('Navigation error:', error);
+        // Fallback to window.location for problematic cases
+        window.location.href = notification.metadata.link;
+      }
     }
     markAsRead(notification.id);
-  }, [markAsRead]);
+  }, [markAsRead, navigate, location.pathname, onNavigate]);
+
+  // ADDED: Helper function to safely navigate
+  const safeNavigate = useCallback((path: string) => {
+    try {
+      if (onNavigate) {
+        onNavigate(path);
+      } else {
+        navigate(path, { 
+          replace: false,
+          state: { from: location.pathname }
+        });
+      }
+    } catch (error) {
+      console.error('Safe navigation error:', error);
+      // Fallback
+      window.location.href = path;
+    }
+  }, [navigate, location.pathname, onNavigate]);
 
   // Position classes for toast notifications
   const positionClasses = {
@@ -441,107 +481,111 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
               </TabsList>
 
               <TabsContent value={activeTab} className="mt-0">
-            {/* Notifications List */}
-            <div className="h-[400px] overflow-y-auto">
-              {filteredNotifications.length === 0 ? (
-                <div className="p-8 text-center">
-                  <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No notifications</p>
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {filteredNotifications.map((notification) => (
-                    <motion.div
-                      key={notification.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className={`p-3 hover:bg-gray-50 transition-colors ${
-                        !notification.read ? 'bg-[#243d8a]/5/30' : ''
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`p-1.5 rounded-md ${getNotificationColor(notification.type)}`}>
-                          {getNotificationIcon(notification.type)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium text-sm text-gray-900 mb-1">
-                            {notification.title}
-                          </h4>
-                          <p className="text-xs text-gray-600 mb-2">
-                            {notification.message}
-                          </p>
-                          
-                          {/* Metadata */}
-                          {notification.metadata && (
-                            <div className="flex flex-wrap gap-1.5 mb-2">
-                              {notification.metadata.project && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
-                                  <FileText className="w-3 h-3 mr-1" />
-                                  {notification.metadata.project}
-                                </Badge>
-                              )}
-                              {notification.metadata.amount && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
-                                  <Banknote className="w-3 h-3 mr-1" />
-                                  AED {notification.metadata.amount.toLocaleString()}
-                                </Badge>
-                              )}
+                {/* Notifications List */}
+                <div className="h-[400px] overflow-y-auto">
+                  {filteredNotifications.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500">No notifications</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {filteredNotifications.map((notification) => (
+                        <motion.div
+                          key={notification.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className={`p-3 hover:bg-gray-50 transition-colors ${
+                            !notification.read ? 'bg-[#243d8a]/5/30' : ''
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`p-1.5 rounded-md ${getNotificationColor(notification.type)}`}>
+                              {getNotificationIcon(notification.type)}
                             </div>
-                          )}
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-medium text-sm text-gray-900 mb-1">
+                                {notification.title}
+                              </h4>
+                              <p className="text-xs text-gray-600 mb-2">
+                                {notification.message}
+                              </p>
+                              
+                              {/* Metadata */}
+                              {notification.metadata && (
+                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                  {notification.metadata.project && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
+                                      <FileText className="w-3 h-3 mr-1" />
+                                      {notification.metadata.project}
+                                    </Badge>
+                                  )}
+                                  {notification.metadata.amount && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
+                                      <Banknote className="w-3 h-3 mr-1" />
+                                      AED {notification.metadata.amount.toLocaleString()}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
 
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="flex items-center gap-2 flex-1">
-                              <span className="text-xs text-gray-400">
-                                {formatTimestamp(notification.timestamp)}
-                              </span>
-                              {notification.metadata?.sender && (
-                                <span className="text-xs text-gray-500">
-                                  <Users className="w-3 h-3 inline mr-1" />
-                                  {notification.metadata.sender}
-                                </span>
-                              )}
-                            </div>
-                            
-                            {/* Actions */}
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <Badge className={`text-[10px] px-1.5 py-0.5 ${getPriorityColor(notification.priority)} border`}>
-                                {notification.priority}
-                              </Badge>
-                              {notification.actionRequired && (
-                                <Button size="sm" className="h-6 px-2 text-[11px]">
-                                  {notification.actionLabel || 'Action'}
-                                  <ChevronRight className="w-3 h-3 ml-0.5" />
-                                </Button>
-                              )}
-                              {!notification.read && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => markAsRead(notification.id)}
-                                  className="h-6 w-6 p-0"
-                                  title="Mark as read"
-                                >
-                                  <Check className="w-3 h-3" />
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deleteNotification(notification.id)}
-                                className="h-6 w-6 p-0 text-gray-400 hover:text-red-600"
-                                title="Delete"
-                              >
-                                <X className="w-3 h-3" />
-                              </Button>
+                              <div className="flex items-center gap-2 mt-2">
+                                <div className="flex items-center gap-2 flex-1">
+                                  <span className="text-xs text-gray-400">
+                                    {formatTimestamp(notification.timestamp)}
+                                  </span>
+                                  {notification.metadata?.sender && (
+                                    <span className="text-xs text-gray-500">
+                                      <Users className="w-3 h-3 inline mr-1" />
+                                      {notification.metadata.sender}
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                {/* Actions */}
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <Badge className={`text-[10px] px-1.5 py-0.5 ${getPriorityColor(notification.priority)} border`}>
+                                    {notification.priority}
+                                  </Badge>
+                                  {notification.actionRequired && (
+                                    <Button 
+                                      size="sm" 
+                                      className="h-6 px-2 text-[11px]"
+                                      onClick={() => handleNotificationAction(notification)}
+                                    >
+                                      {notification.actionLabel || 'Action'}
+                                      <ChevronRight className="w-3 h-3 ml-0.5" />
+                                    </Button>
+                                  )}
+                                  {!notification.read && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => markAsRead(notification.id)}
+                                      className="h-6 w-6 p-0"
+                                      title="Mark as read"
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => deleteNotification(notification.id)}
+                                    className="h-6 w-6 p-0 text-gray-400 hover:text-red-600"
+                                    title="Delete"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
               </TabsContent>
             </Tabs>
           </motion.div>
@@ -578,7 +622,7 @@ const NotificationSystem: React.FC<NotificationSystemProps> = ({
                 stiffness: 300
               }}
               style={{
-                zIndex: 10000 - index // Ensure proper stacking without overlapping
+                zIndex: 10000 - index
               }}
               className={cn(
                 "bg-white rounded-lg shadow-2xl border p-4 w-80 pointer-events-auto",
