@@ -14,7 +14,9 @@ import {
   Eye,
   Send,
   Package,
-  ClipboardCheck
+  ClipboardCheck,
+  Grid3X3,
+  List
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,12 +66,13 @@ interface VendorSOWReview {
 
 const ProcurementVendorReview: React.FC = () => {
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState('new');
+  const [activeTab, setActiveTab] = useState('pending');
   const [selectedSOW, setSelectedSOW] = useState<VendorSOWReview | null>(null);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [isVendorSelectionOpen, setIsVendorSelectionOpen] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
   const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const [sowRequests, setSowRequests] = useState<VendorSOWReview[]>([
     {
@@ -181,6 +184,27 @@ const ProcurementVendorReview: React.FC = () => {
               Review SOWs, select vendors, and manage quotations
             </p>
           </div>
+          <div className="flex items-center gap-3">
+            {/* View Mode Toggle */}
+            <div className="flex items-center border rounded-lg overflow-hidden">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+                className="rounded-none border-0"
+              >
+                <Grid3X3 className="w-4 h-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="rounded-none border-0"
+              >
+                <List className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       </motion.div>
 
@@ -246,14 +270,27 @@ const ProcurementVendorReview: React.FC = () => {
       <Card>
         <CardContent className="p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="new">New SOW Requests</TabsTrigger>
-              <TabsTrigger value="quotations">Quotations</TabsTrigger>
-              <TabsTrigger value="review">QTY/SCOPE Review</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="pending" className="gap-2">
+                <Clock className="h-4 w-4" />
+                Pending ({sowRequests.filter(s => s.status === 'pending_vendor_selection').length})
+              </TabsTrigger>
+              <TabsTrigger value="approved" className="gap-2">
+                <CheckCircle className="h-4 w-4" />
+                Approved ({sowRequests.filter(s => s.status === 'quotation_received').length})
+              </TabsTrigger>
+              <TabsTrigger value="rejected" className="gap-2">
+                <XCircle className="h-4 w-4" />
+                Rejected (0)
+              </TabsTrigger>
+              <TabsTrigger value="completed" className="gap-2">
+                <CheckCircle className="h-4 w-4" />
+                Completed ({sowRequests.filter(s => s.status === 'qty_scope_review').length})
+              </TabsTrigger>
             </TabsList>
 
-            {/* New SOW Requests */}
-            <TabsContent value="new" className="space-y-4 mt-6">
+            {/* Pending SOW Requests */}
+            <TabsContent value="pending" className="space-y-4 mt-6">
               {sowRequests.filter(s => s.status === 'pending_vendor_selection').map((sow) => (
                 <Card key={sow.id} className="border-blue-200">
                   <CardContent className="p-4">
@@ -308,8 +345,8 @@ const ProcurementVendorReview: React.FC = () => {
               ))}
             </TabsContent>
 
-            {/* Quotations Tab */}
-            <TabsContent value="quotations" className="space-y-4 mt-6">
+            {/* Approved Tab */}
+            <TabsContent value="approved" className="space-y-4 mt-6">
               {sowRequests.filter(s => s.status === 'quotation_received').map((sow) => (
                 <Card key={sow.id}>
                   <CardContent className="p-4">
@@ -359,8 +396,15 @@ const ProcurementVendorReview: React.FC = () => {
               ))}
             </TabsContent>
 
-            {/* QTY/SCOPE Review Tab */}
-            <TabsContent value="review" className="space-y-4 mt-6">
+            {/* Rejected Tab */}
+            <TabsContent value="rejected" className="space-y-4 mt-6">
+              <div className="text-center py-8 text-gray-500">
+                No rejected vendor requests found
+              </div>
+            </TabsContent>
+
+            {/* Completed Tab */}
+            <TabsContent value="completed" className="space-y-4 mt-6">
               <Alert className="border-amber-200 bg-amber-50">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                 <AlertDescription>

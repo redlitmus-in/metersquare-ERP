@@ -14,7 +14,10 @@ import {
   ClipboardCheck,
   Flag,
   Gavel,
-  ShieldCheck
+  ShieldCheck,
+  Grid3X3,
+  List,
+  Clock
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -68,6 +71,7 @@ const TDVendorApproval: React.FC = () => {
   const [selectedApproval, setSelectedApproval] = useState<VendorApproval | null>(null);
   const [isFinalApprovalOpen, setIsFinalApprovalOpen] = useState(false);
   const [approvalNotes, setApprovalNotes] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [complianceChecks, setComplianceChecks] = useState({
     technicalCompliance: false,
     qualityStandards: false,
@@ -220,6 +224,27 @@ const TDVendorApproval: React.FC = () => {
               Final technical and compliance approval for vendors
             </p>
           </div>
+          <div className="flex items-center gap-3">
+            {/* View Mode Toggle */}
+            <div className="flex items-center border rounded-lg overflow-hidden">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+                className="rounded-none border-0"
+              >
+                <Grid3X3 className="w-4 h-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="rounded-none border-0"
+              >
+                <List className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       </motion.div>
 
@@ -285,10 +310,23 @@ const TDVendorApproval: React.FC = () => {
       <Card>
         <CardContent className="p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="pending">Pending Approval</TabsTrigger>
-              <TabsTrigger value="approved">Approved</TabsTrigger>
-              <TabsTrigger value="rejected">Rejected</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="pending" className="gap-2">
+                <Clock className="h-4 w-4" />
+                Pending ({approvals.filter(a => a.status === 'pending_approval').length})
+              </TabsTrigger>
+              <TabsTrigger value="approved" className="gap-2">
+                <CheckCircle className="h-4 w-4" />
+                Approved ({approvals.filter(a => a.status === 'approved').length})
+              </TabsTrigger>
+              <TabsTrigger value="rejected" className="gap-2">
+                <XCircle className="h-4 w-4" />
+                Rejected ({approvals.filter(a => a.status === 'rejected').length})
+              </TabsTrigger>
+              <TabsTrigger value="completed" className="gap-2">
+                <CheckCircle className="h-4 w-4" />
+                Completed (0)
+              </TabsTrigger>
             </TabsList>
 
             {/* Pending Approval */}
@@ -444,6 +482,13 @@ const TDVendorApproval: React.FC = () => {
                   </CardContent>
                 </Card>
               ))}
+            </TabsContent>
+
+            {/* Completed Tab */}
+            <TabsContent value="completed" className="space-y-4 mt-6">
+              <div className="text-center py-8 text-gray-500">
+                No completed vendor approvals found
+              </div>
             </TabsContent>
           </Tabs>
         </CardContent>

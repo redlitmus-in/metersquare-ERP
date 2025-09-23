@@ -87,6 +87,221 @@ interface Quotation {
   rejectionReason?: string;
 }
 
+interface QuotationCardProps {
+  quotation: Quotation;
+  viewMode: 'grid' | 'list';
+}
+
+const QuotationCard: React.FC<QuotationCardProps> = ({ quotation, viewMode }) => {
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
+
+  const getStatusBadge = (status: string) => {
+    const variants: Record<string, any> = {
+      pending: { variant: 'secondary', icon: <Clock className="w-3 h-3" />, className: 'bg-amber-100 text-amber-800' },
+      under_review: { variant: 'outline', icon: <Eye className="w-3 h-3" />, className: 'bg-blue-100 text-blue-800' },
+      approved: { variant: 'default', icon: <CheckCircle className="w-3 h-3" />, className: 'bg-green-100 text-green-800' },
+      rejected: { variant: 'destructive', icon: <XCircle className="w-3 h-3" />, className: '' },
+      negotiation: { variant: 'outline', icon: <TrendingUp className="w-3 h-3" />, className: 'bg-blue-100 text-blue-800' }
+    };
+    return variants[status] || variants.pending;
+  };
+
+  const getApprovalProgress = (flags: Quotation['approvalFlags']) => {
+    const total = Object.keys(flags).length;
+    const approved = Object.values(flags).filter(Boolean).length;
+    return (approved / total) * 100;
+  };
+
+  if (viewMode === 'list') {
+    return (
+      <div className="bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4 flex-1">
+            <div className="p-2 rounded-lg bg-blue-100">
+              <FileText className="w-5 h-5 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-1">
+                <h3 className="text-base font-semibold text-gray-900">
+                  {quotation.quotationNumber}
+                </h3>
+                <Badge {...getStatusBadge(quotation.status)} className="gap-1">
+                  {getStatusBadge(quotation.status).icon}
+                  {quotation.status.replace('_', ' ')}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-6 text-sm text-gray-600">
+                <span className="flex items-center gap-1">
+                  <Building2 className="w-3 h-3" />
+                  {quotation.vendorName}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Package className="w-3 h-3" />
+                  {quotation.projectName}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  {new Date(quotation.submissionDate).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-sm text-gray-600">Amount</p>
+              <p className="text-lg font-bold text-blue-600">
+                AED {quotation.totalAmount.toLocaleString()}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm">
+                <Eye className="w-4 h-4" />
+              </Button>
+              {(quotation.status === 'pending' || quotation.status === 'under_review') && (
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                  <FileCheck className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+    >
+      <Card className="hover:shadow-lg transition-shadow">
+        <CardContent className="p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-start gap-4">
+                <div className="p-3 rounded-lg bg-blue-100">
+                  <FileText className="w-6 h-6 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {quotation.quotationNumber}
+                    </h3>
+                    <Badge {...getStatusBadge(quotation.status)} className="gap-1">
+                      {getStatusBadge(quotation.status).icon}
+                      {quotation.status.replace('_', ' ')}
+                    </Badge>
+                    <Badge variant="outline">
+                      {quotation.category}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      <span>{quotation.vendorName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Package className="w-4 h-4" />
+                      <span>{quotation.projectName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4" />
+                      <span>Submitted: {new Date(quotation.submissionDate).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>Valid until: {new Date(quotation.validUntil).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  {quotation.rejectionReason && (
+                    <div className="mt-2 p-2 bg-red-50 rounded-lg">
+                      <p className="text-xs text-red-600">
+                        <strong>Rejection Reason:</strong> {quotation.rejectionReason}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-3">
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Total Amount</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  AED {quotation.totalAmount.toLocaleString()}
+                </p>
+              </div>
+              {quotation.status === 'under_review' && (
+                <div className="w-full">
+                  <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                    <span>Approval Progress</span>
+                    <span>{getApprovalProgress(quotation.approvalFlags).toFixed(0)}%</span>
+                  </div>
+                  <Progress value={getApprovalProgress(quotation.approvalFlags)} className="w-32" />
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsViewDialogOpen(true)}
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  View Details
+                </Button>
+                {(quotation.status === 'pending' || quotation.status === 'under_review') && (
+                  <Button
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700"
+                    onClick={() => setIsApprovalDialogOpen(true)}
+                  >
+                    <FileCheck className="w-4 h-4 mr-2" />
+                    Review
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Approval Flags */}
+          <div className="mt-4 pt-4 border-t">
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-600">Approval Flags:</span>
+              <div className="flex gap-2">
+                <Badge
+                  variant={quotation.approvalFlags.qtyScopeFlag ? 'default' : 'secondary'}
+                  className={quotation.approvalFlags.qtyScopeFlag ? 'bg-green-100 text-green-800' : ''}
+                >
+                  {quotation.approvalFlags.qtyScopeFlag ? '✓' : '○'} QTY/SCOPE
+                </Badge>
+                <Badge
+                  variant={quotation.approvalFlags.pmFlag ? 'default' : 'secondary'}
+                  className={quotation.approvalFlags.pmFlag ? 'bg-green-100 text-green-800' : ''}
+                >
+                  {quotation.approvalFlags.pmFlag ? '✓' : '○'} PM FLAG
+                </Badge>
+                <Badge
+                  variant={quotation.approvalFlags.costFlag ? 'default' : 'secondary'}
+                  className={quotation.approvalFlags.costFlag ? 'bg-green-100 text-green-800' : ''}
+                >
+                  {quotation.approvalFlags.costFlag ? '✓' : '○'} COST FLAG
+                </Badge>
+                <Badge
+                  variant={quotation.approvalFlags.complianceFlag ? 'default' : 'secondary'}
+                  className={quotation.approvalFlags.complianceFlag ? 'bg-green-100 text-green-800' : ''}
+                >
+                  {quotation.approvalFlags.complianceFlag ? '✓' : '○'} COMPLIANCE
+                </Badge>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+};
+
 const VendorQuotationsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -107,7 +322,7 @@ const VendorQuotationsPage: React.FC = () => {
 
   // Tab and view mode state
   const [activeTab, setActiveTab] = useState('pending');
-  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Sample quotation data
   useEffect(() => {
@@ -243,8 +458,6 @@ const VendorQuotationsPage: React.FC = () => {
     return variants[status] || variants.pending;
   };
 
-  // This will be replaced by the tab-based filtering below
-
   const handleApprove = () => {
     if (selectedQuotation) {
       toast.success(`Quotation ${selectedQuotation.quotationNumber} approved successfully`);
@@ -269,38 +482,6 @@ const VendorQuotationsPage: React.FC = () => {
     return (approved / total) * 100;
   };
 
-  // Filter quotations by tab, search, and other filters
-  const getFilteredQuotations = () => {
-    return quotations.filter(quotation => {
-      // Tab filtering
-      const matchesTab = activeTab === 'all' || quotation.status === activeTab;
-
-      // Search filtering
-      const matchesSearch = quotation.quotationNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           quotation.vendorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           quotation.projectName.toLowerCase().includes(searchQuery.toLowerCase());
-
-      // Status filtering (for the dropdown)
-      const matchesStatus = filterStatus === 'all' || quotation.status === filterStatus;
-
-      // Category filtering
-      const matchesCategory = filterCategory === 'all' || quotation.category === filterCategory;
-
-      return matchesTab && matchesSearch && matchesStatus && matchesCategory;
-    }).sort((a, b) => {
-      // Apply sorting
-      switch (sortBy) {
-        case 'date':
-          return new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime();
-        case 'amount':
-          return b.totalAmount - a.totalAmount;
-        case 'vendor':
-          return a.vendorName.localeCompare(b.vendorName);
-        default:
-          return 0;
-      }
-    });
-  };
 
   // Get tab counts
   const getTabCounts = () => {
@@ -315,7 +496,6 @@ const VendorQuotationsPage: React.FC = () => {
   };
 
   const tabCounts = getTabCounts();
-  const filteredQuotations = getFilteredQuotations();
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
@@ -339,9 +519,9 @@ const VendorQuotationsPage: React.FC = () => {
             {/* View Mode Toggle */}
             <div className="flex items-center border rounded-lg overflow-hidden">
               <Button
-                variant={viewMode === 'card' ? 'default' : 'ghost'}
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
                 size="sm"
-                onClick={() => setViewMode('card')}
+                onClick={() => setViewMode('grid')}
                 className="rounded-none border-0"
               >
                 <Grid3X3 className="w-4 h-4" />
@@ -494,146 +674,83 @@ const VendorQuotationsPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Quotations List */}
-      <div className="grid grid-cols-1 gap-4">
-        {filteredQuotations.map((quotation) => (
-          <motion.div
-            key={quotation.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <Card className="hover:shadow-lg transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 rounded-lg bg-blue-100">
-                        <FileText className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            {quotation.quotationNumber}
-                          </h3>
-                          <Badge {...getStatusBadge(quotation.status)} className="gap-1">
-                            {getStatusBadge(quotation.status).icon}
-                            {quotation.status.replace('_', ' ')}
-                          </Badge>
-                          <Badge variant="outline">
-                            {quotation.category}
-                          </Badge>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
-                          <div className="flex items-center gap-2">
-                            <Building2 className="w-4 h-4" />
-                            <span>{quotation.vendorName}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Package className="w-4 h-4" />
-                            <span>{quotation.projectName}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4" />
-                            <span>Submitted: {new Date(quotation.submissionDate).toLocaleDateString()}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4" />
-                            <span>Valid until: {new Date(quotation.validUntil).toLocaleDateString()}</span>
-                          </div>
-                        </div>
-                        {quotation.rejectionReason && (
-                          <div className="mt-2 p-2 bg-red-50 rounded-lg">
-                            <p className="text-xs text-red-600">
-                              <strong>Rejection Reason:</strong> {quotation.rejectionReason}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-3">
-                    <div className="text-right">
-                      <p className="text-sm text-gray-600">Total Amount</p>
-                      <p className="text-2xl font-bold text-blue-600">
-                        AED {quotation.totalAmount.toLocaleString()}
-                      </p>
-                    </div>
-                    {quotation.status === 'under_review' && (
-                      <div className="w-full">
-                        <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-                          <span>Approval Progress</span>
-                          <span>{getApprovalProgress(quotation.approvalFlags).toFixed(0)}%</span>
-                        </div>
-                        <Progress value={getApprovalProgress(quotation.approvalFlags)} className="w-32" />
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedQuotation(quotation);
-                          setIsViewDialogOpen(true);
-                        }}
-                      >
-                        <Eye className="w-4 h-4 mr-2" />
-                        View Details
-                      </Button>
-                      {(quotation.status === 'pending' || quotation.status === 'under_review') && (
-                        <Button
-                          size="sm"
-                          className="bg-blue-600 hover:bg-blue-700"
-                          onClick={() => {
-                            setSelectedQuotation(quotation);
-                            setIsApprovalDialogOpen(true);
-                          }}
-                        >
-                          <FileCheck className="w-4 h-4 mr-2" />
-                          Review
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
+      {/* Quotations with Tabs */}
+      <Card>
+        <CardContent className="p-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="pending" className="gap-2">
+                <Clock className="h-4 w-4" />
+                Pending ({tabCounts.pending})
+              </TabsTrigger>
+              <TabsTrigger value="approved" className="gap-2">
+                <CheckCircle className="h-4 w-4" />
+                Approved ({tabCounts.approved})
+              </TabsTrigger>
+              <TabsTrigger value="rejected" className="gap-2">
+                <XCircle className="h-4 w-4" />
+                Rejected ({tabCounts.rejected})
+              </TabsTrigger>
+              <TabsTrigger value="under_review" className="gap-2">
+                <Eye className="h-4 w-4" />
+                Under Review ({tabCounts.under_review})
+              </TabsTrigger>
+            </TabsList>
 
-                {/* Approval Flags */}
-                <div className="mt-4 pt-4 border-t">
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm text-gray-600">Approval Flags:</span>
-                    <div className="flex gap-2">
-                      <Badge
-                        variant={quotation.approvalFlags.qtyScopeFlag ? 'default' : 'secondary'}
-                        className={quotation.approvalFlags.qtyScopeFlag ? 'bg-green-100 text-green-800' : ''}
-                      >
-                        {quotation.approvalFlags.qtyScopeFlag ? '✓' : '○'} QTY/SCOPE
-                      </Badge>
-                      <Badge
-                        variant={quotation.approvalFlags.pmFlag ? 'default' : 'secondary'}
-                        className={quotation.approvalFlags.pmFlag ? 'bg-green-100 text-green-800' : ''}
-                      >
-                        {quotation.approvalFlags.pmFlag ? '✓' : '○'} PM FLAG
-                      </Badge>
-                      <Badge
-                        variant={quotation.approvalFlags.costFlag ? 'default' : 'secondary'}
-                        className={quotation.approvalFlags.costFlag ? 'bg-green-100 text-green-800' : ''}
-                      >
-                        {quotation.approvalFlags.costFlag ? '✓' : '○'} COST FLAG
-                      </Badge>
-                      <Badge
-                        variant={quotation.approvalFlags.complianceFlag ? 'default' : 'secondary'}
-                        className={quotation.approvalFlags.complianceFlag ? 'bg-green-100 text-green-800' : ''}
-                      >
-                        {quotation.approvalFlags.complianceFlag ? '✓' : '○'} COMPLIANCE
-                      </Badge>
-                    </div>
+            <TabsContent value="pending" className="mt-6">
+              <div className={viewMode === 'grid' ? 'grid grid-cols-1 gap-4' : 'space-y-3'}>
+                {quotations.filter(q => q.status === 'pending').map((quotation) => (
+                  <QuotationCard key={quotation.id} quotation={quotation} viewMode={viewMode} />
+                ))}
+                {quotations.filter(q => q.status === 'pending').length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    No pending quotations found
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="approved" className="mt-6">
+              <div className={viewMode === 'grid' ? 'grid grid-cols-1 gap-4' : 'space-y-3'}>
+                {quotations.filter(q => q.status === 'approved').map((quotation) => (
+                  <QuotationCard key={quotation.id} quotation={quotation} viewMode={viewMode} />
+                ))}
+                {quotations.filter(q => q.status === 'approved').length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    No approved quotations found
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="rejected" className="mt-6">
+              <div className={viewMode === 'grid' ? 'grid grid-cols-1 gap-4' : 'space-y-3'}>
+                {quotations.filter(q => q.status === 'rejected').map((quotation) => (
+                  <QuotationCard key={quotation.id} quotation={quotation} viewMode={viewMode} />
+                ))}
+                {quotations.filter(q => q.status === 'rejected').length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    No rejected quotations found
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="under_review" className="mt-6">
+              <div className={viewMode === 'grid' ? 'grid grid-cols-1 gap-4' : 'space-y-3'}>
+                {quotations.filter(q => q.status === 'under_review').map((quotation) => (
+                  <QuotationCard key={quotation.id} quotation={quotation} viewMode={viewMode} />
+                ))}
+                {quotations.filter(q => q.status === 'under_review').length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    No quotations under review found
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
 
       {/* View Details Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>

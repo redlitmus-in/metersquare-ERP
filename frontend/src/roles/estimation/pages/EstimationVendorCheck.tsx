@@ -14,7 +14,10 @@ import {
   History,
   Calculator,
   Database,
-  Shield
+  Shield,
+  Grid3X3,
+  List,
+  Clock
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,6 +64,7 @@ const EstimationVendorCheck: React.FC = () => {
   const [selectedVerification, setSelectedVerification] = useState<VendorVerification | null>(null);
   const [isVerificationDialogOpen, setIsVerificationDialogOpen] = useState(false);
   const [verificationNotes, setVerificationNotes] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const [verifications, setVerifications] = useState<VendorVerification[]>([
     {
@@ -185,6 +189,27 @@ const EstimationVendorCheck: React.FC = () => {
               Verify vendor list compliance and cost estimates
             </p>
           </div>
+          <div className="flex items-center gap-3">
+            {/* View Mode Toggle */}
+            <div className="flex items-center border rounded-lg overflow-hidden">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+                className="rounded-none border-0"
+              >
+                <Grid3X3 className="w-4 h-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="rounded-none border-0"
+              >
+                <List className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       </motion.div>
 
@@ -250,10 +275,23 @@ const EstimationVendorCheck: React.FC = () => {
       <Card>
         <CardContent className="p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="pending">Pending Verification</TabsTrigger>
-              <TabsTrigger value="verified">Verified</TabsTrigger>
-              <TabsTrigger value="vendor-list">Vendor Database</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="pending" className="gap-2">
+                <Clock className="h-4 w-4" />
+                Pending ({verifications.filter(v => v.status === 'pending_verification').length})
+              </TabsTrigger>
+              <TabsTrigger value="approved" className="gap-2">
+                <CheckCircle className="h-4 w-4" />
+                Approved ({verifications.filter(v => v.status === 'verified').length})
+              </TabsTrigger>
+              <TabsTrigger value="rejected" className="gap-2">
+                <XCircle className="h-4 w-4" />
+                Rejected ({verifications.filter(v => v.status === 'rejected').length})
+              </TabsTrigger>
+              <TabsTrigger value="completed" className="gap-2">
+                <CheckCircle className="h-4 w-4" />
+                Completed (0)
+              </TabsTrigger>
             </TabsList>
 
             {/* Pending Verification */}
@@ -370,8 +408,8 @@ const EstimationVendorCheck: React.FC = () => {
               ))}
             </TabsContent>
 
-            {/* Verified Tab */}
-            <TabsContent value="verified" className="space-y-4 mt-6">
+            {/* Approved Tab */}
+            <TabsContent value="approved" className="space-y-4 mt-6">
               {verifications.filter(v => v.status === 'verified').map((verification) => (
                 <Card key={verification.id} className="border-green-200">
                   <CardContent className="p-4">
@@ -403,8 +441,15 @@ const EstimationVendorCheck: React.FC = () => {
               ))}
             </TabsContent>
 
-            {/* Vendor Database Tab */}
-            <TabsContent value="vendor-list" className="mt-6">
+            {/* Rejected Tab */}
+            <TabsContent value="rejected" className="space-y-4 mt-6">
+              <div className="text-center py-8 text-gray-500">
+                No rejected vendor verifications found
+              </div>
+            </TabsContent>
+
+            {/* Completed Tab */}
+            <TabsContent value="completed" className="mt-6">
               <Alert className="mb-4">
                 <Database className="h-4 w-4" />
                 <AlertDescription>

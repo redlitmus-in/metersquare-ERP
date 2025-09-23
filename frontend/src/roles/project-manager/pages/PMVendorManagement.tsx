@@ -16,7 +16,9 @@ import {
   Package,
   DollarSign,
   Calendar,
-  XCircle
+  XCircle,
+  Grid3X3,
+  List
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -59,7 +61,7 @@ const PMVendorManagement: React.FC = () => {
   const userName = (user as any)?.full_name || (user as any)?.name || '';
   const buildPath = (path: string) => buildRolePath(user?.role_id || '', path);
 
-  const [activeTab, setActiveTab] = useState('initiate');
+  const [activeTab, setActiveTab] = useState('pending');
   const [sows, setSows] = useState<VendorSOW[]>([]);
   const [stats, setStats] = useState({
     totalSOWs: 8,
@@ -74,6 +76,9 @@ const PMVendorManagement: React.FC = () => {
   const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
   const [approvalNotes, setApprovalNotes] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // View mode state
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Sample SOW data
   useEffect(() => {
@@ -238,6 +243,25 @@ const PMVendorManagement: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {/* View Mode Toggle */}
+            <div className="flex items-center border rounded-lg overflow-hidden">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+                className="rounded-none border-0"
+              >
+                <Grid3X3 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="rounded-none border-0"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
             <Button
               onClick={() => navigate(buildPath('/vendors/scope-of-work'))}
               className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
@@ -322,14 +346,27 @@ const PMVendorManagement: React.FC = () => {
       <Card>
         <CardContent className="p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="initiate">Initiate SOW</TabsTrigger>
-              <TabsTrigger value="pending">Pending Approval</TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="pending">
+                <Clock className="h-4 w-4 mr-2" />
+                Pending ({sows.filter(s => s.status === 'qty_scope_review').length})
+              </TabsTrigger>
+              <TabsTrigger value="approved">
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Approved ({sows.filter(s => s.status === 'pm_approved' || s.status === 'approved').length})
+              </TabsTrigger>
+              <TabsTrigger value="rejected">
+                <XCircle className="h-4 w-4 mr-2" />
+                Rejected ({sows.filter(s => s.status === 'rejected').length})
+              </TabsTrigger>
+              <TabsTrigger value="completed">
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Completed ({sows.filter(s => s.status === 'approved').length})
+              </TabsTrigger>
             </TabsList>
 
-            {/* Initiate SOW Tab */}
-            <TabsContent value="initiate" className="space-y-4 mt-6">
+            {/* Pending SOWs Tab */}
+            <TabsContent value="pending" className="space-y-4 mt-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card className="border-blue-200 hover:shadow-lg transition-shadow cursor-pointer"
                       onClick={() => navigate(buildPath('/vendors/scope-of-work'))}>
@@ -370,9 +407,9 @@ const PMVendorManagement: React.FC = () => {
               </div>
             </TabsContent>
 
-            {/* Pending Approval Tab */}
-            <TabsContent value="pending" className="space-y-4 mt-6">
-              {sows.filter(sow => sow.status !== 'approved' && sow.status !== 'rejected').map((sow) => (
+            {/* Approved Tab */}
+            <TabsContent value="approved" className="space-y-4 mt-6">
+              {sows.filter(sow => sow.status === 'pm_approved' || sow.status === 'approved').map((sow) => (
                 <Card key={sow.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
@@ -431,9 +468,9 @@ const PMVendorManagement: React.FC = () => {
               ))}
             </TabsContent>
 
-            {/* History Tab */}
-            <TabsContent value="history" className="space-y-4 mt-6">
-              {sows.filter(sow => sow.status === 'approved' || sow.status === 'rejected').map((sow) => (
+            {/* Rejected Tab */}
+            <TabsContent value="rejected" className="space-y-4 mt-6">
+              {sows.filter(sow => sow.status === 'rejected').map((sow) => (
                 <Card key={sow.id} className={sow.status === 'rejected' ? 'border-red-200' : 'border-green-200'}>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
@@ -453,6 +490,33 @@ const PMVendorManagement: React.FC = () => {
                       <div className="text-right">
                         <p className="text-xl font-bold text-gray-900">AED {sow.totalAmount.toLocaleString()}</p>
                         <p className="text-sm text-gray-500">{new Date(sow.createdDate).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </TabsContent>
+
+            {/* Completed Tab */}
+            <TabsContent value="completed" className="space-y-4 mt-6">
+              {sows.filter(sow => sow.status === 'approved').map((sow) => (
+                <Card key={sow.id} className="border-green-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="font-semibold text-gray-900">{sow.sowNumber}</h3>
+                          <Badge className="bg-green-100 text-green-800">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Completed
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-gray-600">{sow.projectName}</p>
+                        <p className="text-sm text-blue-600 font-medium">AED {sow.totalAmount.toLocaleString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">{sow.createdDate}</p>
+                        <p className="text-xs text-green-600">Workflow Complete</p>
                       </div>
                     </div>
                   </CardContent>
