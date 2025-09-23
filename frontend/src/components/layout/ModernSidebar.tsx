@@ -33,7 +33,7 @@ import {
 } from '@heroicons/react/24/solid';
 import { useAuthStore } from '@/store/authStore';
 import { UserRole } from '@/types';
-import { getRoleDisplayName, getRoleThemeColor, buildRolePath } from '@/utils/roleRouting';
+import { getRoleDisplayName, getRoleThemeColor, buildRolePath, getRoleName } from '@/utils/roleRouting';
 import { clsx } from 'clsx';
 
 interface NavigationItem {
@@ -261,7 +261,10 @@ const ModernSidebar: React.FC<SidebarProps> = memo(({ sidebarOpen, setSidebarOpe
       UserRole.ACCOUNTS
     ];
 
-    if (vendorAllowedRoles.includes(roleId as UserRole)) {
+    // Use utility function to get proper role name
+    const currentRole = getRoleName(roleId);
+
+    if (vendorAllowedRoles.includes(currentRole as UserRole)) {
       baseItems.push({
         name: 'Vendor Management',
         href: buildPath('/vendors'),
@@ -301,9 +304,9 @@ const ModernSidebar: React.FC<SidebarProps> = memo(({ sidebarOpen, setSidebarOpe
     let navigation = [...baseItems];
 
     if (user?.role_id === UserRole.TECHNICAL_DIRECTOR) {
-      navigation.splice(-1, 0, ...managerItems, ...executiveItems);
+      navigation.push(...managerItems, ...executiveItems);
     } else if (user?.role_id === UserRole.PROJECT_MANAGER) {
-      navigation.splice(-1, 0, ...managerItems);
+      navigation.push(...managerItems);
     }
 
     // Profile removed from sidebar - use header dropdown instead
