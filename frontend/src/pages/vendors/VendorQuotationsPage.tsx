@@ -20,7 +20,9 @@ import {
   Send,
   FileCheck,
   ArrowUpDown,
-  Package
+  Package,
+  Grid3X3,
+  List
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -102,6 +104,10 @@ const VendorQuotationsPage: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState('all');
   const [sortBy, setSortBy] = useState('date');
   const [approvalNotes, setApprovalNotes] = useState('');
+
+  // Tab and view mode state
+  const [activeTab, setActiveTab] = useState('pending');
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
   // Sample quotation data
   useEffect(() => {
@@ -237,27 +243,7 @@ const VendorQuotationsPage: React.FC = () => {
     return variants[status] || variants.pending;
   };
 
-  const filteredQuotations = quotations.filter(q => {
-    const matchesSearch = q.quotationNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         q.vendorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         q.projectName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || q.status === filterStatus;
-    const matchesCategory = filterCategory === 'all' || q.category === filterCategory;
-    return matchesSearch && matchesStatus && matchesCategory;
-  });
-
-  const sortedQuotations = [...filteredQuotations].sort((a, b) => {
-    switch (sortBy) {
-      case 'date':
-        return new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime();
-      case 'amount':
-        return b.totalAmount - a.totalAmount;
-      case 'vendor':
-        return a.vendorName.localeCompare(b.vendorName);
-      default:
-        return 0;
-    }
-  });
+  // This will be replaced by the tab-based filtering below
 
   const handleApprove = () => {
     if (selectedQuotation) {
@@ -283,6 +269,54 @@ const VendorQuotationsPage: React.FC = () => {
     return (approved / total) * 100;
   };
 
+  // Filter quotations by tab, search, and other filters
+  const getFilteredQuotations = () => {
+    return quotations.filter(quotation => {
+      // Tab filtering
+      const matchesTab = activeTab === 'all' || quotation.status === activeTab;
+
+      // Search filtering
+      const matchesSearch = quotation.quotationNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           quotation.vendorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           quotation.projectName.toLowerCase().includes(searchQuery.toLowerCase());
+
+      // Status filtering (for the dropdown)
+      const matchesStatus = filterStatus === 'all' || quotation.status === filterStatus;
+
+      // Category filtering
+      const matchesCategory = filterCategory === 'all' || quotation.category === filterCategory;
+
+      return matchesTab && matchesSearch && matchesStatus && matchesCategory;
+    }).sort((a, b) => {
+      // Apply sorting
+      switch (sortBy) {
+        case 'date':
+          return new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime();
+        case 'amount':
+          return b.totalAmount - a.totalAmount;
+        case 'vendor':
+          return a.vendorName.localeCompare(b.vendorName);
+        default:
+          return 0;
+      }
+    });
+  };
+
+  // Get tab counts
+  const getTabCounts = () => {
+    return {
+      all: quotations.length,
+      pending: quotations.filter(q => q.status === 'pending').length,
+      under_review: quotations.filter(q => q.status === 'under_review').length,
+      approved: quotations.filter(q => q.status === 'approved').length,
+      rejected: quotations.filter(q => q.status === 'rejected').length,
+      negotiation: quotations.filter(q => q.status === 'negotiation').length,
+    };
+  };
+
+  const tabCounts = getTabCounts();
+  const filteredQuotations = getFilteredQuotations();
+
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
       {/* Header */}
@@ -302,6 +336,25 @@ const VendorQuotationsPage: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {/* View Mode Toggle */}
+            <div className="flex items-center border rounded-lg overflow-hidden">
+              <Button
+                variant={viewMode === 'card' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('card')}
+                className="rounded-none border-0"
+              >
+                <Grid3X3 className="w-4 h-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="rounded-none border-0"
+              >
+                <List className="w-4 h-4" />
+              </Button>
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -443,7 +496,7 @@ const VendorQuotationsPage: React.FC = () => {
 
       {/* Quotations List */}
       <div className="grid grid-cols-1 gap-4">
-        {sortedQuotations.map((quotation) => (
+        {filteredQuotations.map((quotation) => (
           <motion.div
             key={quotation.id}
             initial={{ opacity: 0, y: 10 }}

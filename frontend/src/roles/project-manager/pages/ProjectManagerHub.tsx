@@ -455,16 +455,7 @@ const ProjectManagerHub: React.FC = () => {
       },
       status_history: (p as any).status_history || []
     } as ProcurementPurchase)) || [], [allStorePurchases]);
-  const [filteredPurchases, setFilteredPurchases] = useState<ProcurementPurchase[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredPurchases.length / itemsPerPage);
-  const paginatedPurchases = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredPurchases.slice(startIndex, endIndex);
-  }, [filteredPurchases, currentPage, itemsPerPage]);
 
   // Reset to first page when tab changes
   useEffect(() => {
@@ -781,9 +772,8 @@ const ProjectManagerHub: React.FC = () => {
     return metricsData;
   }, [purchases, allStorePurchases, completedPurchases, estimationRejectedPurchases]);
 
-
-  // Filter purchases based on active tab and search
-  useEffect(() => {
+  // Filter purchases based on active tab and search - Use useMemo instead of useEffect to prevent loops
+  const filteredPurchasesData = useMemo(() => {
     let filtered: ProcurementPurchase[] = [];
 
     // Filter by status based on active tab
@@ -859,7 +849,7 @@ const ProjectManagerHub: React.FC = () => {
         const purchaseId = p.purchase_id ? p.purchase_id.toString() : '';
         const purpose = p.purpose || '';
         const siteLocation = p.site_location || '';
-        
+
         return purchaseId.includes(search) ||
                purpose.toLowerCase().includes(search) ||
                siteLocation.toLowerCase().includes(search);
@@ -951,8 +941,17 @@ const ProjectManagerHub: React.FC = () => {
         });
     }
 
-    setFilteredPurchases(filtered);
+    return filtered;
   }, [purchases, estimationRejectedPurchases, completedPurchases, allStorePurchases, activeTab, searchTerm, statusFilter, projectFilter, locationFilter, dateFilter]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredPurchasesData.length / itemsPerPage);
+  const paginatedPurchases = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredPurchasesData.slice(startIndex, endIndex);
+  }, [filteredPurchasesData, currentPage, itemsPerPage]);
+
 
   // Handle approval action
   const handleApprove = async (purchaseId: number) => {
@@ -1125,7 +1124,7 @@ const ProjectManagerHub: React.FC = () => {
   // Export data
   const handleExport = () => {
     const dataToExport = {
-      purchases: filteredPurchases,
+      purchases: filteredPurchasesData,
       metrics: metrics.map(m => ({ title: m.title, value: m.value })),
       exportDate: new Date().toISOString(),
       role: 'Project Manager'
@@ -1410,7 +1409,7 @@ const ProjectManagerHub: React.FC = () => {
 
               {/* Tab Content */}
               <TabsContent value={activeTab} className="p-6">
-                {activeTab === 'estimation_rejected' && filteredPurchases.length > 0 && (
+                {activeTab === 'estimation_rejected' && filteredPurchasesData.length > 0 && (
                   <Alert className="mb-4 border-orange-200 bg-orange-50">
                     <AlertTriangle className="h-4 w-4 text-orange-600" />
                     <AlertDescription className="text-orange-800">
@@ -1422,7 +1421,7 @@ const ProjectManagerHub: React.FC = () => {
                   <div className="flex items-center justify-center py-12">
                     <ModernLoadingSpinners variant="pulse-wave" size="md" />
                   </div>
-                ) : filteredPurchases.length === 0 ? (
+                ) : filteredPurchasesData.length === 0 ? (
                   <div className="text-center py-12">
                     <Package className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500">No purchases found</p>
@@ -1466,7 +1465,7 @@ const ProjectManagerHub: React.FC = () => {
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between mt-6 pt-6 border-t">
                         <div className="text-sm text-gray-600">
-                          Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredPurchases.length)} of {filteredPurchases.length} purchases
+                          Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredPurchasesData.length)} of {filteredPurchasesData.length} purchases
                         </div>
 
                         <div className="flex items-center gap-2">
