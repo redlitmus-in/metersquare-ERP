@@ -44,6 +44,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ComboboxInput } from '@/components/ui/combobox-input';
 import { useAuthStore } from '@/store/authStore';
 import { apiClient } from '@/api/config';
 import { toast } from 'sonner';
@@ -218,15 +219,27 @@ const VendorListPage: React.FC = () => {
     setVendors(sampleVendors);
   }, []);
 
-  const categories = [
-    'All Categories',
+  // Dynamic categories list that gets updated with custom entries
+  const [dynamicCategories, setDynamicCategories] = useState<string[]>([
     'Electrical',
     'MEP Systems',
     'Civil Works',
     'Joinery',
     'Furniture',
-    'Safety Equipment'
-  ];
+    'Safety Equipment',
+    'Plumbing',
+    'HVAC',
+    'Fire Fighting',
+    'Structural Steel',
+    'Glass & Aluminium',
+    'Flooring',
+    'Painting',
+    'Waterproofing',
+    'Landscaping'
+  ]);
+
+  // Categories for filter dropdown (includes "All Categories")
+  const categories = ['All Categories', ...dynamicCategories];
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, any> = {
@@ -256,6 +269,12 @@ const VendorListPage: React.FC = () => {
 
   const handleAddVendor = () => {
     // Add vendor logic here
+
+    // Add new category to dynamic list if it's custom
+    if (formData.category && !dynamicCategories.includes(formData.category)) {
+      setDynamicCategories(prev => [...prev, formData.category]);
+    }
+
     toast.success('Vendor added successfully');
     setIsAddDialogOpen(false);
     setFormData({
@@ -277,6 +296,12 @@ const VendorListPage: React.FC = () => {
 
   const handleEditVendor = () => {
     // Edit vendor logic here
+
+    // Add new category to dynamic list if it's custom
+    if (formData.category && !dynamicCategories.includes(formData.category)) {
+      setDynamicCategories(prev => [...prev, formData.category]);
+    }
+
     toast.success('Vendor updated successfully');
     setIsEditDialogOpen(false);
   };
@@ -579,19 +604,13 @@ const VendorListPage: React.FC = () => {
             </div>
             <div>
               <Label htmlFor="category">Category</Label>
-              <Select
+              <ComboboxInput
                 value={formData.category}
-                onValueChange={(value) => setFormData({ ...formData, category: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.slice(1).map(cat => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(value) => setFormData({ ...formData, category: value })}
+                options={dynamicCategories}
+                placeholder="Select or type category"
+                allowCustom={true}
+              />
             </div>
             <div>
               <Label htmlFor="email">Email</Label>
@@ -869,23 +888,18 @@ const VendorListPage: React.FC = () => {
                 id="edit-name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="Enter vendor name"
               />
             </div>
             <div>
               <Label htmlFor="edit-category">Category</Label>
-              <Select
+              <ComboboxInput
                 value={formData.category}
-                onValueChange={(value) => setFormData({ ...formData, category: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.slice(1).map(cat => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(value) => setFormData({ ...formData, category: value })}
+                options={dynamicCategories}
+                placeholder="Select or type category"
+                allowCustom={true}
+              />
             </div>
             <div>
               <Label htmlFor="edit-email">Email</Label>
@@ -894,15 +908,39 @@ const VendorListPage: React.FC = () => {
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="vendor@example.com"
               />
             </div>
             <div>
-              <Label htmlFor="edit-phone">Phone</Label>
-              <Input
-                id="edit-phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              />
+              <Label htmlFor="edit-phone">Phone Number</Label>
+              <div className="flex gap-2">
+                <Select
+                  value={formData.countryCode}
+                  onValueChange={(value) => setFormData({ ...formData, countryCode: value })}
+                >
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Code" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="+971">🇦🇪 +971</SelectItem>
+                    <SelectItem value="+966">🇸🇦 +966</SelectItem>
+                    <SelectItem value="+965">🇰🇼 +965</SelectItem>
+                    <SelectItem value="+968">🇴🇲 +968</SelectItem>
+                    <SelectItem value="+974">🇶🇦 +974</SelectItem>
+                    <SelectItem value="+973">🇧🇭 +973</SelectItem>
+                    <SelectItem value="+91">🇮🇳 +91</SelectItem>
+                    <SelectItem value="+1">🇺🇸 +1</SelectItem>
+                    <SelectItem value="+44">🇬🇧 +44</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  id="edit-phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="50 123 4567"
+                  className="flex-1"
+                />
+              </div>
             </div>
             <div>
               <Label htmlFor="edit-contactPerson">Contact Person</Label>
@@ -910,30 +948,85 @@ const VendorListPage: React.FC = () => {
                 id="edit-contactPerson"
                 value={formData.contactPerson}
                 onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
+                placeholder="Contact person name"
               />
             </div>
             <div>
-              <Label htmlFor="edit-registrationNumber">Registration Number</Label>
-              <Input
-                id="edit-registrationNumber"
-                value={formData.registrationNumber}
-                onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-taxId">Tax ID</Label>
+              <Label htmlFor="edit-taxId">VAT</Label>
               <Input
                 id="edit-taxId"
                 value={formData.taxId}
                 onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
+                placeholder="VAT Number"
               />
             </div>
             <div>
-              <Label htmlFor="edit-address">Address</Label>
+              <Label htmlFor="edit-street">Street Address</Label>
               <Input
-                id="edit-address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                id="edit-street"
+                value={formData.street}
+                onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                placeholder="Street address"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-city">City</Label>
+              <Input
+                id="edit-city"
+                value={formData.city}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                placeholder="City"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-state">State/Emirate</Label>
+              <Select
+                value={formData.state}
+                onValueChange={(value) => setFormData({ ...formData, state: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select state" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Dubai">Dubai</SelectItem>
+                  <SelectItem value="Abu Dhabi">Abu Dhabi</SelectItem>
+                  <SelectItem value="Sharjah">Sharjah</SelectItem>
+                  <SelectItem value="Ajman">Ajman</SelectItem>
+                  <SelectItem value="Fujairah">Fujairah</SelectItem>
+                  <SelectItem value="Ras Al Khaimah">Ras Al Khaimah</SelectItem>
+                  <SelectItem value="Umm Al Quwain">Umm Al Quwain</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="edit-country">Country</Label>
+              <Select
+                value={formData.country}
+                onValueChange={(value) => setFormData({ ...formData, country: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select country" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UAE">United Arab Emirates</SelectItem>
+                  <SelectItem value="Saudi Arabia">Saudi Arabia</SelectItem>
+                  <SelectItem value="Kuwait">Kuwait</SelectItem>
+                  <SelectItem value="Oman">Oman</SelectItem>
+                  <SelectItem value="Qatar">Qatar</SelectItem>
+                  <SelectItem value="Bahrain">Bahrain</SelectItem>
+                  <SelectItem value="India">India</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="edit-pinCode">PIN/Postal Code</Label>
+              <Input
+                id="edit-pinCode"
+                value={formData.pinCode}
+                onChange={(e) => setFormData({ ...formData, pinCode: e.target.value })}
+                placeholder="PIN/Postal code"
               />
             </div>
             <div className="col-span-2">
@@ -942,6 +1035,7 @@ const VendorListPage: React.FC = () => {
                 id="edit-notes"
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Additional notes about the vendor"
                 rows={3}
               />
             </div>

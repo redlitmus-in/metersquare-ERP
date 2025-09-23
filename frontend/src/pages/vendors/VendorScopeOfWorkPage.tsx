@@ -35,6 +35,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ComboboxInput } from '@/components/ui/combobox-input';
+import { defaultBOQSections, getAllSectionNames, type BOQSection } from '@/types/boq-sections';
 import { useAuthStore } from '@/store/authStore';
 import { buildRolePath } from '@/utils/roleRouting';
 import { toast } from 'sonner';
@@ -42,6 +44,7 @@ import { toast } from 'sonner';
 interface BOQItem {
   id: string;
   itemCode: string;
+  section: string; // BOQ section/category
   description: string;
   unit: string;
   quantity: number;
@@ -132,6 +135,7 @@ const VendorScopeOfWorkPage: React.FC = () => {
     {
       id: '1',
       itemCode: 'BOQ-001',
+      section: '',
       description: '',
       unit: 'nos',
       quantity: 0,
@@ -139,6 +143,17 @@ const VendorScopeOfWorkPage: React.FC = () => {
       amount: 0
     }
   ]);
+
+  // State for dynamic BOQ sections
+  const [boqSections, setBoqSections] = useState<BOQSection[]>(defaultBOQSections);
+  const [customSections, setCustomSections] = useState<string[]>([]);
+
+  // Get flat list of all sections for dropdown
+  const sectionOptions = React.useMemo(() => {
+    const defaultSectionNames = getAllSectionNames(boqSections);
+    // Add custom sections
+    return [...defaultSectionNames, ...customSections];
+  }, [boqSections, customSections]);
 
   const projects = [
     { id: 'PRJ-001', name: 'Dubai Marina Tower' },
@@ -165,6 +180,7 @@ const VendorScopeOfWorkPage: React.FC = () => {
     const newItem: BOQItem = {
       id: String(boqItems.length + 1),
       itemCode: `BOQ-${String(boqItems.length + 1).padStart(3, '0')}`,
+      section: '',
       description: '',
       unit: 'nos',
       quantity: 0,
@@ -519,6 +535,7 @@ const VendorScopeOfWorkPage: React.FC = () => {
                   <thead>
                     <tr className="bg-gray-50">
                       <th className="border p-2 text-left text-sm font-medium">Item Code</th>
+                      <th className="border p-2 text-left text-sm font-medium">Section/Category</th>
                       <th className="border p-2 text-left text-sm font-medium">Description</th>
                       <th className="border p-2 text-left text-sm font-medium">Unit</th>
                       <th className="border p-2 text-left text-sm font-medium">Quantity</th>
@@ -534,6 +551,23 @@ const VendorScopeOfWorkPage: React.FC = () => {
                           <Input
                             value={item.itemCode}
                             onChange={(e) => updateBOQItem(index, 'itemCode', e.target.value)}
+                            className="h-8"
+                          />
+                        </td>
+                        <td className="border p-2">
+                          <ComboboxInput
+                            value={item.section}
+                            onChange={(value) => {
+                              updateBOQItem(index, 'section', value);
+                              // Add to custom sections if new
+                              if (value && !sectionOptions.includes(value) && !value.includes(" > ")) {
+                                setCustomSections(prev => [...prev, value]);
+                              }
+                            }}
+                            options={sectionOptions}
+                            placeholder="Select/type section"
+                            allowCustom={true}
+                            showHierarchy={true}
                             className="h-8"
                           />
                         </td>
@@ -599,17 +633,17 @@ const VendorScopeOfWorkPage: React.FC = () => {
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-50">
-                      <td colSpan={5} className="border p-2 text-right font-medium">Subtotal:</td>
+                      <td colSpan={6} className="border p-2 text-right font-medium">Subtotal:</td>
                       <td className="border p-2 font-bold">AED {formData.subtotal.toFixed(2)}</td>
                       <td className="border p-2"></td>
                     </tr>
                     <tr className="bg-gray-50">
-                      <td colSpan={5} className="border p-2 text-right font-medium">VAT (5%):</td>
+                      <td colSpan={6} className="border p-2 text-right font-medium">VAT (5%):</td>
                       <td className="border p-2 font-bold">AED {formData.vatAmount.toFixed(2)}</td>
                       <td className="border p-2"></td>
                     </tr>
                     <tr className="bg-blue-50">
-                      <td colSpan={5} className="border p-2 text-right font-bold">Total Amount:</td>
+                      <td colSpan={6} className="border p-2 text-right font-bold">Total Amount:</td>
                       <td className="border p-2 font-bold text-blue-600">AED {formData.totalAmount.toFixed(2)}</td>
                       <td className="border p-2"></td>
                     </tr>
