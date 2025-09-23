@@ -98,6 +98,10 @@ const VendorScopeOfWorkPage: React.FC = () => {
 
   const buildPath = (path: string) => buildRolePath(user?.role_id || '', path);
 
+  // Check if user can create SOW (only Project Manager role)
+  const userRole = (user as any)?.role?.toLowerCase() || '';
+  const canCreateSOW = userRole === 'project manager' || userRole === 'project_manager' || userRole === 'projectmanager';
+
   const [activeTab, setActiveTab] = useState('basic');
   const [formData, setFormData] = useState<ScopeOfWork>({
     sowNumber: `SOW-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`,
@@ -267,6 +271,32 @@ const VendorScopeOfWorkPage: React.FC = () => {
         return false;
     }
   };
+
+  // Show access denied message if user is not Project Manager
+  if (!canCreateSOW) {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen">
+        <div className="max-w-2xl mx-auto mt-20">
+          <Alert className="border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertTitle>Access Restricted</AlertTitle>
+            <AlertDescription>
+              Only Project Managers can create Vendor Scope of Work (SOW) documents.
+              According to the workflow, Project Managers initiate SOW with BOQ reference,
+              which is then sent to Procurement for vendor selection.
+            </AlertDescription>
+          </Alert>
+          <Button
+            onClick={() => navigate(buildPath('/vendors/list'))}
+            className="mt-4"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            View Vendor List
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">

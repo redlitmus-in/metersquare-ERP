@@ -47,6 +47,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuthStore } from '@/store/authStore';
 import { buildRolePath } from '@/utils/roleRouting';
 import { apiClient } from '@/api/config';
@@ -306,7 +307,11 @@ const VendorQuotationsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const userRole = (user as any)?.role || '';
+  const userRoleLower = userRole.toLowerCase();
   const userName = (user as any)?.full_name || (user as any)?.name || '';
+
+  // Only Project Manager can create SOW
+  const canCreateSOW = userRoleLower === 'project manager' || userRoleLower === 'project_manager' || userRoleLower === 'projectmanager';
 
   const buildPath = (path: string) => buildRolePath(user?.role_id || '', path);
 
@@ -543,16 +548,41 @@ const VendorQuotationsPage: React.FC = () => {
               <Download className="w-4 h-4" />
               Export
             </Button>
-            <Button
-              onClick={() => navigate(buildPath('/vendors/scope-of-work'))}
-              className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              New SOW Request
-            </Button>
+            {canCreateSOW && (
+              <Button
+                onClick={() => navigate(buildPath('/vendors/scope-of-work'))}
+                className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                New SOW Request
+              </Button>
+            )}
           </div>
         </div>
       </motion.div>
+
+      {/* Role-based Information Alert */}
+      {userRoleLower === 'estimation' && (
+        <Alert className="border-indigo-200 bg-indigo-50">
+          <AlertCircle className="h-4 w-4 text-indigo-600" />
+          <AlertTitle>Estimation Review</AlertTitle>
+          <AlertDescription>
+            Review vendor quotations for cost verification and vendor list compliance.
+            You cannot create new SOW requests - these are initiated by Project Managers.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {userRoleLower === 'procurement' && (
+        <Alert className="border-green-200 bg-green-50">
+          <AlertCircle className="h-4 w-4 text-green-600" />
+          <AlertTitle>Procurement Process</AlertTitle>
+          <AlertDescription>
+            Manage vendor quotations and select vendors for SOW requests from Project Managers.
+            Ensure to collect multiple quotations and verify vendor credentials.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">

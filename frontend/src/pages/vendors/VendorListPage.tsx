@@ -24,6 +24,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -53,8 +54,14 @@ interface Vendor {
   category: string;
   email: string;
   phone: string;
+  countryCode?: string;
   address: string;
-  registrationNumber: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  pinCode?: string;
+  registrationNumber?: string; // Made optional for backward compatibility
   taxId: string;
   status: 'active' | 'inactive' | 'blacklisted' | 'pending';
   rating: number;
@@ -81,14 +88,23 @@ const VendorListPage: React.FC = () => {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
+  // Check if user can manage vendors (only Procurement role)
+  const userRole = (user as any)?.role?.toLowerCase() || '';
+  const canManageVendors = userRole === 'procurement';
+  const canEditVendors = userRole === 'procurement';
+
   // Form state for new/edit vendor
   const [formData, setFormData] = useState({
     name: '',
     category: '',
     email: '',
+    countryCode: '+971', // Default UAE code
     phone: '',
-    address: '',
-    registrationNumber: '',
+    street: '',
+    city: '',
+    state: '',
+    country: 'UAE',
+    pinCode: '',
     taxId: '',
     contactPerson: '',
     notes: ''
@@ -246,9 +262,13 @@ const VendorListPage: React.FC = () => {
       name: '',
       category: '',
       email: '',
+      countryCode: '+971',
       phone: '',
-      address: '',
-      registrationNumber: '',
+      street: '',
+      city: '',
+      state: '',
+      country: 'UAE',
+      pinCode: '',
       taxId: '',
       contactPerson: '',
       notes: ''
@@ -293,16 +313,31 @@ const VendorListPage: React.FC = () => {
               <Download className="w-4 h-4" />
               Export
             </Button>
-            <Button
-              onClick={() => setIsAddDialogOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Add New Vendor
-            </Button>
+            {canManageVendors && (
+              <Button
+                onClick={() => setIsAddDialogOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add New Vendor
+              </Button>
+            )}
           </div>
         </div>
       </motion.div>
+
+      {/* Role-based Access Alert */}
+      {!canManageVendors && (
+        <Alert className="border-blue-200 bg-blue-50">
+          <AlertCircle className="h-4 w-4 text-blue-600" />
+          <AlertTitle>View Only Access</AlertTitle>
+          <AlertDescription>
+            You can view vendor information. Only Procurement team can add, edit, or delete vendors.
+            {userRole === 'project manager' || userRole === 'project_manager' || userRole === 'projectmanager' ?
+              ' As a Project Manager, you can create Vendor SOW from the Scope of Work page.' : ''}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Filters */}
       <motion.div
@@ -476,34 +511,42 @@ const VendorListPage: React.FC = () => {
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedVendor(vendor);
-                              setFormData({
-                                name: vendor.name,
-                                category: vendor.category,
-                                email: vendor.email,
-                                phone: vendor.phone,
-                                address: vendor.address,
-                                registrationNumber: vendor.registrationNumber,
-                                taxId: vendor.taxId,
-                                contactPerson: vendor.contactPerson,
-                                notes: vendor.notes || ''
-                              });
-                              setIsEditDialogOpen(true);
-                            }}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteVendor(vendor.id)}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
+                          {canEditVendors && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedVendor(vendor);
+                                setFormData({
+                                  name: vendor.name,
+                                  category: vendor.category,
+                                  email: vendor.email,
+                                  countryCode: '+971',
+                                  phone: vendor.phone,
+                                  street: vendor.street || '',
+                                  city: vendor.city || '',
+                                  state: vendor.state || '',
+                                  country: vendor.country || 'UAE',
+                                  pinCode: vendor.pinCode || '',
+                                  taxId: vendor.taxId,
+                                  contactPerson: vendor.contactPerson,
+                                  notes: vendor.notes || ''
+                                });
+                                setIsEditDialogOpen(true);
+                              }}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {canManageVendors && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteVendor(vendor.id)}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -561,13 +604,35 @@ const VendorListPage: React.FC = () => {
               />
             </div>
             <div>
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+971 X XXX XXXX"
-              />
+              <Label htmlFor="phone">Phone Number</Label>
+              <div className="flex gap-2">
+                <Select
+                  value={formData.countryCode}
+                  onValueChange={(value) => setFormData({ ...formData, countryCode: value })}
+                >
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Code" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="+971">🇦🇪 +971</SelectItem>
+                    <SelectItem value="+966">🇸🇦 +966</SelectItem>
+                    <SelectItem value="+965">🇰🇼 +965</SelectItem>
+                    <SelectItem value="+968">🇴🇲 +968</SelectItem>
+                    <SelectItem value="+974">🇶🇦 +974</SelectItem>
+                    <SelectItem value="+973">🇧🇭 +973</SelectItem>
+                    <SelectItem value="+91">🇮🇳 +91</SelectItem>
+                    <SelectItem value="+1">🇺🇸 +1</SelectItem>
+                    <SelectItem value="+44">🇬🇧 +44</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="50 123 4567"
+                  className="flex-1"
+                />
+              </div>
             </div>
             <div>
               <Label htmlFor="contactPerson">Contact Person</Label>
@@ -579,30 +644,81 @@ const VendorListPage: React.FC = () => {
               />
             </div>
             <div>
-              <Label htmlFor="registrationNumber">Registration Number</Label>
-              <Input
-                id="registrationNumber"
-                value={formData.registrationNumber}
-                onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
-                placeholder="REG-XXXX-XXX"
-              />
-            </div>
-            <div>
-              <Label htmlFor="taxId">Tax ID</Label>
+              <Label htmlFor="taxId">VAT</Label>
               <Input
                 id="taxId"
                 value={formData.taxId}
                 onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
-                placeholder="TRN Number"
+                placeholder="VAT Number"
               />
             </div>
             <div>
-              <Label htmlFor="address">Address</Label>
+              <Label htmlFor="street">Street Address</Label>
               <Input
-                id="address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="Vendor address"
+                id="street"
+                value={formData.street}
+                onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                placeholder="Street address"
+              />
+            </div>
+            <div>
+              <Label htmlFor="city">City</Label>
+              <Input
+                id="city"
+                value={formData.city}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                placeholder="City"
+              />
+            </div>
+            <div>
+              <Label htmlFor="state">State/Emirate</Label>
+              <Select
+                value={formData.state}
+                onValueChange={(value) => setFormData({ ...formData, state: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select state" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Dubai">Dubai</SelectItem>
+                  <SelectItem value="Abu Dhabi">Abu Dhabi</SelectItem>
+                  <SelectItem value="Sharjah">Sharjah</SelectItem>
+                  <SelectItem value="Ajman">Ajman</SelectItem>
+                  <SelectItem value="Fujairah">Fujairah</SelectItem>
+                  <SelectItem value="Ras Al Khaimah">Ras Al Khaimah</SelectItem>
+                  <SelectItem value="Umm Al Quwain">Umm Al Quwain</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="country">Country</Label>
+              <Select
+                value={formData.country}
+                onValueChange={(value) => setFormData({ ...formData, country: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select country" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UAE">United Arab Emirates</SelectItem>
+                  <SelectItem value="Saudi Arabia">Saudi Arabia</SelectItem>
+                  <SelectItem value="Kuwait">Kuwait</SelectItem>
+                  <SelectItem value="Oman">Oman</SelectItem>
+                  <SelectItem value="Qatar">Qatar</SelectItem>
+                  <SelectItem value="Bahrain">Bahrain</SelectItem>
+                  <SelectItem value="India">India</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="pinCode">PIN/Postal Code</Label>
+              <Input
+                id="pinCode"
+                value={formData.pinCode}
+                onChange={(e) => setFormData({ ...formData, pinCode: e.target.value })}
+                placeholder="PIN/Postal code"
               />
             </div>
             <div className="col-span-2">

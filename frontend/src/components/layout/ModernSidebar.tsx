@@ -265,17 +265,47 @@ const ModernSidebar: React.FC<SidebarProps> = memo(({ sidebarOpen, setSidebarOpe
     const currentRole = getRoleName(roleId);
 
     if (vendorAllowedRoles.includes(currentRole as UserRole)) {
+      // Customize menu items based on role
+      const vendorChildren = [];
+
+      // All vendor-allowed roles can view vendor list
+      vendorChildren.push({
+        name: 'Vendor List',
+        href: buildPath('/vendors/list'),
+        icon: ClipboardDocumentCheckIcon,
+        iconSolid: ClipboardDocumentCheckIcon
+      });
+
+      // Only Project Manager can create SOW
+      if (currentRole === UserRole.PROJECT_MANAGER) {
+        vendorChildren.push({
+          name: 'Create SOW',
+          href: buildPath('/vendors/scope-of-work'),
+          icon: DocumentTextIcon,
+          iconSolid: DocumentTextIcon
+        });
+      }
+
+      // All vendor-allowed roles can view quotations
+      vendorChildren.push({
+        name: 'Quotations',
+        href: buildPath('/vendors/quotations'),
+        icon: CurrencyDollarIcon,
+        iconSolid: CurrencyDollarIcon
+      });
+
+      // Determine default href based on role
+      const defaultHref = currentRole === UserRole.PROJECT_MANAGER
+        ? buildPath('/vendors/scope-of-work')
+        : buildPath('/vendors/list');
+
       baseItems.push({
         name: 'Vendor Management',
-        href: buildPath('/vendors/scope-of-work'), // Default to scope-of-work page when clicked
+        href: defaultHref,
         icon: UsersIcon,
         iconSolid: UsersSolid,
         color: 'text-blue-600',
-        children: [
-          { name: 'Vendor List', href: buildPath('/vendors/list'), icon: ClipboardDocumentCheckIcon, iconSolid: ClipboardDocumentCheckIcon },
-          { name: 'Scope of Work', href: buildPath('/vendors/scope-of-work'), icon: DocumentTextIcon, iconSolid: DocumentTextIcon },
-          { name: 'Quotations', href: buildPath('/vendors/quotations'), icon: CurrencyDollarIcon, iconSolid: CurrencyDollarIcon }
-        ]
+        children: vendorChildren
       });
     }
 
