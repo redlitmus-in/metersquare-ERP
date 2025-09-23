@@ -347,98 +347,114 @@ const ProjectManagerHub: React.FC = () => {
   } = usePurchaseStore();
 
   // Get purchases directly from store - no local state needed!
-  const allStorePurchases = useMemo(() => {
-    const storePurchases = getPurchasesForRole('projectManager');
-    return (storePurchases || []) as any[];
-  }, [getPurchasesForRole]);
+  const allStorePurchases = getPurchasesForRole('projectManager');
 
-  // Transform and separate purchases by status with mutual exclusivity
-  const purchases = useMemo(() => {
-    const transformed = (allStorePurchases || []).map((p: any) => ({
-      ...p,
-      pm_status: p.project_manager_status || p.pm_status,
-      materials_summary: p.materials_summary || {
-        total_materials: p.materials?.length || 0,
-        total_quantity: p.total_quantity || 0,
-        total_cost: p.total_cost || 0,
-        materials: p.materials || [],
-        categories: p.materials ? [...new Set(p.materials.map((m: any) => m.category || ''))].filter(Boolean) : []
-      }
-    }));
+  // Transform and separate purchases by status
+  const purchases = useMemo(() => (allStorePurchases || []).map(p => ({
+    ...p,
+    pm_status: (p.project_manager_status || p.pm_status) as 'pending' | 'approved' | 'rejected' | 'completed' | null,
+    pm_status_date: null,
+    pm_comments: null,
+    pm_rejection_reason: null,
+    procurement_status: p.procurement_status || '',
+    procurement_status_date: '',
+    procurement_comments: '',
+    materials_summary: (p as any).materials_summary || {
+      total_materials: p.materials?.length || 0,
+      total_quantity: p.total_quantity || 0,
+      total_cost: p.total_cost || 0,
+      categories: [...new Set(p.materials?.map(m => (m as any).category) || [])]
+    },
+    status_history: (p as any).status_history || []
+  } as ProcurementPurchase)).filter(p => {
+    // Check if TD rejected (these should remain visible)
+    const isTDRejected = (p as any).technical_director_status === 'rejected' ||
+                        (p.status_sender === 'technicalDirector' && (p as any).status === 'rejected');
 
-    // Return only non-completed, non-rejected purchases for general use
-    return transformed.filter((p: any) => {
-      // Exclude completed purchases
-      if (p.latest_status?.status === 'completed' ||
-          p.latest_status?.status === 'complete' ||
-          p.accounts_acknowledgement === true ||
-          p.current_workflow_status === 'completed' ||
-          p.status === 'completed') {
-        return false;
-      }
-
-      // Exclude already rejected by PM
-      if (p.pm_status === 'rejected') {
-        return false;
-      }
-
-      // Exclude already approved by PM (they go to approved tab)
-      if (p.pm_status === 'approved') {
-        return false;
-      }
-
-      // Exclude estimation rejections with PM flag (they go to estimation_rejected tab)
-      if (p.rejection_from === 'estimation' &&
-          (p.rejected_status?.reject_category?.includes('pm_flag') ||
-           p.status_info?.reject_category === 'pm_flag' ||
-           p.reject_category === 'pm_flag')) {
-        return false;
-      }
-
+    // If TD rejected and PM approved, always include
+    if (isTDRejected && p.pm_status === 'approved') {
       return true;
-    });
-  }, [allStorePurchases]) as ProcurementPurchase[];
+    }
 
+    return (
+      // Active purchases (not completed)
+      p.latest_status?.status !== 'completed' &&
+      p.latest_status?.status !== 'complete' &&
+      p.accounts_acknowledgement !== true &&
+      p.current_workflow_status !== 'completed' &&
+      // Exclude ONLY PM flag estimation rejections - they go to estimation_rejected tab
+      // But include purchases rejected by other roles for different reasons
+      ((p as any).rejection_from !== 'estimation' ||
+       !p.rejected_status?.reject_category?.includes('pm_flag') ||
+       // Include if PM has already approved and it was rejected by a later role
+       p.pm_status === 'approved')
+    );
+  }) || [], [allStorePurchases]);
   // Derived from store data - Only show PM flag rejections from Estimation
   const estimationRejectedPurchases = useMemo(() => (allStorePurchases || [])
-    .filter((p: any) =>
+    .filter(p =>
       // Check if it's a rejection that needs PM action
-      (p.requires_pm_action === true ||
-       p.rejection_from === 'estimation' ||
+      ((p as any).requires_pm_action === true ||
+       (p as any).rejection_from === 'estimation' ||
        p.estimation_status === 'rejected') &&
       // Check for PM flag rejection specifically
       (p.rejected_status?.reject_category === 'pm_flag' ||
-       p.status_info?.reject_category === 'pm_flag' ||
-       p.reject_category === 'pm_flag' ||
-       p.approvals?.action?.some((a: any) =>
+       (p as any).status_info?.reject_category === 'pm_flag' ||
+       (p as any).reject_category === 'pm_flag' ||
+       (p as any).approvals?.some((a: any) =>
          a.role === 'estimation' &&
          a.status === 'rejected' &&
          a.reject_category === 'pm_flag'
        )) && // Only PM flag rejections
       // Ensure PM hasn't already rejected it
-      p.pm_status !== 'rejected' &&
+      (p as any).pm_status !== 'rejected' &&
       // Not completed
       p.latest_status?.status !== 'completed' &&
       p.accounts_acknowledgement !== true &&
       p.current_workflow_status !== 'completed'
     )
-    .map((p: any) => ({
+    .map(p => ({
       ...p,
-      pm_status: p.project_manager_status || p.pm_status
-    })), [allStorePurchases]) as ProcurementPurchase[];
+      pm_status: (p.project_manager_status || (p as any).pm_status) as 'pending' | 'approved' | 'rejected' | 'completed' | null,
+      pm_status_date: null,
+      pm_comments: null,
+      pm_rejection_reason: null,
+      procurement_status: p.procurement_status || '',
+      procurement_status_date: '',
+      procurement_comments: '',
+      materials_summary: (p as any).materials_summary || {
+        total_materials: p.materials?.length || 0,
+        total_quantity: p.total_quantity || 0,
+        total_cost: p.total_cost || 0,
+        categories: [...new Set(p.materials?.map(m => (m as any).category) || [])]
+      },
+      status_history: (p as any).status_history || []
+    } as ProcurementPurchase)) || [], [allStorePurchases]);
 
   const completedPurchases = useMemo(() => (allStorePurchases || [])
-    .filter((p: any) =>
+    .filter(p =>
       p.latest_status?.status === 'completed' ||
       p.latest_status?.status === 'complete' ||
       p.accounts_acknowledgement === true ||
-      p.current_workflow_status === 'completed' ||
-      p.status === 'completed'
+      p.current_workflow_status === 'completed'
     )
-    .map((p: any) => ({
+    .map(p => ({
       ...p,
-      pm_status: p.project_manager_status || p.pm_status
-    })), [allStorePurchases]) as ProcurementPurchase[];
+      pm_status: (p.project_manager_status || (p as any).pm_status) as 'pending' | 'approved' | 'rejected' | 'completed' | null,
+      pm_status_date: null,
+      pm_comments: null,
+      pm_rejection_reason: null,
+      procurement_status: p.procurement_status || '',
+      procurement_status_date: '',
+      procurement_comments: '',
+      materials_summary: (p as any).materials_summary || {
+        total_materials: p.materials?.length || 0,
+        total_quantity: p.total_quantity || 0,
+        total_cost: p.total_cost || 0,
+        categories: [...new Set(p.materials?.map(m => (m as any).category) || [])]
+      },
+      status_history: (p as any).status_history || []
+    } as ProcurementPurchase)) || [], [allStorePurchases]);
   const [filteredPurchases, setFilteredPurchases] = useState<ProcurementPurchase[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -532,7 +548,7 @@ const ProjectManagerHub: React.FC = () => {
     });
 
     const avgValue = allStorePurchases.length > 0 ? totalValue / allStorePurchases.length : 0;
-    const materialTypes = [...new Set(allStorePurchases.flatMap((p: any) => p.materials?.map((m: any) => m.material_name || m.description) || []))].length;
+    const materialTypes = [...new Set(allStorePurchases.flatMap(p => p.materials?.map(m => (m as any).material_name || m.description) || []))].length;
 
     // Create different metric sets for auto-swapping
     const metricSets: MetricCard[][] = [
@@ -770,102 +786,69 @@ const ProjectManagerHub: React.FC = () => {
   useEffect(() => {
     let filtered: ProcurementPurchase[] = [];
 
-    // Filter by status based on active tab - MUTUALLY EXCLUSIVE
+    // Filter by status based on active tab
     switch (activeTab) {
       case 'pending':
-        // Show ONLY purchases waiting for PM action (not approved, not rejected, not completed)
-        filtered = [...allStorePurchases].filter((p: any) => {
-          // Check all possible PM status fields
-          const pmStatus = p.pm_status ||
-                          p.project_manager_status ||
-                          p.projectManager_status ||
-                          p.project_manager?.status;
+        // Show purchases waiting for PM action
+        filtered = [...purchases].filter(p => {
+          // Exclude TD rejected purchases from pending (they should stay in approved)
+          const isTDRejected = (p as any).technical_director_status === 'rejected' ||
+                              (p.status_sender === 'technicalDirector' && (p as any).status === 'rejected');
 
-          // Exclude if completed
-          if (p.latest_status?.status === 'completed' ||
-              p.latest_status?.status === 'complete' ||
-              p.accounts_acknowledgement === true ||
-              p.current_workflow_status === 'completed' ||
-              p.status === 'completed') {
-            return false;
-          }
+          if (isTDRejected) return false;
 
-          // Exclude if PM already took action - check case insensitive
-          if (pmStatus && (
-              pmStatus.toLowerCase() === 'approved' ||
-              pmStatus.toLowerCase() === 'rejected')) {
-            return false;
-          }
-
-          // Exclude estimation PM flag rejections (they go to estimation_rejected)
-          if (p.rejection_from === 'estimation' &&
-              (p.rejected_status?.reject_category?.includes('pm_flag') ||
-               p.status_info?.reject_category === 'pm_flag' ||
-               p.reject_category === 'pm_flag')) {
-            return false;
-          }
-
-          // Include if pending or no PM status yet
-          return !pmStatus || pmStatus.toLowerCase() === 'pending';
+          return (
+            (!p.pm_status || p.pm_status === 'pending') &&
+            // Check multiple possible status fields for procurement approval
+            (p.procurement_status === 'approved' ||
+             p.sender_latest_status === 'approved' ||
+             p.current_workflow_status === 'project_manager' ||
+             p.latest_status?.sender === 'procurement' ||
+             // If no specific procurement status, show all pending for PM
+             (!p.procurement_status && !(p as any).rejection_from))
+          );
         });
         break;
-
       case 'approved':
-        // Show ONLY PM approved purchases (not in other tabs)
-        filtered = [...allStorePurchases].filter((p: any) => {
-          const pmStatus = p.pm_status ||
-                          p.project_manager_status ||
-                          p.projectManager_status ||
-                          p.project_manager?.status;
+        // Show ALL PM approved purchases (including ones that moved to next stage or were rejected by TD)
+        filtered = [...allStorePurchases].map(p => ({
+          ...p,
+          pm_status: ((p as any).pm_status || p.project_manager_status) as 'pending' | 'approved' | 'rejected' | 'completed' | null,
+          pm_status_date: null,
+          pm_comments: null,
+          pm_rejection_reason: null,
+          procurement_status: p.procurement_status || '',
+          procurement_status_date: '',
+          procurement_comments: '',
+          materials_summary: (p as any).materials_summary || {
+            total_materials: p.materials?.length || 0,
+            total_quantity: p.total_quantity || 0,
+            total_cost: p.total_cost || 0,
+            categories: [...new Set(p.materials?.map(m => (m as any).category) || [])]
+          },
+          status_history: (p as any).status_history || []
+        } as ProcurementPurchase)).filter(p => {
+          // Include TD rejected purchases in approved tab (PM already approved them)
+          const isTDRejected = (p as any).technical_director_status === 'rejected' ||
+                              (p.status_sender === 'technicalDirector' && (p as any).status === 'rejected');
 
-          // Exclude if completed (goes to completed tab)
-          if (p.latest_status?.status === 'completed' ||
-              p.latest_status?.status === 'complete' ||
-              p.accounts_acknowledgement === true ||
-              p.current_workflow_status === 'completed' ||
-              p.status === 'completed') {
-            return false;
-          }
-
-          // Include only if PM approved - check case insensitive
-          return pmStatus && pmStatus.toLowerCase() === 'approved';
+          return (p.pm_status === 'approved' ||
+                  (isTDRejected && p.pm_status !== 'rejected'));
         });
         break;
-
       case 'rejected':
-        // Show ONLY PM rejected purchases (not completed)
-        filtered = [...allStorePurchases].filter((p: any) => {
-          const pmStatus = p.pm_status ||
-                          p.project_manager_status ||
-                          p.projectManager_status ||
-                          p.project_manager?.status;
-
-          // Exclude if completed
-          if (p.latest_status?.status === 'completed' ||
-              p.latest_status?.status === 'complete' ||
-              p.accounts_acknowledgement === true ||
-              p.current_workflow_status === 'completed' ||
-              p.status === 'completed') {
-            return false;
-          }
-
-          // Include only if PM rejected - check case insensitive
-          return pmStatus && pmStatus.toLowerCase() === 'rejected';
-        });
+        filtered = [...purchases].filter(p => p.pm_status === 'rejected');
         break;
-
       case 'estimation_rejected':
-        // Show ONLY estimation PM flag rejections that need PM action
+        // Use the estimation_pm_rejections data from API
         filtered = [...estimationRejectedPurchases];
         break;
-
       case 'completed':
-        // Show ONLY completed purchases
+        // Show completed purchases
         filtered = [...completedPurchases];
         break;
-
       default:
-        filtered = [];
+        filtered = [...purchases];
         break;
     }
 
@@ -969,7 +952,7 @@ const ProjectManagerHub: React.FC = () => {
     }
 
     setFilteredPurchases(filtered);
-  }, [purchases, estimationRejectedPurchases, completedPurchases, activeTab, searchTerm, statusFilter, projectFilter, locationFilter, dateFilter]);
+  }, [purchases, estimationRejectedPurchases, completedPurchases, allStorePurchases, activeTab, searchTerm, statusFilter, projectFilter, locationFilter, dateFilter]);
 
   // Handle approval action
   const handleApprove = async (purchaseId: number) => {
@@ -1191,77 +1174,14 @@ const ProjectManagerHub: React.FC = () => {
            dateFilter !== 'all';
   };
 
-  // Calculate tab counts - must match the filtering logic exactly
-  const tabCounts = useMemo(() => {
-    // Pending: purchases that PM hasn't acted on yet
-    const pending = allStorePurchases.filter((p: any) => {
-      const pmStatus = p.pm_status || p.project_manager_status || p.projectManager_status || p.project_manager?.status;
-
-      // Exclude completed
-      if (p.latest_status?.status === 'completed' ||
-          p.latest_status?.status === 'complete' ||
-          p.accounts_acknowledgement === true ||
-          p.current_workflow_status === 'completed' ||
-          p.status === 'completed') {
-        return false;
-      }
-
-      // Exclude if PM already took action
-      if (pmStatus && (pmStatus.toLowerCase() === 'approved' || pmStatus.toLowerCase() === 'rejected')) {
-        return false;
-      }
-
-      // Exclude estimation PM flag rejections
-      if (p.rejection_from === 'estimation' &&
-          (p.rejected_status?.reject_category?.includes('pm_flag') ||
-           p.status_info?.reject_category === 'pm_flag' ||
-           p.reject_category === 'pm_flag')) {
-        return false;
-      }
-
-      return !pmStatus || pmStatus.toLowerCase() === 'pending';
-    }).length;
-
-    // Approved: PM approved but not completed
-    const approved = allStorePurchases.filter((p: any) => {
-      const pmStatus = p.pm_status || p.project_manager_status || p.projectManager_status || p.project_manager?.status;
-
-      // Exclude completed
-      if (p.latest_status?.status === 'completed' ||
-          p.latest_status?.status === 'complete' ||
-          p.accounts_acknowledgement === true ||
-          p.current_workflow_status === 'completed' ||
-          p.status === 'completed') {
-        return false;
-      }
-
-      return pmStatus && pmStatus.toLowerCase() === 'approved';
-    }).length;
-
-    // Rejected: PM rejected but not completed
-    const rejected = allStorePurchases.filter((p: any) => {
-      const pmStatus = p.pm_status || p.project_manager_status || p.projectManager_status || p.project_manager?.status;
-
-      // Exclude completed
-      if (p.latest_status?.status === 'completed' ||
-          p.latest_status?.status === 'complete' ||
-          p.accounts_acknowledgement === true ||
-          p.current_workflow_status === 'completed' ||
-          p.status === 'completed') {
-        return false;
-      }
-
-      return pmStatus && pmStatus.toLowerCase() === 'rejected';
-    }).length;
-
-    return {
-      pending,
-      approved,
-      rejected,
-      estimation_rejected: estimationRejectedPurchases.length,
-      completed: completedPurchases.length
-    };
-  }, [allStorePurchases, estimationRejectedPurchases, completedPurchases]);
+  // Calculate tab counts
+  const tabCounts = useMemo(() => ({
+    pending: purchases.filter(p => !p.pm_status || p.pm_status === 'pending').length,
+    approved: purchases.filter(p => p.pm_status === 'approved').length,
+    rejected: purchases.filter(p => p.pm_status === 'rejected').length,
+    estimation_rejected: estimationRejectedPurchases.length,
+    completed: completedPurchases.length
+  }), [purchases, estimationRejectedPurchases, completedPurchases]);
 
   return (
     <div className="min-h-screen bg-gray-50">
