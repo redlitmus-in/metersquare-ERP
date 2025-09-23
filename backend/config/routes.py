@@ -10,6 +10,7 @@ from routes.procurement_routes import procurement_routes
 from routes.technical_director_routes import technical_director_routes
 from routes.account_routes import account_routes
 from routes.boq_routes import boq_routes
+from routes.vendor_routes import vendor_routes
 
 # Import and register the routes from the route blueprints
 
@@ -25,3 +26,5 @@ def initialize_routes(app):
     app.register_blueprint(account_routes)
     app.register_blueprint(file_upload_routes)
     app.register_blueprint(boq_routes)
+    app.register_blueprint(vendor_routes)
+    
