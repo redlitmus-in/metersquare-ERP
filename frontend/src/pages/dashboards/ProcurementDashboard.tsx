@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { SimpleHorizontalCards } from '@/components/ui/SimpleHorizontalCards';
 import {
   Package,
   Users,
@@ -444,49 +445,24 @@ const ProcurementDashboard: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {metrics.map((metric, index) => (
-          <motion.div
-            key={metric.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="w-full"
-          >
-            <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-300 h-full">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <p className="text-sm font-medium text-gray-600 truncate">{metric.title}</p>
-                      <div className={`p-2 rounded-lg ${metric.color} bg-opacity-10 flex-shrink-0`}>
-                        <metric.icon className={`w-5 h-5 ${metric.color.replace('bg-', 'text-')}`} />
-                      </div>
-                    </div>
-                    <p className="text-2xl font-bold text-gray-900 break-words">
-                      {metric.value}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">{metric.subtitle}</p>
-                    <div className="flex items-center gap-1 mt-2">
-                      {metric.trend === 'up' ? (
-                        <TrendingUp className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-                      ) : (
-                        <TrendingDown className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
-                      )}
-                      <span className={`text-sm font-medium ${
-                        metric.trend === 'up' ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {Math.abs(metric.change)}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+      {/* Metrics with Mobile Swipeable Cards */}
+      <SimpleHorizontalCards
+        cards={metrics.map((metric, index) => ({
+          id: `metric-${index}`,
+          title: metric.title,
+          value: metric.value,
+          subtitle: metric.subtitle,
+          icon: <metric.icon className={`w-4 h-4 ${metric.color.replace('bg-', 'text-')}`} />,
+          bgColor: metric.color.includes('green') ? 'bg-green-100' :
+                   metric.color.includes('amber') ? 'bg-amber-100' :
+                   metric.color.includes('purple') ? 'bg-purple-100' : 'bg-blue-100',
+          trend: metric.change ? {
+            value: Math.abs(metric.change),
+            isUp: metric.trend === 'up'
+          } : undefined
+        }))}
+        className="mb-4"
+      />
 
       {/* Charts and Analytics */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

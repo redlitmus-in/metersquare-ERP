@@ -112,57 +112,127 @@ export const PMMetricsCards: React.FC<PMMetricsCardsProps> = ({ data }) => {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-      {metrics.map((metric, index) => (
-        <motion.div
-          key={metric.title}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.05 }}
-        >
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className={`${metric.bgColor} p-3 rounded-lg`}>
-                  <metric.icon className={`h-6 w-6 ${metric.color}`} />
-                </div>
-                {metric.trend && (
-                  <div className={`flex items-center gap-1 ${
-                    getTrendColor(
-                      metric.trend.direction, 
-                      !metric.title.includes('Rejected') && !metric.title.includes('Time')
-                    )
-                  }`}>
-                    {getTrendIcon(metric.trend.direction)}
-                    <span className="text-sm font-medium">
-                      {metric.trend.value.toFixed(1)}%
-                    </span>
+    <>
+      {/* Desktop Grid - Hidden on mobile */}
+      <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {metrics.map((metric, index) => (
+          <motion.div
+            key={metric.title}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.05 }}
+          >
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className={`${metric.bgColor} p-3 rounded-lg`}>
+                    <metric.icon className={`h-6 w-6 ${metric.color}`} />
                   </div>
-                )}
-              </div>
-              
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-gray-600">
-                  {metric.title}
-                </p>
-                <div className="flex items-baseline gap-1">
-                  <p className="text-2xl font-bold text-gray-900">
-                    {metric.value}
-                  </p>
-                  {metric.unit && (
-                    <span className="text-sm text-gray-600">
-                      {metric.unit}
-                    </span>
+                  {metric.trend && (
+                    <div className={`flex items-center gap-1 ${
+                      getTrendColor(
+                        metric.trend.direction,
+                        !metric.title.includes('Rejected') && !metric.title.includes('Time')
+                      )
+                    }`}>
+                      {getTrendIcon(metric.trend.direction)}
+                      <span className="text-sm font-medium">
+                        {metric.trend.value.toFixed(1)}%
+                      </span>
+                    </div>
                   )}
                 </div>
-                <p className="text-xs text-gray-500">
-                  {metric.description}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      ))}
-    </div>
+
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-600">
+                    {metric.title}
+                  </p>
+                  <div className="flex items-baseline gap-1">
+                    <p className="text-2xl font-bold text-gray-900">
+                      {metric.value}
+                    </p>
+                    {metric.unit && (
+                      <span className="text-sm text-gray-600">
+                        {metric.unit}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {metric.description}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Mobile Horizontal Scroll - Only visible on mobile */}
+      <div className="sm:hidden overflow-x-auto scrollbar-hide">
+        <div className="flex gap-3 pb-2" style={{ width: 'max-content' }}>
+          {metrics.map((metric, index) => (
+            <motion.div
+              key={metric.title}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.05 }}
+              className="flex-shrink-0"
+              style={{ width: '85vw', maxWidth: '320px' }}
+            >
+              <Card className="h-full">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className={`${metric.bgColor} p-2 rounded-lg`}>
+                      <metric.icon className={`h-5 w-5 ${metric.color}`} />
+                    </div>
+                    {metric.trend && (
+                      <div className={`flex items-center gap-1 ${
+                        getTrendColor(
+                          metric.trend.direction,
+                          !metric.title.includes('Rejected') && !metric.title.includes('Time')
+                        )
+                      }`}>
+                        {getTrendIcon(metric.trend.direction)}
+                        <span className="text-xs font-medium">
+                          {metric.trend.value.toFixed(1)}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-gray-600">
+                      {metric.title}
+                    </p>
+                    <div className="flex items-baseline gap-1">
+                      <p className="text-xl font-bold text-gray-900">
+                        {metric.value}
+                      </p>
+                      {metric.unit && (
+                        <span className="text-xs text-gray-600">
+                          {metric.unit}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {metric.description}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+        {/* Swipe indicator dots */}
+        <div className="flex justify-center gap-1.5 mt-3">
+          {metrics.map((_, index) => (
+            <div
+              key={index}
+              className="w-1.5 h-1.5 rounded-full bg-gray-300"
+            />
+          ))}
+        </div>
+      </div>
+    </>
   );
 };
