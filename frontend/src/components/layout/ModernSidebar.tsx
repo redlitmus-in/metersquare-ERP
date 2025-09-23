@@ -267,7 +267,7 @@ const ModernSidebar: React.FC<SidebarProps> = memo(({ sidebarOpen, setSidebarOpe
     if (vendorAllowedRoles.includes(currentRole as UserRole)) {
       baseItems.push({
         name: 'Vendor Management',
-        href: buildPath('/vendors'),
+        href: buildPath('/vendors/scope-of-work'), // Default to scope-of-work page when clicked
         icon: UsersIcon,
         iconSolid: UsersSolid,
         color: 'text-blue-600',

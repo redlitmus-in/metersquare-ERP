@@ -250,7 +250,7 @@ const VendorScopeOfWorkPage: React.FC = () => {
     }
 
     toast.success('Scope of Work submitted for approval');
-    navigate(buildPath('/vendors'));
+    navigate(buildPath('/vendors/quotations'));
   };
 
   const isTabComplete = (tab: string): boolean => {
@@ -281,7 +281,7 @@ const VendorScopeOfWorkPage: React.FC = () => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate(buildPath('/vendors'))}
+              onClick={() => navigate(buildPath('/vendors/quotations'))}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back

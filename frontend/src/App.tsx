@@ -361,8 +361,7 @@ function App() {
               <RoleSpecificProcurementHub />
             } />
 
-            {/* Vendor Management Routes - Role-specific views */}
-            <Route path="vendors" element={<RoleSpecificVendorHub />} />
+            {/* Vendor Management Routes - Direct access to specific pages */}
             <Route path="vendors/list" element={<VendorListPage />} />
             <Route path="vendors/scope-of-work" element={<VendorScopeOfWorkPage />} />
             <Route path="vendors/quotations" element={<VendorQuotationsPage />} />
