@@ -101,12 +101,12 @@ class MEPSupervisorService {
     }
   }
 
-  // Get purchase details by ID
+  // Get purchase details by ID - using standard purchase endpoint
   async getPurchaseDetails(purchaseId: number): Promise<Purchase> {
     try {
-      const response = await apiClient.get(`/mep_purchases/${purchaseId}`);
+      const response = await apiClient.get(`/purchase/${purchaseId}`);
       if (response.data.success) {
-        return response.data.data;
+        return response.data.data || response.data.purchase;
       }
       throw new Error(response.data.message || 'Failed to fetch purchase details');
     } catch (error: any) {
@@ -115,10 +115,10 @@ class MEPSupervisorService {
     }
   }
 
-  // Get purchase history with status tracking
+  // Get purchase history with status tracking - using standard history endpoint
   async getPurchaseHistory(purchaseId: number): Promise<{purchase: Purchase, history: any[]}> {
     try {
-      const response = await apiClient.get(`/mep_purchase_history/${purchaseId}`);
+      const response = await apiClient.get(`/purchase_history/${purchaseId}`);
       if (response.data.success) {
         return {
           purchase: response.data.purchase,
@@ -138,10 +138,22 @@ class MEPSupervisorService {
       // Add MEP-specific metadata
       const currentUser = localStorage.getItem('userName') || 'MEP Supervisor Test';
       const currentUserId = localStorage.getItem('userId') || '';
+      // Ensure purpose contains MEP keywords for backend validation
+      let mepPurpose = purchaseData.purpose || '';
+      if (!this.containsMEPKeywords(mepPurpose)) {
+        const detectedCategory = this.detectMEPCategory(purchaseData);
+        if (detectedCategory) {
+          mepPurpose = `MEP ${detectedCategory} - ${mepPurpose}`;
+        } else {
+          mepPurpose = `MEP Equipment - ${mepPurpose}`;
+        }
+      }
+
       const mepPurchaseData = {
         ...purchaseData,
-        requested_by: 'MEP Supervisor Test', // Ensure consistent naming for backend filtering
-        created_by: 'MEP Supervisor Test',
+        purpose: mepPurpose, // Ensure purpose contains MEP keywords
+        requested_by: 'MEP Supervisor', // Consistent naming for backend filtering
+        created_by: 'MEP Supervisor',
         user_id: currentUserId,
         user_name: currentUser,
         mep_category: this.detectMEPCategory(purchaseData),
@@ -151,6 +163,15 @@ class MEPSupervisorService {
 
       const response = await apiClient.post('/purchase', mepPurchaseData);
       if (response.data.success) {
+        // Send confirmation notification to the sender
+        const purchaseId = response.data.purchase_id || response.data.data?.purchase_id;
+        if (purchaseId) {
+          await PurchaseNotificationService.notifySenderConfirmation({
+            documentId: `PR-${purchaseId}`,
+            project: purchaseData.project_id,
+            amount: purchaseData.total_cost
+          });
+        }
         return response.data;
       }
       throw new Error(response.data.message || 'Failed to create MEP purchase');
@@ -177,7 +198,7 @@ class MEPSupervisorService {
   // Delete MEP purchase request
   async deletePurchase(purchaseId: number): Promise<any> {
     try {
-      const response = await apiClient.delete(`/mep_purchases/${purchaseId}`);
+      const response = await apiClient.delete(`/purchase/${purchaseId}`);
       if (response.data.success) {
         return response.data;
       }
@@ -209,7 +230,8 @@ class MEPSupervisorService {
   // Send MEP purchase to procurement (this is the workflow action)
   async sendToProcurement(purchaseId: number): Promise<any> {
     try {
-      const response = await apiClient.post(`/mep_send_to_procurement/${purchaseId}`);
+      // Use the same endpoint as site supervisor for sending purchase email
+      const response = await apiClient.get(`/purchase_email/${purchaseId}`);
       if (response.data.success) {
         // Get purchase details for notification
         const purchaseDetails = await this.getPurchaseDetails(purchaseId);
@@ -326,6 +348,20 @@ class MEPSupervisorService {
            desc.includes('valve') ||
            desc.includes('drainage') ||
            desc.includes('sewage');
+  }
+
+  // Check if text already contains MEP keywords
+  private containsMEPKeywords(text: string): boolean {
+    if (!text) return false;
+    const textLower = text.toLowerCase();
+
+    const mepKeywords = [
+      'mep', 'electrical', 'mechanical', 'plumbing', 'hvac', 'wiring', 'circuit',
+      'transformer', 'panel', 'generator', 'ups', 'ventilation', 'duct', 'chiller',
+      'ahu', 'fan', 'air conditioning', 'pipe', 'water', 'pump', 'valve', 'tank'
+    ];
+
+    return mepKeywords.some(keyword => textLower.includes(keyword));
   }
 }
 

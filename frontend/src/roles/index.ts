@@ -143,7 +143,7 @@ export const hasPermission = (
   permission: string
 ): boolean => {
   const permissions = getRolePermissions(role);
-  return permissions?.[category]?.[permission] || false;
+  return (permissions as any)?.[category]?.[permission] || false;
 };
 
 /**
@@ -246,7 +246,7 @@ export const getRoleDashboardPath = (role: string): string => {
 /**
  * Workflow role hierarchy for approval chains
  */
-export const workflowHierarchy = {
+export const workflowHierarchy: Record<string, string[]> = {
   'material_purchases': [
     'site_supervisor',
     'mep_supervisor',

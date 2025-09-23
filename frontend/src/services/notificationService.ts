@@ -72,9 +72,20 @@ class NotificationService {
           this.serviceWorkerRegistration = await navigator.serviceWorker.register(swUrl);
           debug.info('Service Worker registered successfully');
 
-          // Wait for service worker to be ready
-          await navigator.serviceWorker.ready;
-          debug.info('Service Worker is ready');
+          // Wait for service worker to be ready and active
+          const registration = await navigator.serviceWorker.ready;
+          this.serviceWorkerRegistration = registration;
+
+          // Ensure the service worker is activated
+          if (registration.active) {
+            debug.info('Service Worker is active and ready');
+          } else {
+            debug.warn('Service Worker registered but not yet active');
+            // Listen for the service worker to become active
+            registration.addEventListener('activate', () => {
+              debug.info('Service Worker activated');
+            });
+          }
         } else {
           debug.error('Invalid service worker URL');
         }
@@ -185,8 +196,8 @@ class NotificationService {
     try {
       const options: NotificationOptions = {
         body: sanitizedNotification.message, // Already sanitized
-        icon: '/favicon.ico',
-        badge: '/favicon.ico',
+        icon: '/logo.png', // MeterSquare ERP logo
+        badge: '/logo.png',
         tag: sanitizedNotification.id,
         data: sanitizedNotification, // Use sanitized data
         requireInteraction: sanitizedNotification.priority === 'urgent' || sanitizedNotification.priority === 'high',
@@ -209,12 +220,12 @@ class NotificationService {
           {
             action: 'view',
             title: sanitizedNotification.actionLabel || 'View',
-            icon: '/favicon.ico'
+            icon: '/logo.png'
           },
           {
             action: 'dismiss',
             title: 'Dismiss',
-            icon: '/favicon.ico'
+            icon: '/logo.png'
           }
         ];
       }
@@ -222,36 +233,21 @@ class NotificationService {
       debug.info('Sending browser notification');
 
       // Try to use service worker for better handling (works even when tab is closed)
-      if (this.serviceWorkerRegistration) {
+      if (this.serviceWorkerRegistration && this.serviceWorkerRegistration.active) {
         debug.info('Using service worker for notification');
-        await this.serviceWorkerRegistration.showNotification(sanitizedNotification.title, options);
+        try {
+          await this.serviceWorkerRegistration.showNotification(sanitizedNotification.title, options);
+        } catch (error) {
+          debug.warn('Service worker notification failed, falling back to direct API:', error);
+          // Fallback to direct notification if service worker fails
+          const browserNotification = new Notification(sanitizedNotification.title, options);
+          this.setupDirectNotificationHandlers(browserNotification, sanitizedNotification);
+        }
       } else {
         debug.info('Using direct notification API');
         // Fallback to regular notification
         const browserNotification = new Notification(sanitizedNotification.title, options);
-
-        browserNotification.onclick = () => {
-          debug.info('Notification clicked');
-          this.handleNotificationClick(sanitizedNotification);
-          browserNotification.close();
-        };
-
-        browserNotification.onshow = () => {
-          debug.info('Browser notification shown');
-        };
-
-        browserNotification.onerror = (error) => {
-          debug.error('Browser notification error:', error);
-        };
-
-        // Auto-close after specified time based on priority
-        const autoCloseTime = sanitizedNotification.priority === 'urgent' ? 30000 :
-                             sanitizedNotification.priority === 'high' ? 15000 :
-                             sanitizedNotification.priority === 'medium' ? 10000 : 5000;
-
-        setTimeout(() => {
-          browserNotification.close();
-        }, autoCloseTime);
+        this.setupDirectNotificationHandlers(browserNotification, sanitizedNotification);
       }
 
       // Update browser tab title with notification badge
@@ -405,6 +401,34 @@ class NotificationService {
     await this.sendBrowserNotification(notification);
   }
 
+  // Setup handlers for direct notification API
+  private setupDirectNotificationHandlers(browserNotification: Notification, sanitizedNotification: NotificationData) {
+    const debug = getDebugLogger();
+
+    browserNotification.onclick = () => {
+      debug.info('Notification clicked');
+      this.handleNotificationClick(sanitizedNotification);
+      browserNotification.close();
+    };
+
+    browserNotification.onshow = () => {
+      debug.info('Browser notification shown');
+    };
+
+    browserNotification.onerror = (error) => {
+      debug.error('Browser notification error:', error);
+    };
+
+    // Auto-close after specified time based on priority
+    const autoCloseTime = sanitizedNotification.priority === 'urgent' ? 30000 :
+                         sanitizedNotification.priority === 'high' ? 15000 :
+                         sanitizedNotification.priority === 'medium' ? 10000 : 5000;
+
+    setTimeout(() => {
+      browserNotification.close();
+    }, autoCloseTime);
+  }
+
   // Handle notification click
   private handleNotificationClick(notification: NotificationData) {
     const debug = getDebugLogger();
@@ -479,9 +503,42 @@ class NotificationService {
     return {
       permission: this.permission,
       supported: 'Notification' in window,
-      serviceWorkerSupported: 'serviceWorker' in navigator
+      serviceWorkerSupported: 'serviceWorker' in navigator,
+      serviceWorkerActive: this.serviceWorkerRegistration?.active ? true : false
     };
+  }
+
+  // Test notification function for debugging
+  async testNotification(): Promise<void> {
+    const debug = getDebugLogger();
+    debug.info('Testing browser notification...');
+
+    // Request permission first
+    if (!this.isPermissionGranted()) {
+      await this.requestPermission();
+    }
+
+    if (!this.isPermissionGranted()) {
+      debug.warn('Cannot test notification - permission not granted');
+      return;
+    }
+
+    // Send a test notification
+    await this.sendSystemNotification({
+      type: 'info',
+      title: '🔔 Test Notification',
+      message: 'Browser notifications are working correctly!',
+      priority: 'medium'
+    });
+
+    debug.info('Test notification sent');
   }
 }
 
 export const notificationService = NotificationService.getInstance();
+
+// Make test function available globally in development mode for easy testing
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  (window as any).testNotification = () => notificationService.testNotification();
+  (window as any).notificationService = notificationService;
+}

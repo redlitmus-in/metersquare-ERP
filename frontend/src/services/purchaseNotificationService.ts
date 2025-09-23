@@ -127,19 +127,81 @@ export class PurchaseNotificationService {
     rejectedBy: string;
     reason?: string;
     project?: string;
-    backToRole: 'site supervisor' | 'procurement';
+    backToRole: 'site supervisor' | 'mep supervisor' | 'procurement';
+    originalSender?: string;
   }) {
     const debug = getDebugLogger();
     debug.info(`PR rejected by ${prData.rejectedBy}, sending back to ${prData.backToRole}`);
 
+    // Notify the person who needs to handle the rejection
     await notificationService.sendApprovalNotification({
       type: 'rejected',
       documentType: 'Purchase Requisition',
       documentId: prData.documentId,
       sender: prData.rejectedBy,
-      recipient: prData.backToRole === 'site supervisor' ? 'Site Supervisor' : 'Procurement Team',
+      recipient: prData.backToRole === 'site supervisor' ? 'Site Supervisor' :
+                prData.backToRole === 'mep supervisor' ? 'MEP Supervisor' : 'Procurement Team',
       project: prData.project,
       targetRole: prData.backToRole // Only the person who needs to revise should see this
+    });
+
+    // Also send a system notification with the rejection reason
+    if (prData.reason) {
+      await notificationService.sendSystemNotification({
+        type: 'error',
+        title: `PR ${prData.documentId} Rejected`,
+        message: `Rejected by ${prData.rejectedBy}. Reason: ${prData.reason}`,
+        priority: 'high'
+      });
+    }
+  }
+
+  // When PR is reapproved after a rejection
+  static async notifyPRReapproved(prData: {
+    documentId: string;
+    reapprovedBy: string;
+    project?: string;
+    amount?: number;
+    nextRole: string;
+  }) {
+    const debug = getDebugLogger();
+    debug.info(`PR reapproved by ${prData.reapprovedBy}, forwarding to ${prData.nextRole}`);
+
+    await notificationService.sendApprovalNotification({
+      type: 'received',
+      documentType: 'Purchase Requisition (Resubmitted)',
+      documentId: prData.documentId,
+      sender: prData.reapprovedBy,
+      recipient: prData.nextRole,
+      project: prData.project,
+      amount: prData.amount,
+      targetRole: prData.nextRole.toLowerCase() // Notify the next approver in the chain
+    });
+
+    // Send success notification to the resubmitter
+    await notificationService.sendSystemNotification({
+      type: 'success',
+      title: `PR ${prData.documentId} Resubmitted`,
+      message: `Successfully resubmitted and forwarded to ${prData.nextRole}`,
+      priority: 'medium'
+    });
+  }
+
+  // Send confirmation to the sender when PR is created
+  static async notifySenderConfirmation(prData: {
+    documentId: string;
+    project?: string;
+    amount?: number;
+  }) {
+    const debug = getDebugLogger();
+    debug.info(`Sending confirmation to PR sender for ${prData.documentId}`);
+
+    // Only send a simple toast confirmation to the sender
+    await notificationService.sendSystemNotification({
+      type: 'success',
+      title: 'Purchase Requisition Sent',
+      message: `PR ${prData.documentId} has been successfully submitted for approval`,
+      priority: 'low'
     });
   }
 

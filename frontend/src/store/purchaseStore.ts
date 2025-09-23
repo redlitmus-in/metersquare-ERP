@@ -8,6 +8,8 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import { apiClient, API_ENDPOINTS } from '@/api/config';
 import { toast } from 'sonner';
 import { subscribeToRealtime } from '@/lib/realtimeSubscriptions';
+import { notificationService } from '@/services/notificationService';
+import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
 
 interface Purchase {
   purchase_id: number;
@@ -284,13 +286,128 @@ const usePurchaseStore = create<PurchaseStore>()(
           const hasChanges = JSON.stringify(currentPurchases) !== JSON.stringify(purchaseData);
 
           if (hasChanges) {
+            // Get current user role
+            const userRole = localStorage.getItem('userRole')?.toLowerCase() || '';
+
             // Check for new purchases that need attention
             const newPurchases = purchaseData.filter(p =>
               !currentPurchases.find(cp => cp.purchase_id === p.purchase_id)
             );
 
+            // Check for status changes (rejections, reapprovals, etc.)
+            const statusChangedPurchases = purchaseData.filter(p => {
+              const currentPurchase = currentPurchases.find(cp => cp.purchase_id === p.purchase_id);
+              if (!currentPurchase) return false;
+
+              // Check if status has changed
+              return currentPurchase.status !== p.status ||
+                     currentPurchase.current_workflow_status !== p.current_workflow_status ||
+                     currentPurchase.procurement_status !== p.procurement_status ||
+                     currentPurchase.project_manager_status !== p.project_manager_status ||
+                     currentPurchase.estimation_status !== p.estimation_status ||
+                     currentPurchase.technical_director_status !== p.technical_director_status ||
+                     currentPurchase.accounts_status !== p.accounts_status;
+            });
+
+            // Handle new purchases notifications
             if (newPurchases.length > 0 && currentPurchases.length > 0) {
-              toast.info(`${newPurchases.length} new purchase${newPurchases.length > 1 ? 's' : ''} received`);
+              // Only send notifications if user is NOT a site/MEP supervisor (they are creators, not receivers)
+              if (!userRole.includes('site') && !userRole.includes('mep') && !userRole.includes('supervisor')) {
+                // Show toast notification
+                toast.info(`${newPurchases.length} new purchase${newPurchases.length > 1 ? 's' : ''} received`);
+
+                // Send browser notifications for each new purchase
+                newPurchases.forEach(async (purchase) => {
+                  // Request notification permission if not already granted
+                  if (!notificationService.isPermissionGranted()) {
+                    await notificationService.requestPermission();
+                  }
+
+                  // Send browser notification using the purchase notification service
+                  await PurchaseNotificationService.notifyPRSubmitted({
+                    documentId: `PR-${purchase.purchase_id}`,
+                    sender: purchase.requested_by || purchase.created_by || 'Unknown',
+                    project: purchase.project_id?.toString() || 'Unknown Project',
+                    amount: purchase.total_cost || 0,
+                    description: purchase.purpose || 'Purchase requisition'
+                  });
+                });
+              }
+            }
+
+            // Handle status change notifications (rejections, reapprovals)
+            if (statusChangedPurchases.length > 0 && currentPurchases.length > 0) {
+              statusChangedPurchases.forEach(async (purchase) => {
+                const currentPurchase = currentPurchases.find(cp => cp.purchase_id === purchase.purchase_id);
+                if (!currentPurchase) return;
+
+                // Check for rejection
+                if (purchase.status === 'rejected' && currentPurchase.status !== 'rejected') {
+                  // Determine who rejected and who should be notified
+                  let rejectedBy = 'Unknown';
+                  let backToRole: 'site supervisor' | 'mep supervisor' | 'procurement' = 'procurement';
+
+                  if (purchase.project_manager_rejection_reason) {
+                    rejectedBy = 'Project Manager';
+                    backToRole = 'procurement';
+                  } else if (purchase.estimation_rejection_reason) {
+                    rejectedBy = 'Estimation';
+                    backToRole = 'procurement';
+                  } else if (purchase.technical_director_rejection_reason) {
+                    rejectedBy = 'Technical Director';
+                    backToRole = 'procurement';
+                  } else if (purchase.accounts_rejection_reason) {
+                    rejectedBy = 'Accounts';
+                    backToRole = 'procurement';
+                  }
+
+                  // Check if the original requester was MEP or Site supervisor
+                  const requestedBy = purchase.requested_by?.toLowerCase() || '';
+                  if (requestedBy.includes('mep')) {
+                    backToRole = 'mep supervisor';
+                  } else if (requestedBy.includes('site')) {
+                    backToRole = 'site supervisor';
+                  }
+
+                  // Send rejection notification
+                  await PurchaseNotificationService.notifyPRRejected({
+                    documentId: `PR-${purchase.purchase_id}`,
+                    rejectedBy,
+                    reason: purchase.project_manager_rejection_reason ||
+                            purchase.estimation_rejection_reason ||
+                            purchase.technical_director_rejection_reason ||
+                            purchase.accounts_rejection_reason ||
+                            'No reason provided',
+                    project: purchase.project_id?.toString(),
+                    backToRole
+                  });
+                }
+
+                // Check for reapproval (status changed from rejected to pending/approved)
+                if (currentPurchase.status === 'rejected' && purchase.status !== 'rejected') {
+                  let nextRole = 'Procurement';
+
+                  // Determine next role based on workflow status
+                  if (purchase.current_workflow_status === 'project_manager') {
+                    nextRole = 'Project Manager';
+                  } else if (purchase.current_workflow_status === 'estimation') {
+                    nextRole = 'Estimation';
+                  } else if (purchase.current_workflow_status === 'technical_director') {
+                    nextRole = 'Technical Director';
+                  } else if (purchase.current_workflow_status === 'accounts') {
+                    nextRole = 'Accounts';
+                  }
+
+                  // Send reapproval notification
+                  await PurchaseNotificationService.notifyPRReapproved({
+                    documentId: `PR-${purchase.purchase_id}`,
+                    reapprovedBy: purchase.requested_by || 'Unknown',
+                    project: purchase.project_id?.toString(),
+                    amount: purchase.total_cost,
+                    nextRole
+                  });
+                }
+              });
             }
 
             set({

@@ -104,6 +104,15 @@ class SiteSupervisorService {
     try {
       const response = await apiClient.post('/purchase', purchaseData);
       if (response.data.success) {
+        // Send confirmation notification to the sender
+        const purchaseId = response.data.purchase_id || response.data.data?.purchase_id;
+        if (purchaseId) {
+          await PurchaseNotificationService.notifySenderConfirmation({
+            documentId: `PR-${purchaseId}`,
+            project: purchaseData.project_id,
+            amount: purchaseData.total_cost
+          });
+        }
         return response.data;
       }
       throw new Error(response.data.message || 'Failed to create purchase');

@@ -205,6 +205,7 @@ const MEPSupervisorMetricsCarousel: React.FC<{ metrics: any; formatCurrency: (am
 const MEPSupervisorHub: React.FC = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
+  const [isSendingToProcurement, setIsSendingToProcurement] = useState<Set<number>>(new Set());
   const [activeTab, setActiveTab] = useState('pending');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -241,6 +242,24 @@ const MEPSupervisorHub: React.FC = () => {
   // Currency formatting - Using AED
   const formatCurrency = (amount: number) => {
     return `AED ${amount.toLocaleString()}`;
+  };
+
+  // Helper functions to determine purchase status for tab filtering
+  const isPendingPurchase = (purchase: Purchase) => {
+    // Pending: Status is pending AND email not sent
+    return purchase.status === 'pending' && !purchase.email_sent;
+  };
+
+  const isEmailSentPurchase = (purchase: Purchase) => {
+    // Email sent: Email has been sent but not yet completed/approved
+    return purchase.email_sent &&
+           purchase.status !== 'completed' &&
+           purchase.status !== 'approved';
+  };
+
+  const isCompletedPurchase = (purchase: Purchase) => {
+    // Completed: Status is approved or completed
+    return purchase.status === 'approved' || purchase.status === 'completed';
   };
 
   // Initialize data
@@ -395,13 +414,31 @@ const MEPSupervisorHub: React.FC = () => {
   };
 
   const handleSendToProcurement = async (purchase: Purchase) => {
+    const purchaseId = purchase.purchase_id;
+
+    // Prevent duplicate requests
+    if (isSendingToProcurement.has(purchaseId)) {
+      toast.warning('Request already in progress...');
+      return;
+    }
+
     try {
-      await mepSupervisorService.sendToProcurement(purchase.purchase_id);
+      // Set loading state for this specific purchase
+      setIsSendingToProcurement(prev => new Set([...prev, purchaseId]));
+
+      await mepSupervisorService.sendToProcurement(purchaseId);
       toast.success('Purchase request sent to procurement successfully');
       loadData(); // Refresh the data
     } catch (error) {
       toast.error('Failed to send to procurement');
       console.error('Error sending to procurement:', error);
+    } finally {
+      // Remove loading state for this purchase
+      setIsSendingToProcurement(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(purchaseId);
+        return newSet;
+      });
     }
   };
 
@@ -414,10 +451,10 @@ const MEPSupervisorHub: React.FC = () => {
     currentPage * itemsPerPage
   );
 
-  // Reset to first page when tab changes
+  // Reset to first page when tab or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab]);
+  }, [activeTab, mepCategory, filterStatus, searchTerm]);
 
   // Pagination handlers
   const goToPrevPage = () => {
@@ -555,18 +592,18 @@ const MEPSupervisorHub: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Purchases Tabs */}
+      {/* Purchase Requests Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="flex items-center justify-between mb-4">
           <TabsList className="grid w-full grid-cols-3 max-w-lg">
             <TabsTrigger value="pending">
-              Pending ({filteredPurchases.filter(p => p.status === 'pending').length})
+              Pending ({filteredPurchases.filter(p => isPendingPurchase(p)).length})
             </TabsTrigger>
             <TabsTrigger value="email_sent">
-              Send Mail ({filteredPurchases.filter(p => p.status !== 'completed' && p.status !== 'approved' && (p.email_sent || p.status === 'email_sent' || p.current_workflow_status === 'email_sent' || p.procurement_status === 'approved')).length})
+              Send Mail ({filteredPurchases.filter(p => isEmailSentPurchase(p)).length})
             </TabsTrigger>
             <TabsTrigger value="approved">
-              Completed ({filteredPurchases.filter(p => p.status === 'approved' || p.status === 'completed').length})
+              Completed ({filteredPurchases.filter(p => isCompletedPurchase(p)).length})
             </TabsTrigger>
           </TabsList>
 
@@ -610,23 +647,18 @@ const MEPSupervisorHub: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {paginatedPurchases
                     .filter(p => {
-                  switch (activeTab) {
-                    case 'pending':
-                      return p.status === 'pending';
-                    case 'email_sent':
-                      return p.status !== 'completed' && p.status !== 'approved' &&
-                             (p.email_sent ||
-                             p.status === 'email_sent' ||
-                             p.current_workflow_status === 'email_sent' ||
-                             p.procurement_status === 'approved');
-                    case 'approved':
-                      // Only show completed items in the completed tab
-                      return p.status === 'approved' || p.status === 'completed';
-                    default:
-                      return true;
-                  }
-                })
-                .map((purchase) => {
+                      switch (activeTab) {
+                        case 'pending':
+                          return isPendingPurchase(p);
+                        case 'email_sent':
+                          return isEmailSentPurchase(p);
+                        case 'approved':
+                          return isCompletedPurchase(p);
+                        default:
+                          return true;
+                      }
+                    })
+                    .map((purchase) => {
                   // Transform purchase data to match PurchaseCard expectations
                   const purchaseData = {
                     ...purchase,
@@ -650,6 +682,8 @@ const MEPSupervisorHub: React.FC = () => {
                       onDelete={() => confirmDelete(purchase)}
                       onViewHistory={() => handleViewHistory(purchase)}
                       onSendToProcurement={() => handleSendToProcurement(purchase)}
+                      isLoading={isSendingToProcurement.has(purchase.purchase_id)}
+                      isSendingEmail={isSendingToProcurement.has(purchase.purchase_id)}
                     />
                   );
                 })
@@ -676,15 +710,11 @@ const MEPSupervisorHub: React.FC = () => {
                         .filter(p => {
                           switch (activeTab) {
                             case 'pending':
-                              return p.status === 'pending';
+                              return isPendingPurchase(p);
                             case 'email_sent':
-                              return p.status !== 'completed' && p.status !== 'approved' &&
-                                     (p.email_sent ||
-                                     p.status === 'email_sent' ||
-                                     p.current_workflow_status === 'email_sent' ||
-                                     p.procurement_status === 'approved');
+                              return isEmailSentPurchase(p);
                             case 'approved':
-                              return p.status === 'approved' || p.status === 'completed';
+                              return isCompletedPurchase(p);
                             default:
                               return true;
                           }
@@ -747,7 +777,7 @@ const MEPSupervisorHub: React.FC = () => {
                                 >
                                   <Eye className="h-3.5 w-3.5" />
                                 </Button>
-                                {activeTab === 'pending' && (
+                                {isPendingPurchase(purchase) && (
                                   <>
                                     <Button
                                       size="sm"
@@ -764,10 +794,15 @@ const MEPSupervisorHub: React.FC = () => {
                                     <Button
                                       size="sm"
                                       onClick={() => handleSendToProcurement(purchase)}
-                                      className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                                      title="Send to Procurement"
+                                      disabled={isSendingToProcurement.has(purchase.purchase_id)}
+                                      className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title={isSendingToProcurement.has(purchase.purchase_id) ? "Sending..." : "Send to Procurement"}
                                     >
-                                      <Send className="h-3.5 w-3.5" />
+                                      {isSendingToProcurement.has(purchase.purchase_id) ? (
+                                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        <Send className="h-3.5 w-3.5" />
+                                      )}
                                     </Button>
                                   </>
                                 )}
