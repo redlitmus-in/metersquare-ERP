@@ -11,11 +11,6 @@ import { debugNotifications } from './utils/debugNotifications'
 // Make debug utilities available globally for development
 if (import.meta.env.DEV) {
   (window as any).debugNotifications = debugNotifications;
-
-  // Import test utilities
-  import('./utils/testNotifications');
-  import('./utils/testPRWorkflow');
-  import('./utils/testAllRolesNotifications');
 }
 
 // Register service worker for aggressive caching (production only)
