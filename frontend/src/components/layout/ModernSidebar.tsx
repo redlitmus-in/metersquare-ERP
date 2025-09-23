@@ -247,8 +247,22 @@ const ModernSidebar: React.FC<SidebarProps> = memo(({ sidebarOpen, setSidebarOpe
         icon: ShoppingCartIcon,
         iconSolid: ShoppingSolid,
         color: 'text-red-600'
-      },
-      {
+      }
+    ];
+
+    // Only add Vendor Management for roles that have access to it
+    // According to PDF workflow: PM, Procurement, Estimation, TD, Accounts
+    // Site/MEP Supervisors do NOT have vendor access
+    const vendorAllowedRoles = [
+      UserRole.PROJECT_MANAGER,
+      UserRole.PROCUREMENT,
+      UserRole.ESTIMATION,
+      UserRole.TECHNICAL_DIRECTOR,
+      UserRole.ACCOUNTS
+    ];
+
+    if (vendorAllowedRoles.includes(roleId as UserRole)) {
+      baseItems.push({
         name: 'Vendor Management',
         href: buildPath('/vendors'),
         icon: UsersIcon,
@@ -259,8 +273,8 @@ const ModernSidebar: React.FC<SidebarProps> = memo(({ sidebarOpen, setSidebarOpe
           { name: 'Scope of Work', href: buildPath('/vendors/scope-of-work'), icon: DocumentTextIcon, iconSolid: DocumentTextIcon },
           { name: 'Quotations', href: buildPath('/vendors/quotations'), icon: CurrencyDollarIcon, iconSolid: CurrencyDollarIcon }
         ]
-      },
-    ];
+      });
+    }
 
     const managerItems: NavigationItem[] = [
       { 
