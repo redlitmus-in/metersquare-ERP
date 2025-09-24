@@ -9,25 +9,13 @@ from email.header import Header
 from email.utils import formataddr
 from datetime import datetime
 from typing import List, Dict
-from flask import jsonify, g
-from sqlalchemy import and_
 
 from models.project import Project
 from config.logging import get_logger
 from models.user import User
 from models.role import Role
-from models.purchase import Purchase
-from models.material import Material
-
-try:
-    from .email_styles import get_email_styles
-except ImportError:
-    # Fallback if styles file doesn't exist
-    def get_email_styles():
-        return ""
 
 log = get_logger()
-
 
 class EmailService:
     def __init__(self):
@@ -3877,3 +3865,5 @@ Meter Square
         except Exception as e:
             log.error(f"Error sending acknowledgement notification to stakeholders: {str(e)}")
             return False
+
+

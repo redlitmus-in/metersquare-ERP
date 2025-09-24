@@ -33,4 +33,10 @@ def update_boq_route(boq_id):
 def delete_boq_route(boq_id):
     return delete_boq(boq_id)
 
+# Send BOQ Email Notification (Separate API)
+@boq_routes.route('/send_boq_email/<int:boq_id>', methods=['GET'])
+@jwt_required
+def send_boq_email_route(boq_id):
+    return send_boq_email(boq_id)
+
 
