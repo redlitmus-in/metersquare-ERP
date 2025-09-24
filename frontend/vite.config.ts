@@ -94,7 +94,7 @@ export default defineConfig({
         comments: false
       }
     },
-    // No source maps in production for smaller size
+    // Disable source maps completely in production for security
     sourcemap: false,
     // CSS code splitting
     cssCodeSplit: true,
