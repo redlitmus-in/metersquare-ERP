@@ -130,8 +130,8 @@ export default defineConfig({
         safari10: true, // Fix Safari 10 issues
       }
     },
-    // Disable source maps completely in production for security
-    sourcemap: false,
+    // Source maps for debugging production issues
+    sourcemap: 'hidden', // Hidden source maps for error reporting
     // CSS code splitting
     cssCodeSplit: true,
     // Report compressed size

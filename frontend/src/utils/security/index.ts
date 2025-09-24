@@ -6,10 +6,6 @@
 import { encryption } from './encryption';
 import { selfDefense } from './self-defending';
 import { secureAPI, secureFetch, secureStorage } from './secure-api';
-import { consoleProtection } from './console-protection';
-import { fileStructureObfuscator } from './file-structure-obfuscator';
-import { webpackObfuscator } from './webpack-obfuscator';
-import { sourceMapBlocker } from './source-map-blocker';
 
 class MeterSquareSecuritySystem {
   private initialized: boolean = false;
@@ -43,24 +39,6 @@ class MeterSquareSecuritySystem {
 
       // Add copy protection for sensitive data
       this.addCopyProtection();
-      
-      // Initialize console protection to hide sensitive output
-      // This will hide file structure in console logs
-      console.log('✅ Console protection active');
-      
-      // Initialize file structure obfuscation
-      // This will hide the actual file structure in dev tools
-      fileStructureObfuscator.initialize();
-      console.log('✅ File structure obfuscation active');
-      
-      // Initialize webpack obfuscation
-      // This will hide webpack modules and chunk information
-      webpackObfuscator.initialize();
-      console.log('✅ Webpack module obfuscation active');
-      
-      // Block source maps to prevent source code viewing
-      sourceMapBlocker.initialize();
-      console.log('✅ Source map blocking active');
 
       console.log('✅ Security system fully initialized');
     } else {
@@ -218,11 +196,7 @@ class MeterSquareSecuritySystem {
     encryption,
     secureFetch,
     secureStorage,
-    selfDefense,
-    consoleProtection,
-    fileStructureObfuscator,
-    webpackObfuscator,
-    sourceMapBlocker
+    selfDefense
   };
 }
 
@@ -230,7 +204,7 @@ class MeterSquareSecuritySystem {
 export const Security = new MeterSquareSecuritySystem();
 
 // Export individual components for direct import
-export { encryption, selfDefense, secureAPI, secureFetch, secureStorage, consoleProtection, fileStructureObfuscator, webpackObfuscator, sourceMapBlocker };
+export { encryption, selfDefense, secureAPI, secureFetch, secureStorage };
 
 // Auto-initialize on import
 if (typeof window !== 'undefined') {
