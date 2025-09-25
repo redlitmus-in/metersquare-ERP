@@ -661,7 +661,7 @@ const SiteSupervisorHub: React.FC = () => {
           animate={{ opacity: 1, y: 0 }}
           className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl shadow-xl p-6 text-gray-800 border border-red-200"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between pr-16">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-white/20 rounded-lg backdrop-blur">
                 <Package className="w-8 h-8" />

@@ -17,7 +17,7 @@ import {
   MapPin,
   Hammer,
   Calendar,
-  Bell,
+  Mail,
   ChevronUp,
   ChevronDown,
   BarChart3,
@@ -274,14 +274,14 @@ const SiteSupervisorDashboard: React.FC = () => {
           color: 'text-green-600', 
           subtitle: 'All purchases' 
         },
-        { 
-          title: 'Email Status', 
-          value: analytics.procurement_email_send || 0, 
-          change: ((analytics.procurement_email_send / (analytics.total_purchases || 1)) * 100).toFixed(1), 
-          trend: 'up' as const, 
-          icon: Bell, 
-          color: 'text-purple-600', 
-          subtitle: `${analytics.procurement_unemail_send || 0} pending` 
+        {
+          title: 'Email Status',
+          value: analytics.procurement_email_send || 0,
+          change: ((analytics.procurement_email_send / (analytics.total_purchases || 1)) * 100).toFixed(1),
+          trend: 'up' as const,
+          icon: Mail,
+          color: 'text-purple-600',
+          subtitle: `${analytics.procurement_unemail_send || 0} pending`
         }
       ];
     }
@@ -291,7 +291,7 @@ const SiteSupervisorDashboard: React.FC = () => {
       { title: 'Total Purchases', value: 0, change: 0, trend: 'stable' as const, icon: Package, color: 'text-red-600', subtitle: 'No data' },
       { title: 'Total Materials', value: 0, change: 0, trend: 'stable' as const, icon: Hammer, color: 'text-blue-600', subtitle: 'No data' },
       { title: 'Total Cost', value: 'AED 0', change: 0, trend: 'stable' as const, icon: TrendingUp, color: 'text-green-600', subtitle: 'No data' },
-      { title: 'Email Status', value: 0, change: 0, trend: 'stable' as const, icon: Bell, color: 'text-purple-600', subtitle: 'No data' }
+      { title: 'Email Status', value: 0, change: 0, trend: 'stable' as const, icon: Mail, color: 'text-purple-600', subtitle: 'No data' }
     ];
   };
 
@@ -424,30 +424,6 @@ const SiteSupervisorDashboard: React.FC = () => {
           <p className="text-xs text-gray-600 mt-0.5">
             Real-time monitoring of construction sites and operations
           </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end">
-          <Button
-            onClick={(e) => {
-              e.preventDefault();
-              // Force navigation to procurement page
-              console.log('Procurement Hub clicked - navigating to /procurement');
-              navigate('../procurement', { replace: false });
-            }}
-            className="h-8 px-4 flex items-center gap-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-md transition-all duration-200 shadow-sm hover:shadow-md"
-          >
-            <Package className="w-4 h-4" />
-            <span>Procurement Hub</span>
-          </Button>
-          <select
-            aria-label="Select Period"
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value as any)}
-            className="h-8 px-3 mr-12 text-sm border border-gray-300 rounded-md bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent cursor-pointer transition-colors"
-          >
-            <option value="day">Today</option>
-            <option value="week">This Week</option>
-            <option value="month">This Month</option>
-          </select>
         </div>
       </div>
 
