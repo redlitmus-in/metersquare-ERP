@@ -32,6 +32,8 @@ def get_workflow_roles():
                 title = 'Project Manager'
             elif role_id == 'technicalDirector':
                 title = 'Technical Director'
+            elif role_id == 'estimator':
+                title = 'Estimator'
             else:
                 # Capitalize first letter for single words
                 title = role_id.capitalize()

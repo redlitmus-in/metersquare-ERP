@@ -13,6 +13,7 @@ export enum UserRole {
   PROJECT_MANAGER = 'projectManager',
   DESIGN = 'design',
   ESTIMATION = 'estimation',
+  ESTIMATOR = 'estimator',
   ACCOUNTS = 'accounts',
   TECHNICAL_DIRECTOR = 'technicalDirector',
 }

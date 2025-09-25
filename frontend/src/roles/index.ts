@@ -8,16 +8,18 @@ import { siteSupervisorPermissions } from './site-supervisor/permissions';
 import { mepSupervisorPermissions } from './mep-supervisor/permissions';
 import { projectManagerPermissions } from './project-manager/permissions';
 import { estimationPermissions } from './estimation/permissions';
+import { estimatorPermissions } from './estimator/permissions';
 import { technicalDirectorPermissions } from './technical-director/permissions';
 import { accountsPermissions } from './accounts/permissions';
 import { designPermissions } from './design/permissions';
 
-export type UserRole = 
+export type UserRole =
   | 'procurement'
   | 'site_supervisor'
   | 'mep_supervisor'
   | 'project_manager'
   | 'estimation'
+  | 'estimator'
   | 'technical_director'
   | 'accounts'
   | 'design'
@@ -52,8 +54,10 @@ export const getRolePermissions = (role: string) => {
       return projectManagerPermissions;
       
     case 'estimation':
-    case 'estimator':
       return estimationPermissions;
+
+    case 'estimator':
+      return estimatorPermissions;
       
     case 'technical_director':
     case 'td':
@@ -171,8 +175,10 @@ export const getRoleDashboard = async (role: string) => {
       return (await import('@/pages/dashboards/ProjectManagerDashboard')).default;
       
     case 'estimation':
-    case 'estimator':
       return (await import('@/pages/dashboards/EstimationDashboard')).default;
+
+    case 'estimator':
+      return (await import('@/pages/dashboards/EstimatorDashboard')).default;
       
     case 'technical_director':
     case 'td':
@@ -219,8 +225,10 @@ export const getRoleDashboardPath = (role: string): string => {
       return '/project-manager/dashboard';
       
     case 'estimation':
-    case 'estimator':
       return '/estimation/dashboard';
+
+    case 'estimator':
+      return '/estimator/dashboard';
       
     case 'technical_director':
     case 'td':

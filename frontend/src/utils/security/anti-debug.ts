@@ -70,7 +70,7 @@ if (typeof __PRODUCTION__ !== 'undefined' && __PRODUCTION__) {
     };
 
     // 6. Key Combination Blocking - DISABLED
-    const blockKeyCombinat ions = () => {
+    const blockKeyCombinations = () => {
       // All keyboard shortcuts allowed for better UX
     };
 
@@ -211,7 +211,7 @@ if (typeof __PRODUCTION__ !== 'undefined' && __PRODUCTION__) {
         protectConsole();
         disableContextMenu();
         disableSelection();
-        blockKeyCombinat ions();
+        blockKeyCombinations();
         detectSourceMaps();
         protectGlobals();
         protectToString();

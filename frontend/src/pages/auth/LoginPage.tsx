@@ -62,6 +62,7 @@ const availableRoles = [
   { value: 'siteSupervisor', label: 'Site Supervisor', icon: HardHat },
   { value: 'mepSupervisor', label: 'MEP Supervisor', icon: Activity },
   { value: 'estimation', label: 'Estimation', icon: BarChart3 },
+  { value: 'estimator', label: 'Estimator', icon: FileText },
   { value: 'accounts', label: 'Accounts', icon: Building2 },
   // { value: 'design', label: 'Design', icon: Layers },
 ];

@@ -38,6 +38,7 @@ const DeliveriesPage = lazy(() => import('@/roles/procurement/pages/DeliveriesPa
 const ProjectManagerHub = lazy(() => import('@/roles/project-manager/pages/ProjectManagerHub'));
 const PurchaseApprovalsPage = lazy(() => import('@/roles/project-manager/pages/PurchaseApprovalsPage'));
 const EstimationHub = lazy(() => import('@/roles/estimation/pages/EstimationHub'));
+const EstimatorHub = lazy(() => import('@/roles/estimator/pages/EstimatorHub'));
 const TechnicalDirectorHub = lazy(() => import('@/roles/technical-director/pages/TechnicalDirectorHub'));
 const SiteSupervisorHub = lazy(() => import('@/roles/site-supervisor/pages/SiteSupervisorHub'));
 const MEPSupervisorHub = lazy(() => import('@/roles/mep-supervisor/pages/MEPSupervisorHub'));
@@ -80,6 +81,10 @@ const RoleSpecificProcurementHub: React.FC = () => {
   
   if (userRoleLower === 'estimation') {
     return <EstimationHub />;
+  }
+
+  if (userRoleLower === 'estimator') {
+    return <EstimatorHub />;
   }
   
   if (userRole === 'technicalDirector' || userRoleLower === 'technical director' || userRoleLower === 'technical_director' || userRoleLower === 'technicaldirector') {
@@ -386,6 +391,9 @@ function App() {
             <Route path="procurement" element={
               <RoleSpecificProcurementHub />
             } />
+
+            {/* Estimator Routes */}
+            <Route path="boq-management" element={<EstimatorHub />} />
 
             {/* Vendor Management Routes - Role-specific vendor hub */}
             <Route path="vendors" element={<RoleSpecificVendorHub />} />

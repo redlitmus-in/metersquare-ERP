@@ -104,6 +104,25 @@ ROLE_HIERARCHY = {
         'color': '#f59e0b',
         'icon': 'Calculator'
     },
+    'estimator': {
+        'level': 3,
+        'tier': 'Technical',
+        'approval_limit': 25000,
+        'can_approve': ['boq_approval'],
+        'permissions': [
+            'create_boq',
+            'edit_boq',
+            'upload_boq_pdf',
+            'extract_boq_data',
+            'approve_boq',
+            'send_boq',
+            'view_boq_analytics',
+            'manage_boq_items'
+        ],
+        'description': 'Estimator - BOQ management and cost estimation',
+        'color': '#4f46e5',
+        'icon': 'FileText'
+    },
     'accounts': {
         'level': 3,
         'tier': 'Support',
@@ -178,6 +197,7 @@ ROLE_DEPARTMENTS = {
     'projectManager': 'Management',
     'design': 'Technical',
     'estimation': 'Technical',
+    'estimator': 'Technical',
     'accounts': 'Finance',
     'technicalDirector': 'Executive'
 }

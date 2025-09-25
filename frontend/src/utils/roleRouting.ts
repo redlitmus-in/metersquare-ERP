@@ -26,6 +26,7 @@ export const ROLE_ID_TO_NAME: Record<number, string> = {
   7: UserRole.ESTIMATION,
   8: UserRole.ACCOUNTS,
   9: UserRole.TECHNICAL_DIRECTOR,
+  10: 'estimator' // New estimator role
 };
 
 /**
@@ -40,6 +41,7 @@ export const ROLE_URL_SLUGS: Record<string, string> = {
   [UserRole.ESTIMATION]: 'estimation',
   [UserRole.ACCOUNTS]: 'accounts',
   [UserRole.TECHNICAL_DIRECTOR]: 'technical-director',
+  'estimator': 'estimator' // New estimator role
 };
 
 /**
@@ -59,6 +61,7 @@ export const ROLE_DASHBOARD_PATHS: Record<string, string> = {
   [UserRole.ESTIMATION]: '/estimation/dashboard',
   [UserRole.ACCOUNTS]: '/accounts/dashboard',
   [UserRole.TECHNICAL_DIRECTOR]: '/technical-director/dashboard',
+  'estimator': '/estimator/dashboard' // New estimator role
 };
 
 /**
@@ -128,9 +131,10 @@ export const getRoleDisplayName = (role: string | number | UserRole): string => 
     [UserRole.ESTIMATION]: 'Estimation',
     [UserRole.ACCOUNTS]: 'Accounts',
     [UserRole.TECHNICAL_DIRECTOR]: 'Technical Director',
+    'estimator': 'Estimator' // New estimator role
   };
-  
-  return roleNames[roleName as UserRole] || 'User';
+
+  return roleNames[roleName as UserRole] || roleNames[roleName] || 'User';
 };
 
 /**
@@ -148,9 +152,10 @@ export const getRoleThemeColor = (role: string | UserRole): string => {
     [UserRole.ESTIMATION]: 'amber',
     [UserRole.ACCOUNTS]: 'emerald',
     [UserRole.TECHNICAL_DIRECTOR]: 'blue',
+    'estimator': 'indigo' // New estimator role
   };
-  
-  return roleColors[role as UserRole] || 'gray';
+
+  return roleColors[role as UserRole] || roleColors[role] || 'gray';
 };
 
 /**
@@ -211,6 +216,7 @@ export const hasRouteAccess = (userRole: string | UserRole, routePath: string): 
     [UserRole.DESIGN]: ['/projects', '/workflows'],
     [UserRole.ESTIMATION]: ['/procurement/quotations'],
     [UserRole.ACCOUNTS]: ['/procurement/approvals'],
+    'estimator': ['/boq-management', '/cost-analysis', '/projects'] // New estimator role
   };
   
   const allowedRoutes = roleAccess[userRole as UserRole] || [];
