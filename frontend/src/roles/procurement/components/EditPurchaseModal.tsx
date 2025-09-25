@@ -321,6 +321,7 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({
                               className="w-full px-3 py-2 border rounded-md"
                               value={material.priority || 'medium'}
                               onChange={(e) => handleMaterialChange(index, 'priority', e.target.value)}
+                              aria-label="Priority level for material"
                             >
                               <option value="low">Low</option>
                               <option value="medium">Medium</option>

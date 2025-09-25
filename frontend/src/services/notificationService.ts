@@ -8,6 +8,7 @@ import {
   isValidServiceWorkerUrl,
   createSecureNotificationId
 } from '@/utils/notificationSecurity';
+import { NotificationConfig, getToastDuration, getAutoCloseDuration } from '@/config/notificationConfig';
 
 export interface NotificationData {
   id: string;
@@ -296,7 +297,7 @@ class NotificationService {
     // Show toast notification
     toast.success(`Email sent to ${emailData.recipient}`, {
       description: emailData.subject,
-      duration: 5000
+      duration: getToastDuration('default')
     });
   }
 
@@ -376,7 +377,7 @@ class NotificationService {
 
     toastMethod(`${config.icon} ${config.title}`, {
       description: notification.message,
-      duration: approvalData.type === 'received' ? 8000 : 5000
+      duration: approvalData.type === 'received' ? getToastDuration('approval') : getToastDuration('default')
     });
   }
 
@@ -420,9 +421,7 @@ class NotificationService {
     };
 
     // Auto-close after specified time based on priority
-    const autoCloseTime = sanitizedNotification.priority === 'urgent' ? 30000 :
-                         sanitizedNotification.priority === 'high' ? 15000 :
-                         sanitizedNotification.priority === 'medium' ? 10000 : 5000;
+    const autoCloseTime = getAutoCloseDuration(sanitizedNotification.priority || 'medium');
 
     setTimeout(() => {
       browserNotification.close();
@@ -469,7 +468,7 @@ class NotificationService {
   }
 
   // Notify all subscribers
-  private notifyCallbacks(notification: NotificationData) {
+  notifyCallbacks(notification: NotificationData) {
     this.callbacks.forEach(callback => {
       try {
         callback(notification);

@@ -5,14 +5,15 @@
 
 import { sanitizeText } from '@/utils/sanitizer';
 import { NotificationData } from '@/services/notificationService';
+import { NotificationConfig } from '@/config/notificationConfig';
 
-// Constants for security limits
-const MAX_NOTIFICATIONS = 100;
-const MAX_NOTIFICATION_AGE_DAYS = 30;
-const MIN_NOTIFICATION_INTERVAL_MS = 1000; // 1 second
-const MAX_TITLE_LENGTH = 200;
-const MAX_MESSAGE_LENGTH = 500;
-const MAX_URL_LENGTH = 2000;
+// Use centralized config for all limits
+const MAX_NOTIFICATIONS = NotificationConfig.limits.maxNotifications;
+const MAX_NOTIFICATION_AGE_DAYS = 30; // Keep this as is for now
+const MIN_NOTIFICATION_INTERVAL_MS = NotificationConfig.timing.minNotificationInterval;
+const MAX_TITLE_LENGTH = NotificationConfig.limits.maxTitleLength;
+const MAX_MESSAGE_LENGTH = NotificationConfig.limits.maxMessageLength;
+const MAX_URL_LENGTH = NotificationConfig.limits.maxUrlLength;
 
 /**
  * Rate limiter for notifications

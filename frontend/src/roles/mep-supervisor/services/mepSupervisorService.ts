@@ -1,5 +1,5 @@
 import { apiClient } from '@/api/config';
-import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
+import { sendPRNotification, sendSystemNotification } from '@/middleware/notificationMiddleware';
 
 export interface Material {
   material_id: number;
@@ -166,11 +166,7 @@ class MEPSupervisorService {
         // Send confirmation notification to the sender
         const purchaseId = response.data.purchase_id || response.data.data?.purchase_id;
         if (purchaseId) {
-          await PurchaseNotificationService.notifySenderConfirmation({
-            documentId: `PR-${purchaseId}`,
-            project: purchaseData.project_id,
-            amount: purchaseData.total_cost
-          });
+          await sendSystemNotification('success', 'MEP Purchase Request Created', `PR-${purchaseId} has been created and sent to Procurement for review`);
         }
         return response.data;
       }
@@ -241,12 +237,11 @@ class MEPSupervisorService {
           sum + (m.quantity * m.cost), 0) || purchaseDetails.total_cost || 0;
 
         // Send notification to procurement about new MEP PR submission
-        await PurchaseNotificationService.notifyPRSubmitted({
+        await sendPRNotification('submitted', {
           documentId: String(purchaseId),
-          sender: 'MEP Supervisor',
-          project: purchaseDetails.project_id,
-          amount: totalAmount,
-          description: purchaseDetails.purpose + ' (MEP)'
+          submittedBy: 'MEP Supervisor',
+          projectName: purchaseDetails.project_id,
+          nextRole: 'Procurement'
         });
 
         return response.data;

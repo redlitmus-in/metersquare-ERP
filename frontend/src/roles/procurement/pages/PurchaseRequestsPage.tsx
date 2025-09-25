@@ -717,6 +717,7 @@ const PurchaseRequestsPage: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 bg-white text-sm"
                     value={filterProject}
                     onChange={(e) => setFilterProject(e.target.value)}
+                    aria-label="Filter by project"
                   >
                     <option value="all">All Projects</option>
                     {[...new Set(purchaseRequests.map(r => r.project))].map(project => (
@@ -734,6 +735,7 @@ const PurchaseRequestsPage: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 bg-white text-sm"
                     value={filterDepartment}
                     onChange={(e) => setFilterDepartment(e.target.value)}
+                    aria-label="Filter by department"
                   >
                     <option value="all">All Departments</option>
                     {[...new Set(purchaseRequests.map(r => r.department))].map(dept => (

@@ -8,8 +8,7 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import { apiClient, API_ENDPOINTS } from '@/api/config';
 import { toast } from 'sonner';
 import { subscribeToRealtime } from '@/lib/realtimeSubscriptions';
-import { notificationService } from '@/services/notificationService';
-import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
+import { sendPRNotification, requestNotificationPermission } from '@/middleware/notificationMiddleware';
 
 interface Purchase {
   purchase_id: number;
@@ -319,17 +318,14 @@ const usePurchaseStore = create<PurchaseStore>()(
                 // Send browser notifications for each new purchase
                 newPurchases.forEach(async (purchase) => {
                   // Request notification permission if not already granted
-                  if (!notificationService.isPermissionGranted()) {
-                    await notificationService.requestPermission();
-                  }
+                  await requestNotificationPermission();
 
                   // Send browser notification using the purchase notification service
-                  await PurchaseNotificationService.notifyPRSubmitted({
+                  await sendPRNotification('submitted', {
                     documentId: `PR-${purchase.purchase_id}`,
-                    sender: purchase.requested_by || purchase.created_by || 'Unknown',
-                    project: purchase.project_id?.toString() || 'Unknown Project',
-                    amount: purchase.total_cost || 0,
-                    description: purchase.purpose || 'Purchase requisition'
+                    submittedBy: purchase.requested_by || purchase.created_by || 'Unknown',
+                    projectName: purchase.project_id?.toString() || 'Unknown Project',
+                    nextRole: 'Procurement'
                   });
                 });
               }
@@ -370,7 +366,7 @@ const usePurchaseStore = create<PurchaseStore>()(
                   }
 
                   // Send rejection notification
-                  await PurchaseNotificationService.notifyPRRejected({
+                  await sendPRNotification('rejected', {
                     documentId: `PR-${purchase.purchase_id}`,
                     rejectedBy,
                     reason: purchase.project_manager_rejection_reason ||
@@ -378,12 +374,12 @@ const usePurchaseStore = create<PurchaseStore>()(
                             purchase.technical_director_rejection_reason ||
                             purchase.accounts_rejection_reason ||
                             'No reason provided',
-                    project: purchase.project_id?.toString(),
-                    backToRole
+                    projectName: purchase.project_id?.toString()
                   });
                 }
 
                 // Check for reapproval (status changed from rejected to pending/approved)
+                // This happens when PR is edited and resubmitted after rejection
                 if (currentPurchase.status === 'rejected' && purchase.status !== 'rejected') {
                   let nextRole = 'Procurement';
 
@@ -396,14 +392,45 @@ const usePurchaseStore = create<PurchaseStore>()(
                     nextRole = 'Technical Director';
                   } else if (purchase.current_workflow_status === 'accounts') {
                     nextRole = 'Accounts';
+                  } else if (purchase.current_workflow_status === 'procurement') {
+                    // If workflow is at procurement and status is pending, it means resubmitted
+                    // Need to notify next approver (usually Project Manager)
+                    nextRole = 'Project Manager';
                   }
 
+                  console.log(`PR ${purchase.purchase_id} resubmitted - notifying ${nextRole}`);
+
                   // Send reapproval notification
-                  await PurchaseNotificationService.notifyPRReapproved({
+                  await sendPRNotification('reapproved', {
                     documentId: `PR-${purchase.purchase_id}`,
-                    reapprovedBy: purchase.requested_by || 'Unknown',
-                    project: purchase.project_id?.toString(),
-                    amount: purchase.total_cost,
+                    reapprovedBy: purchase.last_modified_by || purchase.requested_by || 'Unknown',
+                    projectName: purchase.project_id?.toString(),
+                    nextRole
+                  });
+                }
+
+                // Also check if PR was just modified and email_sent flag was reset
+                // This indicates a resubmission after editing
+                if (currentPurchase.email_sent === true && purchase.email_sent === false &&
+                    purchase.status === 'pending' && currentPurchase.status === 'rejected') {
+                  console.log(`PR ${purchase.purchase_id} edited and ready for resubmission`);
+
+                  // Determine who should be notified based on workflow
+                  let nextRole = 'Project Manager'; // Default to PM for first approval
+
+                  if (purchase.current_workflow_status === 'estimation') {
+                    nextRole = 'Estimation';
+                  } else if (purchase.current_workflow_status === 'technical_director') {
+                    nextRole = 'Technical Director';
+                  } else if (purchase.current_workflow_status === 'accounts') {
+                    nextRole = 'Accounts';
+                  }
+
+                  // Send notification that PR is ready for re-review
+                  await sendPRNotification('reapproved', {
+                    documentId: `PR-${purchase.purchase_id}`,
+                    reapprovedBy: purchase.last_modified_by || 'Procurement Team',
+                    projectName: purchase.project_id?.toString(),
                     nextRole
                   });
                 }

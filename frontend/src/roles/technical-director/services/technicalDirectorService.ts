@@ -5,7 +5,7 @@
  */
 
 import { apiClient, API_ENDPOINTS } from '@/api/config';
-import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
+import { sendPRNotification, sendSystemNotification } from '@/middleware/notificationMiddleware';
 import type {
   TechnicalDirectorApprovalRequest,
   TechnicalDirectorApprovalResponse,
@@ -39,12 +39,12 @@ class TechnicalDirectorService {
         const purchase = purchaseDetails.purchase_details || purchaseDetails;
 
         // Send final approval notification - this completes the workflow
-        await PurchaseNotificationService.notifyPRFinallyApproved({
+        await sendPRNotification('approved', {
           documentId: String(purchaseId),
-          project: purchase.project_id,
-          amount: purchase.materials_summary?.total_cost || 0,
-          approvedBy: 'Technical Director'
+          projectName: purchase.project_id,
+          nextRole: 'Procurement'
         });
+        await sendSystemNotification('success', 'Purchase Request Approved', `PR-${purchaseId} has been finally approved and sent to Procurement for execution`);
       }
 
       return response.data;
@@ -81,12 +81,11 @@ class TechnicalDirectorService {
         const purchase = purchaseDetails.purchase_details || purchaseDetails;
 
         // Send rejection notification back to estimation
-        await PurchaseNotificationService.notifyPRRejected({
+        await sendPRNotification('rejected', {
           documentId: String(purchaseId),
           rejectedBy: 'Technical Director',
           reason: rejectionReason,
-          project: purchase.project_id,
-          backToRole: 'estimation'
+          projectName: purchase.project_id
         });
       }
 

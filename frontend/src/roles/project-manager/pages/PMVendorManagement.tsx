@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { vendorService } from '@/services/vendorService';
 
 interface VendorSOW {
   id: string;
@@ -63,12 +64,13 @@ const PMVendorManagement: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState('pending');
   const [sows, setSows] = useState<VendorSOW[]>([]);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
-    totalSOWs: 8,
-    pendingApproval: 3,
-    approved: 4,
-    rejected: 1,
-    totalValue: 2450000
+    totalSOWs: 0,
+    pendingApproval: 0,
+    approved: 0,
+    rejected: 0,
+    totalValue: 0
   });
 
   // Approval dialog state
@@ -80,60 +82,42 @@ const PMVendorManagement: React.FC = () => {
   // View mode state
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  // Sample SOW data
+  // Load SOW data from API
   useEffect(() => {
-    const sampleSOWs: VendorSOW[] = [
-      {
-        id: '1',
-        sowNumber: 'SOW-2024-045',
-        projectName: 'Dubai Marina Tower',
-        vendorName: 'ABC Trading LLC',
-        category: 'Electrical',
-        status: 'submitted',
-        totalAmount: 125000,
-        createdDate: '2024-03-18',
-        boqReference: 'BOQ-2024-089',
-        approvalStage: 'Awaiting Procurement Review'
-      },
-      {
-        id: '2',
-        sowNumber: 'SOW-2024-043',
-        projectName: 'Abu Dhabi Mall',
-        vendorName: 'Global MEP Solutions',
-        category: 'MEP Systems',
-        status: 'qty_scope_review',
-        totalAmount: 280000,
-        createdDate: '2024-03-15',
-        boqReference: 'BOQ-2024-087',
-        approvalStage: 'QTY/SCOPE FLAG Review'
-      },
-      {
-        id: '3',
-        sowNumber: 'SOW-2024-041',
-        projectName: 'Sharjah Office',
-        vendorName: 'XYZ Contractors',
-        category: 'Civil Works',
-        status: 'pm_approved',
-        totalAmount: 450000,
-        createdDate: '2024-03-10',
-        boqReference: 'BOQ-2024-085',
-        approvalStage: 'PM FLAG Approved - Sent to Estimation'
-      },
-      {
-        id: '4',
-        sowNumber: 'SOW-2024-039',
-        projectName: 'Dubai Marina Tower',
-        vendorName: 'Prime Furniture Co.',
-        category: 'Furniture',
-        status: 'rejected',
-        totalAmount: 180000,
-        createdDate: '2024-03-08',
-        boqReference: 'BOQ-2024-083',
-        rejectionReason: 'Scope exceeds project requirements'
-      }
-    ];
-    setSows(sampleSOWs);
+    loadSOWData();
   }, []);
+
+  const loadSOWData = async () => {
+    try {
+      setLoading(true);
+      // TODO: Replace with actual SOW API endpoint when available
+      // const response = await apiClient.get('/project-manager/sows');
+      // For now, using empty data until API is implemented
+      const sowData: VendorSOW[] = [];
+      setSows(sowData);
+
+      // Calculate stats from loaded data
+      updateStats(sowData);
+    } catch (error) {
+      console.error('Error loading SOW data:', error);
+      toast.error('Failed to load vendor SOW data');
+      setSows([]);
+      updateStats([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateStats = (sowData: VendorSOW[]) => {
+    const newStats = {
+      totalSOWs: sowData.length,
+      pendingApproval: sowData.filter(s => s.status === 'qty_scope_review').length,
+      approved: sowData.filter(s => s.status === 'pm_approved' || s.status === 'approved').length,
+      rejected: sowData.filter(s => s.status === 'rejected').length,
+      totalValue: sowData.reduce((sum, sow) => sum + sow.totalAmount, 0)
+    };
+    setStats(newStats);
+  };
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, any> = {
@@ -284,15 +268,15 @@ const PMVendorManagement: React.FC = () => {
       </Alert>
 
       {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total SOWs</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalSOWs}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm text-gray-600 truncate">Total SOWs</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">{loading ? '-' : stats.totalSOWs}</p>
               </div>
-              <FileText className="w-8 h-8 text-blue-600 opacity-20" />
+              <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 opacity-20 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
@@ -612,6 +596,139 @@ const PMVendorManagement: React.FC = () => {
         </DialogContent>
       </Dialog>
     </div>
+  );
+};
+
+// SOW Card Component
+interface SOWCardProps {
+  sow: VendorSOW;
+  viewMode: 'grid' | 'list';
+  onReview?: (sow: VendorSOW) => void;
+  showRejectionReason?: boolean;
+  isCompleted?: boolean;
+}
+
+const SOWCard: React.FC<SOWCardProps> = ({
+  sow,
+  viewMode,
+  onReview,
+  showRejectionReason = false,
+  isCompleted = false
+}) => {
+  const getStatusBadge = (status: string) => {
+    const statusConfig: Record<string, any> = {
+      draft: { color: 'bg-gray-100 text-gray-800', icon: <Clock className="w-3 h-3" /> },
+      submitted: { color: 'bg-blue-100 text-blue-800', icon: <Send className="w-3 h-3" /> },
+      qty_scope_review: { color: 'bg-amber-100 text-amber-800', icon: <AlertCircle className="w-3 h-3" /> },
+      pm_approved: { color: 'bg-green-100 text-green-800', icon: <CheckCircle className="w-3 h-3" /> },
+      estimation_check: { color: 'bg-indigo-100 text-indigo-800', icon: <TrendingUp className="w-3 h-3" /> },
+      approved: { color: 'bg-green-100 text-green-800', icon: <CheckCircle className="w-3 h-3" /> },
+      rejected: { color: 'bg-red-100 text-red-800', icon: <AlertCircle className="w-3 h-3" /> }
+    };
+    return statusConfig[status] || statusConfig.draft;
+  };
+
+  const getWorkflowStep = (status: string): number => {
+    const steps: Record<string, number> = {
+      draft: 0,
+      submitted: 1,
+      qty_scope_review: 2,
+      pm_approved: 3,
+      estimation_check: 4,
+      approved: 5
+    };
+    return steps[status] || 0;
+  };
+
+  const borderClass = showRejectionReason ? 'border-red-200' : isCompleted ? 'border-green-200' : 'border-gray-200';
+
+  return (
+    <Card className={`${borderClass} hover:shadow-md transition-shadow`}>
+      <CardContent className="p-3 sm:p-4">
+        <div className={`flex ${viewMode === 'list' ? 'flex-col sm:flex-row sm:items-center' : 'flex-col'} gap-4`}>
+          {/* Header */}
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+              <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{sow.sowNumber}</h3>
+              <Badge className={`${getStatusBadge(sow.status).color} text-xs w-fit`}>
+                {getStatusBadge(sow.status).icon}
+                <span className="ml-1">
+                  {isCompleted ? 'Completed' : sow.status.replace('_', ' ').toUpperCase()}
+                </span>
+              </Badge>
+            </div>
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs sm:text-sm text-gray-600 mb-3">
+              <div className="flex items-center gap-1 min-w-0">
+                <Building2 className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                <span className="truncate">{sow.vendorName}</span>
+              </div>
+              <div className="flex items-center gap-1 min-w-0">
+                <Package className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                <span className="truncate">{sow.projectName}</span>
+              </div>
+              <div className="flex items-center gap-1 min-w-0">
+                <FileText className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                <span className="truncate">BOQ: {sow.boqReference}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Calendar className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                <span>{new Date(sow.createdDate).toLocaleDateString()}</span>
+              </div>
+            </div>
+
+            {/* Approval Stage */}
+            {sow.approvalStage && (
+              <div className="mb-3">
+                <p className="text-xs text-gray-500">Current Stage:</p>
+                <p className="text-xs sm:text-sm font-medium text-blue-600">{sow.approvalStage}</p>
+              </div>
+            )}
+
+            {/* Rejection Reason */}
+            {showRejectionReason && sow.rejectionReason && (
+              <div className="mb-3">
+                <p className="text-xs text-gray-500">Rejection Reason:</p>
+                <p className="text-xs sm:text-sm text-red-600">{sow.rejectionReason}</p>
+              </div>
+            )}
+
+            {/* Progress Bar */}
+            {!isCompleted && (
+              <div className="mb-3">
+                <Progress value={(getWorkflowStep(sow.status) / 5) * 100} className="h-1.5 sm:h-2" />
+              </div>
+            )}
+          </div>
+
+          {/* Amount and Actions */}
+          <div className={`${viewMode === 'list' ? 'flex items-center justify-between sm:flex-col sm:items-end' : 'flex items-center justify-between'} gap-2 sm:gap-4`}>
+            <div className={`${viewMode === 'list' ? 'sm:text-right' : 'text-left sm:text-right'} min-w-0`}>
+              <p className="text-xs sm:text-sm text-gray-600">Amount</p>
+              <p className="text-base sm:text-lg lg:text-xl font-bold text-blue-600 truncate">
+                AED {sow.totalAmount.toLocaleString()}
+              </p>
+              {isCompleted && (
+                <p className="text-xs text-green-600">Workflow Complete</p>
+              )}
+            </div>
+
+            {/* Action Button */}
+            {sow.status === 'qty_scope_review' && onReview && (
+              <Button
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm px-2 sm:px-3 whitespace-nowrap flex-shrink-0"
+                onClick={() => onReview(sow)}
+              >
+                <span className="hidden sm:inline">Review & Approve</span>
+                <span className="sm:hidden">Review</span>
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

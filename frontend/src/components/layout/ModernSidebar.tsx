@@ -23,6 +23,7 @@ import {
   TruckIcon,
   WrenchScrewdriverIcon,
   ClipboardDocumentCheckIcon,
+  DocumentCheckIcon,
   Bars3Icon
 } from '@heroicons/react/24/outline';
 import { 
@@ -265,47 +266,13 @@ const ModernSidebar: React.FC<SidebarProps> = memo(({ sidebarOpen, setSidebarOpe
     const currentRole = getRoleName(roleId);
 
     if (vendorAllowedRoles.includes(currentRole as UserRole)) {
-      // Customize menu items based on role
-      const vendorChildren = [];
-
-      // All vendor-allowed roles can view vendor list
-      vendorChildren.push({
-        name: 'Vendor List',
-        href: buildPath('/vendors/list'),
-        icon: ClipboardDocumentCheckIcon,
-        iconSolid: ClipboardDocumentCheckIcon
-      });
-
-      // Only Project Manager can create SOW
-      if (currentRole === UserRole.PROJECT_MANAGER) {
-        vendorChildren.push({
-          name: 'Create SOW',
-          href: buildPath('/vendors/scope-of-work'),
-          icon: DocumentTextIcon,
-          iconSolid: DocumentTextIcon
-        });
-      }
-
-      // All vendor-allowed roles can view quotations
-      vendorChildren.push({
-        name: 'Quotations',
-        href: buildPath('/vendors/quotations'),
-        icon: CurrencyDollarIcon,
-        iconSolid: CurrencyDollarIcon
-      });
-
-      // Determine default href based on role
-      const defaultHref = currentRole === UserRole.PROJECT_MANAGER
-        ? buildPath('/vendors/scope-of-work')
-        : buildPath('/vendors/list');
-
+      // Add vendor management for allowed roles
       baseItems.push({
         name: 'Vendor Management',
-        href: defaultHref,
+        href: buildPath('/vendor-management'),
         icon: UsersIcon,
         iconSolid: UsersSolid,
-        color: 'text-blue-600',
-        children: vendorChildren
+        color: 'text-blue-600'
       });
     }
 

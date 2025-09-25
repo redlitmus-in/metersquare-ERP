@@ -5,7 +5,7 @@
 
 import { apiClient } from '@/api/config';
 import { requestDeduplicator } from '@/utils/requestDeduplication';
-import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
+import { sendPRNotification } from '@/middleware/notificationMiddleware';
 
 export interface PurchaseApproval {
   purchase_id: number;
@@ -273,10 +273,9 @@ class ProjectManagerService {
         const purchase = purchaseDetails.purchase || purchaseDetails;
 
         // Send notification about PM approval - forwards to estimation
-        await PurchaseNotificationService.notifyPRApprovedByProjectManager({
+        await sendPRNotification('approved', {
           documentId: String(purchaseId),
-          project: purchase.project_id,
-          amount: purchase.materials_summary?.total_cost || 0,
+          projectName: purchase.project_id,
           nextRole: 'estimation'
         });
       }
@@ -310,12 +309,11 @@ class ProjectManagerService {
         const purchase = purchaseDetails.purchase || purchaseDetails;
 
         // Send rejection notification back to procurement
-        await PurchaseNotificationService.notifyPRRejected({
+        await sendPRNotification('rejected', {
           documentId: String(purchaseId),
           rejectedBy: 'Project Manager',
           reason: rejectionReason,
-          project: purchase.project_id,
-          backToRole: 'procurement'
+          projectName: purchase.project_id
         });
       }
 

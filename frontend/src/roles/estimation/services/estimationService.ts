@@ -5,7 +5,7 @@
  */
 
 import { apiClient, API_ENDPOINTS } from '@/api/config';
-import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
+import { sendPRNotification } from '@/middleware/notificationMiddleware';
 import type {
   EstimationApprovalRequest,
   EstimationApprovalResponse,
@@ -91,10 +91,9 @@ class EstimationService {
         const purchase = purchaseDetails.purchase_details || purchaseDetails;
 
         // Send notification about Estimation approval - forwards to Technical Director
-        await PurchaseNotificationService.notifyPRApprovedByProjectManager({
+        await sendPRNotification('approved', {
           documentId: String(purchaseId),
-          project: purchase.project_id,
-          amount: purchase.materials_summary?.total_cost || 0,
+          projectName: purchase.project_id,
           nextRole: 'technical director'
         });
       }
@@ -135,12 +134,11 @@ class EstimationService {
         const purchase = purchaseDetails.purchase_details || purchaseDetails;
 
         // Send rejection notification back to project manager
-        await PurchaseNotificationService.notifyPRRejected({
+        await sendPRNotification('rejected', {
           documentId: String(purchaseId),
           rejectedBy: 'Estimation Team',
           reason: rejectionReason,
-          project: purchase.project_id,
-          backToRole: 'project manager'
+          projectName: purchase.project_id
         });
       }
 

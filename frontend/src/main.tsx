@@ -5,22 +5,10 @@ import App from './App.tsx'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 import './index.css'
 
-// Import debug utilities for development
-import { debugNotifications } from './utils/debugNotifications'
+// Debug utilities removed - using centralized notification middleware
 
-// Make debug utilities available globally for development
-if (import.meta.env.DEV) {
-  (window as any).debugNotifications = debugNotifications;
-}
-
-// Register service worker for aggressive caching (production only)
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then(registration => console.log('Service Worker registered'))
-      .catch(error => console.log('Service Worker registration failed'));
-  });
-}
+// Service worker will be registered by notificationService.ts
+// We don't need to register it here to avoid duplicate registrations
 
 // Hide initial loader once React starts
 const hideInitialLoader = () => {

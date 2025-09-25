@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { formatDate, formatDateForInput, getTodayFormatted } from '@/utils/dateFormatter';
 import DocumentViewModal from '@/components/DocumentViewModal';
+import { countries, findCountryByName, findCountryByPhoneCode, getDefaultCountry } from '@/data/countries';
+import { procurementService } from '@/roles/procurement/services/procurementService';
+import { toast } from 'sonner';
 import {
   Users,
   Building2,
@@ -63,6 +66,8 @@ interface VendorDetails {
   companyName: string;
   registrationNumber: string;
   contactPerson: string;
+  country: string;
+  phoneCode: string;
   phone: string;
   email: string;
   address: string;
@@ -117,8 +122,37 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
   const [activeTab, setActiveTab] = useState('vendor');
   const [showComparison, setShowComparison] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState(getDefaultCountry());
+  const [phoneNumber, setPhoneNumber] = useState('');
 
-  const { register, handleSubmit, watch, formState: { errors }, setValue } = useForm<VendorQuotationFormData>();
+  const { register, handleSubmit, watch, formState: { errors }, setValue, reset } = useForm<VendorQuotationFormData>();
+
+  // Handle country selection change
+  const handleCountryChange = (countryName: string) => {
+    const country = findCountryByName(countryName);
+    if (country) {
+      setSelectedCountry(country);
+      setValue('vendor.country', country.name);
+      setValue('vendor.phoneCode', country.phoneCode);
+    }
+  };
+
+  // Handle phone code selection change
+  const handlePhoneCodeChange = (phoneCode: string) => {
+    const country = findCountryByPhoneCode(phoneCode);
+    if (country) {
+      setSelectedCountry(country);
+      setValue('vendor.country', country.name);
+      setValue('vendor.phoneCode', country.phoneCode);
+    }
+  };
+
+  // Initialize default values
+  useEffect(() => {
+    const defaultCountry = getDefaultCountry();
+    setValue('vendor.country', defaultCountry.name);
+    setValue('vendor.phoneCode', defaultCountry.phoneCode);
+  }, [setValue]);
 
   const addQuotationItem = () => {
     const newItem: QuotationItem = {
@@ -183,46 +217,105 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
     return calculateGrandTotal();
   };
 
-  const onSubmit = (data: VendorQuotationFormData) => {
-    console.log('Submitting Vendor Quotation:', { ...data, items: quotationItems });
-    // TODO: Integrate with ApprovalWorkflow
-    // - Initialize workflow with QTY/SCOPE FLAG, PM FLAG
-    // - Route to Project Manager -> Estimation -> Technical Director
-    // - Set up rejection/revision loops for scope changes
-    alert('Vendor Quotation submitted! (Workflow integration pending)');
-    
-    // Close form after successful submission
+  const onSubmit = async (data: VendorQuotationFormData) => {
+    try {
+      const quotationData = {
+        ...data,
+        items: quotationItems,
+        totalAmount: calculateGrandTotal(),
+        subtotal: calculateSubtotal(),
+        totalDiscount: calculateTotalDiscount(),
+        totalTax: calculateTotalTax(),
+        status: 'submitted'
+      };
+
+      if (quotation) {
+        // Update existing quotation
+        // TODO: Implement update API when available
+        toast.info('Update functionality coming soon');
+      } else {
+        // Create new quotation
+        await procurementService.createVendorQuotation(quotationData);
+        toast.success('Vendor Quotation submitted for approval successfully!');
+      }
+
+      // Close form after successful submission
+      if (onClose) {
+        onClose();
+      }
+    } catch (error: any) {
+      console.error('Error submitting vendor quotation:', error);
+      toast.error(error.message || 'Failed to submit vendor quotation');
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    try {
+      const formData = watch();
+      const quotationData = {
+        ...formData,
+        items: quotationItems,
+        totalAmount: calculateGrandTotal(),
+        subtotal: calculateSubtotal(),
+        totalDiscount: calculateTotalDiscount(),
+        totalTax: calculateTotalTax(),
+        status: 'draft'
+      };
+
+      if (quotation) {
+        // Update existing quotation as draft
+        toast.info('Update draft functionality coming soon');
+      } else {
+        // Save new quotation as draft
+        await procurementService.createVendorQuotation(quotationData);
+        toast.success('Vendor Quotation saved as draft!');
+      }
+    } catch (error: any) {
+      console.error('Error saving draft:', error);
+      toast.error(error.message || 'Failed to save draft');
+    }
+  };
+
+  const handleCancel = () => {
+    // Reset form and close
+    reset();
+    setQuotationItems([]);
+    setActiveTab('vendor');
+    setShowPreview(false);
+    setShowComparison(false);
     if (onClose) {
       onClose();
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="max-w-7xl mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl shadow-xl p-6 text-gray-800 border border-red-200"
+        className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl shadow-xl p-4 sm:p-6 text-gray-800 border border-red-200"
       >
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-white/20 rounded-lg backdrop-blur">
-              <Users className="w-8 h-8" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg backdrop-blur">
+              <Users className="w-6 h-6 sm:w-8 sm:h-8" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Vendor/Subcontractor Quotation</h1>
-              <p className="text-gray-600 mt-1">Submit and manage vendor quotations</p>
+              <h1 className="text-lg sm:text-2xl font-bold">Vendor/Subcontractor Quotation</h1>
+              <p className="text-gray-600 mt-1 text-sm sm:text-base">Submit and manage vendor quotations</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 mt-4 md:mt-0">
-            <Badge className="bg-red-100 text-red-700 border-red-300 px-3 py-1">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <Badge className="bg-red-100 text-red-700 border-red-300 px-2 sm:px-3 py-1 text-xs sm:text-sm">
               <Hash className="w-3 h-3 mr-1" />
-              VQ-2024-001
+              <span className="hidden sm:inline">{quotation?.vqNumber || 'New Quotation'}</span>
+              <span className="sm:hidden">New</span>
             </Badge>
-            <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300 px-3 py-1">
+            <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300 px-2 sm:px-3 py-1 text-xs sm:text-sm">
               <Clock className="w-3 h-3 mr-1" />
-              Under Review
+              <span className="hidden sm:inline">{quotation?.status || 'Draft'}</span>
+              <span className="sm:hidden">Draft</span>
             </Badge>
           </div>
         </div>
@@ -230,26 +323,31 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
 
       <form onSubmit={handleSubmit(onSubmit)}>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid grid-cols-5 w-full bg-white shadow-sm border">
-            <TabsTrigger value="vendor" className="data-[state=active]:bg-red-50">
-              <Building2 className="w-4 h-4 mr-2" />
-              Vendor
+          <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 w-full bg-white shadow-sm border gap-1">
+            <TabsTrigger value="vendor" className="data-[state=active]:bg-red-50 text-xs sm:text-sm px-2 sm:px-3 py-2">
+              <Building2 className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Vendor</span>
+              <span className="sm:hidden">V</span>
             </TabsTrigger>
-            <TabsTrigger value="scope" className="data-[state=active]:bg-red-50">
-              <Briefcase className="w-4 h-4 mr-2" />
-              Scope
+            <TabsTrigger value="scope" className="data-[state=active]:bg-red-50 text-xs sm:text-sm px-2 sm:px-3 py-2">
+              <Briefcase className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Scope</span>
+              <span className="sm:hidden">S</span>
             </TabsTrigger>
-            <TabsTrigger value="quotation" className="data-[state=active]:bg-red-50">
-              <Calculator className="w-4 h-4 mr-2" />
-              Quotation
+            <TabsTrigger value="quotation" className="data-[state=active]:bg-red-50 text-xs sm:text-sm px-2 sm:px-3 py-2">
+              <Calculator className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Quotation</span>
+              <span className="sm:hidden">Q</span>
             </TabsTrigger>
-            <TabsTrigger value="terms" className="data-[state=active]:bg-red-50">
-              <CreditCard className="w-4 h-4 mr-2" />
-              Terms
+            <TabsTrigger value="terms" className="data-[state=active]:bg-red-50 text-xs sm:text-sm px-2 sm:px-3 py-2">
+              <CreditCard className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Terms</span>
+              <span className="sm:hidden">T</span>
             </TabsTrigger>
-            <TabsTrigger value="approval" className="data-[state=active]:bg-red-50">
-              <Shield className="w-4 h-4 mr-2" />
-              Approval
+            <TabsTrigger value="approval" className="data-[state=active]:bg-red-50 text-xs sm:text-sm px-2 sm:px-3 py-2">
+              <Shield className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Approval</span>
+              <span className="sm:hidden">A</span>
             </TabsTrigger>
           </TabsList>
 
@@ -262,8 +360,8 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                   Vendor Information
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <CardContent className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2 text-sm font-semibold">
                       <Building2 className="w-4 h-4 text-gray-500" />
@@ -293,7 +391,7 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                       <Users className="w-4 h-4 text-gray-500" />
                       Contact Person
                     </Label>
-                    <Input 
+                    <Input
                       {...register('vendor.contactPerson', { required: true })}
                       placeholder="Primary contact name"
                       className="h-11 border-gray-200 focus:border-red-500"
@@ -302,14 +400,69 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
 
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2 text-sm font-semibold">
+                      <Globe className="w-4 h-4 text-gray-500" />
+                      Country
+                    </Label>
+                    <Select
+                      value={selectedCountry.name}
+                      onValueChange={handleCountryChange}
+                    >
+                      <SelectTrigger className="h-11 border-gray-200 focus:border-red-500">
+                        <SelectValue placeholder="Select country" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px] overflow-y-auto">
+                        {countries.map(country => (
+                          <SelectItem
+                            key={country.code}
+                            value={country.name}
+                            className="flex items-center gap-2"
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="text-lg">{country.flag}</span>
+                              {country.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 text-sm font-semibold">
                       <Phone className="w-4 h-4 text-gray-500" />
                       Phone Number
                     </Label>
-                    <Input 
-                      {...register('vendor.phone', { required: true })}
-                      placeholder="+65 XXXX XXXX"
-                      className="h-11 border-gray-200 focus:border-red-500"
-                    />
+                    <div className="flex gap-2">
+                      <Select
+                        value={selectedCountry.phoneCode}
+                        onValueChange={handlePhoneCodeChange}
+                      >
+                        <SelectTrigger className="w-32 h-11 border-gray-200 focus:border-red-500">
+                          <SelectValue placeholder="Code" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[300px] overflow-y-auto">
+                          {countries.map(country => (
+                            <SelectItem
+                              key={country.code}
+                              value={country.phoneCode}
+                              className="flex items-center gap-2"
+                            >
+                              <span className="flex items-center gap-2">
+                                <span className="text-lg">{country.flag}</span>
+                                {country.phoneCode}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        {...register('vendor.phone', { required: true })}
+                        placeholder="Phone number"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="flex-1 h-11 border-gray-200 focus:border-red-500"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -317,7 +470,7 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                       <Mail className="w-4 h-4 text-gray-500" />
                       Email Address
                     </Label>
-                    <Input 
+                    <Input
                       type="email"
                       {...register('vendor.email', { required: true })}
                       placeholder="vendor@company.com"
@@ -359,7 +512,7 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2 text-sm font-semibold">
                       <Globe className="w-4 h-4 text-gray-500" />
@@ -398,7 +551,7 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                     <Shield className="w-5 h-5 text-red-600" />
                     Vendor Credentials & Compliance
                   </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {['BCA Registered', 'ISO Certified', 'BizSafe', 'GST Registered'].map((cert) => (
                       <label key={cert} className="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" className="rounded border-gray-300 text-red-600" />
@@ -420,8 +573,8 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                   Scope of Work
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <CardContent className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2 text-sm font-semibold">
                       <Building2 className="w-4 h-4 text-gray-500" />
@@ -466,7 +619,7 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                 {/* Work Categories */}
                 <div className="bg-red-50 rounded-xl p-4 border border-red-200">
                   <h3 className="font-semibold text-gray-800 mb-3">Work Categories Included</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-3">
                     {[
                       'Civil Works',
                       'Electrical Works',
@@ -487,7 +640,7 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                 </div>
 
                 {/* Site Conditions */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2 text-sm font-semibold">
                       <MapPin className="w-4 h-4 text-gray-500" />
@@ -573,7 +726,7 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                           </Button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div className="grid grid-cols-1 gap-3 mb-4">
                           <div className="space-y-2">
                             <Label className="text-xs font-semibold text-gray-600">Description</Label>
                             <Input
@@ -594,7 +747,7 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                        <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
                           <div className="space-y-2">
                             <Label className="text-xs font-semibold text-gray-600">Unit</Label>
                             <Select
@@ -735,14 +888,14 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                   Payment & Delivery Terms
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-6">
+              <CardContent className="p-3 sm:p-6 space-y-4 sm:space-y-6">
                 {/* Payment Terms */}
                 <div>
                   <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <Banknote className="w-5 h-5 text-gray-600" />
                     Payment Terms
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <div className="space-y-2">
                       <Label className="text-sm font-semibold">Advance Payment (%)</Label>
                       <Input 
@@ -814,7 +967,7 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                     <Package className="w-5 h-5 text-gray-600" />
                     Delivery Terms
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div className="space-y-2">
                       <Label className="text-sm font-semibold">Delivery Period (Days)</Label>
                       <Input 
@@ -863,21 +1016,25 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                     <Calendar className="w-5 h-5 text-gray-600" />
                     Quotation Validity
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div className="space-y-2">
                       <Label className="text-sm font-semibold">Valid From</Label>
-                      <DateInput 
+                      <DateInput
                         className="border-gray-200"
                         placeholder="dd/mm/yyyy"
-                        {...register('validity.validFrom')}
+                        value={watch('validity.validFrom')}
+                        onChange={(value) => setValue('validity.validFrom', value)}
+                        min={new Date().toISOString().split('T')[0]}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-sm font-semibold">Valid Until</Label>
-                      <DateInput 
+                      <DateInput
                         className="border-gray-200"
                         placeholder="dd/mm/yyyy"
-                        {...register('validity.validUntil')}
+                        value={watch('validity.validUntil')}
+                        onChange={(value) => setValue('validity.validUntil', value)}
+                        min={watch('validity.validFrom') ? new Date(watch('validity.validFrom')).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
                       />
                     </div>
                   </div>
@@ -910,7 +1067,7 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
               <CardContent className="p-6">
                 <div className="space-y-6">
                   {/* Approval Flags */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <div className="bg-[#243d8a]/5 rounded-xl p-4 border border-[#243d8a]/20">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
@@ -1015,28 +1172,10 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                       </Button>
                     </div>
                     {showComparison && (
-                      <div className="mt-4 space-y-2">
-                        <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-gray-600 pb-2 border-b">
-                          <div>Vendor</div>
-                          <div>Quote Amount</div>
-                          <div>Delivery</div>
-                          <div>Rating</div>
-                        </div>
-                        {[
-                          { name: 'Current Vendor', amount: calculateGrandTotal(), delivery: '45 days', rating: 4.5 },
-                          { name: 'ABC Contractors', amount: calculateGrandTotal() * 1.1, delivery: '60 days', rating: 4.2 },
-                          { name: 'XYZ Builders', amount: calculateGrandTotal() * 0.95, delivery: '50 days', rating: 3.8 }
-                        ].map((vendor, idx) => (
-                          <div key={idx} className={`grid grid-cols-4 gap-2 text-sm py-2 ${idx === 0 ? 'font-semibold text-red-700' : ''}`}>
-                            <div>{vendor.name}</div>
-                            <div>AED {vendor.amount.toLocaleString()}</div>
-                            <div>{vendor.delivery}</div>
-                            <div className="flex items-center gap-1">
-                              <span>{vendor.rating}</span>
-                              <span className="text-yellow-500">★</span>
-                            </div>
-                          </div>
-                        ))}
+                      <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                        <p className="text-sm text-gray-500 text-center">
+                          Vendor comparison will be available once quotations are received from multiple vendors.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -1047,25 +1186,25 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
         </Tabs>
 
         {/* Action Buttons */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col md:flex-row gap-4 justify-between mt-6"
+          className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-between mt-6"
         >
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3 justify-center sm:justify-start">
             <Button
               type="button"
               variant="outline"
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
               onClick={() => setShowPreview(true)}
             >
-              <Eye className="w-4 h-4" />
-              Preview
+              <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Preview</span>
             </Button>
             <Button
               type="button"
               variant="outline"
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
               onClick={() => {
                 const formData = watch();
                 const data = {
@@ -1083,75 +1222,206 @@ const VendorQuotationForm: React.FC<VendorQuotationFormProps> = ({ onClose, quot
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                alert('Exported as JSON. PDF export requires additional setup.');
+                toast.success('Exported as JSON. PDF export requires additional setup.');
               }}
             >
-              <Download className="w-4 h-4" />
-              Export PDF
+              <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Export</span>
             </Button>
             <Button
               type="button"
               variant="outline"
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
+              onClick={handleSaveDraft}
             >
-              <Save className="w-4 h-4" />
-              Save Draft
+              <Save className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Save Draft</span>
             </Button>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3 justify-center sm:justify-end">
             <Button
               type="button"
               variant="outline"
-              className="flex items-center gap-2"
-              onClick={onClose}
+              className="flex items-center gap-2 text-xs sm:text-sm px-3 sm:px-4 py-2"
+              onClick={handleCancel}
             >
-              <X className="w-4 h-4" />
+              <X className="w-3 h-3 sm:w-4 sm:h-4" />
               Cancel
             </Button>
             <Button
               type="submit"
-              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white flex items-center gap-2"
+              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white flex items-center gap-2 text-xs sm:text-sm px-3 sm:px-4 py-2"
+              disabled={quotationItems.length === 0}
             >
-              <Send className="w-4 h-4" />
-              Submit Quotation
+              <Send className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Submit for Approval</span>
+              <span className="xs:hidden">Submit</span>
             </Button>
           </div>
         </motion.div>
       </form>
 
       {/* Preview Modal */}
-      <DocumentViewModal
-        isOpen={showPreview}
-        onClose={() => setShowPreview(false)}
-        documentType="Vendor Quotation"
-        documentData={{
-          id: 'VQ-' + Date.now(),
-          vendor: watch('vendor')?.companyName || 'Vendor Name',
-          project: watch('projectName') || 'Project Name',
-          totalAmount: calculateTotal(),
-          items: quotationItems,
-          status: 'draft',
-          createdDate: getTodayFormatted(),
-          priority: 'medium'
-        }}
-        onDownload={() => {
-          const formData = watch();
-          const data = {
-            ...formData,
-            items: quotationItems,
-            total: calculateTotal()
-          };
-          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `VQ_${Date.now()}.json`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }}
-      />
+      {showPreview && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+          >
+            <div className="p-4 sm:p-6">
+              {/* Preview Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-100 rounded-lg">
+                    <FileText className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">Vendor Quotation Preview</h2>
+                    <p className="text-sm text-gray-500">Live preview of your quotation</p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowPreview(false)}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              {/* Preview Content */}
+              <div className="space-y-6">
+                {/* Quotation Header */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Quotation Number</p>
+                      <p className="font-semibold">VQ-{new Date().getFullYear()}-{String(Date.now()).slice(-4)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Status</p>
+                      <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300">Draft</Badge>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Vendor</p>
+                      <p className="font-semibold">{watch('vendor.companyName') || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1">Project</p>
+                      <p className="font-semibold">{watch('projectName') || 'Not specified'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Vendor Details */}
+                {watch('vendor.companyName') && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Vendor Details</h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-sm text-gray-500">Company:</p>
+                          <p className="font-medium">{watch('vendor.companyName')}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Contact Person:</p>
+                          <p className="font-medium">{watch('vendor.contactPerson') || 'Not specified'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Email:</p>
+                          <p className="font-medium">{watch('vendor.email') || 'Not specified'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Phone:</p>
+                          <p className="font-medium">{watch('vendor.phoneCode')}{watch('vendor.phone') || 'Not specified'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Quotation Items */}
+                {quotationItems.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Quotation Items</h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left py-2">#</th>
+                              <th className="text-left py-2">Description</th>
+                              <th className="text-left py-2">Qty</th>
+                              <th className="text-left py-2">Unit</th>
+                              <th className="text-right py-2">Rate (AED)</th>
+                              <th className="text-right py-2">Total (AED)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {quotationItems.map((item, index) => (
+                              <tr key={item.id} className="border-b">
+                                <td className="py-2">{index + 1}</td>
+                                <td className="py-2">{item.description || 'No description'}</td>
+                                <td className="py-2">{item.quantity}</td>
+                                <td className="py-2">{item.unit}</td>
+                                <td className="text-right py-2">{item.unitRate.toLocaleString()}</td>
+                                <td className="text-right py-2 font-semibold">{item.totalAmount.toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Totals */}
+                      <div className="mt-4 pt-4 border-t">
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span>Subtotal:</span>
+                            <span>AED {calculateSubtotal().toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between text-red-600">
+                            <span>Total Discount:</span>
+                            <span>-AED {calculateTotalDiscount().toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Total Tax:</span>
+                            <span>AED {calculateTotalTax().toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between text-lg font-bold pt-2 border-t">
+                            <span>Grand Total:</span>
+                            <span className="text-red-600">AED {calculateGrandTotal().toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Validity Period */}
+                {(watch('validity.validFrom') || watch('validity.validUntil')) && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Validity Period</h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-sm text-gray-500">Valid From:</p>
+                          <p className="font-medium">{watch('validity.validFrom') || 'Not specified'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Valid Until:</p>
+                          <p className="font-medium">{watch('validity.validUntil') || 'Not specified'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

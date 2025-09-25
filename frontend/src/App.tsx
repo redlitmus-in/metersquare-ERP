@@ -8,6 +8,9 @@ import { setupCacheValidator } from '@/utils/clearCache';
 import { queryClient } from '@/lib/queryClient';
 import { setupRealtimeSubscriptions } from '@/lib/realtimeSubscriptions';
 import { initializeNotificationService } from '@/store/notificationStore';
+import { requestNotificationPermission } from '@/middleware/notificationMiddleware';
+import { backgroundNotificationService } from '@/services/backgroundNotificationService';
+import { realtimeNotificationHub } from '@/services/realtimeNotificationHub';
 import { Security } from '@/utils/security'; // Initialize security system
 
 // Critical components loaded immediately
@@ -29,11 +32,7 @@ const CreativeErrorPage = lazy(() => import('@/components/ui/CreativeErrorPage')
 const ProcurementHub = lazy(() => import('@/roles/procurement/pages/ProcurementHub'));
 const DeliveriesPage = lazy(() => import('@/roles/procurement/pages/DeliveriesPage'));
 
-// Lazy load vendor management pages
-const VendorDashboard = lazy(() => import('@/pages/vendors/VendorDashboard'));
-const VendorListPage = lazy(() => import('@/pages/vendors/VendorListPage'));
-const VendorScopeOfWorkPage = lazy(() => import('@/pages/vendors/VendorScopeOfWorkPage'));
-const VendorQuotationsPage = lazy(() => import('@/pages/vendors/VendorQuotationsPage'));
+// Vendor management pages removed - now handled by role-specific pages
 
 // Lazy load role hubs - Direct import for better code splitting
 const ProjectManagerHub = lazy(() => import('@/roles/project-manager/pages/ProjectManagerHub'));
@@ -54,6 +53,9 @@ const ProcurementVendorReview = lazy(() => import('@/roles/procurement/pages/Pro
 const EstimationVendorCheck = lazy(() => import('@/roles/estimation/pages/EstimationVendorCheck'));
 const TDVendorApproval = lazy(() => import('@/roles/technical-director/pages/TDVendorApproval'));
 const AccountsVendorPayment = lazy(() => import('@/roles/accounts/pages/AccountsVendorPayment'));
+
+// Vendor forms
+const VendorScopeOfWorkForm = lazy(() => import('@/components/forms/VendorScopeOfWorkForm'));
 
 // Other components
 const RoleRouteWrapper = lazy(() => import('@/components/routing/RoleRouteWrapper'));
@@ -116,7 +118,7 @@ const RoleSpecificVendorHub: React.FC = () => {
     return <PMVendorManagement />;
   }
 
-  // Check if user is Procurement - they review and select vendors
+  // Check if user is Procurement - they review vendor SOWs
   if (userRoleLower === 'procurement') {
     return <ProcurementVendorReview />;
   }
@@ -226,9 +228,24 @@ function App() {
       const userRole = (user as any)?.role || '';
       const unsubscribe = setupRealtimeSubscriptions(userRole);
 
+      // Request notification permission if needed
+      requestNotificationPermission();
+
+      // Update background service with credentials
+      const token = localStorage.getItem('access_token');
+      const userId = (user as any)?.id || (user as any)?.userId;
+      backgroundNotificationService.updateCredentials(token, userRole, userId);
+
+      // Reconnect real-time hub with new credentials
+      realtimeNotificationHub.reconnect();
+
       return () => {
         unsubscribe();
       };
+    } else {
+      // Clear credentials on logout
+      backgroundNotificationService.updateCredentials(null, null, null);
+      realtimeNotificationHub.disconnect();
     }
   }, [isAuthenticated, user]);
 
@@ -236,8 +253,16 @@ function App() {
     // Setup cache validation for role mismatches
     setupCacheValidator();
 
-    // Initialize notification service
+    // Initialize notification services
     initializeNotificationService();
+
+    // Initialize background notification service
+    console.log('Initializing background notification service...');
+
+    // Request notification permission after initial load
+    setTimeout(() => {
+      requestNotificationPermission();
+    }, 3000);
 
     // Quick initialization - don't block on environment validation
     const initialize = async () => {
@@ -362,10 +387,16 @@ function App() {
               <RoleSpecificProcurementHub />
             } />
 
-            {/* Vendor Management Routes - Direct access to specific pages */}
-            <Route path="vendors/list" element={<VendorListPage />} />
-            <Route path="vendors/scope-of-work" element={<VendorScopeOfWorkPage />} />
-            <Route path="vendors/quotations" element={<VendorQuotationsPage />} />
+            {/* Vendor Management Routes - Role-specific vendor hub */}
+            <Route path="vendors" element={<RoleSpecificVendorHub />} />
+            <Route path="vendor-management" element={<RoleSpecificVendorHub />} />
+
+            {/* Vendor Form Routes */}
+            <Route path="vendors/scope-of-work" element={<VendorScopeOfWorkForm />} />
+
+            {/* Procurement-specific vendor routes */}
+            <Route path="vendor-sow-review" element={<ProcurementVendorReview />} />
+            <Route path="vendor-quotations" element={<ProcurementVendorReview />} />
 
             <Route path="purchase/:purchaseId" element={<PurchaseApprovalsPage />} />
             <Route path="site-supervisor" element={<SiteSupervisorHub />} />

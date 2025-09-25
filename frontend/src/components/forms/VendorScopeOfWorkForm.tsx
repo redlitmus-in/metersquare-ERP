@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { formatDate, formatDateForInput, getTodayFormatted } from '@/utils/dateFormatter';
@@ -34,6 +34,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { vendorService } from '@/services/vendorService';
+import { toast } from 'sonner';
 
 interface BOQItem {
   id: string;
@@ -70,28 +72,67 @@ interface VendorScopeData {
   safetyRequirements: string;
 }
 
+interface Project {
+  project_id: number;
+  project_name: string;
+  location: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+}
+
 interface VendorScopeOfWorkFormProps {
   onClose?: () => void;
 }
 
 const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState('basic');
-  const [boqItems, setBOQItems] = useState<BOQItem[]>([
-    {
-      id: '1',
-      itemCode: 'ELE-001',
-      description: 'Electrical conduit installation',
-      specification: '20mm PVC conduit with accessories',
-      unit: 'meter',
-      quantity: 500,
-      unitRate: 8.50,
-      totalAmount: 4250,
-      category: 'Electrical',
-      priority: 'high'
-    }
-  ]);
+  const [boqItems, setBOQItems] = useState<BOQItem[]>([]);
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedVendor, setSelectedVendor] = useState<any>(null);
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<VendorScopeData>();
+
+  // Load vendors and projects on component mount
+  useEffect(() => {
+    loadFormData();
+  }, []);
+
+  const loadFormData = async () => {
+    try {
+      setLoading(true);
+
+      // Load vendors
+      const vendorResponse = await vendorService.getAllVendors({ is_active: true });
+      setVendors(vendorResponse.data || []);
+
+      // TODO: Add project API call when available
+      // const projectResponse = await projectService.getAllProjects();
+      // setProjects(projectResponse.data || []);
+
+    } catch (error) {
+      console.error('Error loading form data:', error);
+      toast.error('Failed to load vendors and projects data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVendorSelect = (vendorId: string) => {
+    const vendor = vendors.find(v => v.vendor_id.toString() === vendorId);
+    if (vendor) {
+      setSelectedVendor(vendor);
+      // Pre-fill vendor fields
+      setValue('vendorName', vendor.vendor_name);
+      setValue('vendorId', vendorId);
+      setValue('contactPerson', vendor.contact_person_name || '');
+      setValue('email', vendor.email);
+      setValue('phone', vendor.phone || '');
+      setValue('address', vendor.street_address || '');
+    }
+  };
 
   const addBOQItem = () => {
     const newItem: BOQItem = {
@@ -159,7 +200,7 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-6xl mx-auto p-6 space-y-6"
+      className="max-w-6xl mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6"
     >
       {/* Header */}
       <Card className="shadow-lg border-0 bg-gradient-to-r from-red-50 to-red-100">
@@ -186,34 +227,34 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
 
       <form onSubmit={handleSubmit(onSubmit)}>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid grid-cols-4 w-full max-w-2xl bg-white shadow-sm border">
-            <TabsTrigger 
-              value="basic" 
-              className="data-[state=active]:bg-red-50 data-[state=active]:text-red-700"
+          <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full max-w-2xl bg-white shadow-sm border h-auto">
+            <TabsTrigger
+              value="basic"
+              className="data-[state=active]:bg-red-50 data-[state=active]:text-red-700 flex-col sm:flex-row py-2 px-2 sm:px-4"
             >
-              <Building className="w-4 h-4 mr-2" />
-              Project Info
+              <Building className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2 mb-1 sm:mb-0" />
+              <span className="text-xs sm:text-sm">Project Info</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="vendor" 
-              className="data-[state=active]:bg-red-50 data-[state=active]:text-red-700"
+            <TabsTrigger
+              value="vendor"
+              className="data-[state=active]:bg-red-50 data-[state=active]:text-red-700 flex-col sm:flex-row py-2 px-2 sm:px-4"
             >
-              <User className="w-4 h-4 mr-2" />
-              Vendor Details
+              <User className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2 mb-1 sm:mb-0" />
+              <span className="text-xs sm:text-sm">Vendor</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="boq" 
-              className="data-[state=active]:bg-red-50 data-[state=active]:text-red-700"
+            <TabsTrigger
+              value="boq"
+              className="data-[state=active]:bg-red-50 data-[state=active]:text-red-700 flex-col sm:flex-row py-2 px-2 sm:px-4"
             >
-              <Calculator className="w-4 h-4 mr-2" />
-              BOQ Items
+              <Calculator className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2 mb-1 sm:mb-0" />
+              <span className="text-xs sm:text-sm">BOQ Items</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="requirements" 
-              className="data-[state=active]:bg-red-50 data-[state=active]:text-red-700"
+            <TabsTrigger
+              value="requirements"
+              className="data-[state=active]:bg-red-50 data-[state=active]:text-red-700 flex-col sm:flex-row py-2 px-2 sm:px-4"
             >
-              <CheckCircle className="w-4 h-4 mr-2" />
-              Requirements
+              <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2 mb-1 sm:mb-0" />
+              <span className="text-xs sm:text-sm">Requirements</span>
             </TabsTrigger>
           </TabsList>
 
@@ -226,8 +267,36 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
                   Project Information
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <CardContent className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1">
+                      <Building className="w-4 h-4 text-red-500" />
+                      Select Project (Optional)
+                    </Label>
+                    <Select onValueChange={(value) => {
+                      if (value && projects.length > 0) {
+                        const project = projects.find(p => p.project_id.toString() === value);
+                        if (project) {
+                          setValue('projectName', project.project_name);
+                          setValue('projectId', project.project_id.toString());
+                          setValue('workLocation', project.location);
+                        }
+                      }
+                    }} disabled={loading}>
+                      <SelectTrigger className="focus:border-red-500 focus:ring-red-500">
+                        <SelectValue placeholder={loading ? "Loading projects..." : "Choose a project (or fill manually below)"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects.map((project) => (
+                          <SelectItem key={project.project_id} value={project.project_id.toString()}>
+                            {project.project_name} - {project.location}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
                       <Hash className="w-4 h-4 text-red-500" />
@@ -346,17 +415,43 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
                   Vendor Information
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <CardContent className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1">
+                      <Building className="w-4 h-4 text-red-500" />
+                      Select Vendor
+                    </Label>
+                    <Select onValueChange={handleVendorSelect} disabled={loading}>
+                      <SelectTrigger className="focus:border-red-500 focus:ring-red-500">
+                        <SelectValue placeholder={loading ? "Loading vendors..." : "Choose a vendor from the list"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {vendors.map((vendor) => (
+                          <SelectItem key={vendor.vendor_id} value={vendor.vendor_id.toString()}>
+                            {vendor.vendor_name} {vendor.category ? `(${vendor.category})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.vendorName && (
+                      <p className="text-red-500 text-sm flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        Please select a vendor
+                      </p>
+                    )}
+                  </div>
+
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1">
                       <Building className="w-4 h-4 text-red-500" />
                       Vendor Name
                     </Label>
                     <Input
-                      {...register('vendorName', { required: 'Vendor name is required' })}
-                      placeholder="Singapore Electrical Contractors Pte Ltd"
-                      className="focus:border-red-500 focus:ring-red-500"
+                      {...register('vendorName', { required: 'Vendor is required' })}
+                      placeholder="Auto-filled from selection"
+                      className="focus:border-red-500 focus:ring-red-500 bg-gray-50"
+                      readOnly
                     />
                   </div>
 
@@ -367,8 +462,9 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
                     </Label>
                     <Input
                       {...register('vendorId', { required: 'Vendor ID is required' })}
-                      placeholder="VEN-2024-001"
-                      className="focus:border-red-500 focus:ring-red-500"
+                      placeholder="Auto-filled from selection"
+                      className="focus:border-red-500 focus:ring-red-500 bg-gray-50"
+                      readOnly
                     />
                   </div>
 
@@ -378,9 +474,10 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
                       Contact Person
                     </Label>
                     <Input
-                      {...register('contactPerson', { required: 'Contact person is required' })}
-                      placeholder="John Tan"
-                      className="focus:border-red-500 focus:ring-red-500"
+                      {...register('contactPerson')}
+                      placeholder="Auto-filled from vendor data"
+                      className="focus:border-red-500 focus:ring-red-500 bg-gray-50"
+                      readOnly
                     />
                   </div>
 
@@ -390,9 +487,10 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
                       Phone Number
                     </Label>
                     <Input
-                      {...register('phone', { required: 'Phone number is required' })}
-                      placeholder="+65 9123 4567"
-                      className="focus:border-red-500 focus:ring-red-500"
+                      {...register('phone')}
+                      placeholder="Auto-filled from vendor data"
+                      className="focus:border-red-500 focus:ring-red-500 bg-gray-50"
+                      readOnly
                     />
                   </div>
 
@@ -403,15 +501,10 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
                     </Label>
                     <Input
                       type="email"
-                      {...register('email', { 
-                        required: 'Email is required',
-                        pattern: {
-                          value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                          message: 'Invalid email address'
-                        }
-                      })}
-                      placeholder="contact@vendor.com"
-                      className="focus:border-red-500 focus:ring-red-500"
+                      {...register('email', { required: 'Email is required' })}
+                      placeholder="Auto-filled from vendor data"
+                      className="focus:border-red-500 focus:ring-red-500 bg-gray-50"
+                      readOnly
                     />
                   </div>
 
@@ -440,10 +533,11 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
                     Vendor Address
                   </Label>
                   <textarea
-                    {...register('address', { required: 'Address is required' })}
+                    {...register('address')}
                     rows={3}
-                    placeholder="Complete vendor address with postal code..."
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                    placeholder="Auto-filled from vendor data"
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:border-red-500 focus:ring-1 focus:ring-red-500 bg-gray-50"
+                    readOnly
                   />
                 </div>
               </CardContent>
@@ -477,8 +571,23 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                {boqItems.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">
+                    <Calculator className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                    <p className="text-lg font-medium mb-2">No BOQ Items Added</p>
+                    <p className="text-sm mb-4">Add items to build your Bill of Quantities</p>
+                    <Button
+                      type="button"
+                      onClick={addBOQItem}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add First Item
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[800px]">
                     <thead className="bg-gray-50 border-b">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item Code</th>
@@ -570,7 +679,8 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
                       ))}
                     </tbody>
                   </table>
-                </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -584,7 +694,7 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
                   Project Requirements & Standards
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-6">
+              <CardContent className="p-3 sm:p-6 space-y-4 sm:space-y-6">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-1">
                     <FileText className="w-4 h-4 text-red-500" />
@@ -659,26 +769,27 @@ const VendorScopeOfWorkForm: React.FC<VendorScopeOfWorkFormProps> = ({ onClose }
 
         {/* Submit Actions */}
         <Card className="shadow-lg border-2 border-red-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+          <CardContent className="p-3 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
               <div className="text-sm text-gray-600">
                 <p className="font-semibold">Total Project Value: <span className="text-red-600">AED {totalProjectValue.toLocaleString()}</span></p>
                 <p className="text-xs mt-1">This form will be submitted for procurement approval</p>
               </div>
-              <div className="flex gap-3">
-                <Button 
-                  type="button" 
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                <Button
+                  type="button"
                   variant="outline"
                   onClick={onClose}
+                  className="w-full sm:w-auto"
                 >
                   <X className="w-4 h-4 mr-1" />
                   Cancel
                 </Button>
-                <Button type="button" variant="outline">
+                <Button type="button" variant="outline" className="w-full sm:w-auto">
                   <Save className="w-4 h-4 mr-1" />
                   Save Draft
                 </Button>
-                <Button type="submit" className="bg-red-600 hover:bg-red-700 text-white">
+                <Button type="submit" className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto">
                   <Send className="w-4 h-4 mr-1" />
                   Submit for Approval
                 </Button>

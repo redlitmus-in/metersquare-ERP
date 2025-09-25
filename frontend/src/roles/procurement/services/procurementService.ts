@@ -1,6 +1,5 @@
 import { apiClient } from '@/api/config';
-import { notificationService } from '@/services/notificationService';
-import { PurchaseNotificationService } from '@/services/purchaseNotificationService';
+import { sendPRNotification, notifyEmailSent } from '@/middleware/notificationMiddleware';
 
 export interface Material {
   material_id: number;
@@ -268,16 +267,29 @@ class ProcurementService {
         const totalAmount = purchase.materials?.reduce((sum: number, m: Material) =>
           sum + (m.quantity * m.cost), 0) || 0;
 
-        // Send email notification
-        await notificationService.sendEmailNotification({
-          recipient: 'Project Manager',
-          subject: `Purchase Requisition #${purchaseId} - Approval Required`,
-          documentType: 'Purchase Requisition',
-          documentId: String(purchaseId),
-          amount: totalAmount,
-          project: purchase.project_id,
-          sender: 'Procurement Team'
-        });
+        // Check if this is a resubmission after rejection
+        const isResubmission = purchase.status === 'rejected' ||
+                              purchase.project_manager_rejection_reason ||
+                              purchase.estimation_rejection_reason ||
+                              purchase.technical_director_rejection_reason ||
+                              purchase.accounts_rejection_reason;
+
+        if (isResubmission) {
+          // Send reapproval notification for resubmitted PR
+          await sendPRNotification('reapproved', {
+            documentId: `PR-${purchaseId}`,
+            reapprovedBy: purchase.last_modified_by || 'Procurement Team',
+            projectName: purchase.project_id?.toString(),
+            nextRole: 'Project Manager'
+          });
+        } else {
+          // Send regular email notification
+          await notifyEmailSent(
+            'Project Manager',
+            `Purchase Requisition #${purchaseId} - Approval Required`,
+            String(purchaseId)
+          );
+        }
 
         return response.data;
       }
@@ -302,10 +314,10 @@ class ProcurementService {
           sum + (m.quantity * m.cost), 0) || 0;
 
         // Send notification using PurchaseNotificationService
-        await PurchaseNotificationService.notifyPRForwardedToProjectManager({
+        await sendPRNotification('forwarded', {
           documentId: String(purchaseId),
-          project: purchase.project_id,
-          amount: totalAmount
+          projectName: purchase.project_id,
+          nextRole: 'Project Manager'
         });
 
         return response.data;
@@ -343,12 +355,11 @@ class ProcurementService {
         const purchase = purchaseDetails.purchase || purchaseDetails;
 
         // Send rejection notification using PurchaseNotificationService
-        await PurchaseNotificationService.notifyPRRejected({
+        await sendPRNotification('rejected', {
           documentId: String(purchaseId),
           rejectedBy: 'Procurement Team',
           reason: reason || 'Rejected by Procurement',
-          project: purchase.project_id,
-          backToRole: 'site supervisor'
+          projectName: purchase.project_id
         });
 
         return response.data;
@@ -428,6 +439,140 @@ class ProcurementService {
       console.error('Error creating vendor quotation:', error);
       throw error;
     }
+  }
+
+  // ===== VENDOR CRUD OPERATIONS =====
+
+  // Create new vendor
+  async createVendor(vendorData: {
+    vendor_name: string;
+    category?: string;
+    contact_person_name?: string;
+    email: string;
+    phone_code?: string;
+    phone?: string;
+    street_address?: string;
+    state?: string;
+    city?: string;
+    country?: string;
+    pin_code?: string;
+    gst_number?: string;
+  }): Promise<any> {
+    try {
+      const response = await apiClient.post('/create_vendor', vendorData);
+      if (response.data.status === 'success') {
+        return response.data.data;
+      }
+      throw new Error(response.data.message || 'Failed to create vendor');
+    } catch (error: any) {
+      console.error('Error creating vendor:', error);
+      if (error.response?.status === 400) {
+        throw new Error(error.response.data.message || 'Vendor with this email already exists');
+      }
+      throw error;
+    }
+  }
+
+  // Get all vendors
+  async getAllVendors(params?: {
+    category?: string;
+    is_active?: boolean;
+    page?: number;
+    per_page?: number;
+  }): Promise<any> {
+    try {
+      const queryParams = {
+        category: params?.category,
+        is_active: params?.is_active !== undefined ? params.is_active : true,
+        page: params?.page || 1,
+        per_page: params?.per_page || 20
+      };
+
+      const response = await apiClient.get('/all_vendor', { params: queryParams });
+      if (response.data.status === 'success') {
+        return response.data;
+      }
+      throw new Error(response.data.message || 'Failed to fetch vendors');
+    } catch (error: any) {
+      console.error('Error fetching vendors:', error);
+      throw error;
+    }
+  }
+
+  // Get vendor by ID
+  async getVendorById(vendorId: number): Promise<any> {
+    try {
+      const response = await apiClient.get(`/vendor/${vendorId}`);
+      if (response.data.status === 'success') {
+        return response.data.data;
+      }
+      if (response.data.status === 'error' && response.data.data?.length === 0) {
+        throw new Error('Vendor not found');
+      }
+      throw new Error(response.data.message || 'Failed to fetch vendor');
+    } catch (error: any) {
+      console.error('Error fetching vendor:', error);
+      throw error;
+    }
+  }
+
+  // Update vendor
+  async updateVendor(vendorId: number, vendorData: any): Promise<any> {
+    try {
+      const response = await apiClient.put(`/update_vendor/${vendorId}`, vendorData);
+      if (response.data.status === 'success') {
+        return response.data.data;
+      }
+      throw new Error(response.data.message || 'Failed to update vendor');
+    } catch (error: any) {
+      console.error('Error updating vendor:', error);
+      if (error.response?.status === 404) {
+        throw new Error('Vendor not found');
+      }
+      if (error.response?.status === 400) {
+        throw new Error(error.response.data.message || 'Email already exists for another vendor');
+      }
+      throw error;
+    }
+  }
+
+  // Delete vendor (soft delete)
+  async deleteVendor(vendorId: number): Promise<void> {
+    try {
+      const response = await apiClient.delete(`/delete_vendor/${vendorId}`);
+      if (response.data.status === 'success') {
+        return;
+      }
+      throw new Error(response.data.message || 'Failed to delete vendor');
+    } catch (error: any) {
+      console.error('Error deleting vendor:', error);
+      if (error.response?.status === 404) {
+        throw new Error('Vendor not found');
+      }
+      if (error.response?.status === 400) {
+        throw new Error('Vendor already deleted');
+      }
+      throw error;
+    }
+  }
+
+  // Get vendor categories
+  getVendorCategories(): string[] {
+    return [
+      'Construction Materials',
+      'Electrical Equipment',
+      'Plumbing Supplies',
+      'HVAC Equipment',
+      'Safety Equipment',
+      'Tools & Machinery',
+      'Furniture',
+      'IT Equipment',
+      'Office Supplies',
+      'Transportation',
+      'Consulting Services',
+      'Maintenance Services',
+      'Other'
+    ];
   }
 }
 
